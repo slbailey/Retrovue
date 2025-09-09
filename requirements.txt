@@ -1,0 +1,18 @@
+# Retrovue - Retro IPTV Simulation Project Dependencies
+# Core streaming and video processing
+ffmpeg-python==0.2.0
+
+# Web API and server
+fastapi==0.116.1
+uvicorn==0.35.0
+
+# Desktop UI
+pyside6==6.9.2
+
+# Database (built into Python)
+# sqlite3 - included with Python standard library
+
+# Additional utilities (to be added as needed)
+# requests - for HTTP client operations
+# python-dotenv - for environment variables
+# aiofiles - for async file operations
