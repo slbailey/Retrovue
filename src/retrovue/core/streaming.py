@@ -1,7 +1,51 @@
 """
 Retrovue Core Streaming Components
 
-Professional streaming implementations for IPTV simulation.
+This module provides professional streaming implementations for IPTV simulation.
+It includes multiple streaming strategies optimized for different use cases,
+from simple looping to complex multi-file concatenation.
+
+Key Components:
+- ConcatDemuxerStreamer: ErsatzTV-style streaming with seamless transitions
+- SimpleLoopStreamer: Basic looping for single-file continuous playback
+- StreamHandler: HTTP request handler for streaming endpoints
+- GracefulHTTPServer: Enhanced HTTP server with proper shutdown handling
+
+Streaming Strategies:
+
+1. ConcatDemuxerStreamer:
+   - Uses FFmpeg's concat demuxer for seamless file transitions
+   - Creates temporary concat files for FFmpeg processing
+   - Optimized for multi-file playlists and complex scheduling
+   - Similar to ErsatzTV's approach for professional streaming
+
+2. SimpleLoopStreamer:
+   - Uses FFmpeg's -stream_loop -1 for infinite looping
+   - Optimized for single-file continuous playback
+   - Lower resource usage for simple scenarios
+   - Good for bumpers, commercials, and simple content
+
+3. HTTP Streaming:
+   - Serves MPEG-TS streams over HTTP
+   - Compatible with VLC, Plex, and other media players
+   - Proper headers for streaming protocols
+   - Graceful connection handling and cleanup
+
+Technical Details:
+- All streamers use FFmpeg for video processing and encoding
+- Output format is MPEG-TS for maximum compatibility
+- Proper error handling and resource cleanup
+- Thread-safe operations for concurrent streaming
+
+Usage:
+    # Simple looping
+    streamer = SimpleLoopStreamer("video.mp4")
+    
+    # Multi-file concatenation
+    streamer = ConcatDemuxerStreamer(["file1.mp4", "file2.mp4"])
+    
+    # HTTP server
+    server = GracefulHTTPServer(('localhost', 8080), handler_factory)
 """
 
 import os

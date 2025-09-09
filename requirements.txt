@@ -12,7 +12,9 @@ pyside6==6.9.2
 # Database (built into Python)
 # sqlite3 - included with Python standard library
 
+# HTTP client for Plex API
+requests==2.31.0
+
 # Additional utilities (to be added as needed)
-# requests - for HTTP client operations
 # python-dotenv - for environment variables
 # aiofiles - for async file operations
