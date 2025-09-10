@@ -47,10 +47,11 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, 
     QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, 
     QProgressBar, QTableWidget, QTableWidgetItem, QComboBox,
-    QGroupBox, QGridLayout, QMessageBox, QFileDialog
+    QGroupBox, QGridLayout, QMessageBox, QFileDialog, QDialog,
+    QDialogButtonBox, QMenuBar, QMenu
 )
 from PySide6.QtCore import QThread, Signal, Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QAction
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -87,7 +88,8 @@ def format_duration_milliseconds(duration_ms: int) -> str:
 class ImportWorker(QThread):
     """Worker thread for importing content from Plex"""
     
-    progress = Signal(int, int)  # current, total
+    library_progress = Signal(int, int, str)  # current, total, library_name
+    item_progress = Signal(int, int, str)     # current, total, item_name
     status = Signal(str)
     finished = Signal()
     error = Signal(str)
@@ -123,21 +125,32 @@ class ImportWorker(QThread):
             
             self.status.emit(f"📚 Found {len(libraries)} libraries")
             
-            # Simple progress callback - just pass through the structured progress
-            def progress_callback(current: int, total: int, message: str):
+            # Dual progress callback - handle library and item progress separately
+            def progress_callback(library_progress=None, item_progress=None, message=None):
                 if message:
                     self.status.emit(message)
                 
-                # Simple progress calculation: (current / total) * 100
-                if total > 0:
-                    progress = int((current / total) * 100)
-                    self.progress.emit(progress, 100)
+                # Handle library progress
+                if library_progress:
+                    lib_current, lib_total, lib_name = library_progress
+                    if lib_total > 0:
+                        lib_progress = int((lib_current / lib_total) * 100)
+                        self.library_progress.emit(lib_progress, 100, lib_name)
+                
+                # Handle item progress
+                if item_progress:
+                    item_current, item_total, item_name = item_progress
+                    if item_total > 0:
+                        item_progress_percent = int((item_current / item_total) * 100)
+                        # Pass the actual current item number (1-based) and total
+                        self.item_progress.emit(item_progress_percent, 100, f"{item_name} ({item_current + 1}/{item_total})")
             
             # Use the new sync_all_libraries method with progress callback
             result = importer.sync_all_libraries(progress_callback)
             
             # Update progress to 100%
-            self.progress.emit(100, 100)
+            self.library_progress.emit(100, 100, "Complete")
+            self.item_progress.emit(100, 100, "Complete")
             
             self.status.emit(f"🎉 Sync completed! {result['updated']} updated, {result['added']} added, {result['removed']} removed")
             self.finished.emit()
@@ -150,18 +163,20 @@ class ImportWorker(QThread):
                 self.database.close()
 
 
-class ContentImportTab(QWidget):
-    """Tab for importing content from Plex"""
+class PlexSettingsDialog(QDialog):
+    """Modal dialog for Plex settings configuration"""
     
-    def __init__(self, database: RetrovueDatabase):
-        super().__init__()
+    def __init__(self, database: RetrovueDatabase, parent=None):
+        super().__init__(parent)
         self.database = database
-        self.import_worker = None
+        self.setWindowTitle("Plex Settings")
+        self.setModal(True)
+        self.setFixedSize(500, 300)
         self._setup_ui()
         self._load_stored_credentials()
     
     def _setup_ui(self):
-        """Set up the UI for content import"""
+        """Set up the UI for Plex settings"""
         layout = QVBoxLayout()
         
         # Plex Connection Group
@@ -186,29 +201,25 @@ class ContentImportTab(QWidget):
         self.test_btn.clicked.connect(self._test_connection)
         connection_layout.addWidget(self.test_btn, 2, 0)
         
-        # Sync Button
-        self.import_btn = QPushButton("Sync All Libraries")
-        self.import_btn.clicked.connect(self._start_import)
-        connection_layout.addWidget(self.import_btn, 2, 1)
+        # Save Button
+        self.save_btn = QPushButton("Save Settings")
+        self.save_btn.clicked.connect(self._save_settings)
+        connection_layout.addWidget(self.save_btn, 2, 1)
         
         connection_group.setLayout(connection_layout)
         layout.addWidget(connection_group)
         
-        # Progress Group
-        progress_group = QGroupBox("Import Progress")
-        progress_layout = QVBoxLayout()
-        
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        progress_layout.addWidget(self.progress_bar)
-        
+        # Status Text
         self.status_text = QTextEdit()
-        self.status_text.setMaximumHeight(150)
+        self.status_text.setMaximumHeight(100)
         self.status_text.setReadOnly(True)
-        progress_layout.addWidget(self.status_text)
+        layout.addWidget(self.status_text)
         
-        progress_group.setLayout(progress_layout)
-        layout.addWidget(progress_group)
+        # Dialog buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
         
         self.setLayout(layout)
     
@@ -226,54 +237,164 @@ class ContentImportTab(QWidget):
         token = self.token_input.text().strip()
         
         if not server_url or not token:
-            QMessageBox.warning(self, "Missing Information", "Please enter both server URL and token")
+            self.status_text.append("⚠️ Please enter both server URL and token")
             return
+        
+        self.status_text.append("🔄 Testing connection...")
         
         try:
             importer = create_plex_importer(server_url, token, self.database)
             if importer:
                 libraries = importer.get_libraries()
-                QMessageBox.information(
-                    self, "Connection Successful", 
-                    f"Connected to Plex server!\nFound {len(libraries)} libraries."
-                )
-                self.status_text.append(f"✅ Connected to Plex server: {server_url}")
+                self.status_text.append(f"✅ Connection successful! Found {len(libraries)} libraries on {server_url}")
             else:
-                QMessageBox.critical(self, "Connection Failed", "Failed to connect to Plex server")
-                self.status_text.append(f"❌ Failed to connect to Plex server: {server_url}")
+                self.status_text.append(f"❌ Connection failed to {server_url}")
         except Exception as e:
-            QMessageBox.critical(self, "Connection Error", f"Error: {str(e)}")
             self.status_text.append(f"❌ Connection error: {str(e)}")
     
-    def _start_import(self):
-        """Start the import process"""
+    def _save_settings(self):
+        """Save Plex settings to database"""
         server_url = self.server_url_input.text().strip()
         token = self.token_input.text().strip()
         
         if not server_url or not token:
-            QMessageBox.warning(self, "Missing Information", "Please enter both server URL and token")
+            self.status_text.append("⚠️ Please enter both server URL and token")
             return
         
-        # Disable buttons during import
-        self.test_btn.setEnabled(False)
+        try:
+            # Store credentials in database
+            self.database.store_plex_credentials(server_url, token)
+            self.status_text.append("💾 Settings saved successfully")
+        except Exception as e:
+            self.status_text.append(f"❌ Save error: {str(e)}")
+    
+    def get_credentials(self):
+        """Get the current credentials from the dialog"""
+        return {
+            'server_url': self.server_url_input.text().strip(),
+            'token': self.token_input.text().strip()
+        }
+
+
+class ContentImportTab(QWidget):
+    """Tab for importing content from Plex"""
+    
+    def __init__(self, database: RetrovueDatabase):
+        super().__init__()
+        self.database = database
+        self.import_worker = None
+        self._setup_ui()
+        self._load_stored_credentials()
+    
+    def _setup_ui(self):
+        """Set up the UI for content import"""
+        layout = QVBoxLayout()
+        
+        # Sync Controls Group
+        sync_group = QGroupBox("Content Sync")
+        sync_layout = QVBoxLayout()
+        
+        # Info label
+        info_label = QLabel("Configure Plex settings in the Settings menu, then use the sync button below to import content.")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; font-style: italic;")
+        sync_layout.addWidget(info_label)
+        
+        # Sync Button
+        self.import_btn = QPushButton("Sync All Libraries")
+        self.import_btn.clicked.connect(self._start_import)
+        self.import_btn.setMinimumHeight(40)
+        sync_layout.addWidget(self.import_btn)
+        
+        sync_group.setLayout(sync_layout)
+        layout.addWidget(sync_group)
+        
+        # Progress Group
+        progress_group = QGroupBox("Import Progress")
+        progress_layout = QVBoxLayout()
+        
+        # Library Progress
+        self.library_progress_label = QLabel("Library Progress")
+        self.library_progress_label.setVisible(False)
+        progress_layout.addWidget(self.library_progress_label)
+        
+        self.library_progress_bar = QProgressBar()
+        self.library_progress_bar.setVisible(False)
+        progress_layout.addWidget(self.library_progress_bar)
+        
+        # Item Progress
+        self.item_progress_label = QLabel("Item Progress")
+        self.item_progress_label.setVisible(False)
+        progress_layout.addWidget(self.item_progress_label)
+        
+        self.item_progress_bar = QProgressBar()
+        self.item_progress_bar.setVisible(False)
+        progress_layout.addWidget(self.item_progress_bar)
+        
+        self.status_text = QTextEdit()
+        self.status_text.setMaximumHeight(150)
+        self.status_text.setReadOnly(True)
+        progress_layout.addWidget(self.status_text)
+        
+        progress_group.setLayout(progress_layout)
+        layout.addWidget(progress_group)
+        
+        self.setLayout(layout)
+    
+    def _load_stored_credentials(self):
+        """Load stored Plex credentials from database"""
+        creds = self.database.get_plex_credentials()
+        if creds:
+            self.status_text.append("🔐 Plex credentials found in database")
+        else:
+            self.status_text.append("⚠️ No Plex credentials found. Please configure in Settings menu.")
+    
+    def _start_import(self):
+        """Start the import process"""
+        # Get credentials from database
+        creds = self.database.get_plex_credentials()
+        if not creds:
+            QMessageBox.warning(
+                self, "No Plex Settings", 
+                "Please configure Plex settings in the Settings menu before syncing."
+            )
+            return
+        
+        server_url = creds['server_url']
+        token = creds['token']
+        
+        # Disable button during import
         self.import_btn.setEnabled(False)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
+        
+        # Show progress bars and labels
+        self.library_progress_label.setVisible(True)
+        self.library_progress_bar.setVisible(True)
+        self.library_progress_bar.setValue(0)
+        self.item_progress_label.setVisible(True)
+        self.item_progress_bar.setVisible(True)
+        self.item_progress_bar.setValue(0)
         
         # Clear status text
         self.status_text.clear()
         
         # Start import worker
         self.import_worker = ImportWorker('retrovue.db', server_url, token)
-        self.import_worker.progress.connect(self._update_progress)
+        self.import_worker.library_progress.connect(self._update_library_progress)
+        self.import_worker.item_progress.connect(self._update_item_progress)
         self.import_worker.status.connect(self._update_status)
         self.import_worker.finished.connect(self._import_finished)
         self.import_worker.error.connect(self._import_error)
         self.import_worker.start()
     
-    def _update_progress(self, current: int, total: int):
-        """Update progress bar"""
-        self.progress_bar.setValue(current)
+    def _update_library_progress(self, current: int, total: int, library_name: str):
+        """Update library progress bar and label"""
+        self.library_progress_bar.setValue(current)
+        self.library_progress_label.setText(f"Library Progress: {library_name} ({current}%)")
+    
+    def _update_item_progress(self, current: int, total: int, item_name: str):
+        """Update item progress bar and label"""
+        self.item_progress_bar.setValue(current)
+        self.item_progress_label.setText(f"Item Progress: {item_name}")
     
     def _update_status(self, message: str):
         """Update status text"""
@@ -281,9 +402,14 @@ class ContentImportTab(QWidget):
     
     def _import_finished(self):
         """Handle import completion"""
-        self.test_btn.setEnabled(True)
         self.import_btn.setEnabled(True)
-        self.progress_bar.setVisible(False)
+        
+        # Hide progress bars and labels
+        self.library_progress_label.setVisible(False)
+        self.library_progress_bar.setVisible(False)
+        self.item_progress_label.setVisible(False)
+        self.item_progress_bar.setVisible(False)
+        
         self.status_text.append("🎉 Import completed successfully!")
         
         # Emit signal to refresh content browser
@@ -297,9 +423,14 @@ class ContentImportTab(QWidget):
     
     def _import_error(self, error_message: str):
         """Handle import error"""
-        self.test_btn.setEnabled(True)
         self.import_btn.setEnabled(True)
-        self.progress_bar.setVisible(False)
+        
+        # Hide progress bars and labels
+        self.library_progress_label.setVisible(False)
+        self.library_progress_bar.setVisible(False)
+        self.item_progress_label.setVisible(False)
+        self.item_progress_bar.setVisible(False)
+        
         self.status_text.append(f"❌ Import failed: {error_message}")
         QMessageBox.critical(self, "Import Error", error_message)
 
@@ -434,6 +565,9 @@ class RetrovueMainWindow(QMainWindow):
         self.setWindowTitle("Retrovue - IPTV Management System v2")
         self.setGeometry(100, 100, 1200, 800)
         
+        # Create menu bar
+        self._create_menu_bar()
+        
         # Create central widget with tabs
         central_widget = QTabWidget()
         self.setCentralWidget(central_widget)
@@ -448,6 +582,26 @@ class RetrovueMainWindow(QMainWindow):
         font = QFont()
         font.setPointSize(10)
         self.setFont(font)
+    
+    def _create_menu_bar(self):
+        """Create the menu bar"""
+        menubar = self.menuBar()
+        
+        # Settings menu
+        settings_menu = menubar.addMenu('Settings')
+        
+        # Plex Settings action
+        plex_settings_action = QAction('Plex Settings', self)
+        plex_settings_action.triggered.connect(self._open_plex_settings)
+        settings_menu.addAction(plex_settings_action)
+    
+    def _open_plex_settings(self):
+        """Open the Plex settings dialog"""
+        dialog = PlexSettingsDialog(self.database, self)
+        dialog.exec()
+        
+        # Refresh the import tab to show updated credentials status
+        self.import_tab._load_stored_credentials()
     
     def refresh_content_browser(self):
         """Refresh the content browser tab"""

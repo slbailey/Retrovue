@@ -85,12 +85,19 @@ Features:
 - [x] **Smart Sync System** - Intelligent sync with conflict resolution and change detection
 - [x] **Content Import UI** - PySide6 interface with real-time progress updates
 
-#### **2.2 Content Management** ✅ **COMPLETED**
+#### **2.2 Content Management** 🔄 **IN PROGRESS**
 - [x] **Content Browser UI** - Browse and organize content library with proper duration formatting
 - [x] **Database Migrations** - Schema updates without data loss
 - [x] **Library Management** - Store library names as media file attributes
 - [x] **Duration Handling** - Proper millisecond storage and hh:mm:ss.ff display formatting
-- [ ] **TMM Integration** - Import content from TinyMediaManager .nfo files (planned)
+- [ ] **Menu Bar Structure** - File menu (About, Settings, Quit) and Utilities menu (Sync Media)
+- [ ] **Main Window Content List** - Display all media data with Edit Metadata button and modal popup
+- [ ] **Content Type Handling** - Support for Movies, TV Shows, Commercials, Bumpers, Intros/Outros, Interstitials
+- [ ] **Advanced Metadata Editor** - Media player, chapter markers, and Plex metadata display (read-only)
+- [ ] **Content Validation** - Verify media files are playable, check codec support, validate metadata
+- [ ] **TMM Directory Management** - Configure list of directories containing TMM .nfo files (with subdirectory support)
+- [ ] **Selective Sync System** - Choose to sync ALL sources or select specific Plex libraries and TMM directories
+- [ ] **TMM Integration** - Import content from TinyMediaManager .nfo files (depends on directory management)
 - [ ] **Advanced Filtering** - Filter by source, type, rating, demographic (planned)
 - [ ] **Scheduling Metadata** - Daypart preferences, seasonal targeting, content ratings (planned)
 
@@ -143,15 +150,28 @@ Media Files → Content Manager → Database → Schedule Manager → Program Di
 
 ### **Core Tables - Scheduling & Content Delivery Focus**
 ```sql
--- Content Library (Scheduling Metadata)
-content_items (id, file_path, title, duration, content_type, source_type, created_at, updated_at)
+-- Media Files (Core Content Storage)
+media_files (id, file_path, duration, media_type, source_type, source_id, library_name, created_at, updated_at)
+
+-- Movies (TV Network Content)
+movies (id, media_file_id, title, year, rating, summary, genre, director, created_at, updated_at)
+
+-- TV Shows
+shows (id, title, total_seasons, total_episodes, show_rating, show_summary, genre, source_type, source_id, created_at, updated_at)
+
+-- Episodes
+episodes (id, media_file_id, show_id, episode_title, season_number, episode_number, rating, summary, created_at, updated_at)
+
+-- Content Type Specific Metadata
 content_scheduling_metadata (
-    content_id, 
+    id, media_file_id, content_type,  -- movie, tv_show, commercial, bumper, intro, outro, interstitial
     daypart_preference,    -- morning, afternoon, evening, late_night
     seasonal_preference,   -- spring, summer, fall, winter, holiday
     content_rating,        -- G, PG, PG-13, R, Adult
     commercial_company,    -- For commercials: "Coca-Cola", "McDonald's"
     commercial_category,   -- For commercials: "food", "automotive", "retail"
+    commercial_duration,   -- For commercials: 15s, 30s, 60s
+    commercial_expiration, -- For commercials: when to stop airing
     target_demographic,    -- "family", "adult", "children", "seniors"
     content_warnings,      -- "violence", "language", "adult_themes"
     scheduling_notes       -- Custom notes for schedulers
@@ -161,8 +181,38 @@ content_scheduling_metadata (
 content_sources (
     id, source_type, source_name, 
     plex_server_url, plex_token,  -- For Plex integration
-    tmm_library_path,             -- For TinyMediaManager .nfo files
     last_sync_time, sync_enabled
+)
+
+-- TMM Directory Management
+tmm_directories (
+    id, directory_path, name, description,
+    include_subdirectories, enabled, created_at, updated_at
+)
+
+-- Sync History Tracking
+sync_history (
+    id, source_type, source_name, sync_type,
+    start_time, end_time, status, items_processed, 
+    items_added, items_updated, items_removed, error_message
+)
+
+-- Chapter Markers
+chapter_markers (
+    id, media_file_id, chapter_title, timestamp_ms,
+    created_at, updated_at
+)
+
+-- Commercial Break Scheduling
+commercial_breaks (
+    id, media_file_id, chapter_marker_id, commercial_content_id,
+    start_time, end_time, created_at, updated_at
+)
+
+-- Generated Media Segments
+media_segments (
+    id, media_file_id, segment_path, start_time, end_time,
+    chapter_marker_id, created_at, updated_at
 )
 
 -- Scheduling
@@ -190,14 +240,35 @@ emergency_alerts (id, message, priority, start_time, end_time, channels)
 ### **Desktop Application Structure**
 ```
 Retrovue Manager (PySide6)
-├── Media Browser Tab
-│   ├── File tree view (Plex/TMM integration)
-│   ├── Metadata editor (title, runtime, commercial breaks)
-│   └── Preview player
+├── Menu Bar
+│   ├── File Menu
+│   │   ├── About (application info, version)
+│   │   ├── Settings (opens settings dialog)
+│   │   └── Quit (exit application)
+│   └── Utilities Menu
+│       └── Sync Media... (opens selective sync dialog)
+├── Main Window (Default View)
+│   ├── Content List (all media data from database)
+│   ├── Row Selection (click to select media item)
+│   ├── Edit Metadata Button (opens metadata editor modal)
+│   └── Content Filtering (search, filter by type/source)
+├── Advanced Metadata Editor Modal
+│   ├── Media Player (top left) - Video playback with controls
+│   ├── Chapter Markers (top right) - List of chapters with timestamps
+│   ├── Chapter Controls (middle) - Add, Set Time, Delete, Generate buttons
+│   ├── Plex Metadata Display (bottom) - Read-only Plex metadata fields
+│   └── Save/Cancel buttons
+├── Import/Sync Tab
+│   ├── Source Selection (ALL, specific Plex libraries, specific TMM directories)
+│   ├── Sync Progress (library-level and item-level progress)
+│   └── Sync History (last sync times, results)
 ├── Schedule Editor Tab  
 │   ├── Timeline view (drag & drop scheduling)
 │   ├── Channel selector
 │   └── Schedule validation
+├── Settings Dialog
+│   ├── Plex Settings (server URL, token)
+│   └── TMM Directories (configure .nfo file locations)
 └── Monitor Tab
     ├── Live stream status
     ├── Error logs
@@ -205,10 +276,101 @@ Retrovue Manager (PySide6)
 ```
 
 ### **UI Development Approach**
-1. **Start with Content Import** - Import from Plex/TMM, validate data flow
-2. **Add Content Browser** - Browse imported content with scheduling metadata
-3. **Add Schedule Editor** - Builds on established content library
-4. **Finish with Monitor** - Real-time system status and debugging
+1. **Menu Bar Foundation** - File menu (About, Settings, Quit) and Utilities menu (Sync Media)
+2. **Main Window Content List** - Display all media data with Edit Metadata functionality
+3. **Metadata Editor Modal** - Edit media metadata with full database integration
+4. **Content Import** - Import from Plex/TMM, validate data flow
+5. **Schedule Editor** - Builds on established content library
+6. **Monitor** - Real-time system status and debugging
+
+---
+
+## 🖥️ **Main Window Content Management**
+
+### **Primary Interface Design**
+The main window serves as the central content management interface, displaying all media data from the database with full editing capabilities.
+
+### **Content List Features**
+- **Comprehensive Display** - Show all media files (movies, episodes) with key metadata
+- **Row Selection** - Click any row to select a media item for editing
+- **Edit Metadata Button** - Prominent button to open metadata editor for selected item
+- **Content Filtering** - Search and filter by type, source, rating, etc.
+- **Sortable Columns** - Sort by title, duration, type, source, last modified
+
+### **Advanced Metadata Editor Modal**
+- **Media Player (Top Left)** - Video playback window with standard controls (play/pause, volume, fullscreen)
+- **Chapter Markers (Top Right)** - List of chapters with titles and timestamps, selectable rows
+- **Chapter Controls (Middle)** - Buttons for chapter management:
+  - **Add** - Add new chapter marker at current playhead position
+  - **Set Time** - Update selected chapter time to current playhead position
+  - **Delete** - Remove selected chapter marker
+  - **Generate** - Auto-generate chapter markers from black space between frames
+- **Content Type Selection** - Choose content type (Movie, TV Show, Commercial, Bumper, Intro/Outro, Interstitial)
+- **Plex Metadata Display (Bottom)** - Read-only display of Plex metadata:
+  - General: Title, Actors, Directors, Copyright
+  - Production: Sort Name, Producers, Screenwriters, Studio, Comments
+  - Media: Media Type, Definition, Rating, Advisory, iTunes Genre
+  - Series: TV Series Name, Season, Episode, Episode ID, Cover Art
+- **Save/Cancel** - Save chapter markers and content type to database or discard changes
+
+### **User Workflow**
+1. **Open Application** - Main window displays all content immediately
+2. **Browse Content** - Scroll through or filter the content list
+3. **Select Item** - Click on any row to select a media item
+4. **Edit Metadata** - Click "Edit Metadata" button to open advanced editor modal
+5. **Video Playback** - Use media player to navigate through content
+6. **Chapter Management** - Add, modify, or delete chapter markers using controls
+7. **View Plex Metadata** - Review read-only Plex metadata at bottom
+8. **Save Changes** - Save chapter markers to database or discard changes
+
+---
+
+## 🎬 **Chapter Marker Strategy & Media Splitting**
+
+### **Chapter Markers as Commercial Break Guidelines**
+Chapter markers serve as **scheduling metadata** rather than embedded .mp4 chapter data:
+- **Database-Only Storage** - Chapter markers stored in `chapter_markers` table, not in .mp4 files
+- **Commercial Break Planning** - Markers indicate where commercials should be inserted during scheduling
+- **Playback Flexibility** - Original .mp4 files remain unchanged, allowing multiple scheduling strategies
+
+### **Media Splitting During Playback**
+**Yes, we can still split media during playback** using several approaches:
+
+#### **Option 1: FFmpeg Real-Time Splitting**
+- **Stream Segmentation** - FFmpeg can split streams at specific timestamps without modifying source files
+- **Command Example**: `ffmpeg -i input.mp4 -ss 00:02:15 -t 00:09:25 -c copy segment1.ts`
+- **Benefits**: No file modification, real-time processing, multiple output formats
+- **Use Case**: Live streaming with commercial insertion
+
+#### **Option 2: Pre-Generated Segments**
+- **Scheduled Processing** - Generate segments during off-peak hours based on chapter markers
+- **Storage Strategy** - Store segments in database with chapter marker relationships
+- **Benefits**: Faster playback, reduced server load, better quality control
+- **Use Case**: Scheduled programming with known commercial breaks
+
+#### **Option 3: Dynamic Playlist Generation**
+- **HLS Playlist Manipulation** - Generate .m3u8 playlists that skip commercial segments
+- **Chapter Marker Integration** - Use database markers to determine segment boundaries
+- **Benefits**: Standard HLS compatibility, flexible commercial insertion
+- **Use Case**: IPTV streaming with commercial management
+
+### **Implementation Strategy**
+1. **Chapter Marker Creation** - Users mark commercial break points in metadata editor
+2. **Scheduling Integration** - Chapter markers inform where commercials should be inserted
+3. **Playback Engine** - FFmpeg uses chapter marker timestamps for real-time splitting
+4. **Commercial Insertion** - Replace marked segments with commercial content during streaming
+
+### **Database Integration**
+```sql
+-- Chapter markers linked to media files
+chapter_markers (id, media_file_id, chapter_title, timestamp_ms, created_at, updated_at)
+
+-- Commercial break scheduling
+commercial_breaks (id, media_file_id, chapter_marker_id, commercial_content_id, start_time, end_time)
+
+-- Generated segments (for pre-processing approach)
+media_segments (id, media_file_id, segment_path, start_time, end_time, chapter_marker_id)
+```
 
 ---
 
@@ -222,19 +384,28 @@ Manual Entry → Content Items + Custom Scheduling Metadata
 ```
 
 ### **Import Process Flow**
-1. **Plex Integration**
+1. **Selective Sync Interface**
+   - **Sync ALL** - Sync all configured Plex libraries and TMM directories
+   - **Selective Sync** - Choose specific Plex libraries and/or TMM directories to sync
+   - **Source Management** - View and manage configured sources before syncing
+   - **Sync History** - Track last sync times and results for each source
+
+2. **Plex Integration**
    - Connect to Plex server via API
+   - **Library Selection** - Choose specific libraries or sync all available
    - Import movies/shows with basic metadata (title, duration, rating)
    - Map Plex ratings to content_rating (G, PG, PG-13, R, Adult)
    - Set default scheduling preferences based on content type
 
-2. **TinyMediaManager Integration**
-   - Scan directories for .nfo files
+3. **TinyMediaManager Integration**
+   - **TMM Directory Management** - Configure list of directories containing .nfo files (with subdirectory support)
+   - **Directory Selection** - Choose specific TMM directories or sync all configured
+   - Scan selected directories for .nfo files
    - Parse XML metadata (title, plot, genre, custom fields)
    - Extract scheduling-specific metadata from custom fields
    - Handle adult content metadata that won't be in Plex
 
-3. **Commercial Content**
+4. **Commercial Content**
    - Manual entry for commercials without external metadata
    - Company, category, seasonal preferences
    - Daypart targeting (morning coffee, evening dinner, etc.)
@@ -370,8 +541,14 @@ Retrovue/
 - **Streaming Engine** - Working FFmpeg-based streaming with HLS output (basic single-channel)
 
 ### **❌ What's NOT Available Yet**
+- **Menu Bar Structure** - No proper File/Utilities menu structure
+- **Main Window Content Management** - No main window content list with Edit Metadata functionality
+- **Content Type Handling** - No support for different TV network content types (Movies, Commercials, Bumpers, etc.)
+- **Advanced Metadata Editor** - No media player, chapter markers, or Plex metadata display
+- **Content Validation** - No verification of media file playability or codec support
 - **Scheduling System** - No timeline management or scheduling engine
-- **Multi-source Support** - Only Plex integration works (TMM integration planned but not implemented)
+- **Selective Sync** - No ability to choose specific libraries/directories for sync
+- **TMM Integration** - TMM directory management and .nfo file parsing not implemented
 - **Content Filtering** - Basic browsing only, no advanced filtering by metadata
 - **Multi-channel Support** - Single channel streaming only
 - **Program Director** - No orchestration or channel management
