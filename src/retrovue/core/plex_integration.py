@@ -35,6 +35,8 @@ Usage:
 import requests
 from typing import List, Dict, Optional, Any
 from .database import RetrovueDatabase
+from .path_mapping import PlexPathMappingService
+from .guid_parser import GUIDParser, extract_guids_from_plex_metadata, get_show_disambiguation_key, format_show_for_display
 
 
 class PlexImporter:
@@ -60,6 +62,9 @@ class PlexImporter:
             'X-Plex-Token': token,
             'Accept': 'application/json'
         }
+        
+        # Initialize path mapping service
+        self.path_mapping_service = PlexPathMappingService.create_from_database(database)
     
     def _emit_status(self, message: str):
         """Emit status message via callback"""
@@ -109,35 +114,127 @@ class PlexImporter:
         except Exception as e:
             return []
     
-    def get_show_episodes(self, show_key: str) -> List[Dict]:
-        """Get all episodes for a specific show"""
+    def discover_shows_by_title(self, title: str, year: int = None) -> List[Dict]:
+        """
+        Discover shows by title and optionally year for disambiguation.
+        
+        Args:
+            title: Show title to search for
+            year: Optional year for disambiguation
+            
+        Returns:
+            List of matching shows with disambiguation information
+        """
         try:
-            # First get seasons, then get episodes from each season
-            seasons_url = f"{self.server_url}{show_key}"
-            response = requests.get(seasons_url, headers=self.headers)
+            # Search for shows with title and year filter
+            url = f"{self.server_url}/library/sections/all"
+            params = {
+                'type': 2,  # TV shows
+                'title': title,
+                'includeGuids': 1
+            }
+            if year:
+                params['year'] = year
+            
+            response = requests.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             
-            seasons_data = response.json()
-            seasons = seasons_data.get('MediaContainer', {}).get('Metadata', [])
+            data = response.json()
+            shows = data.get('MediaContainer', {}).get('Metadata', [])
             
-            all_episodes = []
+            # Process shows to add disambiguation information
+            processed_shows = []
+            for show in shows:
+                # Extract GUIDs
+                guids = extract_guids_from_plex_metadata(show)
+                parsed_guids = GUIDParser.parse_guids(guids)
+                
+                # Get show year
+                show_year = show.get('year')
+                
+                # Create disambiguation key
+                disambiguation_key = get_show_disambiguation_key(title, show_year)
+                
+                # Format for display
+                display_name = format_show_for_display(title, show_year, parsed_guids)
+                
+                processed_show = {
+                    'ratingKey': show.get('ratingKey'),
+                    'title': show.get('title'),
+                    'year': show_year,
+                    'disambiguation_key': disambiguation_key,
+                    'display_name': display_name,
+                    'guids': parsed_guids,
+                    'summary': show.get('summary', ''),
+                    'studio': show.get('studio', ''),
+                    'originallyAvailableAt': show.get('originallyAvailableAt'),
+                    'raw_metadata': show  # Keep original for full sync
+                }
+                processed_shows.append(processed_show)
             
-            # Get episodes from each season
-            for season in seasons:
-                season_key = season.get('key', '')
-                if season_key:
-                    # Get episodes from this season
-                    episodes_url = f"{self.server_url}{season_key}"
-                    episodes_response = requests.get(episodes_url, headers=self.headers)
-                    episodes_response.raise_for_status()
-                    
-                    episodes_data = episodes_response.json()
-                    episodes = episodes_data.get('MediaContainer', {}).get('Metadata', [])
-                    all_episodes.extend(episodes)
+            return processed_shows
             
-            return all_episodes
         except Exception as e:
+            self._emit_status(f"❌ Error discovering shows: {e}")
             return []
+    
+    def get_library_episode_count(self, section_key: str) -> int:
+        """Get total episode count for a library section using allLeaves endpoint"""
+        try:
+            all_leaves_url = f"{self.server_url}/library/sections/{section_key}/allLeaves"
+            response = requests.get(all_leaves_url, headers=self.headers)
+            response.raise_for_status()
+            
+            episodes_data = response.json()
+            media_container = episodes_data.get('MediaContainer', {})
+            total_episodes = media_container.get('size', 0)
+            
+            return total_episodes
+        except Exception as e:
+            self._emit_status(f"❌ Error getting episode count: {e}")
+            return 0
+    
+    def get_show_episodes(self, show_key: str) -> List[Dict]:
+        """Get all episodes for a specific show using allLeaves endpoint"""
+        try:
+            # Use allLeaves endpoint to get all episodes directly
+            all_leaves_url = f"{self.server_url}{show_key}/allLeaves"
+            response = requests.get(all_leaves_url, headers=self.headers)
+            response.raise_for_status()
+            
+            episodes_data = response.json()
+            episodes = episodes_data.get('MediaContainer', {}).get('Metadata', [])
+            
+            return episodes
+        except Exception as e:
+            # Fallback to the old method if allLeaves fails
+            try:
+                # First get seasons, then get episodes from each season
+                seasons_url = f"{self.server_url}{show_key}"
+                response = requests.get(seasons_url, headers=self.headers)
+                response.raise_for_status()
+                
+                seasons_data = response.json()
+                seasons = seasons_data.get('MediaContainer', {}).get('Metadata', [])
+                
+                all_episodes = []
+                
+                # Get episodes from each season
+                for season in seasons:
+                    season_key = season.get('key', '')
+                    if season_key:
+                        # Get episodes from this season
+                        episodes_url = f"{self.server_url}{season_key}"
+                        episodes_response = requests.get(episodes_url, headers=self.headers)
+                        episodes_response.raise_for_status()
+                        
+                        episodes_data = episodes_response.json()
+                        episodes = episodes_data.get('MediaContainer', {}).get('Metadata', [])
+                        all_episodes.extend(episodes)
+                
+                return all_episodes
+            except Exception as e2:
+                return []
     
     def _map_plex_rating(self, plex_rating: str) -> str:
         """Map Plex rating to standard rating"""
@@ -183,6 +280,10 @@ class PlexImporter:
             if part_array and len(part_array) > 0:
                 return part_array[0].get('file', '')
         return ''
+    
+    def get_local_path(self, plex_path: str) -> str:
+        """Get the local mapped path for a Plex path (for file access)"""
+        return self.path_mapping_service.get_local_path(plex_path)
     
     def import_movie(self, item: Dict, library_name: str = None) -> bool:
         """Import a single movie"""
@@ -239,11 +340,17 @@ class PlexImporter:
             return False
     
     def import_show_episodes(self, show: Dict) -> int:
-        """Import all episodes from a show"""
+        """Import all episodes from a show with year-based disambiguation"""
         try:
             show_title = show.get('title', 'Unknown Show')
             show_key = show.get('key', '')
-            show_guid = show.get('guid', '')  # Use stable GUID
+            show_rating_key = show.get('ratingKey', '')
+            show_year = show.get('year')
+            
+            # Extract GUIDs for disambiguation
+            guids = extract_guids_from_plex_metadata(show)
+            parsed_guids = GUIDParser.parse_guids(guids)
+            primary_guid = GUIDParser.get_primary_guid(guids)
             
             # Get all episodes for this show
             episodes = self.get_show_episodes(show_key)
@@ -251,17 +358,27 @@ class PlexImporter:
             if not episodes:
                 return 0
             
-            # Create show record
+            # Create show record with disambiguation
             show_id = self.database.add_show(
                 title=show_title,
+                plex_rating_key=show_rating_key,
+                year=show_year,
                 total_seasons=show.get('leafCount', 0),
                 total_episodes=len(episodes),
                 show_rating=self._map_plex_rating(show.get('contentRating', '')),
                 show_summary=show.get('summary', ''),
                 genre=', '.join([g.get('tag', '') for g in show.get('Genre', [])]),
+                studio=show.get('studio', ''),
+                originally_available_at=show.get('originallyAvailableAt'),
+                guid_primary=primary_guid,
+                updated_at_plex=show.get('updatedAt'),
                 source_type='plex',
-                source_id=show_guid  # Use stable GUID
+                source_id=show_rating_key  # Use rating key as source ID
             )
+            
+            # Store all GUIDs for this show
+            for provider, external_id in parsed_guids:
+                self.database.add_show_guid(show_id, provider, external_id)
             
             imported_count = 0
             
@@ -294,12 +411,15 @@ class PlexImporter:
                     )
                     
                     # Add episode metadata
+                    # Convert to integers to match database storage
+                    season_number = int(episode.get('parentIndex', 0)) if episode.get('parentIndex') is not None else 0
+                    episode_number = int(episode.get('index', 0)) if episode.get('index') is not None else 0
                     self.database.add_episode(
                         media_file_id=media_file_id,
                         show_id=show_id,
                         episode_title=episode_title,
-                        season_number=episode.get('parentIndex'),
-                        episode_number=episode.get('index'),
+                        season_number=season_number,
+                        episode_number=episode_number,
                         rating=content_rating,
                         summary=episode.get('summary', '')
                     )
@@ -458,12 +578,12 @@ class PlexImporter:
                         else:
                             action = None  # No output for failed adds
                     
-                    # Emit item progress: current item / total items in this library
+                    # Emit item progress: current movie / total movies in this library
                     if progress_callback:
                         progress_callback(
                             library_progress=(i, len(libraries), library_name),
-                            item_progress=(j, len(plex_movies), movie_title),
-                            message=action
+                            item_progress=(j + 1, len(plex_movies), movie_title),
+                            message=action  # Only show message if there was a database change
                         )
                 
             elif library_type == 'show':
@@ -476,25 +596,13 @@ class PlexImporter:
                     show_title = show.get('title', 'Unknown Show')
                     
                     # Process this show and all its episodes
-                    episode_count = self._sync_show_episodes(show, progress_callback, library_progress=(i, len(libraries), library_name))
+                    episode_count = self._sync_show_episodes(
+                        show, 
+                        progress_callback, 
+                        library_progress=(i, len(libraries), library_name), 
+                        library_name=library_name
+                    )
                     total_updated += episode_count
-                    
-                    # Emit item progress: current show / total shows in this library
-                    if progress_callback:
-                        # Only show output if there were actual changes
-                        if episode_count > 0:
-                            progress_callback(
-                                library_progress=(i, len(libraries), library_name),
-                                item_progress=(j, len(plex_shows), show_title),
-                                message=f"Updated show: {show_title} ({episode_count} episodes)"
-                            )
-                        else:
-                            # Still update progress bar even for shows with no changes
-                            progress_callback(
-                                library_progress=(i, len(libraries), library_name),
-                                item_progress=(j, len(plex_shows), show_title),
-                                message=None
-                            )
         
         # Collect all Plex content for orphaned content removal
         all_plex_movie_ids = set()
@@ -609,6 +717,58 @@ class PlexImporter:
         
         return {'updated': updated_count, 'added': added_count, 'removed': removed_count}
     
+    def sync_show_by_title_and_year(self, title: str, year: int = None) -> Dict[str, int]:
+        """
+        Sync a specific show by title and year for disambiguation.
+        
+        Args:
+            title: Show title
+            year: Optional year for disambiguation
+            
+        Returns:
+            Dictionary with sync results: {'updated': int, 'added': int, 'removed': int}
+        """
+        # Discover shows matching the criteria
+        shows = self.discover_shows_by_title(title, year)
+        
+        if not shows:
+            self._emit_status(f"❌ No shows found matching '{title}'" + (f" ({year})" if year else ""))
+            return {'updated': 0, 'added': 0, 'removed': 0}
+        
+        # Display discovered shows
+        self._emit_status(f"🔍 Found {len(shows)} show(s) matching '{title}'" + (f" ({year})" if year else ""))
+        for show in shows:
+            self._emit_status(f"  📺 {show['display_name']}")
+        
+        total_updated = 0
+        total_added = 0
+        total_removed = 0
+        
+        # Sync each discovered show
+        for show in shows:
+            show_rating_key = show['ratingKey']
+            show_title = show['title']
+            show_year = show['year']
+            
+            # Check if show already exists in database
+            existing_show = self.database.get_show_by_plex_rating_key(show_rating_key)
+            
+            if existing_show:
+                # Update existing show
+                self._emit_status(f"🔄 Updating existing show: {show['display_name']}")
+                episode_count = self._sync_show_episodes(show['raw_metadata'])
+                total_updated += episode_count
+            else:
+                # Add new show
+                self._emit_status(f"➕ Adding new show: {show['display_name']}")
+                episode_count = self.import_show_episodes(show['raw_metadata'])
+                total_added += episode_count
+        
+        self._emit_status(f"🎉 Sync completed for '{title}'" + (f" ({year})" if year else "") + 
+                         f" - Added: {total_added}, Updated: {total_updated}")
+        
+        return {'updated': total_updated, 'added': total_added, 'removed': total_removed}
+    
     def _update_movie(self, movie: Dict, library_name: str = None) -> bool:
         """Update an existing movie with current Plex data"""
         try:
@@ -687,7 +847,7 @@ class PlexImporter:
         except Exception as e:
             return False
     
-    def _sync_show_episodes(self, show: Dict, progress_callback=None, library_progress=None) -> int:
+    def _sync_show_episodes(self, show: Dict, progress_callback=None, library_progress=None, library_name: str = None) -> int:
         """Sync episodes for an existing show"""
         try:
             show_title = show.get('title', 'Unknown Show')
@@ -711,39 +871,68 @@ class PlexImporter:
                 episode_guid = episode.get('guid', '')  # Use stable GUID
                 episode_title = episode.get('title', 'Unknown Episode')
                 
-                if episode_guid in db_episode_ids:
-                    # Update existing episode (only count if there were actual changes)
-                    if self._update_episode(episode, show):
-                        updated_count += 1
-                else:
-                    # Add new episode
-                    if self._add_episode(episode, show):
-                        added_count += 1
-                
-                # Update progress for each episode processed
+                # Update progress for each episode processed (moved outside conditional)
                 if progress_callback and library_progress:
-                    # Format: "Show Title / Episode Title"
-                    show_episode_display = f"{show_title} / {episode_title}"
+                    # Get episode number and season info
+                    episode_number = episode.get('index', 0)
+                    season_number = episode.get('parentIndex', 0)
+                    # Format: "Show Title / Episode Title (episode #/total episodes in this show)"
+                    show_episode_display = f"{show_title} / {episode_title} ({episode_number}/{len(plex_episodes)})"
                     progress_callback(
                         library_progress=library_progress,
-                        item_progress=(i, len(plex_episodes), show_episode_display),
-                        message=None
+                        item_progress=(i + 1, len(plex_episodes), show_episode_display),
+                        message=None  # No status messages during scanning
                     )
+                
+                if episode_guid in db_episode_ids:
+                    # Update existing episode (only count if there were actual changes)
+                    if self._update_episode(episode, show, library_name):
+                        updated_count += 1
+                        # Emit status message for database change
+                        if progress_callback:
+                            progress_callback(
+                                library_progress=library_progress,
+                                item_progress=(i + 1, len(plex_episodes), show_episode_display),
+                                message=f"Updated episode: {episode_title}"
+                            )
+                else:
+                    # Add new episode
+                    if self._add_episode(episode, show, library_name):
+                        added_count += 1
+                        # Emit status message for database change
+                        if progress_callback:
+                            progress_callback(
+                                library_progress=library_progress,
+                                item_progress=(i + 1, len(plex_episodes), show_episode_display),
+                                message=f"Added episode: {episode_title}"
+                            )
             
             # Remove episodes that no longer exist in Plex
             for db_episode in db_episodes:
                 if db_episode['source_id'] and db_episode['source_id'] not in plex_episode_ids:
                     if self.database.remove_episode_by_source_id(db_episode['source_id']):
                         removed_count += 1
+                        # Emit status message for database change
+                        if progress_callback:
+                            episode_title = db_episode.get('title', 'Unknown Episode')
+                            progress_callback(
+                                library_progress=library_progress,
+                                item_progress=None,  # No item progress for removals
+                                message=f"Removed episode: {episode_title}"
+                            )
             
             # Only output if there were actual changes
             total_changes = updated_count + added_count + removed_count
-            return total_changes
+            
+            # No summary messages - just progress bars
+            
+            # Return the number of episodes processed (not just changes)
+            return len(plex_episodes)
             
         except Exception as e:
             return 0
     
-    def _update_episode(self, episode: Dict, show: Dict) -> bool:
+    def _update_episode(self, episode: Dict, show: Dict, library_name: str = None) -> bool:
         """Update an existing episode with current Plex data"""
         try:
             episode_guid = episode.get('guid', '')  # Use stable GUID
@@ -757,8 +946,9 @@ class PlexImporter:
             
             # Update episode data
             episode_title = episode.get('title', 'Unknown Episode')
-            season_number = episode.get('parentIndex', 0)
-            episode_number = episode.get('index', 0)
+            # Convert to integers to match database storage
+            season_number = int(episode.get('parentIndex', 0)) if episode.get('parentIndex') is not None else 0
+            episode_number = int(episode.get('index', 0)) if episode.get('index') is not None else 0
             rating = self._map_plex_rating(episode.get('contentRating', ''))
             summary = episode.get('summary', '')
             
@@ -774,16 +964,29 @@ class PlexImporter:
             has_changes = False
             
             # Check media file changes
-            if (db_episode.get('file_path') != file_path or 
-                db_episode.get('duration') != duration):
-                has_changes = True
+            # Only update library_name if it's currently NULL (first-time assignment)
+            library_name_changed = (db_episode.get('library_name') is None and library_name is not None)
+            
+            # Check for file path or duration changes (these are legitimate updates)
+            file_path_changed = (db_episode.get('file_path') != file_path)
+            duration_changed = (db_episode.get('duration') != duration)
+            
+            if (file_path_changed or duration_changed or library_name_changed):
+                # Update the media file data
+                update_library_name = library_name if library_name_changed else db_episode.get('library_name')
                 self.database.update_media_file(
                     media_file_id=db_episode['media_file_id'],
                     file_path=file_path,
-                    duration=duration
+                    duration=duration,
+                    library_name=update_library_name
                 )
+                
+                # Only count as "changes" if it's not just a file path change
+                # File path changes are often due to library reorganization and shouldn't be treated as major updates
+                if duration_changed or library_name_changed:
+                    has_changes = True
             
-            # Check episode metadata changes
+            # Check episode metadata changes - ensure proper type comparison
             if (db_episode.get('episode_title') != episode_title or 
                 db_episode.get('season_number') != season_number or 
                 db_episode.get('episode_number') != episode_number or 
@@ -842,8 +1045,9 @@ class PlexImporter:
             episode_title = episode.get('title', 'Unknown Episode')
             episode_key = episode.get('key', '')
             episode_guid = episode.get('guid', '')  # Use stable GUID
-            season_number = episode.get('parentIndex', 0)
-            episode_number = episode.get('index', 0)
+            # Convert to integers to match database storage
+            season_number = int(episode.get('parentIndex', 0)) if episode.get('parentIndex') is not None else 0
+            episode_number = int(episode.get('index', 0)) if episode.get('index') is not None else 0
             rating = self._map_plex_rating(episode.get('contentRating', ''))
             summary = episode.get('summary', '')
             
