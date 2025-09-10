@@ -62,11 +62,9 @@ class PlexImporter:
         }
     
     def _emit_status(self, message: str):
-        """Emit status message via callback or print"""
+        """Emit status message via callback"""
         if self.status_callback:
             self.status_callback(message)
-        else:
-            print(message)
     
     def test_connection(self) -> bool:
         """Test connection to Plex server"""
@@ -75,7 +73,6 @@ class PlexImporter:
             response = requests.get(url, headers=self.headers, timeout=10)
             return response.status_code == 200
         except Exception as e:
-            print(f"❌ Plex connection failed: {e}")
             return False
     
     def get_libraries(self) -> List[Dict]:
@@ -98,7 +95,6 @@ class PlexImporter:
             
             return libraries
         except Exception as e:
-            print(f"❌ Failed to get libraries: {e}")
             return []
     
     def get_library_items(self, library_key: str, library_type: str) -> List[Dict]:
@@ -111,7 +107,6 @@ class PlexImporter:
             data = response.json()
             return data.get('MediaContainer', {}).get('Metadata', [])
         except Exception as e:
-            print(f"❌ Failed to get library items: {e}")
             return []
     
     def get_show_episodes(self, show_key: str) -> List[Dict]:
@@ -142,7 +137,6 @@ class PlexImporter:
             
             return all_episodes
         except Exception as e:
-            print(f"❌ Failed to get show episodes: {e}")
             return []
     
     def _map_plex_rating(self, plex_rating: str) -> str:
@@ -203,7 +197,6 @@ class PlexImporter:
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
-                print(f"⚠️ No duration found for movie: {title}")
                 return False
             
             # Get rating
@@ -243,7 +236,6 @@ class PlexImporter:
             return True
             
         except Exception as e:
-            print(f"❌ Failed to import movie {title}: {e}")
             return False
     
     def import_show_episodes(self, show: Dict) -> int:
@@ -257,7 +249,6 @@ class PlexImporter:
             episodes = self.get_show_episodes(show_key)
             
             if not episodes:
-                print(f"⚠️ No episodes found for show: {show_title}")
                 return 0
             
             # Create show record
@@ -287,7 +278,6 @@ class PlexImporter:
                     duration = self._get_duration_from_media(media_array)
                     
                     if not duration:
-                        print(f"⚠️ No duration found for episode: {episode_title}")
                         continue
                     
                     # Get rating
@@ -326,14 +316,12 @@ class PlexImporter:
                     self._emit_status(f"✅ Imported episode: {episode_title} ({content_rating}) - {duration_str}")
                     
                 except Exception as e:
-                    print(f"❌ Failed to import episode {episode_title}: {e}")
                     continue
             
             self._emit_status(f"🎉 Imported {imported_count} episodes from show: {show_title}")
             return imported_count
             
         except Exception as e:
-            print(f"❌ Failed to import show {show_title}: {e}")
             return 0
     
     def import_library(self, library_key: str, library_type: str) -> int:
@@ -343,7 +331,6 @@ class PlexImporter:
         elif library_type == 'show':
             return self._import_show_library(library_key)
         else:
-            print(f"⚠️ Unsupported library type: {library_type}")
             return 0
     
     def sync_library(self, library_key: str, library_type: str) -> Dict[str, int]:
@@ -362,7 +349,6 @@ class PlexImporter:
         elif library_type == 'show':
             return self._sync_show_library(library_key)
         else:
-            print(f"⚠️ Unsupported library type: {library_type}")
             return {'updated': 0, 'added': 0, 'removed': 0}
     
     def _import_movie_library(self, library_key: str, library_name: str = None) -> int:
@@ -424,75 +410,25 @@ class PlexImporter:
         total_added = 0
         total_removed = 0
         
-        # First pass: count total individual items (movies + episodes) for progress tracking
-        total_items = 0
-        library_item_counts = {}  # Store item counts per library for progress tracking
-        
-        for library in libraries:
-            library_key = library.get('key', '')
-            library_type = library.get('type', 'movie')
-            library_name = library.get('title', 'Unknown Library')
-            # Count items silently
-            
-            try:
-                if library_type == 'movie':
-                    # For movies, use /all endpoint
-                    url = f"{self.server_url}/library/sections/{library_key}/all?X-Plex-Token={self.token}"
-                elif library_type == 'show':
-                    # For shows, use /allLeaves endpoint to get episode count
-                    url = f"{self.server_url}/library/sections/{library_key}/allLeaves?X-Plex-Token={self.token}"
-                else:
-                    continue
-                
-                response = requests.get(url, timeout=10)
-                response.raise_for_status()
-                
-                # Parse the XML response to get size
-                import xml.etree.ElementTree as ET
-                root = ET.fromstring(response.content)
-                size = int(root.get('size', 0))
-                
-                total_items += size
-                library_item_counts[library_key] = size
-                # Found items silently
-                
-            except Exception as e:
-                print(f"DEBUG: Error getting size for {library_name}: {e}")
-                # Fallback to old method
-                if library_type == 'movie':
-                    plex_movies = self.get_library_items(library_key, 'movie')
-                    total_items += len(plex_movies)
-                    library_item_counts[library_key] = len(plex_movies)
-                    print(f"DEBUG: Fallback - Found {len(plex_movies)} movies in {library_name}")
-                elif library_type == 'show':
-                    plex_shows = self.get_library_items(library_key, 'show')
-                    total_items += len(plex_shows)
-                    library_item_counts[library_key] = len(plex_shows)
-                    print(f"DEBUG: Fallback - Found {len(plex_shows)} shows in {library_name}")
-        
-        if progress_callback:
-            progress_callback(0, total_items, f"📊 Found {total_items} total items to process")
-        
-        # Collect all Plex content across all libraries and process each individual item
-        all_plex_movie_ids = set()
-        all_plex_show_ids = set()
-        items_processed = 0
-        
-        # Process each library and each individual item within it
+        # Process each library with dual progress tracking
         for i, library in enumerate(libraries):
             library_key = library.get('key', '')
             library_type = library.get('type', 'movie')
             library_name = library.get('title', 'Unknown Library')
             
+            # Emit library progress: current library / total libraries
             if progress_callback:
-                progress_callback(items_processed, total_items, f"🔄 Processing library {i+1}/{len(libraries)}: {library_name} ({library_type})")
+                progress_callback(
+                    library_progress=(i, len(libraries), library_name),
+                    item_progress=None,
+                    message=None  # No status message for library processing
+                )
             
             if library_type == 'movie':
                 # Get all movies from this library
                 plex_movies = self.get_library_items(library_key, 'movie')
-                all_plex_movie_ids.update(movie.get('guid', '') for movie in plex_movies)
                 
-                # Process each movie individually
+                # Process each movie individually with item progress
                 for j, movie in enumerate(plex_movies):
                     movie_guid = movie.get('guid', '')
                     movie_title = movie.get('title', 'Unknown Movie')
@@ -522,18 +458,17 @@ class PlexImporter:
                         else:
                             action = None  # No output for failed adds
                     
-                    # Update progress after each movie
-                    items_processed += 1
-                    if progress_callback and action:
-                        progress_callback(items_processed, total_items, action)
-                    elif progress_callback:
-                        # Still update progress bar even for ignored items
-                        progress_callback(items_processed, total_items, None)
+                    # Emit item progress: current item / total items in this library
+                    if progress_callback:
+                        progress_callback(
+                            library_progress=(i, len(libraries), library_name),
+                            item_progress=(j, len(plex_movies), movie_title),
+                            message=action
+                        )
                 
             elif library_type == 'show':
                 # Get all shows from this library
                 plex_shows = self.get_library_items(library_key, 'show')
-                all_plex_show_ids.update(show.get('guid', '') for show in plex_shows)
                 
                 # Process each show individually (which processes all its episodes)
                 for j, show in enumerate(plex_shows):
@@ -541,23 +476,48 @@ class PlexImporter:
                     show_title = show.get('title', 'Unknown Show')
                     
                     # Process this show and all its episodes
-                    episode_count = self._sync_show_episodes(show, progress_callback)
+                    episode_count = self._sync_show_episodes(show, progress_callback, library_progress=(i, len(libraries), library_name))
                     total_updated += episode_count
                     
-                    # Update progress after each show (count episodes processed)
-                    items_processed += episode_count
+                    # Emit item progress: current show / total shows in this library
                     if progress_callback:
                         # Only show output if there were actual changes
                         if episode_count > 0:
-                            progress_callback(items_processed, total_items, f"Updated show: {show_title} ({episode_count} episodes)")
+                            progress_callback(
+                                library_progress=(i, len(libraries), library_name),
+                                item_progress=(j, len(plex_shows), show_title),
+                                message=f"Updated show: {show_title} ({episode_count} episodes)"
+                            )
                         else:
                             # Still update progress bar even for shows with no changes
-                            progress_callback(items_processed, total_items, None)
+                            progress_callback(
+                                library_progress=(i, len(libraries), library_name),
+                                item_progress=(j, len(plex_shows), show_title),
+                                message=None
+                            )
+        
+        # Collect all Plex content for orphaned content removal
+        all_plex_movie_ids = set()
+        all_plex_show_ids = set()
+        
+        for library in libraries:
+            library_key = library.get('key', '')
+            library_type = library.get('type', 'movie')
+            
+            if library_type == 'movie':
+                plex_movies = self.get_library_items(library_key, 'movie')
+                all_plex_movie_ids.update(movie.get('guid', '') for movie in plex_movies)
+            elif library_type == 'show':
+                plex_shows = self.get_library_items(library_key, 'show')
+                all_plex_show_ids.update(show.get('guid', '') for show in plex_shows)
         
         # Remove orphaned movies (not in any Plex library)
         if progress_callback:
-            progress_callback(items_processed, total_items, "🧹 Removing orphaned movies...")
-            print(f"DEBUG: Starting orphaned content removal - items_processed={items_processed}, total_items={total_items}")
+            progress_callback(
+                library_progress=(len(libraries), len(libraries), "Cleanup"),
+                item_progress=None,
+                message=None  # No status message for cleanup
+            )
         db_movies = self.database.get_movies_by_source('plex')
         for db_movie in db_movies:
             if db_movie['source_id'] and db_movie['source_id'] not in all_plex_movie_ids:
@@ -566,8 +526,11 @@ class PlexImporter:
         
         # Remove orphaned shows (not in any Plex library)
         if progress_callback:
-            progress_callback(items_processed, total_items, "🧹 Removing orphaned shows...")
-            print(f"DEBUG: Starting orphaned shows removal - items_processed={items_processed}, total_items={total_items}")
+            progress_callback(
+                library_progress=(len(libraries), len(libraries), "Cleanup"),
+                item_progress=None,
+                message=None  # No status message for cleanup
+            )
         db_shows = self.database.get_shows_by_source('plex')
         for db_show in db_shows:
             if db_show['source_id'] and db_show['source_id'] not in all_plex_show_ids:
@@ -576,8 +539,11 @@ class PlexImporter:
         
         # Final progress callback
         if progress_callback:
-            progress_callback(total_items, total_items, f"🎉 Sync completed! Added: {total_added}, Updated: {total_updated}, Removed: {total_removed}")
-            print(f"DEBUG: Sync completed - total_items={total_items}, total_items={total_items}")
+            progress_callback(
+                library_progress=(len(libraries), len(libraries), "Complete"),
+                item_progress=None,
+                message=f"🎉 Sync completed! Added: {total_added}, Updated: {total_updated}, Removed: {total_removed}"
+            )
         
         return {'updated': total_updated, 'added': total_added, 'removed': total_removed}
     
@@ -669,7 +635,6 @@ class PlexImporter:
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
-                print(f"⚠️ No duration found for movie: {title}")
                 return False
             
             # Check if anything has actually changed
@@ -720,10 +685,9 @@ class PlexImporter:
             return has_changes
             
         except Exception as e:
-            print(f"❌ Failed to update movie {title}: {e}")
             return False
     
-    def _sync_show_episodes(self, show: Dict, progress_callback=None) -> int:
+    def _sync_show_episodes(self, show: Dict, progress_callback=None, library_progress=None) -> int:
         """Sync episodes for an existing show"""
         try:
             show_title = show.get('title', 'Unknown Show')
@@ -757,8 +721,14 @@ class PlexImporter:
                         added_count += 1
                 
                 # Update progress for each episode processed
-                if progress_callback:
-                    progress_callback(i + 1, len(plex_episodes), None)
+                if progress_callback and library_progress:
+                    # Format: "Show Title / Episode Title"
+                    show_episode_display = f"{show_title} / {episode_title}"
+                    progress_callback(
+                        library_progress=library_progress,
+                        item_progress=(i, len(plex_episodes), show_episode_display),
+                        message=None
+                    )
             
             # Remove episodes that no longer exist in Plex
             for db_episode in db_episodes:
@@ -768,12 +738,9 @@ class PlexImporter:
             
             # Only output if there were actual changes
             total_changes = updated_count + added_count + removed_count
-            if total_changes > 0:
-                print(f"🔄 Synced show {show_title}: {updated_count} updated, {added_count} added, {removed_count} removed")
             return total_changes
             
         except Exception as e:
-            print(f"❌ Failed to sync show episodes {show_title}: {e}")
             return 0
     
     def _update_episode(self, episode: Dict, show: Dict) -> bool:
@@ -801,7 +768,6 @@ class PlexImporter:
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
-                print(f"⚠️ No duration found for episode: {episode_title}")
                 return False
             
             # Check if anything has actually changed
@@ -834,14 +800,9 @@ class PlexImporter:
                 )
             
             # Only output if there were actual changes
-            if has_changes:
-                print(f"✅ Updated episode: {episode_title} ({rating}) - {duration}s")
-            
             return has_changes
             
         except Exception as e:
-            episode_title = episode.get('title', 'Unknown Episode')
-            print(f"❌ Failed to update episode {episode_title}: {e}")
             return False
     
     def _add_episode(self, episode: Dict, show: Dict, library_name: str = None) -> bool:
@@ -874,10 +835,8 @@ class PlexImporter:
                     if db_show:
                         db_show = dict(db_show)
                     if not db_show:
-                        print(f"❌ Failed to create show in database: {show_guid}")
                         return False
                 except Exception as e:
-                    print(f"❌ Exception creating show {show_guid}: {e}")
                     return False
             
             episode_title = episode.get('title', 'Unknown Episode')
@@ -894,7 +853,6 @@ class PlexImporter:
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
-                print(f"⚠️ No duration found for episode: {episode_title}")
                 return False
             
             # Add media file
@@ -918,12 +876,9 @@ class PlexImporter:
                 summary=summary
             )
             
-            print(f"✅ Added episode: {episode_title} ({rating}) - {duration}s")
             return True
             
         except Exception as e:
-            episode_title = episode.get('title', 'Unknown Episode')
-            print(f"❌ Failed to add episode {episode_title}: {e}")
             return False
     
     def import_all_libraries(self) -> int:
@@ -936,12 +891,8 @@ class PlexImporter:
             library_title = library.get('title', 'Unknown Library')
             library_type = library.get('type', 'movie')
             
-            print(f"🔄 Importing {library_title} ({library_type})...")
-            
             count = self.import_library(library_key, library_type)
             total_imported += count
-            
-            print(f"🎉 Imported {count} items from {library_title}")
         
         return total_imported
 
@@ -965,5 +916,4 @@ def create_plex_importer(server_url: str, token: str, database: RetrovueDatabase
         importer._emit_status(f"✅ Connected to Plex server: {server_url}")
         return importer
     else:
-        print(f"❌ Failed to connect to Plex server: {server_url}")
         return None
