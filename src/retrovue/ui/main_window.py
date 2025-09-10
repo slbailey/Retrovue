@@ -142,8 +142,8 @@ class ImportWorker(QThread):
                     item_current, item_total, item_name = item_progress
                     if item_total > 0:
                         item_progress_percent = int((item_current / item_total) * 100)
-                        # Pass the actual current item number (1-based) and total
-                        self.item_progress.emit(item_progress_percent, 100, f"{item_name} ({item_current + 1}/{item_total})")
+                        # The item_name now already includes the episode number format from plex_integration
+                        self.item_progress.emit(item_progress_percent, 100, item_name)
             
             # Use the new sync_all_libraries method with progress callback
             result = importer.sync_all_libraries(progress_callback)
@@ -171,7 +171,7 @@ class PlexSettingsDialog(QDialog):
         self.database = database
         self.setWindowTitle("Plex Settings")
         self.setModal(True)
-        self.setFixedSize(500, 300)
+        self.setFixedSize(500, 400)
         self._setup_ui()
         self._load_stored_credentials()
     
@@ -199,15 +199,35 @@ class PlexSettingsDialog(QDialog):
         # Test Connection Button
         self.test_btn = QPushButton("Test Connection")
         self.test_btn.clicked.connect(self._test_connection)
-        connection_layout.addWidget(self.test_btn, 2, 0)
-        
-        # Save Button
-        self.save_btn = QPushButton("Save Settings")
-        self.save_btn.clicked.connect(self._save_settings)
-        connection_layout.addWidget(self.save_btn, 2, 1)
+        connection_layout.addWidget(self.test_btn, 2, 0, 1, 2)
         
         connection_group.setLayout(connection_layout)
         layout.addWidget(connection_group)
+        
+        # Path Mapping Group
+        path_group = QGroupBox("Path Mapping")
+        path_layout = QGridLayout()
+        
+        # Plex Path
+        path_layout.addWidget(QLabel("Plex Path:"), 0, 0)
+        self.plex_path_input = QLineEdit()
+        self.plex_path_input.setPlaceholderText("/media")
+        path_layout.addWidget(self.plex_path_input, 0, 1)
+        
+        # Local Path
+        path_layout.addWidget(QLabel("Local Path:"), 1, 0)
+        self.local_path_input = QLineEdit()
+        self.local_path_input.setPlaceholderText("R:\\media")
+        path_layout.addWidget(self.local_path_input, 1, 1)
+        
+        # Path mapping info
+        path_info = QLabel("Map Plex server paths to local paths. Example: /media → R:\\media")
+        path_info.setWordWrap(True)
+        path_info.setStyleSheet("color: #666; font-size: 11px;")
+        path_layout.addWidget(path_info, 2, 0, 1, 2)
+        
+        path_group.setLayout(path_layout)
+        layout.addWidget(path_group)
         
         # Status Text
         self.status_text = QTextEdit()
@@ -215,10 +235,11 @@ class PlexSettingsDialog(QDialog):
         self.status_text.setReadOnly(True)
         layout.addWidget(self.status_text)
         
-        # Dialog buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
+        # Dialog buttons with Apply button
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.Apply)
+        button_box.accepted.connect(self._ok_clicked)
         button_box.rejected.connect(self.reject)
+        button_box.button(QDialogButtonBox.Apply).clicked.connect(self._apply_clicked)
         layout.addWidget(button_box)
         
         self.setLayout(layout)
@@ -230,6 +251,15 @@ class PlexSettingsDialog(QDialog):
             self.server_url_input.setText(creds['server_url'])
             self.token_input.setText(creds['token'])
             self.status_text.append("🔐 Loaded stored Plex credentials")
+        
+        # Load path mappings
+        path_mappings = self.database.get_plex_path_mappings()
+        if path_mappings:
+            # For now, just use the first mapping (we can extend this later)
+            mapping = path_mappings[0]
+            self.plex_path_input.setText(mapping['plex_path'])
+            self.local_path_input.setText(mapping['local_path'])
+            self.status_text.append("🗺️ Loaded path mappings")
     
     def _test_connection(self):
         """Test connection to Plex server"""
@@ -252,21 +282,72 @@ class PlexSettingsDialog(QDialog):
         except Exception as e:
             self.status_text.append(f"❌ Connection error: {str(e)}")
     
-    def _save_settings(self):
-        """Save Plex settings to database"""
+    def _validate_settings(self):
+        """Validate all settings and return list of missing fields"""
+        missing_fields = []
+        
         server_url = self.server_url_input.text().strip()
         token = self.token_input.text().strip()
+        plex_path = self.plex_path_input.text().strip()
+        local_path = self.local_path_input.text().strip()
         
-        if not server_url or not token:
-            self.status_text.append("⚠️ Please enter both server URL and token")
-            return
+        if not server_url:
+            missing_fields.append("Server URL")
+        
+        if not token:
+            missing_fields.append("Token")
+        
+        if not plex_path:
+            missing_fields.append("Plex Path")
+        
+        if not local_path:
+            missing_fields.append("Local Path")
+        
+        return missing_fields
+    
+    def _show_validation_error(self, missing_fields):
+        """Show modal dialog for missing required fields"""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Missing Required Fields")
+        msg.setText("The following required fields are missing:\n\n" + "\n".join(f"• {field}" for field in missing_fields))
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec()
+    
+    def _save_settings(self):
+        """Save Plex settings to database with validation"""
+        missing_fields = self._validate_settings()
+        
+        if missing_fields:
+            self._show_validation_error(missing_fields)
+            return False
+        
+        server_url = self.server_url_input.text().strip()
+        token = self.token_input.text().strip()
+        plex_path = self.plex_path_input.text().strip()
+        local_path = self.local_path_input.text().strip()
         
         try:
             # Store credentials in database
             self.database.store_plex_credentials(server_url, token)
-            self.status_text.append("💾 Settings saved successfully")
+            
+            # Store path mappings
+            self.database.store_plex_path_mapping(plex_path, local_path)
+            
+            self.status_text.append("💾 Settings and path mappings saved successfully")
+            return True
         except Exception as e:
             self.status_text.append(f"❌ Save error: {str(e)}")
+            return False
+    
+    def _apply_clicked(self):
+        """Handle Apply button click - save settings but don't close dialog"""
+        self._save_settings()
+    
+    def _ok_clicked(self):
+        """Handle OK button click - save settings and close dialog"""
+        if self._save_settings():
+            self.accept()
     
     def get_credentials(self):
         """Get the current credentials from the dialog"""
@@ -466,15 +547,27 @@ class ContentBrowserTab(QWidget):
         self.show_combo.currentTextChanged.connect(self._filter_content)
         filter_layout.addWidget(self.show_combo)
         
+        # Library Filter
+        filter_layout.addWidget(QLabel("Library:"))
+        self.library_combo = QComboBox()
+        self.library_combo.addItem("All Libraries")
+        self.library_combo.currentTextChanged.connect(self._filter_content)
+        filter_layout.addWidget(self.library_combo)
+        
         filter_group.setLayout(filter_layout)
         layout.addWidget(filter_group)
         
         # Content Table
         self.content_table = QTableWidget()
-        self.content_table.setColumnCount(6)
+        self.content_table.setColumnCount(8)
         self.content_table.setHorizontalHeaderLabels([
-            "Title", "Type", "Duration", "Rating", "Show", "Season/Episode"
+            "Title", "Type", "Duration", "Rating", "Show", "Season/Episode", "Library", "Media Path"
         ])
+        
+        # Enable context menu for the table
+        self.content_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.content_table.customContextMenuRequested.connect(self._show_context_menu)
+        
         layout.addWidget(self.content_table)
         
         self.setLayout(layout)
@@ -494,6 +587,13 @@ class ContentBrowserTab(QWidget):
         for show in shows:
             self.show_combo.addItem(show['title'])
         
+        # Load libraries
+        libraries = self.database.get_libraries()
+        self.library_combo.clear()
+        self.library_combo.addItem("All Libraries")
+        for library in libraries:
+            self.library_combo.addItem(library)
+        
         # Load content
         self._filter_content()
     
@@ -501,6 +601,7 @@ class ContentBrowserTab(QWidget):
         """Filter content based on selected criteria"""
         media_type = self.media_type_combo.currentText()
         show_title = self.show_combo.currentText()
+        library_name = self.library_combo.currentText()
         
         # Clear table
         self.content_table.setRowCount(0)
@@ -510,6 +611,8 @@ class ContentBrowserTab(QWidget):
             episodes = self.database.get_episodes_with_show_info()
             for episode in episodes:
                 if show_title != "All Shows" and episode['show_title'] != show_title:
+                    continue
+                if library_name != "All Libraries" and episode.get('library_name', '') != library_name:
                     continue
                 
                 row = self.content_table.rowCount()
@@ -530,10 +633,14 @@ class ContentBrowserTab(QWidget):
                 self.content_table.setItem(row, 3, QTableWidgetItem(episode.get('rating', '')))
                 self.content_table.setItem(row, 4, QTableWidgetItem(episode['show_title']))
                 self.content_table.setItem(row, 5, QTableWidgetItem(season_episode))
+                self.content_table.setItem(row, 6, QTableWidgetItem(episode.get('library_name', '')))
+                self.content_table.setItem(row, 7, QTableWidgetItem(episode.get('file_path', '')))
         
         if media_type == "All" or media_type == "movie":
             movies = self.database.get_movies_with_metadata()
             for movie in movies:
+                if library_name != "All Libraries" and movie.get('library_name', '') != library_name:
+                    continue
                 row = self.content_table.rowCount()
                 self.content_table.insertRow(row)
                 
@@ -547,9 +654,79 @@ class ContentBrowserTab(QWidget):
                 self.content_table.setItem(row, 3, QTableWidgetItem(movie.get('rating', '')))
                 self.content_table.setItem(row, 4, QTableWidgetItem(""))
                 self.content_table.setItem(row, 5, QTableWidgetItem(""))
+                self.content_table.setItem(row, 6, QTableWidgetItem(movie.get('library_name', '')))
+                self.content_table.setItem(row, 7, QTableWidgetItem(movie.get('file_path', '')))
         
         # Resize columns to content
         self.content_table.resizeColumnsToContents()
+    
+    def _show_context_menu(self, position):
+        """Show context menu for table items"""
+        item = self.content_table.itemAt(position)
+        if item is None:
+            return
+        
+        row = item.row()
+        media_path_item = self.content_table.item(row, 7)  # Media Path column
+        if media_path_item is None:
+            return
+        
+        media_path = media_path_item.text()
+        if not media_path:
+            return
+        
+        # Create context menu
+        menu = QMenu(self)
+        
+        # Copy path action
+        copy_action = QAction("Copy Media Path", self)
+        copy_action.triggered.connect(lambda: self._copy_to_clipboard(media_path))
+        menu.addAction(copy_action)
+        
+        # Copy local path action (if path mapping is configured)
+        try:
+            local_path = self.database.get_local_path_for_media_file(
+                self.content_table.item(row, 0).data(Qt.ItemDataRole.UserRole)  # We'll need to store media_file_id
+            )
+            if local_path != media_path:
+                copy_local_action = QAction("Copy Local Path", self)
+                copy_local_action.triggered.connect(lambda: self._copy_to_clipboard(local_path))
+                menu.addAction(copy_local_action)
+        except:
+            pass  # Ignore if we can't get local path
+        
+        # Show in Explorer action
+        show_action = QAction("Show in Explorer", self)
+        show_action.triggered.connect(lambda: self._show_in_explorer(media_path))
+        menu.addAction(show_action)
+        
+        # Show menu
+        menu.exec(self.content_table.mapToGlobal(position))
+    
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard"""
+        from PySide6.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+    
+    def _show_in_explorer(self, file_path: str):
+        """Show file in Windows Explorer"""
+        import os
+        import subprocess
+        
+        # Convert to local path if path mapping is configured
+        try:
+            # For now, just use the path as-is
+            # In the future, we could use the path mapping service here
+            local_path = file_path
+            
+            # Get the directory containing the file
+            directory = os.path.dirname(local_path)
+            
+            # Open in Windows Explorer
+            subprocess.run(['explorer', '/select,', local_path], check=False)
+        except Exception as e:
+            print(f"Error opening in Explorer: {e}")
 
 
 class RetrovueMainWindow(QMainWindow):

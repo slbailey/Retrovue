@@ -90,6 +90,7 @@ Features:
 - [x] **Database Migrations** - Schema updates without data loss
 - [x] **Library Management** - Store library names as media file attributes
 - [x] **Duration Handling** - Proper millisecond storage and hh:mm:ss.ff display formatting
+- [ ] **🚨 CRITICAL: Path Mapping System** - Translate Plex internal paths to accessible file paths (REQUIRED for streaming)
 - [ ] **Menu Bar Structure** - File menu (About, Settings, Quit) and Utilities menu (Sync Media)
 - [ ] **Main Window Content List** - Display all media data with Edit Metadata button and modal popup
 - [ ] **Content Type Handling** - Support for Movies, TV Shows, Commercials, Bumpers, Intros/Outros, Interstitials
@@ -139,10 +140,109 @@ Media Files → Content Manager → Database → Schedule Manager → Program Di
 ### **Component Dependencies**
 - **Content Manager** ← Independent (can build first)
 - **Database Schema** ← Needed by Content Manager  
+- **🚨 Path Mapping System** ← CRITICAL: Required before streaming integration
 - **Media Browser UI** ← Depends on Content Manager + Database
 - **Schedule Manager** ← Depends on Database + Media metadata
 - **Program Director** ← Depends on Schedule Manager
-- **Streaming Pipeline** ← Depends on Program Director
+- **Streaming Pipeline** ← Depends on Program Director + Path Mapping System
+
+---
+
+## 🎯 **Show Disambiguation Strategy**
+
+Retrovue implements a robust disambiguation system to handle series with identical titles but different years, such as the two Battlestar Galactica series (1978 and 2003).
+
+### **The Problem**
+Many TV series have been remade or rebooted with the same title but different years:
+- **Battlestar Galactica** (1978) - Original series
+- **Battlestar Galactica** (2003) - Reboot series
+- **Doctor Who** (1963) - Classic series
+- **Doctor Who** (2005) - Revival series
+
+Without proper disambiguation, these would be treated as the same show, causing metadata conflicts and incorrect episode associations.
+
+### **The Solution**
+Retrovue uses a **multi-layered disambiguation strategy**:
+
+#### **1. Year-Based Disambiguation**
+- **Primary Key**: `(title, year)` combination
+- **Database Constraint**: `UNIQUE(title, year)` prevents duplicate shows
+- **Example**: "Battlestar Galactica (1978)" vs "Battlestar Galactica (2003)"
+
+#### **2. GUID-Based Identification**
+- **External Identifiers**: TVDB, TMDB, IMDB, Plex internal GUIDs
+- **Stable References**: GUIDs remain constant across Plex updates
+- **Multiple GUIDs**: Each show can have multiple external identifiers
+- **Priority Order**: TVDB > TMDB > IMDB > Plex (for primary GUID selection)
+
+#### **3. Plex Rating Key Tracking**
+- **Unique Identifier**: Plex's internal `ratingKey` for each show
+- **Database Storage**: `plex_rating_key` field with unique constraint
+- **Sync Reliability**: Ensures accurate updates and conflict resolution
+
+### **Database Schema for Disambiguation**
+
+```sql
+-- Shows table with year-based disambiguation
+shows (
+    id INTEGER PRIMARY KEY,
+    plex_rating_key TEXT UNIQUE NOT NULL,  -- Plex's unique identifier
+    title TEXT NOT NULL,
+    year INTEGER,                          -- Year for disambiguation
+    guid_primary TEXT,                     -- Primary external GUID
+    -- ... other fields
+    UNIQUE(title, year)                    -- Prevent duplicate shows
+)
+
+-- Show GUIDs table for multiple external identifiers
+show_guids (
+    id INTEGER PRIMARY KEY,
+    show_id INTEGER,
+    provider TEXT NOT NULL,                -- 'tvdb', 'tmdb', 'imdb', 'plex'
+    external_id TEXT NOT NULL,             -- The actual ID from provider
+    UNIQUE(provider, external_id)          -- Prevent duplicate GUIDs
+)
+```
+
+### **GUID Parsing Examples**
+
+```python
+# Plex GUID formats and their parsed equivalents
+"com.plexapp.agents.thetvdb://12345"     → (tvdb, 12345)
+"com.plexapp.agents.themoviedb://54321"  → (tmdb, 54321)
+"imdb://tt0123456"                       → (imdb, tt0123456)
+"plex://show/abcdef"                     → (plex, show/abcdef)
+```
+
+### **CLI Usage Examples**
+
+```bash
+# Discover both Battlestar Galactica series
+python -m retrovue discover --title "Battlestar Galactica"
+# Output:
+# 📺 Battlestar Galactica (1978) [TVDB:12345 TMDB:67890]
+# 📺 Battlestar Galactica (2003) [TVDB:54321 TMDB:09876]
+
+# Sync specific series
+python -m retrovue sync --title "Battlestar Galactica" --year 1978
+python -m retrovue sync --title "Battlestar Galactica" --year 2003
+
+# Sync all series with the same title
+python -m retrovue sync --title "Battlestar Galactica"
+```
+
+### **Benefits of This Approach**
+
+1. **Accurate Identification**: Year + GUIDs provide multiple ways to identify shows
+2. **Conflict Prevention**: Database constraints prevent duplicate entries
+3. **Stable References**: GUIDs remain constant across Plex updates
+4. **Flexible Discovery**: Can find shows by title, year, or external ID
+5. **Robust Sync**: Handles metadata updates without losing disambiguation
+6. **User-Friendly**: Clear display names show disambiguation information
+
+### **Migration Support**
+
+The system includes automatic database migrations to add the new disambiguation fields to existing databases without data loss.
 
 ---
 
@@ -182,6 +282,14 @@ content_sources (
     id, source_type, source_name, 
     plex_server_url, plex_token,  -- For Plex integration
     last_sync_time, sync_enabled
+)
+
+-- Plex Path Mapping (CRITICAL for streaming)
+plex_path_replacements (
+    id, plex_media_source_id,
+    plex_path,        -- "/media/movies" (Plex internal path)
+    local_path,       -- "R:\movies" (accessible path)
+    created_at, updated_at
 )
 
 -- TMM Directory Management
@@ -444,6 +552,68 @@ pip install -r requirements.txt
 python run_ui.py
 ```
 
+### Using the CLI for Show Disambiguation
+
+Retrovue now includes a powerful CLI for managing content with robust disambiguation support for series with the same title but different years (like Battlestar Galactica 1978 vs 2003).
+
+#### Environment Setup
+```bash
+# Set Plex connection details (or use command line arguments)
+export PLEX_BASE_URL="http://127.0.0.1:32400"
+export PLEX_TOKEN="your-plex-token-here"
+export PLEX_TV_SECTION_KEY="1"  # Optional: specific TV section
+```
+
+#### Discover Shows
+```bash
+# Discover all shows with a specific title
+python -m retrovue discover --title "Battlestar Galactica"
+
+# Discover specific year (1978 original series)
+python -m retrovue discover --title "Battlestar Galactica" --year 1978
+
+# Discover specific year (2003 reboot)
+python -m retrovue discover --title "Battlestar Galactica" --year 2003
+```
+
+#### Sync Specific Shows
+```bash
+# Sync the 1978 original series
+python -m retrovue sync --title "Battlestar Galactica" --year 1978
+
+# Sync the 2003 reboot series
+python -m retrovue sync --title "Battlestar Galactica" --year 2003
+
+# Sync all shows with the title (both series)
+python -m retrovue sync --title "Battlestar Galactica"
+```
+
+#### Full Library Sync
+```bash
+# Sync all libraries with progress tracking
+python -m retrovue sync-all --page-size 200
+
+# Dry run to see what would be synced
+python -m retrovue sync-all --dry-run
+```
+
+#### CLI Options
+```bash
+# Global options
+--debug              # Enable debug logging
+--dry-run            # Show what would be done without making changes
+--db-path PATH       # Path to SQLite database file
+
+# Plex connection options
+--plex-url URL       # Plex server URL
+--plex-token TOKEN   # Plex authentication token
+--plex-section KEY   # Plex TV section key
+
+# Examples with options
+python -m retrovue discover --title "Battlestar Galactica" --year 1978 --debug
+python -m retrovue sync --title "Battlestar Galactica" --year 2003 --dry-run
+```
+
 ### Content Import Process
 1. **Launch the UI** - Run `python run_ui_v2.py`
 2. **Import Tab** - Import content from your sources:
@@ -554,6 +724,7 @@ Retrovue/
 - **Program Director** - No orchestration or channel management
 - **Graphics Overlays** - No bugs, lower thirds, or branding overlays
 - **Emergency System** - No alert injection or priority overrides
+- **🚨 CRITICAL: Path Mapping System** - No translation between Plex internal paths and accessible file paths
 
 ### **🎯 Current Capabilities**
 You can currently:
@@ -573,18 +744,260 @@ The next major development phases will focus on:
 
 **Current Status**: Content management foundation is solid. Ready to build the scheduling engine.
 
-### **🐛 Known Issues - Progress Bar Behavior**
-**Issue**: Dual progress bar system causing confusion during sync operations.
-- **Main Progress Bar**: Shows overall sync progress (e.g., 6% when processing cartoons)
-- **Episode Progress Bar**: Resets to 0-100% for each show's episode processing
-- **Problem**: Two different progress tracking systems are running simultaneously, making it unclear which progress is being displayed
-- **Impact**: User experience confusion during content sync operations
-- **Status**: Identified but not yet resolved - needs architectural review of progress callback system
+---
 
-**Next Steps**: 
-- Review progress callback architecture in `plex_integration.py`
-- Consolidate to single progress tracking system
-- Ensure clear progress indication for both overall sync and individual show processing
+## 🚨 **CRITICAL REQUIREMENT: Path Mapping System**
+
+### **The Problem**
+**Plex provides its own internal file paths, not the paths you can actually access from your system.**
+
+When Plex reports a file path like `/media/movies/MovieName.mp4`, this is **Plex's internal path**, not necessarily the path you would use to access the file directly. For streaming to work, we need to translate these paths to your actual accessible paths.
+
+### **Real-World Examples**
+```
+Plex Internal Path:     /media/movies/ActionMovie.mp4
+Your Accessible Path:   R:\movies\ActionMovie.mp4
+
+Plex Internal Path:     /media/tv/ShowName/S01E01.mp4  
+Your Accessible Path:   \\server\share\tv\ShowName\S01E01.mp4
+
+Plex Internal Path:     /othermedia/Other Movies/Godzilla
+Your Accessible Path:   R:\other\Godzilla
+```
+
+### **Why This Matters**
+- ✅ **Metadata Import Works** - Titles, durations, ratings all import correctly
+- ❌ **Streaming Will Fail** - FFmpeg can't access files using Plex's internal paths
+- ❌ **File Validation Fails** - Can't verify media files are playable
+- ❌ **Content Management Broken** - Can't preview or edit media files
+
+### **ErsatzTV's Solution (Reference Implementation)**
+ErsatzTV solves this with an **optional Plex Path Replacement** system that users must configure:
+
+#### **Database Table**
+```sql
+plex_path_replacements (
+    id INTEGER PRIMARY KEY,
+    plex_media_source_id INTEGER,
+    plex_path TEXT,        -- "/media/movies"
+    local_path TEXT,       -- "R:\movies"
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+)
+```
+
+#### **Path Replacement Service**
+```python
+class PlexPathReplacementService:
+    def get_replacement_path(self, plex_path: str, replacements: List[PlexPathReplacement]) -> str:
+        # Find matching replacement rule (prefix matching)
+        for replacement in replacements:
+            if plex_path.startswith(replacement.plex_path):
+                # Apply regex replacement
+                local_path = re.sub(
+                    re.escape(replacement.plex_path),
+                    replacement.local_path,
+                    plex_path,
+                    flags=re.IGNORECASE
+                )
+                return local_path
+        
+        # No replacement found, return original path
+        return plex_path
+```
+
+#### **Usage in Import Process**
+```python
+# During Plex import
+plex_file_path = "/media/movies/ActionMovie.mp4"  # From Plex API
+accessible_path = path_replacement_service.get_replacement_path(
+    plex_file_path, 
+    path_replacements
+)  # Returns "R:\movies\ActionMovie.mp4"
+
+# Store the accessible path in database
+database.add_media_file(file_path=accessible_path, ...)
+```
+
+### **Required Implementation for Retrovue**
+
+#### **1. Database Schema Addition**
+Add to `database.py`:
+```python
+def create_plex_path_replacements_table(self):
+    """Create plex_path_replacements table for path mapping"""
+    self.connection.execute("""
+        CREATE TABLE IF NOT EXISTS plex_path_replacements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plex_media_source_id INTEGER,
+            plex_path TEXT NOT NULL,
+            local_path TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (plex_media_source_id) REFERENCES plex_media_sources (id)
+        )
+    """)
+```
+
+#### **2. Path Replacement Service**
+Create `src/retrovue/core/path_mapping.py`:
+```python
+class PlexPathReplacementService:
+    def __init__(self, database: RetrovueDatabase):
+        self.database = database
+    
+    def get_replacement_path(self, plex_path: str, media_source_id: int = None) -> str:
+        """Convert Plex internal path to accessible local path"""
+        replacements = self.database.get_plex_path_replacements(media_source_id)
+        
+        for replacement in replacements:
+            if plex_path.startswith(replacement['plex_path']):
+                # Apply path replacement
+                local_path = plex_path.replace(
+                    replacement['plex_path'], 
+                    replacement['local_path'], 
+                    1
+                )
+                return local_path
+        
+        return plex_path  # No replacement found
+    
+    def add_path_replacement(self, plex_path: str, local_path: str, media_source_id: int = None):
+        """Add a new path replacement rule"""
+        self.database.add_plex_path_replacement(plex_path, local_path, media_source_id)
+```
+
+#### **3. Modify Plex Integration**
+Update `plex_integration.py`:
+```python
+def __init__(self, server_url: str, token: str, database: RetrovueDatabase, status_callback=None):
+    # ... existing code ...
+    self.path_replacement_service = PlexPathReplacementService(database)
+
+def _get_file_path_from_media(self, media_info: List[Dict]) -> str:
+    """Extract and map file path from Plex media information"""
+    if media_info and len(media_info) > 0:
+        media = media_info[0]
+        part_array = media.get('Part', [])
+        if part_array and len(part_array) > 0:
+            plex_path = part_array[0].get('file', '')
+            # Apply path replacement to get accessible path
+            accessible_path = self.path_replacement_service.get_replacement_path(plex_path)
+            return accessible_path
+    return ''
+```
+
+#### **4. UI Configuration Interface**
+Add to main window UI:
+```python
+class PathMappingDialog(QDialog):
+    def __init__(self, database: RetrovueDatabase):
+        super().__init__()
+        self.database = database
+        self.setup_ui()
+    
+    def setup_ui(self):
+        # Plex Path input field
+        # Local Path input field  
+        # Add/Remove buttons
+        # List of existing mappings
+        pass
+```
+
+### **How ErsatzTV Users Configure This**
+1. **Navigate to Media Sources** - Go to `/media/sources/plex` in ErsatzTV web UI
+2. **Select Plex Server** - Click the "Edit Path Replacements" button (folder icon)
+3. **Configure Mappings** - Add path replacement rules:
+   - **Plex Path**: `/media/movies` (what Plex reports)
+   - **Local Path**: `R:\movies` (what you can access)
+4. **Save Configuration** - System applies mappings during import/scan
+5. **Import Content** - ErsatzTV uses mapped paths when importing from Plex
+
+### **Configuration Workflow for Retrovue**
+1. **Import Content from Plex** - System detects Plex internal paths
+2. **Configure Path Mappings** - User maps Plex paths to accessible paths via UI
+3. **Apply Mappings** - System translates all stored paths
+4. **Validate Access** - Verify files are accessible at mapped paths
+5. **Enable Streaming** - FFmpeg can now access files for streaming
+
+### **Example Configuration**
+```
+Plex Path:     /media/movies
+Local Path:    R:\movies
+Result:        /media/movies/ActionMovie.mp4 → R:\movies\ActionMovie.mp4
+
+Plex Path:     /media/tv  
+Local Path:    \\server\share\tv
+Result:        /media/tv/ShowName/S01E01.mp4 → \\server\share\tv\ShowName\S01E01.mp4
+```
+
+### **When Path Mapping is Needed**
+**Path mapping is only required when:**
+- **Plex server is on a different machine** than your Retrovue server
+- **Plex uses different file paths** than what your system can access
+- **Network-mounted drives** or **Docker containers** with different path structures
+- **Cross-platform setups** (Plex on Linux, Retrovue on Windows)
+
+**Path mapping is NOT needed when:**
+- **Plex and Retrovue are on the same machine** with direct file access
+- **Plex's internal paths match your accessible paths** exactly
+
+### **Implementation Priority**
+**🚨 CRITICAL - Must implement before streaming integration**
+- Without path mapping, streaming will fail completely when paths don't match
+- File validation and content management will be broken
+- Users cannot preview or edit imported media files
+- **However**: This is optional configuration - not all users will need it
+
+### **📊 Progress Tracking Design Pattern**
+
+Retrovue implements a clean, focused progress tracking system that provides clear visibility into sync operations without cluttering the interface.
+
+#### **Progress Bar Structure**
+- **Library Progress**: Shows overall library sync progress (e.g., "TV Shows (1/3)")
+- **Item Progress**: Shows current item being processed within the current library/show
+
+#### **Progress Display Logic**
+
+**For Movies:**
+```
+Item Progress: Movie Title (1/250)
+Item Progress: Another Movie (2/250)
+Item Progress: Yet Another Movie (3/250)
+```
+- Format: `Movie Title (current movie / total movies in library)`
+- Progress tracks current movie being processed within the library
+
+**For TV Shows:**
+```
+Item Progress: Show Name / Episode Title (1/124)
+Item Progress: Show Name / Another Episode (2/124)
+Item Progress: Show Name / Yet Another Episode (3/124)
+```
+- Format: `Show Name / Episode Title (current episode / total episodes in current show)`
+- Progress tracks current episode being processed within the current show
+- Uses Plex's `allLeaves` endpoint to get accurate episode counts
+
+#### **Status Message Behavior**
+Status messages at the bottom **only appear when database changes occur**:
+- `Status: Added movie: New Movie Title`
+- `Status: Updated episode: Existing Episode Title`
+- `Status: Removed episode: Deleted Episode Title`
+
+**No status messages during scanning** when no changes are needed - keeps the interface clean and focused.
+
+#### **Implementation Details**
+- **Plex API**: Uses `/allLeaves` endpoint for accurate episode counts
+- **Progress Callback**: Dual progress system (library + item level)
+- **Database Changes**: Status messages only for actual database modifications
+- **Clean Interface**: No clutter from scanning or processing messages
+
+#### **Benefits**
+- **Clear Progress Indication**: Users see exactly what's being processed
+- **Focused Status Messages**: Only relevant database changes are shown
+- **No Interface Clutter**: Clean, professional appearance
+- **Accurate Episode Counting**: Proper episode numbers within each show
+- **Library-Aware Progress**: Progress reflects current library being processed
 
 ---
 

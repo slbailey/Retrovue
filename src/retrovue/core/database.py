@@ -56,20 +56,40 @@ class RetrovueDatabase:
             )
         """)
         
-        # Shows table (for grouping episodes)
+        # Shows table (for grouping episodes) - Updated for year-based disambiguation
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS shows (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plex_rating_key TEXT UNIQUE NOT NULL,  -- Plex's unique identifier
                 title TEXT NOT NULL,
+                year INTEGER,  -- Year for disambiguation (e.g., 1978 vs 2003 for Battlestar Galactica)
                 total_seasons INTEGER,
                 total_episodes INTEGER,
                 show_rating TEXT,
                 show_summary TEXT,
                 genre TEXT,
+                studio TEXT,  -- Production studio
+                originally_available_at DATE,  -- Original air date
+                guid_primary TEXT,  -- Primary GUID (preferred external identifier)
+                updated_at_plex TIMESTAMP,  -- Last update from Plex
                 source_type TEXT NOT NULL,
                 source_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(title, source_type, source_id)
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(title, year)  -- Prevent duplicate shows with same title/year
+            )
+        """)
+        
+        # Show GUIDs table (for storing multiple external identifiers per show)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS show_guids (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                show_id INTEGER NOT NULL,
+                provider TEXT NOT NULL,  -- e.g., 'tvdb', 'tmdb', 'imdb', 'plex'
+                external_id TEXT NOT NULL,  -- The actual ID from the provider
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE,
+                UNIQUE(provider, external_id)  -- Prevent duplicate GUIDs
             )
         """)
         
@@ -84,6 +104,11 @@ class RetrovueDatabase:
                 episode_number INTEGER,
                 rating TEXT,
                 summary TEXT,
+                originally_available_at DATE,  -- Original air date
+                duration_ms INTEGER,  -- Duration in milliseconds
+                updated_at_plex TIMESTAMP,  -- Last update from Plex
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (media_file_id) REFERENCES media_files(id) ON DELETE CASCADE,
                 FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
             )
@@ -215,6 +240,15 @@ class RetrovueDatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_schedules_channel_start ON schedules (channel_id, start_time)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_playout_logs_channel_start ON playout_logs (channel_id, start_time)")
         
+        # New indexes for disambiguation support
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shows_title ON shows (title)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shows_year ON shows (year)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shows_plex_rating_key ON shows (plex_rating_key)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_episodes_season_number ON episodes (season_number)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_episodes_episode_number ON episodes (episode_number)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_guids_provider ON show_guids (provider)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_guids_external_id ON show_guids (external_id)")
+        
         self.connection.commit()
     
     def _run_migrations(self):
@@ -229,6 +263,40 @@ class RetrovueDatabase:
         except sqlite3.OperationalError as e:
             if "duplicate column name" in str(e):
                 # Column already exists, that's fine
+                pass
+            else:
+                print(f"⚠️ Migration warning: {e}")
+        
+        # Migration 2: Add year-based disambiguation columns to shows table
+        try:
+            cursor.execute("ALTER TABLE shows ADD COLUMN plex_rating_key TEXT")
+            cursor.execute("ALTER TABLE shows ADD COLUMN year INTEGER")
+            cursor.execute("ALTER TABLE shows ADD COLUMN studio TEXT")
+            cursor.execute("ALTER TABLE shows ADD COLUMN originally_available_at DATE")
+            cursor.execute("ALTER TABLE shows ADD COLUMN guid_primary TEXT")
+            cursor.execute("ALTER TABLE shows ADD COLUMN updated_at_plex TIMESTAMP")
+            cursor.execute("ALTER TABLE shows ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            self.connection.commit()
+            print("✅ Added year-based disambiguation columns to shows table")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                # Columns already exist, that's fine
+                pass
+            else:
+                print(f"⚠️ Migration warning: {e}")
+        
+        # Migration 3: Add additional columns to episodes table
+        try:
+            cursor.execute("ALTER TABLE episodes ADD COLUMN originally_available_at DATE")
+            cursor.execute("ALTER TABLE episodes ADD COLUMN duration_ms INTEGER")
+            cursor.execute("ALTER TABLE episodes ADD COLUMN updated_at_plex TIMESTAMP")
+            cursor.execute("ALTER TABLE episodes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            cursor.execute("ALTER TABLE episodes ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            self.connection.commit()
+            print("✅ Added additional columns to episodes table")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                # Columns already exist, that's fine
                 pass
             else:
                 print(f"⚠️ Migration warning: {e}")
@@ -267,6 +335,92 @@ class RetrovueDatabase:
             }
         return None
     
+    def store_plex_path_mapping(self, plex_path: str, local_path: str) -> int:
+        """Store Plex path mapping in the database"""
+        cursor = self.connection.cursor()
+        
+        # Create table if it doesn't exist
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS plex_path_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plex_path TEXT NOT NULL,
+                local_path TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Clear existing mappings (for now, we'll support one mapping)
+        # Later we can extend this to support multiple mappings
+        cursor.execute("DELETE FROM plex_path_mappings")
+        
+        # Insert new mapping
+        cursor.execute("""
+            INSERT INTO plex_path_mappings (plex_path, local_path)
+            VALUES (?, ?)
+        """, (plex_path, local_path))
+        
+        self.connection.commit()
+        return cursor.lastrowid
+    
+    def get_plex_path_mappings(self) -> List[Dict[str, str]]:
+        """Get all Plex path mappings from the database"""
+        cursor = self.connection.cursor()
+        
+        # Create table if it doesn't exist
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS plex_path_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plex_path TEXT NOT NULL,
+                local_path TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("""
+            SELECT plex_path, local_path FROM plex_path_mappings
+            ORDER BY created_at DESC
+        """)
+        
+        results = cursor.fetchall()
+        return [{'plex_path': row['plex_path'], 'local_path': row['local_path']} for row in results]
+    
+    def get_libraries(self) -> List[str]:
+        """Get all unique library names from media files"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT DISTINCT library_name 
+            FROM media_files 
+            WHERE library_name IS NOT NULL AND library_name != ''
+            ORDER BY library_name
+        """)
+        results = cursor.fetchall()
+        return [row['library_name'] for row in results]
+    
+    def get_local_path_for_media_file(self, media_file_id: int) -> str:
+        """Get the local mapped path for a media file (for file access)"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT mf.file_path, ppm.plex_path, ppm.local_path
+            FROM media_files mf
+            LEFT JOIN plex_path_mappings ppm ON 1=1
+            WHERE mf.id = ?
+        """, (media_file_id,))
+        
+        result = cursor.fetchone()
+        if result:
+            plex_path = result['file_path']
+            plex_mapping = result['plex_path']
+            local_mapping = result['local_path']
+            
+            if plex_mapping and local_mapping and plex_path.startswith(plex_mapping):
+                # Map the path
+                relative_path = plex_path[len(plex_mapping):]
+                if relative_path.startswith('/'):
+                    relative_path = relative_path[1:]
+                return os.path.join(local_mapping, relative_path)
+        
+        return plex_path
+    
     def add_media_file(self, file_path: str, duration: int, media_type: str, 
                       source_type: str, source_id: str = None, library_name: str = None) -> int:
         """Add a media file to the database"""
@@ -292,24 +446,32 @@ class RetrovueDatabase:
         self.connection.commit()
         return media_file_id
     
-    def add_show(self, title: str, total_seasons: int = None, total_episodes: int = None,
+    def add_show(self, title: str, plex_rating_key: str = None, year: int = None,
+                total_seasons: int = None, total_episodes: int = None,
                 show_rating: str = None, show_summary: str = None, genre: str = None,
+                studio: str = None, originally_available_at: str = None,
+                guid_primary: str = None, updated_at_plex: str = None,
                 source_type: str = None, source_id: str = None) -> int:
-        """Add a show to the database"""
+        """Add a show to the database with year-based disambiguation"""
         cursor = self.connection.cursor()
         
         cursor.execute("""
             INSERT OR REPLACE INTO shows
-            (title, total_seasons, total_episodes, show_rating, show_summary, genre, source_type, source_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (title, total_seasons, total_episodes, show_rating, show_summary, genre, source_type, source_id))
+            (plex_rating_key, title, year, total_seasons, total_episodes, show_rating, 
+             show_summary, genre, studio, originally_available_at, guid_primary, 
+             updated_at_plex, source_type, source_id, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (plex_rating_key, title, year, total_seasons, total_episodes, show_rating, 
+              show_summary, genre, studio, originally_available_at, guid_primary, 
+              updated_at_plex, source_type, source_id))
         
-        # Get the show_id
-        if source_id:
-            cursor.execute("""
-                SELECT id FROM shows
-                WHERE title = ? AND source_type = ? AND source_id = ?
-            """, (title, source_type, source_id))
+        # Get the show_id using the new unique constraint
+        if plex_rating_key:
+            cursor.execute("SELECT id FROM shows WHERE plex_rating_key = ?", (plex_rating_key,))
+            result = cursor.fetchone()
+            show_id = result['id'] if result else cursor.lastrowid
+        elif title and year is not None:
+            cursor.execute("SELECT id FROM shows WHERE title = ? AND year = ?", (title, year))
             result = cursor.fetchone()
             show_id = result['id'] if result else cursor.lastrowid
         else:
@@ -317,6 +479,45 @@ class RetrovueDatabase:
         
         self.connection.commit()
         return show_id
+    
+    def add_show_guid(self, show_id: int, provider: str, external_id: str) -> int:
+        """Add a GUID for a show"""
+        cursor = self.connection.cursor()
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO show_guids (show_id, provider, external_id)
+            VALUES (?, ?, ?)
+        """, (show_id, provider, external_id))
+        
+        self.connection.commit()
+        return cursor.lastrowid
+    
+    def get_show_guids(self, show_id: int) -> List[Dict]:
+        """Get all GUIDs for a show"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT provider, external_id FROM show_guids
+            WHERE show_id = ?
+        """, (show_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_show_by_title_and_year(self, title: str, year: int) -> Optional[Dict]:
+        """Get a show by title and year for disambiguation"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT * FROM shows WHERE title = ? AND year = ?
+        """, (title, year))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def get_show_by_plex_rating_key(self, plex_rating_key: str) -> Optional[Dict]:
+        """Get a show by Plex rating key"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT * FROM shows WHERE plex_rating_key = ?
+        """, (plex_rating_key,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
     
     def add_episode(self, media_file_id: int, show_id: int, episode_title: str,
                    season_number: int = None, episode_number: int = None,
@@ -466,10 +667,9 @@ class RetrovueDatabase:
         """Get all shows from a specific source"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT s.*, mf.source_id
+            SELECT s.*, s.source_id
             FROM shows s
-            JOIN media_files mf ON s.id = mf.id
-            WHERE mf.source_type = ?
+            WHERE s.source_type = ?
         """, (source_type,))
         return [dict(row) for row in cursor.fetchall()]
     
@@ -477,7 +677,7 @@ class RetrovueDatabase:
         """Get all episodes for a show by its source ID"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT e.*, mf.source_id, mf.id as media_file_id
+            SELECT e.*, mf.source_id, mf.id as media_file_id, mf.file_path, mf.duration
             FROM episodes e
             JOIN shows s ON e.show_id = s.id
             JOIN media_files mf ON e.media_file_id = mf.id
@@ -501,10 +701,9 @@ class RetrovueDatabase:
         """Get a show by its source ID"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT s.*, mf.source_id
+            SELECT s.*, s.source_id
             FROM shows s
-            JOIN media_files mf ON s.id = mf.id
-            WHERE mf.source_id = ?
+            WHERE s.source_id = ?
         """, (source_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
