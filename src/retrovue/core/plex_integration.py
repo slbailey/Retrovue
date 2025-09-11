@@ -451,6 +451,41 @@ class PlexImporter:
                 return part_array[0].get('file', '')
         return ''
     
+    def _get_local_path_from_plex_path(self, plex_path: str, library_root_paths: List[str]) -> str:
+        """Convert Plex path to local path using path mappings"""
+        if not plex_path:
+            return ''
+        
+        # Choose the appropriate library root
+        chosen_library_root = self._choose_library_root(plex_path, library_root_paths)
+        
+        # Get path mappings for this server
+        path_mappings = self.database.get_plex_path_mappings(self.server_id)
+        
+        # Find the best matching path mapping
+        best_match = None
+        best_match_length = 0
+        
+        for mapping in path_mappings:
+            plex_mapping = mapping['plex_path']
+            local_mapping = mapping['local_path']
+            
+            if plex_mapping and local_mapping and plex_path.startswith(plex_mapping):
+                if len(plex_mapping) > best_match_length:
+                    best_match = mapping
+                    best_match_length = len(plex_mapping)
+        
+        if best_match:
+            # Map the path using the best match
+            plex_mapping = best_match['plex_path']
+            local_mapping = best_match['local_path']
+            relative_path = plex_path[len(plex_mapping):]
+            if relative_path.startswith('/'):
+                relative_path = relative_path[1:]
+            return os.path.join(local_mapping, relative_path)
+        
+        return plex_path  # Fallback to original path if no mapping found
+    
     def get_local_path(self, plex_path: str, library_root: str = None) -> str:
         """Get the local mapped path for a Plex path (for file access)"""
         return self.path_mapping_service.get_local_path(plex_path, library_root)
@@ -488,7 +523,7 @@ class PlexImporter:
             
             # Get duration and file path from Media array
             media_array = item.get('Media', [])
-            file_path = self._get_file_path_from_media(media_array)
+            plex_file_path = self._get_file_path_from_media(media_array)
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
@@ -498,15 +533,19 @@ class PlexImporter:
             plex_rating = item.get('contentRating', '')
             content_rating = self._map_plex_rating(plex_rating)
             
+            # Convert Plex path to local path
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+            
             # Add media file to database
             media_file_id = self.database.add_media_file(
-                file_path=file_path,
+                file_path=local_file_path,
                 duration=duration,
                 media_type='movie',
                 source_type='plex',
                 source_id=plex_guid,
                 library_name=library_name,
-                server_id=self.server_id
+                server_id=self.server_id,
+                plex_path=plex_file_path
             )
             
             # Add movie metadata
@@ -589,7 +628,7 @@ class PlexImporter:
                     
                     # Get duration and file path from Media array
                     media_array = episode.get('Media', [])
-                    file_path = self._get_file_path_from_media(media_array)
+                    plex_file_path = self._get_file_path_from_media(media_array)
                     duration = self._get_duration_from_media(media_array)
                     
                     if not duration:
@@ -599,14 +638,18 @@ class PlexImporter:
                     plex_rating = episode.get('contentRating', '')
                     content_rating = self._map_plex_rating(plex_rating)
                     
+                    # Convert Plex path to local path
+                    local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+                    
                     # Add media file to database
                     media_file_id = self.database.add_media_file(
-                        file_path=file_path,
+                        file_path=local_file_path,
                         duration=duration,
                         media_type='episode',
                         source_type='plex',
                         source_id=episode_guid,  # Use stable GUID
-                        server_id=self.server_id
+                        server_id=self.server_id,
+                        plex_path=plex_file_path
                     )
                     
                     # Add episode metadata
@@ -717,7 +760,7 @@ class PlexImporter:
                     continue
                 
                 # Update existing movie (only count if there were actual changes)
-                if self._update_movie(movie, library_name, primary_library_root):
+                if self._update_movie(movie, library_name, primary_library_root, library_root_paths):
                     updated_count += 1
             else:
                 # Add new movie
@@ -817,7 +860,7 @@ class PlexImporter:
                         else:
                             # Update existing movie
                             self._emit_status(f"🔄 UPDATE Movie '{movie_title}': Timestamps differ (Plex: {ts}, DB: {db_ts})", debug_only=True)
-                            if self._update_movie(movie, library_name, chosen_library_root):
+                            if self._update_movie(movie, library_name, chosen_library_root, library_root_paths):
                                 total_updated += 1
                                 action = f"Updated movie: {movie_title}"
                             else:
@@ -1071,7 +1114,7 @@ class PlexImporter:
         
         return {'updated': total_updated, 'added': total_added, 'removed': total_removed}
     
-    def _update_movie(self, movie: Dict, library_name: str = None, library_root: str = None) -> bool:
+    def _update_movie(self, movie: Dict, library_name: str = None, library_root: str = None, library_root_paths: List[str] = None) -> bool:
         """Update an existing movie with current Plex data"""
         try:
             movie_guid = movie.get('guid', '')  # Use stable GUID
@@ -1100,25 +1143,29 @@ class PlexImporter:
             
             # Get duration and file path from Media array
             media_array = movie.get('Media', [])
-            file_path = self._get_file_path_from_media(media_array)
+            plex_file_path = self._get_file_path_from_media(media_array)
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
                 return False
             
+            # Convert Plex path to local path
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+            
             # Check if anything has actually changed
             has_changes = False
             
             # Check media file changes
-            if (db_movie.get('file_path') != file_path or 
+            if (db_movie.get('file_path') != local_file_path or 
                 db_movie.get('duration') != duration or
                 db_movie.get('library_name') != library_name):
                 has_changes = True
                 self.database.update_media_file(
                     media_file_id=db_movie['media_file_id'],
-                    file_path=file_path,
+                    file_path=local_file_path,
                     duration=duration,
-                    library_name=library_name
+                    library_name=library_name,
+                    plex_path=plex_file_path
                 )
             
             # Check movie metadata changes
@@ -1218,7 +1265,7 @@ class PlexImporter:
                         # Update existing episode (only count if there were actual changes)
                         self._emit_status(f"🔄 UPDATE Episode '{episode_title}': Timestamps differ (Plex: {ts}, DB: {db_ts})", debug_only=True)
                         db_episode = db_episode_lookup[episode_guid]
-                        if self._update_episode(episode, show, library_name, chosen_library_root, db_episode):
+                        if self._update_episode(episode, show, library_name, chosen_library_root, db_episode, library_root_paths):
                             updated_count += 1
                             # Emit status message for database change
                             if progress_callback:
@@ -1233,7 +1280,7 @@ class PlexImporter:
                     chosen_library_root = self._choose_library_root(episode_file_path, library_root_paths or [])
                     
                     # Add new episode
-                    if self._add_episode(episode, show, library_name, chosen_library_root):
+                    if self._add_episode(episode, show, library_name, chosen_library_root, library_root_paths):
                         added_count += 1
                         # Emit status message for database change
                         if progress_callback:
@@ -1279,7 +1326,7 @@ class PlexImporter:
         except Exception as e:
             return 0
     
-    def _update_episode(self, episode: Dict, show: Dict, library_name: str = None, library_root: str = None, db_episode: Dict = None) -> bool:
+    def _update_episode(self, episode: Dict, show: Dict, library_name: str = None, library_root: str = None, db_episode: Dict = None, library_root_paths: List[str] = None) -> bool:
         """Update an existing episode with current Plex data"""
         try:
             episode_guid = episode.get('guid', '')  # Use stable GUID
@@ -1305,11 +1352,14 @@ class PlexImporter:
             
             # Get duration and file path from Media array
             media_array = episode.get('Media', [])
-            file_path = self._get_file_path_from_media(media_array)
+            plex_file_path = self._get_file_path_from_media(media_array)
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
                 return False
+            
+            # Convert Plex path to local path
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
             
             # Check if anything has actually changed
             has_changes = False
@@ -1319,7 +1369,7 @@ class PlexImporter:
             library_name_changed = (db_episode.get('library_name') is None and library_name is not None)
             
             # Check for file path or duration changes (these are legitimate updates)
-            file_path_changed = (db_episode.get('file_path') != file_path)
+            file_path_changed = (db_episode.get('file_path') != local_file_path)
             duration_changed = (db_episode.get('duration') != duration)
             
             if (file_path_changed or duration_changed or library_name_changed):
@@ -1327,9 +1377,10 @@ class PlexImporter:
                 update_library_name = library_name if library_name_changed else db_episode.get('library_name')
                 self.database.update_media_file(
                     media_file_id=db_episode['media_file_id'],
-                    file_path=file_path,
+                    file_path=local_file_path,
                     duration=duration,
-                    library_name=update_library_name
+                    library_name=update_library_name,
+                    plex_path=plex_file_path
                 )
                 
                 # Only count as "changes" if it's not just a file path change
@@ -1365,7 +1416,7 @@ class PlexImporter:
             self._emit_status(f"❌ Error updating episode '{episode_title}': {e}", debug_only=True)
             return False
     
-    def _add_episode(self, episode: Dict, show: Dict, library_name: str = None, library_root: str = None) -> bool:
+    def _add_episode(self, episode: Dict, show: Dict, library_name: str = None, library_root: str = None, library_root_paths: List[str] = None) -> bool:
         """Add a new episode to an existing show"""
         try:
             # Get show ID from database using the show's GUID
@@ -1417,21 +1468,25 @@ class PlexImporter:
             
             # Get duration and file path from Media array
             media_array = episode.get('Media', [])
-            file_path = self._get_file_path_from_media(media_array)
+            plex_file_path = self._get_file_path_from_media(media_array)
             duration = self._get_duration_from_media(media_array)
             
             if not duration:
                 return False
             
+            # Convert Plex path to local path
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+            
             # Add media file
             media_file_id = self.database.add_media_file(
-                file_path=file_path,
+                file_path=local_file_path,
                 duration=duration,
                 media_type='episode',
                 source_type='plex',
                 source_id=episode_guid,  # Use stable GUID
                 library_name=library_name,
-                server_id=self.server_id
+                server_id=self.server_id,
+                plex_path=plex_file_path
             )
             
             # Add episode
