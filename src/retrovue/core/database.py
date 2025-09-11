@@ -525,6 +525,33 @@ class RetrovueDatabase:
             pass
         except Exception as e:
             print(f"⚠️ Migration warning: {e}")
+        
+        # Migration 12: Add plex_path column and migrate existing file_path data
+        try:
+            # Check if plex_path column already exists
+            cursor.execute("PRAGMA table_info(media_files)")
+            media_files_info = cursor.fetchall()
+            plex_path_exists = any(col[1] == 'plex_path' for col in media_files_info)
+            
+            if not plex_path_exists:
+                print("🔧 Migration 12: Adding plex_path column to media_files table")
+                
+                # Add plex_path column
+                cursor.execute("ALTER TABLE media_files ADD COLUMN plex_path TEXT")
+                
+                # Migrate existing file_path data to plex_path (since file_path currently contains Plex paths)
+                cursor.execute("UPDATE media_files SET plex_path = file_path WHERE plex_path IS NULL")
+                
+                # Clear file_path column (will be populated with local paths during next sync)
+                cursor.execute("UPDATE media_files SET file_path = '' WHERE file_path IS NOT NULL")
+                
+                self.connection.commit()
+                print("✅ Migration 12: Added plex_path column and migrated existing data")
+            else:
+                print("✅ Migration 12: plex_path column already exists")
+                
+        except Exception as e:
+            print(f"⚠️ Migration warning: {e}")
     
     def _ensure_schema_consistency(self):
         """Ensure the database schema is consistent with the latest requirements"""
@@ -1110,17 +1137,18 @@ class RetrovueDatabase:
         """Get the local mapped path for a media file (for file access)"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT mf.file_path, mf.server_id, ppm.plex_path, ppm.local_path, ppm.library_root
+            SELECT mf.file_path, mf.plex_path, mf.server_id, ppm.plex_path as mapping_plex_path, ppm.local_path, ppm.library_root
             FROM media_files mf
             LEFT JOIN plex_path_mappings ppm ON mf.server_id = ppm.server_id
             WHERE mf.id = ?
         """, (media_file_id,))
-        
+
         results = cursor.fetchall()
         if not results:
             return ""
-        
-        plex_path = results[0]['file_path']
+
+        # Use plex_path column if available, otherwise fall back to file_path (for backward compatibility)
+        plex_path = results[0]['plex_path'] or results[0]['file_path']
         server_id = results[0]['server_id']
         
         # Find the mapping with the longest matching prefix
@@ -1128,9 +1156,9 @@ class RetrovueDatabase:
         best_match_length = 0
         
         for result in results:
-            plex_mapping = result['plex_path']
+            plex_mapping = result['mapping_plex_path']
             local_mapping = result['local_path']
-            
+
             if plex_mapping and local_mapping and plex_path.startswith(plex_mapping):
                 if len(plex_mapping) > best_match_length:
                     best_match = result
@@ -1138,7 +1166,7 @@ class RetrovueDatabase:
         
         if best_match:
             # Map the path using the best match
-            plex_mapping = best_match['plex_path']
+            plex_mapping = best_match['mapping_plex_path']
             local_mapping = best_match['local_path']
             relative_path = plex_path[len(plex_mapping):]
             if relative_path.startswith('/'):
@@ -1148,15 +1176,15 @@ class RetrovueDatabase:
         return plex_path
     
     def add_media_file(self, file_path: str, duration: int, media_type: str, 
-                      source_type: str, source_id: str = None, library_name: str = None, server_id: int = None) -> int:
+                      source_type: str, source_id: str = None, library_name: str = None, server_id: int = None, plex_path: str = None) -> int:
         """Add a media file to the database"""
         cursor = self.connection.cursor()
         
         cursor.execute("""
             INSERT OR REPLACE INTO media_files
-            (file_path, duration, media_type, source_type, source_id, library_name, server_id, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, (file_path, duration, media_type, source_type, source_id, library_name, server_id))
+            (file_path, duration, media_type, source_type, source_id, library_name, server_id, updated_at, plex_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        """, (file_path, duration, media_type, source_type, source_id, library_name, server_id, plex_path))
         
         # Get the media_file_id
         if source_id:
@@ -1470,16 +1498,28 @@ class RetrovueDatabase:
         row = cursor.fetchone()
         return row[0] if row and row[0] is not None else None
     
-    def update_media_file(self, media_file_id: int, file_path: str, duration: int, library_name: str = None) -> bool:
+    def update_media_file(self, media_file_id: int, file_path: str, duration: int, library_name: str = None, plex_path: str = None) -> bool:
         """Update a media file"""
         try:
             cursor = self.connection.cursor()
-            if library_name is not None:
+            if library_name is not None and plex_path is not None:
+                cursor.execute("""
+                    UPDATE media_files 
+                    SET file_path = ?, duration = ?, library_name = ?, plex_path = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (file_path, duration, library_name, plex_path, media_file_id))
+            elif library_name is not None:
                 cursor.execute("""
                     UPDATE media_files 
                     SET file_path = ?, duration = ?, library_name = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 """, (file_path, duration, library_name, media_file_id))
+            elif plex_path is not None:
+                cursor.execute("""
+                    UPDATE media_files 
+                    SET file_path = ?, duration = ?, plex_path = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (file_path, duration, plex_path, media_file_id))
             else:
                 cursor.execute("""
                     UPDATE media_files 
