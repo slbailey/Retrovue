@@ -41,34 +41,42 @@ from .guid_parser import GUIDParser, extract_guids_from_plex_metadata, get_show_
 
 class PlexImporter:
     """
-    Handles importing content from Plex Media Server.
+    Handles importing content from Plex Media Server with multi-server support.
     """
     
-    def __init__(self, server_url: str, token: str, database: RetrovueDatabase, status_callback=None):
+    def __init__(self, server_id: int, database: RetrovueDatabase, status_callback=None):
         """
         Initialize the Plex importer.
         
         Args:
-            server_url: Plex server URL
-            token: Plex authentication token
+            server_id: Plex server ID from database
             database: Database instance for storing imported content
             status_callback: Optional callback function for status updates
         """
-        self.server_url = server_url.rstrip('/')
-        self.token = token
+        self.server_id = server_id
         self.database = database
         self.status_callback = status_callback
+        
+        # Get server details from database
+        server_info = database.get_plex_server(server_id)
+        if not server_info:
+            raise ValueError(f"Plex server with ID {server_id} not found")
+        
+        self.server_url = server_info['server_url'].rstrip('/')
+        self.token = server_info['token']
+        self.server_name = server_info['name']
+        
         self.headers = {
-            'X-Plex-Token': token,
+            'X-Plex-Token': self.token,
             'Accept': 'application/json'
         }
         
-        # Initialize path mapping service
-        self.path_mapping_service = PlexPathMappingService.create_from_database(database)
+        # Initialize path mapping service for this server
+        self.path_mapping_service = PlexPathMappingService.create_from_database(database, server_id)
     
-    def _emit_status(self, message: str):
+    def _emit_status(self, message: str, debug_only: bool = False):
         """Emit status message via callback"""
-        if self.status_callback:
+        if self.status_callback and not debug_only:
             self.status_callback(message)
     
     def test_connection(self) -> bool:
@@ -95,10 +103,32 @@ class PlexImporter:
                     'key': section.get('key'),
                     'title': section.get('title'),
                     'type': section.get('type'),
-                    'agent': section.get('agent')
+                    'agent': section.get('agent'),
+                    'locations': section.get('Location', [])  # Library root paths
                 })
             
             return libraries
+        except Exception as e:
+            return []
+    
+    def get_library_root_paths(self, library_key: str) -> List[str]:
+        """Get the root paths for a specific library"""
+        try:
+            url = f"{self.server_url}/library/sections/{library_key}"
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            locations = data.get('MediaContainer', {}).get('Location', [])
+            
+            # Extract the path from each location
+            root_paths = []
+            for location in locations:
+                path = location.get('path', '')
+                if path:
+                    root_paths.append(path)
+            
+            return root_paths
         except Exception as e:
             return []
     
@@ -252,6 +282,19 @@ class PlexImporter:
         }
         return rating_map.get(plex_rating, 'PG-13')
     
+    def _get_show_timestamp(self, show) -> int:
+        """Get the timestamp for a show, using addedAt as fallback if updatedAt is missing"""
+        updated_at = show.get('updatedAt')
+        if updated_at:
+            return int(updated_at)
+        
+        # Fallback to addedAt if updatedAt is missing
+        added_at = show.get('addedAt')
+        if added_at:
+            return int(added_at)
+        
+        return None
+    
     def _get_duration_from_media(self, media_info: List[Dict]) -> Optional[int]:
         """
         Extract duration from Plex media information.
@@ -281,11 +324,11 @@ class PlexImporter:
                 return part_array[0].get('file', '')
         return ''
     
-    def get_local_path(self, plex_path: str) -> str:
+    def get_local_path(self, plex_path: str, library_root: str = None) -> str:
         """Get the local mapped path for a Plex path (for file access)"""
-        return self.path_mapping_service.get_local_path(plex_path)
+        return self.path_mapping_service.get_local_path(plex_path, library_root)
     
-    def import_movie(self, item: Dict, library_name: str = None) -> bool:
+    def import_movie(self, item: Dict, library_name: str = None, library_root: str = None) -> bool:
         """Import a single movie"""
         try:
             # Extract basic information
@@ -311,7 +354,8 @@ class PlexImporter:
                 media_type='movie',
                 source_type='plex',
                 source_id=plex_guid,
-                library_name=library_name
+                library_name=library_name,
+                server_id=self.server_id
             )
             
             # Add movie metadata
@@ -322,7 +366,9 @@ class PlexImporter:
                 rating=content_rating,
                 summary=item.get('summary', ''),
                 genre=', '.join([g.get('tag', '') for g in item.get('Genre', [])]),
-                director=', '.join([d.get('tag', '') for d in item.get('Director', [])])
+                director=', '.join([d.get('tag', '') for d in item.get('Director', [])]),
+                server_id=self.server_id,
+                plex_updated_at=item.get('updatedAt')
             )
             
             # Format duration for display (convert milliseconds to hh:mm:ss.ff)
@@ -344,7 +390,6 @@ class PlexImporter:
         try:
             show_title = show.get('title', 'Unknown Show')
             show_key = show.get('key', '')
-            show_rating_key = show.get('ratingKey', '')
             show_year = show.get('year')
             
             # Extract GUIDs for disambiguation
@@ -361,7 +406,7 @@ class PlexImporter:
             # Create show record with disambiguation
             show_id = self.database.add_show(
                 title=show_title,
-                plex_rating_key=show_rating_key,
+                plex_rating_key=show.get('ratingKey', ''),  # Keep for display purposes
                 year=show_year,
                 total_seasons=show.get('leafCount', 0),
                 total_episodes=len(episodes),
@@ -371,9 +416,10 @@ class PlexImporter:
                 studio=show.get('studio', ''),
                 originally_available_at=show.get('originallyAvailableAt'),
                 guid_primary=primary_guid,
-                updated_at_plex=show.get('updatedAt'),
                 source_type='plex',
-                source_id=show_rating_key  # Use rating key as source ID
+                source_id=show.get('guid', ''),  # Use GUID as source ID
+                server_id=self.server_id,
+                plex_updated_at=self._get_show_timestamp(show)
             )
             
             # Store all GUIDs for this show
@@ -407,7 +453,8 @@ class PlexImporter:
                         duration=duration,
                         media_type='episode',
                         source_type='plex',
-                        source_id=episode_guid  # Use stable GUID
+                        source_id=episode_guid,  # Use stable GUID
+                        server_id=self.server_id
                     )
                     
                     # Add episode metadata
@@ -421,7 +468,8 @@ class PlexImporter:
                         season_number=season_number,
                         episode_number=episode_number,
                         rating=content_rating,
-                        summary=episode.get('summary', '')
+                        summary=episode.get('summary', ''),
+                        plex_updated_at=episode.get('updatedAt')
                     )
                     
                     imported_count += 1
@@ -445,7 +493,7 @@ class PlexImporter:
             return 0
     
     def import_library(self, library_key: str, library_type: str) -> int:
-        """Import all content from a specific library"""
+        """Import all content from a specific library (legacy method - use sync_library instead)"""
         if library_type == 'movie':
             return self._import_movie_library(library_key)
         elif library_type == 'show':
@@ -476,8 +524,12 @@ class PlexImporter:
         movies = self.get_library_items(library_key, 'movie')
         imported_count = 0
         
+        # Get library root paths for path mapping
+        library_root_paths = self.get_library_root_paths(library_key)
+        primary_library_root = library_root_paths[0] if library_root_paths else None
+        
         for movie in movies:
-            if self.import_movie(movie, library_name):
+            if self.import_movie(movie, library_name, primary_library_root):
                 imported_count += 1
         
         return imported_count
@@ -491,6 +543,10 @@ class PlexImporter:
         # Get current movies from database for this library
         db_movies = self.database.get_movies_by_source('plex')
         db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id']}
+        
+        # Get library root paths for path mapping
+        library_root_paths = self.get_library_root_paths(library_key)
+        primary_library_root = library_root_paths[0] if library_root_paths else None
         
         updated_count = 0
         added_count = 0
@@ -507,16 +563,20 @@ class PlexImporter:
                     continue
                 
                 # Update existing movie (only count if there were actual changes)
-                if self._update_movie(movie, library_name):
+                if self._update_movie(movie, library_name, primary_library_root):
                     updated_count += 1
             else:
                 # Add new movie
-                if self.import_movie(movie, library_name):
+                if self.import_movie(movie, library_name, primary_library_root):
                     added_count += 1
             
             # Emit progress for each movie processed
             if progress_callback:
-                progress_callback(i + 1, len(plex_movies), f"Processing movie {i+1}/{len(plex_movies)}: {movie.get('title', 'Unknown')}")
+                progress_callback(
+                    library_progress=None,
+                    item_progress=(i + 1, len(plex_movies), movie.get('title', 'Unknown')),
+                    message=None  # No status message during processing
+                )
         
         # NOTE: We don't remove movies here because this is per-library sync
         # Removal should be handled at the global level after all libraries are processed
@@ -530,11 +590,29 @@ class PlexImporter:
         total_added = 0
         total_removed = 0
         
+        # Get sync preferences from database (cache for performance)
+        db_libraries = self.database.get_server_libraries(server_id=self.server_id)
+        sync_enabled_libraries = {lib['library_key']: lib['sync_enabled'] for lib in db_libraries}
+        
+        # Cache library root paths to avoid repeated API calls
+        library_root_cache = {}
+        
         # Process each library with dual progress tracking
         for i, library in enumerate(libraries):
             library_key = library.get('key', '')
             library_type = library.get('type', 'movie')
             library_name = library.get('title', 'Unknown Library')
+            
+            # Check if this library is enabled for sync
+            if library_key in sync_enabled_libraries and not sync_enabled_libraries[library_key]:
+                # Library is disabled for sync, skip it
+                if progress_callback:
+                    progress_callback(
+                        library_progress=(i, len(libraries), library_name),
+                        item_progress=None,
+                        message=f"⏭️ Skipping disabled library: {library_name}"
+                    )
+                continue
             
             # Emit library progress: current library / total libraries
             if progress_callback:
@@ -548,31 +626,40 @@ class PlexImporter:
                 # Get all movies from this library
                 plex_movies = self.get_library_items(library_key, 'movie')
                 
+                # Get library root paths for path mapping (use cache)
+                if library_key not in library_root_cache:
+                    library_root_cache[library_key] = self.get_library_root_paths(library_key)
+                library_root_paths = library_root_cache[library_key]
+                primary_library_root = library_root_paths[0] if library_root_paths else None
+                
+                # DEBUG: Show library info
+                self._emit_status(f"🎬 MOVIE LIBRARY: '{library_name}' - Found {len(plex_movies)} movies", debug_only=True)
+                
                 # Process each movie individually with item progress
                 for j, movie in enumerate(plex_movies):
                     movie_guid = movie.get('guid', '')
                     movie_title = movie.get('title', 'Unknown Movie')
                     
-                    # Check if movie exists in database
-                    db_movies = self.database.get_movies_by_source('plex')
-                    db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id']}
+                    # DEBUG: Show EVERY movie being processed
+                    self._emit_status(f"🎬 PROCESSING Movie {j+1}/{len(plex_movies)}: '{movie_title}' (GUID: {movie_guid})", debug_only=True)
+                    
+                    # Check if movie exists in database (cache for performance)
+                    if 'db_movie_ids' not in locals():
+                        db_movies = self.database.get_movies_by_source('plex')
+                        db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id']}
                     
                     if movie_guid in db_movie_ids:
-                        # Check if movie already has a library name (processed by another library)
-                        db_movie = self.database.get_movie_by_source_id(movie_guid)
-                        if db_movie and db_movie.get('library_name'):
-                            # Movie already processed by another library, skip to avoid conflicts
-                            action = None  # No output for ignored items
+                        # Update existing movie
+                        self._emit_status(f"🔄 UPDATE Movie '{movie_title}': Calling _update_movie method")
+                        if self._update_movie(movie, library_name, primary_library_root):
+                            total_updated += 1
+                            action = f"Updated movie: {movie_title}"
                         else:
-                            # Update existing movie
-                            if self._update_movie(movie, library_name):
-                                total_updated += 1
-                                action = f"Updated movie: {movie_title}"
-                            else:
-                                action = None  # No output for no changes
+                            action = None  # No output for no changes
                     else:
                         # Add new movie
-                        if self.import_movie(movie, library_name):
+                        self._emit_status(f"➕ ADD Movie '{movie_title}': Calling import_movie method")
+                        if self.import_movie(movie, library_name, primary_library_root):
                             total_added += 1
                             action = f"Added movie: {movie_title}"
                         else:
@@ -590,19 +677,30 @@ class PlexImporter:
                 # Get all shows from this library
                 plex_shows = self.get_library_items(library_key, 'show')
                 
+                # Get library root paths for path mapping (use cache)
+                if library_key not in library_root_cache:
+                    library_root_cache[library_key] = self.get_library_root_paths(library_key)
+                library_root_paths = library_root_cache[library_key]
+                primary_library_root = library_root_paths[0] if library_root_paths else None
+                
+                # DEBUG: Show library info
+                self._emit_status(f"📺 TV SHOW LIBRARY: '{library_name}' - Found {len(plex_shows)} shows", debug_only=True)
+                
                 # Process each show individually (which processes all its episodes)
                 for j, show in enumerate(plex_shows):
                     show_guid = show.get('guid', '')
                     show_title = show.get('title', 'Unknown Show')
                     
-                    # Process this show and all its episodes
-                    episode_count = self._sync_show_episodes(
+                    # Always process this show and all its episodes
+                    # Individual episodes may have been updated even if show metadata hasn't changed
+                    episode_changes = self._sync_show_episodes(
                         show, 
                         progress_callback, 
                         library_progress=(i, len(libraries), library_name), 
-                        library_name=library_name
+                        library_name=library_name,
+                        library_root=primary_library_root
                     )
-                    total_updated += episode_count
+                    total_updated += episode_changes
         
         # Collect all Plex content for orphaned content removal
         all_plex_movie_ids = set()
@@ -650,7 +748,7 @@ class PlexImporter:
             progress_callback(
                 library_progress=(len(libraries), len(libraries), "Complete"),
                 item_progress=None,
-                message=f"🎉 Sync completed! Added: {total_added}, Updated: {total_updated}, Removed: {total_removed}"
+                message=None  # No completion message here - handled in UI
             )
         
         return {'updated': total_updated, 'added': total_added, 'removed': total_removed}
@@ -691,6 +789,18 @@ class PlexImporter:
             
             if show_guid in db_show_ids:
                 # Update existing show and its episodes
+                show_id = self.database.add_show(
+                    title=show.get('title', 'Unknown Show'),
+                    total_seasons=show.get('leafCount', 0),
+                    total_episodes=0,  # Will be updated by episode sync
+                    show_rating=self._map_plex_rating(show.get('contentRating', '')),
+                    show_summary=show.get('summary', ''),
+                    genre=', '.join([g.get('tag', '') for g in show.get('Genre', [])]),
+                    source_type='plex',
+                    source_id=show_guid,
+                    server_id=self.server_id,
+                    plex_updated_at=self._get_show_timestamp(show)
+                )
                 episode_count = self._sync_show_episodes(show, progress_callback)
                 updated_count += episode_count
             else:
@@ -703,7 +813,9 @@ class PlexImporter:
                     show_summary=show.get('summary', ''),
                     genre=', '.join([g.get('tag', '') for g in show.get('Genre', [])]),
                     source_type='plex',
-                    source_id=show_guid
+                    source_id=show_guid,
+                    server_id=self.server_id,
+                    plex_updated_at=self._get_show_timestamp(show)
                 )
                 # Now sync episodes for the newly added show
                 episode_count = self._sync_show_episodes(show, progress_callback)
@@ -746,16 +858,33 @@ class PlexImporter:
         
         # Sync each discovered show
         for show in shows:
-            show_rating_key = show['ratingKey']
+            show_guid = show['raw_metadata'].get('guid', '')
             show_title = show['title']
             show_year = show['year']
             
             # Check if show already exists in database
-            existing_show = self.database.get_show_by_plex_rating_key(show_rating_key)
+            existing_show = self.database.get_show_by_source_id(show_guid)
             
             if existing_show:
                 # Update existing show
                 self._emit_status(f"🔄 Updating existing show: {show['display_name']}")
+                show_id = self.database.add_show(
+                    title=show['raw_metadata'].get('title', 'Unknown Show'),
+                    plex_rating_key=show['raw_metadata'].get('ratingKey', ''),
+                    year=show['raw_metadata'].get('year'),
+                    total_seasons=show['raw_metadata'].get('leafCount', 0),
+                    total_episodes=0,  # Will be updated by episode sync
+                    show_rating=self._map_plex_rating(show['raw_metadata'].get('contentRating', '')),
+                    show_summary=show['raw_metadata'].get('summary', ''),
+                    genre=', '.join([g.get('tag', '') for g in show['raw_metadata'].get('Genre', [])]),
+                    studio=show['raw_metadata'].get('studio', ''),
+                    originally_available_at=show['raw_metadata'].get('originallyAvailableAt'),
+                    guid_primary=show['raw_metadata'].get('guid', ''),
+                    source_type='plex',
+                    source_id=show_guid,
+                    server_id=self.server_id,
+                    plex_updated_at=self._get_show_timestamp(show['raw_metadata'])
+                )
                 episode_count = self._sync_show_episodes(show['raw_metadata'])
                 total_updated += episode_count
             else:
@@ -769,7 +898,7 @@ class PlexImporter:
         
         return {'updated': total_updated, 'added': total_added, 'removed': total_removed}
     
-    def _update_movie(self, movie: Dict, library_name: str = None) -> bool:
+    def _update_movie(self, movie: Dict, library_name: str = None, library_root: str = None) -> bool:
         """Update an existing movie with current Plex data"""
         try:
             movie_guid = movie.get('guid', '')  # Use stable GUID
@@ -780,6 +909,19 @@ class PlexImporter:
             db_movie = self.database.get_movie_by_source_id(movie_guid)
             if not db_movie:
                 return False
+            
+            # Check if movie has been updated in Plex since last sync
+            plex_updated_at = movie.get('updatedAt')
+            db_updated_at = db_movie.get('updated_at')
+            
+            # DEBUG: Show timestamps for debugging
+            movie_title = movie.get('title', 'Unknown Movie')
+            self._emit_status(f"🔍 DEBUG Movie '{movie_title}': Plex={plex_updated_at}, DB={db_updated_at}", debug_only=True)
+            
+            # If Plex updatedAt matches our stored value, skip this movie entirely
+            if plex_updated_at and db_updated_at and plex_updated_at == db_updated_at:
+                self._emit_status(f"⏭️ SKIP Movie '{movie_title}': Timestamps match, no changes")
+                return False  # No changes, skip update
             
             # Update movie data
             title = movie.get('title', 'Unknown Movie')
@@ -813,41 +955,39 @@ class PlexImporter:
                 )
             
             # Check movie metadata changes
-            if (db_movie.get('title') != title or 
-                db_movie.get('year') != year or 
-                db_movie.get('rating') != rating or 
-                db_movie.get('summary') != summary or 
-                db_movie.get('genre') != genre or 
-                db_movie.get('director') != director):
-                has_changes = True
-                self.database.update_movie(
-                    movie_id=db_movie['id'],
-                    title=title,
-                    year=year,
-                    rating=rating,
-                    summary=summary,
-                    genre=genre,
-                    director=director
-                )
+            metadata_changed = (db_movie.get('title') != title or 
+                              db_movie.get('year') != year or 
+                              db_movie.get('rating') != rating or 
+                              db_movie.get('summary') != summary or 
+                              db_movie.get('genre') != genre or 
+                              db_movie.get('director') != director)
             
-            # Only output if there were actual changes
-            if has_changes:
-                # Format duration for display (convert milliseconds to hh:mm:ss.ff)
-                duration_seconds = duration / 1000.0
-                hours = int(duration_seconds // 3600)
-                minutes = int((duration_seconds % 3600) // 60)
-                seconds = int(duration_seconds % 60)
-                fractional_seconds = int((duration_seconds % 1) * 100)
-                duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}.{fractional_seconds:02d}"
-                
-                self._emit_status(f"✅ Updated movie: {title} ({rating}) - {duration_str}")
+            # If we reach here, either:
+            # 1. This is the first sync (db_updated_at is NULL), or
+            # 2. The content has changed (timestamps don't match)
+            # Always update the updated_at field to reflect current state
+            has_changes = True  # We're updating the timestamp, so there are changes
             
+            # DEBUG: Show that we're processing this movie
+            self._emit_status(f"🔄 PROCESSING Movie '{title}': Updating timestamp from {db_updated_at} to {plex_updated_at}", debug_only=True)
+            self.database.update_movie(
+                movie_id=db_movie['id'],
+                title=title,
+                year=year,
+                rating=rating,
+                summary=summary,
+                genre=genre,
+                director=director,
+                plex_updated_at=plex_updated_at
+            )
+            
+            # Return whether there were changes (status message handled by progress callback)
             return has_changes
             
         except Exception as e:
             return False
     
-    def _sync_show_episodes(self, show: Dict, progress_callback=None, library_progress=None, library_name: str = None) -> int:
+    def _sync_show_episodes(self, show: Dict, progress_callback=None, library_progress=None, library_name: str = None, library_root: str = None) -> int:
         """Sync episodes for an existing show"""
         try:
             show_title = show.get('title', 'Unknown Show')
@@ -858,9 +998,13 @@ class PlexImporter:
             plex_episodes = self.get_show_episodes(show_key)
             plex_episode_ids = {episode.get('guid', '') for episode in plex_episodes}  # Use stable GUID
             
-            # Get current episodes from database for this show
-            db_episodes = self.database.get_episodes_by_show_source_id(show_guid)  # Use stable GUID
+            # Get current episodes from database for this show (cache for performance)
+            db_episodes = self.database.get_episodes_by_show_source_id(show_guid)  # Use GUID to match stored source_id
             db_episode_ids = {episode['source_id'] for episode in db_episodes if episode['source_id']}
+            
+            # Create lookup dict for faster episode access
+            db_episode_lookup = {episode['source_id']: episode for episode in db_episodes if episode['source_id']}
+            
             
             updated_count = 0
             added_count = 0
@@ -870,6 +1014,9 @@ class PlexImporter:
             for i, episode in enumerate(plex_episodes):
                 episode_guid = episode.get('guid', '')  # Use stable GUID
                 episode_title = episode.get('title', 'Unknown Episode')
+                
+                # DEBUG: Show EVERY episode being processed
+                self._emit_status(f"📺 PROCESSING Episode {i+1}/{len(plex_episodes)}: '{show_title} / {episode_title}' (GUID: {episode_guid})", debug_only=True)
                 
                 # Update progress for each episode processed (moved outside conditional)
                 if progress_callback and library_progress:
@@ -886,7 +1033,8 @@ class PlexImporter:
                 
                 if episode_guid in db_episode_ids:
                     # Update existing episode (only count if there were actual changes)
-                    if self._update_episode(episode, show, library_name):
+                    db_episode = db_episode_lookup[episode_guid]
+                    if self._update_episode(episode, show, library_name, library_root, db_episode):
                         updated_count += 1
                         # Emit status message for database change
                         if progress_callback:
@@ -897,7 +1045,7 @@ class PlexImporter:
                             )
                 else:
                     # Add new episode
-                    if self._add_episode(episode, show, library_name):
+                    if self._add_episode(episode, show, library_name, library_root):
                         added_count += 1
                         # Emit status message for database change
                         if progress_callback:
@@ -924,25 +1072,45 @@ class PlexImporter:
             # Only output if there were actual changes
             total_changes = updated_count + added_count + removed_count
             
+            # Update show's updated_at if any episodes were processed
+            if total_changes > 0:
+                # Update the show's updated_at to reflect that it was processed
+                cursor = self.database.connection.cursor()
+                cursor.execute("""
+                    UPDATE shows 
+                    SET updated_at = CURRENT_TIMESTAMP 
+                    WHERE source_id = ?
+                """, (show_guid,))
+                self.database.connection.commit()
+            
             # No summary messages - just progress bars
             
-            # Return the number of episodes processed (not just changes)
-            return len(plex_episodes)
+            # Return the number of actual database changes (not total episodes processed)
+            return total_changes
             
         except Exception as e:
             return 0
     
-    def _update_episode(self, episode: Dict, show: Dict, library_name: str = None) -> bool:
+    def _update_episode(self, episode: Dict, show: Dict, library_name: str = None, library_root: str = None, db_episode: Dict = None) -> bool:
         """Update an existing episode with current Plex data"""
         try:
             episode_guid = episode.get('guid', '')  # Use stable GUID
             if not episode_guid:
                 return False
             
-            # Get current episode from database
-            db_episode = self.database.get_episode_by_source_id(episode_guid)
+            # Get current episode from database (use provided or fetch)
             if not db_episode:
-                return False
+                db_episode = self.database.get_episode_by_source_id(episode_guid)
+                if not db_episode:
+                    return False
+            
+            # Check if episode has been updated in Plex since last sync
+            plex_updated_at = episode.get('updatedAt')
+            db_updated_at = db_episode.get('updated_at')
+            
+            # If Plex updatedAt matches our stored value, skip this episode entirely
+            if plex_updated_at and db_updated_at and plex_updated_at == db_updated_at:
+                return False  # No changes, skip update
             
             # Update episode data
             episode_title = episode.get('title', 'Unknown Episode')
@@ -987,20 +1155,26 @@ class PlexImporter:
                     has_changes = True
             
             # Check episode metadata changes - ensure proper type comparison
-            if (db_episode.get('episode_title') != episode_title or 
-                db_episode.get('season_number') != season_number or 
-                db_episode.get('episode_number') != episode_number or 
-                db_episode.get('rating') != rating or 
-                db_episode.get('summary') != summary):
-                has_changes = True
-                self.database.update_episode(
-                    episode_id=db_episode['id'],
-                    episode_title=episode_title,
-                    season_number=season_number,
-                    episode_number=episode_number,
-                    rating=rating,
-                    summary=summary
-                )
+            metadata_changed = (db_episode.get('episode_title') != episode_title or 
+                              db_episode.get('season_number') != season_number or 
+                              db_episode.get('episode_number') != episode_number or 
+                              db_episode.get('rating') != rating or 
+                              db_episode.get('summary') != summary)
+            
+            # If we reach here, either:
+            # 1. This is the first sync (db_updated_at is NULL), or
+            # 2. The content has changed (timestamps don't match)
+            # Always update the updated_at field to reflect current state
+            has_changes = True  # We're updating the timestamp, so there are changes
+            self.database.update_episode(
+                episode_id=db_episode['id'],
+                episode_title=episode_title,
+                season_number=season_number,
+                episode_number=episode_number,
+                rating=rating,
+                summary=summary,
+                plex_updated_at=episode.get('updatedAt')
+            )
             
             # Only output if there were actual changes
             return has_changes
@@ -1008,7 +1182,7 @@ class PlexImporter:
         except Exception as e:
             return False
     
-    def _add_episode(self, episode: Dict, show: Dict, library_name: str = None) -> bool:
+    def _add_episode(self, episode: Dict, show: Dict, library_name: str = None, library_root: str = None) -> bool:
         """Add a new episode to an existing show"""
         try:
             # Get show ID from database using the show's GUID
@@ -1024,16 +1198,23 @@ class PlexImporter:
                 try:
                     show_id = self.database.add_show(
                         title=show.get('title', 'Unknown Show'),
+                        plex_rating_key=show.get('ratingKey', ''),  # Keep for display purposes
+                        year=show.get('year'),
                         total_seasons=show.get('leafCount', 0),
                         total_episodes=0,  # Will be updated as episodes are added
                         show_rating=self._map_plex_rating(show.get('contentRating', '')),
                         show_summary=show.get('summary', ''),
                         genre=', '.join([g.get('tag', '') for g in show.get('Genre', [])]),
+                        studio=show.get('studio', ''),
+                        originally_available_at=show.get('originallyAvailableAt'),
+                        guid_primary=show.get('guid', ''),
                         source_type='plex',
-                        source_id=show_guid
+                        source_id=show.get('guid', ''),
+                        server_id=self.server_id,
+                        plex_updated_at=self._get_show_timestamp(show)
                     )
                     # Get the show record we just created
-                    cursor.execute("SELECT * FROM shows WHERE source_id = ?", (show_guid,))
+                    cursor.execute("SELECT * FROM shows WHERE source_id = ?", (show.get('guid', ''),))
                     db_show = cursor.fetchone()
                     if db_show:
                         db_show = dict(db_show)
@@ -1066,7 +1247,8 @@ class PlexImporter:
                 media_type='episode',
                 source_type='plex',
                 source_id=episode_guid,  # Use stable GUID
-                library_name=library_name
+                library_name=library_name,
+                server_id=self.server_id
             )
             
             # Add episode
@@ -1077,7 +1259,8 @@ class PlexImporter:
                 season_number=season_number,
                 episode_number=episode_number,
                 rating=rating,
-                summary=summary
+                summary=summary,
+                plex_updated_at=episode.get('updatedAt')
             )
             
             return True
@@ -1086,7 +1269,7 @@ class PlexImporter:
             return False
     
     def import_all_libraries(self) -> int:
-        """Import all libraries from Plex server"""
+        """Import all libraries from Plex server (legacy method - use sync_all_libraries instead)"""
         libraries = self.get_libraries()
         total_imported = 0
         
@@ -1101,9 +1284,36 @@ class PlexImporter:
         return total_imported
 
 
-def create_plex_importer(server_url: str, token: str, database: RetrovueDatabase, status_callback=None) -> Optional[PlexImporter]:
+def create_plex_importer(server_id: int, database: RetrovueDatabase, status_callback=None) -> Optional[PlexImporter]:
     """
     Create a Plex importer instance and test the connection.
+    
+    Args:
+        server_id: Plex server ID from database
+        database: Database instance
+        status_callback: Optional callback function for status updates
+        
+    Returns:
+        PlexImporter instance if connection successful, None otherwise
+    """
+    try:
+        importer = PlexImporter(server_id, database, status_callback)
+        
+        if importer.test_connection():
+            importer._emit_status(f"✅ Connected to Plex server: {importer.server_name} ({importer.server_url})")
+            return importer
+        else:
+            importer._emit_status(f"❌ Failed to connect to Plex server: {importer.server_name}")
+            return None
+    except Exception as e:
+        if status_callback:
+            status_callback(f"❌ Error creating Plex importer: {e}")
+        return None
+
+
+def create_plex_importer_legacy(server_url: str, token: str, database: RetrovueDatabase, status_callback=None) -> Optional[PlexImporter]:
+    """
+    Create a Plex importer instance using legacy URL/token method (for backward compatibility).
     
     Args:
         server_url: Plex server URL
@@ -1114,10 +1324,8 @@ def create_plex_importer(server_url: str, token: str, database: RetrovueDatabase
     Returns:
         PlexImporter instance if connection successful, None otherwise
     """
-    importer = PlexImporter(server_url, token, database, status_callback)
+    # Add server to database if it doesn't exist
+    server_id = database.add_plex_server("Legacy Server", server_url, token)
     
-    if importer.test_connection():
-        importer._emit_status(f"✅ Connected to Plex server: {server_url}")
-        return importer
-    else:
-        return None
+    # Create importer using the new method
+    return create_plex_importer(server_id, database, status_callback)
