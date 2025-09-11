@@ -111,7 +111,7 @@ Show → Episodes → Media Files → Database
 - `source_type` (TEXT) - Always 'plex'
 - `source_id` (TEXT) - Plex GUID
 - `server_id` (INTEGER) - Foreign key to plex_servers
-- `plex_updated_at` (INTEGER) - Plex timestamp
+- `updated_at` (INTEGER) - Plex timestamp (Unix epoch seconds)
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
@@ -124,7 +124,7 @@ Show → Episodes → Media Files → Database
 - `episode_number` (INTEGER)
 - `rating` (TEXT) - Content rating
 - `summary` (TEXT)
-- `plex_updated_at` (INTEGER) - Plex timestamp
+- `updated_at` (INTEGER) - Plex timestamp (Unix epoch seconds)
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
@@ -212,7 +212,7 @@ Show → Episodes → Media Files → Database
 ### Timestamp-Based Change Detection
 
 - Plex provides `updatedAt` timestamps for all content
-- Database stores `plex_updated_at` for comparison
+- Database stores `updated_at` (INTEGER epoch seconds) for comparison
 - Only content with different timestamps is processed
 - Significantly reduces processing time for large libraries
 

@@ -467,6 +467,64 @@ class RetrovueDatabase:
             pass
         except Exception as e:
             print(f"⚠️ Migration warning: {e}")
+        
+        # Migration 11: Fix episodes table updated_at to be INTEGER epoch (no default)
+        try:
+            # Check if episodes table has wrong column type for updated_at
+            cursor.execute("PRAGMA table_info(episodes)")
+            episodes_info = cursor.fetchall()
+            episodes_updated_at_wrong_type = False
+            episodes_updated_at_has_default = False
+            
+            for col in episodes_info:
+                if col[1] == 'updated_at':
+                    if col[2] == 'TIMESTAMP':  # col[2] is column type
+                        episodes_updated_at_wrong_type = True
+                    if col[4] is not None:  # col[4] is default value
+                        episodes_updated_at_has_default = True
+            
+            if episodes_updated_at_wrong_type or episodes_updated_at_has_default:
+                print("🔧 Fixing episodes table: changing updated_at from TIMESTAMP to INTEGER epoch")
+                # Recreate episodes table with correct column type
+                cursor.execute("""
+                    CREATE TABLE episodes_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        media_file_id INTEGER NOT NULL,
+                        show_id INTEGER NOT NULL,
+                        episode_title TEXT NOT NULL,
+                        season_number INTEGER,
+                        episode_number INTEGER,
+                        rating TEXT,
+                        summary TEXT,
+                        originally_available_at DATE,
+                        duration_ms INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at INTEGER,
+                        FOREIGN KEY (media_file_id) REFERENCES media_files(id) ON DELETE CASCADE,
+                        FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
+                    )
+                """)
+                
+                # Copy data from old table to new table
+                cursor.execute("""
+                    INSERT INTO episodes_new 
+                    SELECT id, media_file_id, show_id, episode_title, season_number, episode_number,
+                           rating, summary, originally_available_at, duration_ms, created_at, updated_at
+                    FROM episodes
+                """)
+                
+                # Drop old table and rename new table
+                cursor.execute("DROP TABLE episodes")
+                cursor.execute("ALTER TABLE episodes_new RENAME TO episodes")
+                
+                self.connection.commit()
+                print("✅ Fixed episodes table: updated_at is now INTEGER epoch")
+            
+        except sqlite3.OperationalError as e:
+            # Column might not exist, which is fine
+            pass
+        except Exception as e:
+            print(f"⚠️ Migration warning: {e}")
     
     def _ensure_schema_consistency(self):
         """Ensure the database schema is consistent with the latest requirements"""
@@ -1052,24 +1110,40 @@ class RetrovueDatabase:
         """Get the local mapped path for a media file (for file access)"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT mf.file_path, ppm.plex_path, ppm.local_path
+            SELECT mf.file_path, mf.server_id, ppm.plex_path, ppm.local_path, ppm.library_root
             FROM media_files mf
-            LEFT JOIN plex_path_mappings ppm ON 1=1
+            LEFT JOIN plex_path_mappings ppm ON mf.server_id = ppm.server_id
             WHERE mf.id = ?
         """, (media_file_id,))
         
-        result = cursor.fetchone()
-        if result:
-            plex_path = result['file_path']
+        results = cursor.fetchall()
+        if not results:
+            return ""
+        
+        plex_path = results[0]['file_path']
+        server_id = results[0]['server_id']
+        
+        # Find the mapping with the longest matching prefix
+        best_match = None
+        best_match_length = 0
+        
+        for result in results:
             plex_mapping = result['plex_path']
             local_mapping = result['local_path']
             
             if plex_mapping and local_mapping and plex_path.startswith(plex_mapping):
-                # Map the path
-                relative_path = plex_path[len(plex_mapping):]
-                if relative_path.startswith('/'):
-                    relative_path = relative_path[1:]
-                return os.path.join(local_mapping, relative_path)
+                if len(plex_mapping) > best_match_length:
+                    best_match = result
+                    best_match_length = len(plex_mapping)
+        
+        if best_match:
+            # Map the path using the best match
+            plex_mapping = best_match['plex_path']
+            local_mapping = best_match['local_path']
+            relative_path = plex_path[len(plex_mapping):]
+            if relative_path.startswith('/'):
+                relative_path = relative_path[1:]
+            return os.path.join(local_mapping, relative_path)
         
         return plex_path
     
@@ -1360,6 +1434,41 @@ class RetrovueDatabase:
         """, (source_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
+    
+    def get_movie_ts_by_guid(self, guid: str) -> Optional[int]:
+        """Get the updated_at timestamp for a movie by its GUID"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT m.updated_at
+            FROM movies m
+            JOIN media_files mf ON m.media_file_id = mf.id
+            WHERE mf.source_id = ?
+        """, (guid,))
+        row = cursor.fetchone()
+        return row[0] if row and row[0] is not None else None
+    
+    def get_episode_ts_by_guid(self, guid: str) -> Optional[int]:
+        """Get the updated_at timestamp for an episode by its GUID"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT e.updated_at
+            FROM episodes e
+            JOIN media_files mf ON e.media_file_id = mf.id
+            WHERE mf.source_id = ?
+        """, (guid,))
+        row = cursor.fetchone()
+        return row[0] if row and row[0] is not None else None
+    
+    def get_show_ts_by_guid(self, guid: str) -> Optional[int]:
+        """Get the updated_at timestamp for a show by its GUID"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT updated_at
+            FROM shows
+            WHERE source_id = ?
+        """, (guid,))
+        row = cursor.fetchone()
+        return row[0] if row and row[0] is not None else None
     
     def update_media_file(self, media_file_id: int, file_path: str, duration: int, library_name: str = None) -> bool:
         """Update a media file"""
