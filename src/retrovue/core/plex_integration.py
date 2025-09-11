@@ -34,6 +34,7 @@ Usage:
 
 import requests
 import xml.etree.ElementTree as ET
+import xmltodict
 from typing import List, Dict, Optional, Any
 from .database import RetrovueDatabase
 from .path_mapping import PlexPathMappingService
@@ -107,10 +108,9 @@ def parse_plex_response(response: requests.Response) -> Dict:
     
     elif 'application/xml' in content_type or 'text/xml' in content_type:
         try:
-            # Parse XML and convert to dict-like structure
-            root = ET.fromstring(response.text)
-            return xml_to_dict(root)
-        except ET.ParseError as e:
+            # Parse XML using xmltodict for better compatibility
+            return xmltodict.parse(response.text)
+        except Exception as e:
             raise ValueError(f"Failed to parse XML response: {e}")
     
     else:
@@ -121,45 +121,9 @@ def parse_plex_response(response: requests.Response) -> Dict:
         except ValueError:
             # If JSON fails, try XML
             try:
-                root = ET.fromstring(response.text)
-                return xml_to_dict(root)
-            except ET.ParseError:
+                return xmltodict.parse(response.text)
+            except Exception:
                 raise ValueError(f"Unsupported response format: {content_type}")
-
-
-def xml_to_dict(element: ET.Element) -> Dict:
-    """
-    Convert XML element to dictionary structure.
-    
-    Args:
-        element: XML element to convert
-        
-    Returns:
-        Dictionary representation of XML
-    """
-    result = {}
-    
-    # Add attributes
-    if element.attrib:
-        result.update(element.attrib)
-    
-    # Add text content if present and no children
-    if element.text and element.text.strip() and len(element) == 0:
-        result['text'] = element.text.strip()
-    
-    # Process children
-    for child in element:
-        child_dict = xml_to_dict(child)
-        
-        if child.tag in result:
-            # Multiple children with same tag - convert to list
-            if not isinstance(result[child.tag], list):
-                result[child.tag] = [result[child.tag]]
-            result[child.tag].append(child_dict)
-        else:
-            result[child.tag] = child_dict
-    
-    return result
 
 
 class PlexImporter:
@@ -833,7 +797,8 @@ class PlexImporter:
                     if movie_guid in db_movie_ids:
                         # Compare timestamps before updating
                         ts = plex_ts(movie)
-                        db_ts = self.database.get_movie_ts_by_guid(movie_guid)
+                        db_ts_raw = self.database.get_movie_ts_by_guid(movie_guid)
+                        db_ts = db_ts_to_int(db_ts_raw)
                         
                         if db_ts is not None and ts is not None and ts == db_ts:
                             # Skip update - timestamps match, no changes
@@ -881,8 +846,24 @@ class PlexImporter:
                     show_guid = show.get('guid', '')
                     show_title = show.get('title', 'Unknown Show')
                     
-                    # Always process this show and all its episodes
-                    # Individual episodes may have been updated even if show metadata hasn't changed
+                    # Check if show-level timestamp has changed before processing episodes
+                    show_ts = plex_ts(show)
+                    db_show_ts_raw = self.database.get_show_ts_by_guid(show_guid)
+                    db_show_ts = db_ts_to_int(db_show_ts_raw)
+                    
+                    # Short-circuit: skip episode processing if show timestamp hasn't changed
+                    if db_show_ts is not None and show_ts is not None and show_ts == db_show_ts:
+                        self._emit_status(f"⏭️ SKIP Show '{show_title}': Show timestamp unchanged ({show_ts}), skipping episode walk", debug_only=True)
+                        # Still emit progress for the show
+                        if progress_callback:
+                            progress_callback(
+                                library_progress=(i, len(libraries), library_name),
+                                item_progress=(j + 1, len(plex_shows), show_title),
+                                message=None
+                            )
+                        continue
+                    
+                    # Process show and its episodes
                     episode_changes = self._sync_show_episodes(
                         show, 
                         progress_callback, 
@@ -1173,6 +1154,10 @@ class PlexImporter:
                 plex_updated_at=plex_updated_at
             )
             
+            # Persist the new timestamp after successful update
+            if plex_updated_at is not None:
+                self.database.set_movie_ts_by_guid(movie_guid, plex_updated_at)
+            
             # Return whether there were changes (status message handled by progress callback)
             return has_changes
             
@@ -1227,7 +1212,8 @@ class PlexImporter:
                 if episode_guid in db_episode_ids:
                     # Compare timestamps before updating
                     ts = plex_ts(episode)
-                    db_ts = self.database.get_episode_ts_by_guid(episode_guid)
+                    db_ts_raw = self.database.get_episode_ts_by_guid(episode_guid)
+                    db_ts = db_ts_to_int(db_ts_raw)
                     
                     if db_ts is not None and ts is not None and ts == db_ts:
                         # Skip update - timestamps match, no changes
@@ -1298,12 +1284,18 @@ class PlexImporter:
                 """, (show_guid,))
                 self.database.connection.commit()
             
+            # Always persist the show's Plex timestamp after processing
+            show_ts = plex_ts(show)
+            if show_ts is not None:
+                self.database.set_show_ts_by_guid(show_guid, show_ts)
+            
             # No summary messages - just progress bars
             
             # Return the number of actual database changes (not total episodes processed)
             return total_changes
             
         except Exception as e:
+            self._emit_status(f"❌ Error in _sync_show_episodes: {e}", debug_only=True)
             return 0
     
     def _update_episode(self, episode: Dict, show: Dict, library_name: str = None, library_root: str = None, db_episode: Dict = None, library_root_paths: List[str] = None) -> bool:
@@ -1389,6 +1381,10 @@ class PlexImporter:
                 plex_updated_at=plex_updated_at
             )
             
+            # Persist the new timestamp after successful update
+            if plex_updated_at is not None:
+                self.database.set_episode_ts_by_guid(episode_guid, plex_updated_at)
+            
             # Return whether there were changes
             return has_changes
             
@@ -1435,6 +1431,7 @@ class PlexImporter:
                     if not db_show:
                         return False
                 except Exception as e:
+                    self._emit_status(f"❌ Error creating show in _add_episode: {e}", debug_only=True)
                     return False
             
             episode_title = episode.get('title', 'Unknown Episode')

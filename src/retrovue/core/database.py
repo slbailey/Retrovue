@@ -1481,6 +1481,55 @@ class RetrovueDatabase:
         row = cursor.fetchone()
         return row[0] if row and row[0] is not None else None
     
+    def set_movie_ts_by_guid(self, guid: str, ts: int) -> bool:
+        """Set the updated_at timestamp for a movie by its GUID"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                UPDATE movies 
+                SET updated_at = ?
+                WHERE media_file_id IN (
+                    SELECT id FROM media_files WHERE source_id = ?
+                )
+            """, (ts, guid))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"❌ Failed to set movie timestamp: {e}")
+            return False
+    
+    def set_episode_ts_by_guid(self, guid: str, ts: int) -> bool:
+        """Set the updated_at timestamp for an episode by its GUID"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                UPDATE episodes 
+                SET updated_at = ?
+                WHERE media_file_id IN (
+                    SELECT id FROM media_files WHERE source_id = ?
+                )
+            """, (ts, guid))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"❌ Failed to set episode timestamp: {e}")
+            return False
+    
+    def set_show_ts_by_guid(self, guid: str, ts: int) -> bool:
+        """Set the updated_at timestamp for a show by its GUID"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                UPDATE shows 
+                SET updated_at = ?
+                WHERE source_id = ?
+            """, (ts, guid))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"❌ Failed to set show timestamp: {e}")
+            return False
+    
     def update_media_file(self, media_file_id: int, file_path: str, duration: int, library_name: str = None, plex_path: str = None) -> bool:
         """Update a media file"""
         try:
