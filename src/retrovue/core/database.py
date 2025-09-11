@@ -7,9 +7,16 @@ Uses normalized schema with separate tables for media files and metadata.
 
 import sqlite3
 import os
+import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from datetime import datetime
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+# Schema version constant - increment this when making schema changes
+CURRENT_SCHEMA_VERSION = 2
 
 
 class RetrovueDatabase:
@@ -33,10 +40,20 @@ class RetrovueDatabase:
         """Initialize the database with required tables."""
         self.connection = sqlite3.connect(str(self.db_path))
         self.connection.row_factory = sqlite3.Row  # Enable dict-like access
+        
+        # Enable foreign key constraints immediately
+        cursor = self.connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        self.connection.commit()
+        
         self._create_tables()
         self._run_migrations()
         self._ensure_schema_consistency()
         self._update_schema_version()
+        
+        # Verify schema consistency on startup
+        if not self.verify_schema_consistency():
+            logger.warning("⚠️ Schema consistency check failed - some issues may need manual resolution")
     
     def _create_tables(self):
         """Create all required database tables with normalized schema."""
@@ -52,8 +69,10 @@ class RetrovueDatabase:
                 source_type TEXT NOT NULL,  -- 'plex', 'tmm', 'manual'
                 source_id TEXT,  -- External ID (Plex key, TMM file path, etc.)
                 library_name TEXT,  -- Library name from source (e.g., "Horror", "3D Movies")
+                plex_path TEXT,  -- Plex file path (separate from local file_path)
+                server_id INTEGER,  -- Server ID for multi-server support
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at INTEGER,  -- Unix timestamp from Plex
                 UNIQUE(source_type, source_id)
             )
         """)
@@ -125,7 +144,8 @@ class RetrovueDatabase:
                 summary TEXT,
                 genre TEXT,
                 director TEXT,
-                updated_at INTEGER,
+                server_id INTEGER,  -- Server ID for multi-server support
+                updated_at INTEGER,  -- Unix timestamp from Plex
                 FOREIGN KEY (media_file_id) REFERENCES media_files(id) ON DELETE CASCADE
             )
         """)
@@ -284,17 +304,79 @@ class RetrovueDatabase:
         """Run database migrations to update schema"""
         cursor = self.connection.cursor()
         
+        # Helper function to check if a column exists in a table
+        def column_exists(table_name: str, column_name: str) -> bool:
+            """Check if a column exists in a table"""
+            try:
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = [row[1] for row in cursor.fetchall()]
+                return column_name in columns
+            except Exception as e:
+                logger.warning(f"⚠️ Error checking column {column_name} in {table_name}: {e}")
+                return False
+        
+        # Helper function to get column info
+        def get_column_info(table_name: str, column_name: str) -> Optional[Dict]:
+            """Get information about a specific column"""
+            try:
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = cursor.fetchall()
+                for col in columns:
+                    if col[1] == column_name:  # col[1] is column name
+                        return {
+                            'name': col[1],
+                            'type': col[2],
+                            'not_null': col[3],
+                            'default': col[4],
+                            'primary_key': col[5]
+                        }
+                return None
+            except Exception as e:
+                logger.warning(f"⚠️ Error getting column info for {column_name} in {table_name}: {e}")
+                return None
+        
+        # Helper function to check if migration has been applied
+        def migration_applied(migration_name: str) -> bool:
+            """Check if a specific migration has been applied"""
+            try:
+                cursor.execute("SELECT COUNT(*) FROM schema_version WHERE description LIKE ?", (f"%{migration_name}%",))
+                return cursor.fetchone()[0] > 0
+            except Exception:
+                return False
+        
+        # Helper function to recreate a table with new schema
+        def recreate_table(table_name: str, new_schema_sql: str, data_copy_sql: str) -> bool:
+            """Recreate a table with new schema and copy data"""
+            try:
+                temp_table_name = f"{table_name}_new"
+                
+                # Create new table
+                cursor.execute(new_schema_sql.replace(table_name, temp_table_name))
+                
+                # Copy data
+                cursor.execute(data_copy_sql.replace(table_name, temp_table_name))
+                
+                # Drop old table and rename new table
+                cursor.execute(f"DROP TABLE {table_name}")
+                cursor.execute(f"ALTER TABLE {temp_table_name} RENAME TO {table_name}")
+                
+                self.connection.commit()
+                return True
+            except Exception as e:
+                logger.error(f"❌ Failed to recreate table {table_name}: {e}")
+                self.connection.rollback()
+                return False
+        
         # Migration 1: Add library_name column to media_files table
         try:
-            cursor.execute("ALTER TABLE media_files ADD COLUMN library_name TEXT")
-            self.connection.commit()
-            print("✅ Added library_name column to media_files table")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name" in str(e):
-                # Column already exists, that's fine
-                pass
+            if not column_exists('media_files', 'library_name'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN library_name TEXT")
+                self.connection.commit()
+                logger.info("✅ Added library_name column to media_files table")
             else:
-                print(f"⚠️ Migration warning: {e}")
+                logger.info("✅ Migration 1: library_name column already exists")
+        except Exception as e:
+            logger.warning(f"⚠️ Migration 1 warning: {e}")
         
         # Migration 2: Add year-based disambiguation columns to shows table
         try:
@@ -306,13 +388,13 @@ class RetrovueDatabase:
             cursor.execute("ALTER TABLE shows ADD COLUMN updated_at_plex TIMESTAMP")
             cursor.execute("ALTER TABLE shows ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             self.connection.commit()
-            print("✅ Added year-based disambiguation columns to shows table")
+            logger.info("✅ Added year-based disambiguation columns to shows table")
         except sqlite3.OperationalError as e:
             if "duplicate column name" in str(e):
                 # Columns already exist, that's fine
                 pass
             else:
-                print(f"⚠️ Migration warning: {e}")
+                logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 3: Add additional columns to episodes table
         try:
@@ -322,13 +404,13 @@ class RetrovueDatabase:
             cursor.execute("ALTER TABLE episodes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             cursor.execute("ALTER TABLE episodes ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             self.connection.commit()
-            print("✅ Added additional columns to episodes table")
+            logger.info("✅ Added additional columns to episodes table")
         except sqlite3.OperationalError as e:
             if "duplicate column name" in str(e):
                 # Columns already exist, that's fine
                 pass
             else:
-                print(f"⚠️ Migration warning: {e}")
+                logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 4: Add updated_at_plex column to movies table (if it doesn't exist)
         # Skip this migration if we're using the new schema (no updated_at_plex columns)
@@ -344,10 +426,10 @@ class RetrovueDatabase:
                 if 'updated_at_plex' not in movies_columns:
                     cursor.execute("ALTER TABLE movies ADD COLUMN updated_at_plex TIMESTAMP")
                     self.connection.commit()
-                    print("✅ Added updated_at_plex column to movies table")
+                    logger.info("✅ Added updated_at_plex column to movies table")
             # New schema - skip this migration
         except sqlite3.OperationalError as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
     
         # Migration 5: Migrate plex_credentials to plex_servers table
         try:
@@ -381,9 +463,9 @@ class RetrovueDatabase:
             else:
                 pass  # No plex_credentials table to migrate
         except sqlite3.OperationalError as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
         except sqlite3.IntegrityError as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 6: Update plex_path_mappings table for per-library support
         try:
@@ -398,7 +480,7 @@ class RetrovueDatabase:
                 # Columns already exist, that's fine
                 pass
             else:
-                print(f"⚠️ Migration warning: {e}")
+                logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 7: Add server_id to media tables for server-specific cleanup
         try:
@@ -413,7 +495,7 @@ class RetrovueDatabase:
                 # Columns already exist, that's fine
                 pass
             else:
-                print(f"⚠️ Migration warning: {e}")
+                logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 8: Add foreign key constraints with CASCADE deletes
         try:
@@ -425,7 +507,7 @@ class RetrovueDatabase:
             # when we recreate the tables with proper constraints in the future
             pass  # Migration completed
         except sqlite3.OperationalError as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 9: Create libraries table for proper 1:many relationship
         try:
@@ -448,7 +530,7 @@ class RetrovueDatabase:
             self.connection.commit()
             pass  # Migration completed
         except Exception as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 10: Remove redundant updated_at_plex columns and use updated_at for Plex timestamps
         try:
@@ -466,7 +548,7 @@ class RetrovueDatabase:
             # Column might not exist, which is fine
             pass
         except Exception as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 11: Fix episodes table updated_at to be INTEGER epoch (no default)
         try:
@@ -484,10 +566,10 @@ class RetrovueDatabase:
                         episodes_updated_at_has_default = True
             
             if episodes_updated_at_wrong_type or episodes_updated_at_has_default:
-                print("🔧 Fixing episodes table: changing updated_at from TIMESTAMP to INTEGER epoch")
-                # Recreate episodes table with correct column type
-                cursor.execute("""
-                    CREATE TABLE episodes_new (
+                logger.info("🔧 Fixing episodes table: changing updated_at from TIMESTAMP to INTEGER epoch")
+                
+                new_schema = """
+                    CREATE TABLE episodes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         media_file_id INTEGER NOT NULL,
                         show_id INTEGER NOT NULL,
@@ -503,28 +585,25 @@ class RetrovueDatabase:
                         FOREIGN KEY (media_file_id) REFERENCES media_files(id) ON DELETE CASCADE,
                         FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
                     )
-                """)
+                """
                 
-                # Copy data from old table to new table
-                cursor.execute("""
-                    INSERT INTO episodes_new 
+                data_copy = """
+                    INSERT INTO episodes 
                     SELECT id, media_file_id, show_id, episode_title, season_number, episode_number,
                            rating, summary, originally_available_at, duration_ms, created_at, updated_at
                     FROM episodes
-                """)
+                """
                 
-                # Drop old table and rename new table
-                cursor.execute("DROP TABLE episodes")
-                cursor.execute("ALTER TABLE episodes_new RENAME TO episodes")
-                
-                self.connection.commit()
-                print("✅ Fixed episodes table: updated_at is now INTEGER epoch")
+                if recreate_table('episodes', new_schema, data_copy):
+                    logger.info("✅ Fixed episodes table: updated_at is now INTEGER epoch")
+                else:
+                    logger.error("❌ Failed to fix episodes table")
             
         except sqlite3.OperationalError as e:
             # Column might not exist, which is fine
             pass
         except Exception as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
         
         # Migration 12: Add plex_path column and migrate existing file_path data
         try:
@@ -534,7 +613,7 @@ class RetrovueDatabase:
             plex_path_exists = any(col[1] == 'plex_path' for col in media_files_info)
             
             if not plex_path_exists:
-                print("🔧 Migration 12: Adding plex_path column to media_files table")
+                logger.info("🔧 Migration 12: Adding plex_path column to media_files table")
                 
                 # Add plex_path column
                 cursor.execute("ALTER TABLE media_files ADD COLUMN plex_path TEXT")
@@ -546,12 +625,75 @@ class RetrovueDatabase:
                 cursor.execute("UPDATE media_files SET file_path = '' WHERE file_path IS NOT NULL")
                 
                 self.connection.commit()
-                print("✅ Migration 12: Added plex_path column and migrated existing data")
+                logger.info("✅ Migration 12: Added plex_path column and migrated existing data")
             else:
-                print("✅ Migration 12: plex_path column already exists")
+                logger.info("✅ Migration 12: plex_path column already exists")
                 
         except Exception as e:
-            print(f"⚠️ Migration warning: {e}")
+            logger.warning(f"⚠️ Migration warning: {e}")
+        
+        # Migration 13: Fix media_files table updated_at column type and add missing columns
+        try:
+            # Check if media_files table has wrong column type for updated_at
+            cursor.execute("PRAGMA table_info(media_files)")
+            media_files_info = cursor.fetchall()
+            media_files_updated_at_wrong_type = False
+            media_files_updated_at_has_default = False
+            has_plex_path = False
+            has_server_id = False
+            
+            for col in media_files_info:
+                if col[1] == 'updated_at':
+                    if col[2] == 'TIMESTAMP':  # col[2] is column type
+                        media_files_updated_at_wrong_type = True
+                    if col[4] is not None:  # col[4] is default value
+                        media_files_updated_at_has_default = True
+                elif col[1] == 'plex_path':
+                    has_plex_path = True
+                elif col[1] == 'server_id':
+                    has_server_id = True
+            
+            if media_files_updated_at_wrong_type or media_files_updated_at_has_default or not has_plex_path or not has_server_id:
+                logger.info("🔧 Migration 13: Fixing media_files table structure")
+                # Recreate media_files table with correct column types and missing columns
+                cursor.execute("""
+                    CREATE TABLE media_files_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_path TEXT NOT NULL,
+                        duration INTEGER NOT NULL,
+                        media_type TEXT NOT NULL,
+                        source_type TEXT NOT NULL,
+                        source_id TEXT,
+                        library_name TEXT,
+                        plex_path TEXT,
+                        server_id INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at INTEGER,
+                        UNIQUE(source_type, source_id)
+                    )
+                """)
+                
+                # Copy data from old table to new table
+                cursor.execute("""
+                    INSERT INTO media_files_new 
+                    SELECT id, file_path, duration, media_type, source_type, source_id, 
+                           library_name, 
+                           COALESCE(plex_path, '') as plex_path,
+                           COALESCE(server_id, 0) as server_id,
+                           created_at, 
+                           COALESCE(updated_at, 0) as updated_at
+                    FROM media_files
+                """)
+                
+                # Drop old table and rename new table
+                cursor.execute("DROP TABLE media_files")
+                cursor.execute("ALTER TABLE media_files_new RENAME TO media_files")
+                
+                self.connection.commit()
+                logger.info("✅ Migration 13: Fixed media_files table structure")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Migration warning: {e}")
     
     def _ensure_schema_consistency(self):
         """Ensure the database schema is consistent with the latest requirements"""
@@ -603,7 +745,7 @@ class RetrovueDatabase:
                 plex_rating_key_is_unique = True
             
             if shows_updated_at_has_default or shows_updated_at_wrong_type or plex_rating_key_is_unique:
-                print("🔧 Fixing shows table: removing DEFAULT CURRENT_TIMESTAMP from updated_at and fixing unique constraints")
+                logger.info("🔧 Fixing shows table: removing DEFAULT CURRENT_TIMESTAMP from updated_at and fixing unique constraints")
                 # Recreate shows table without the default and with correct unique constraints
                 cursor.execute("""
                     CREATE TABLE shows_new (
@@ -650,7 +792,7 @@ class RetrovueDatabase:
                     movies_updated_at_wrong_type = True
             
             if movies_updated_at_wrong_type:
-                print("🔧 Fixing movies table: changing updated_at from TIMESTAMP to INTEGER")
+                logger.info("🔧 Fixing movies table: changing updated_at from TIMESTAMP to INTEGER")
                 # Recreate movies table with correct column type
                 cursor.execute("""
                     CREATE TABLE movies_new (
@@ -685,16 +827,13 @@ class RetrovueDatabase:
             # Columns might not exist, which is fine
             pass
         except Exception as e:
-            print(f"⚠️ Schema consistency warning: {e}")
+            logger.warning(f"⚠️ Schema consistency warning: {e}")
     
     def _update_schema_version(self):
         """Update the schema version to track the current database schema"""
         cursor = self.connection.cursor()
         
         try:
-            # Current schema version (increment this when making schema changes)
-            CURRENT_SCHEMA_VERSION = 1
-            
             # Check if we already have this version
             cursor.execute("SELECT version FROM schema_version WHERE version = ?", (CURRENT_SCHEMA_VERSION,))
             if cursor.fetchone():
@@ -704,12 +843,12 @@ class RetrovueDatabase:
             cursor.execute("""
                 INSERT INTO schema_version (version, description) 
                 VALUES (?, ?)
-            """, (CURRENT_SCHEMA_VERSION, "Unix timestamp schema - removed updated_at_plex columns"))
+            """, (CURRENT_SCHEMA_VERSION, "Fixed schema consistency - proper updated_at types, plex_path separation, foreign key cascades"))
             
             self.connection.commit()
             
         except Exception as e:
-            print(f"⚠️ Schema version warning: {e}")
+            logger.warning(f"⚠️ Schema version warning: {e}")
     
     def get_schema_version(self) -> int:
         """Get the current schema version of the database"""
@@ -725,7 +864,7 @@ class RetrovueDatabase:
     def is_schema_up_to_date(self) -> bool:
         """Check if the database schema is up to date"""
         current_version = self.get_schema_version()
-        return current_version >= 1  # Update this when schema changes
+        return current_version >= CURRENT_SCHEMA_VERSION
     
     def add_plex_server(self, name: str, server_url: str, token: str, is_active: bool = True) -> int:
         """Add a new Plex server to the database"""
@@ -733,8 +872,8 @@ class RetrovueDatabase:
         
         cursor.execute("""
             INSERT OR REPLACE INTO plex_servers (name, server_url, token, is_active, updated_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, (name, server_url, token, 1 if is_active else 0))
+            VALUES (?, ?, ?, ?, ?)
+        """, (name, server_url, token, 1 if is_active else 0, int(datetime.now().timestamp())))
         
         self.connection.commit()
         return cursor.lastrowid
@@ -782,7 +921,8 @@ class RetrovueDatabase:
                 params.append(is_active)
             
             if updates:
-                updates.append("updated_at = CURRENT_TIMESTAMP")
+                updates.append("updated_at = ?")
+                params.append(int(datetime.now().timestamp()))
                 params.append(server_id)
                 
                 cursor.execute(f"""
@@ -795,7 +935,7 @@ class RetrovueDatabase:
                 return cursor.rowcount > 0
             return False
         except Exception as e:
-            print(f"❌ Failed to update Plex server: {e}")
+            logger.error(f"❌ Failed to update Plex server: {e}")
             return False
     
     def delete_plex_server(self, server_id: int) -> bool:
@@ -803,63 +943,8 @@ class RetrovueDatabase:
         try:
             cursor = self.connection.cursor()
             
-            # Delete in order to respect foreign key dependencies
-            # 1. Delete episodes (they reference media_files)
-            cursor.execute("""
-                DELETE FROM episodes 
-                WHERE media_file_id IN (
-                    SELECT id FROM media_files WHERE server_id = ?
-                )
-            """, (server_id,))
-            
-            # 2. Delete movies (they reference media_files)
-            cursor.execute("""
-                DELETE FROM movies 
-                WHERE media_file_id IN (
-                    SELECT id FROM media_files WHERE server_id = ?
-                )
-            """, (server_id,))
-            
-            # 3. Delete shows (they have server_id directly)
-            cursor.execute("DELETE FROM shows WHERE server_id = ?", (server_id,))
-            
-            # 4. Delete show GUIDs (they reference shows) - but shows are already deleted above
-            # This is handled by the shows deletion above
-            
-            # 5. Delete content scheduling metadata (they reference media_files)
-            cursor.execute("""
-                DELETE FROM content_scheduling_metadata 
-                WHERE media_file_id IN (
-                    SELECT id FROM media_files WHERE server_id = ?
-                )
-            """, (server_id,))
-            
-            # 6. Delete schedules (they reference media_files)
-            cursor.execute("""
-                DELETE FROM schedules 
-                WHERE media_file_id IN (
-                    SELECT id FROM media_files WHERE server_id = ?
-                )
-            """, (server_id,))
-            
-            # 7. Delete playout logs (they reference media_files)
-            cursor.execute("""
-                DELETE FROM playout_logs 
-                WHERE media_file_id IN (
-                    SELECT id FROM media_files WHERE server_id = ?
-                )
-            """, (server_id,))
-            
-            # 8. Delete media files
-            cursor.execute("DELETE FROM media_files WHERE server_id = ?", (server_id,))
-            
-            # 9. Delete libraries (they have CASCADE constraint)
-            cursor.execute("DELETE FROM libraries WHERE server_id = ?", (server_id,))
-            
-            # 10. Delete path mappings (they have CASCADE constraint)
-            cursor.execute("DELETE FROM plex_path_mappings WHERE server_id = ?", (server_id,))
-            
-            # 11. Finally, delete the server itself
+            # With proper CASCADE constraints, we only need to delete the server
+            # All related data will be automatically deleted by foreign key cascades
             cursor.execute("DELETE FROM plex_servers WHERE id = ?", (server_id,))
             
             self.connection.commit()
@@ -869,7 +954,7 @@ class RetrovueDatabase:
             
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to delete Plex server: {e}")
+            logger.error(f"❌ Failed to delete Plex server: {e}")
             self.connection.rollback()
             return False
     
@@ -882,26 +967,51 @@ class RetrovueDatabase:
             cursor.execute("PRAGMA table_info(shows)")
             shows_columns = [row[1] for row in cursor.fetchall()]
             if 'updated_at_plex' in shows_columns:
-                print("❌ Schema issue: shows table still has updated_at_plex column")
+                logger.error("❌ Schema issue: shows table still has updated_at_plex column")
                 return False
             
             cursor.execute("PRAGMA table_info(episodes)")
             episodes_columns = [row[1] for row in cursor.fetchall()]
             if 'updated_at_plex' in episodes_columns:
-                print("❌ Schema issue: episodes table still has updated_at_plex column")
+                logger.error("❌ Schema issue: episodes table still has updated_at_plex column")
                 return False
             
             cursor.execute("PRAGMA table_info(movies)")
             movies_columns = [row[1] for row in cursor.fetchall()]
             if 'updated_at_plex' in movies_columns:
-                print("❌ Schema issue: movies table still has updated_at_plex column")
+                logger.error("❌ Schema issue: movies table still has updated_at_plex column")
                 return False
             
-            print("✅ Schema is consistent - no updated_at_plex columns found")
+            # Check that updated_at columns are INTEGER type (not TIMESTAMP with DEFAULT)
+            for table_name in ['shows', 'episodes', 'movies', 'media_files']:
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = cursor.fetchall()
+                for col in columns:
+                    if col[1] == 'updated_at':  # col[1] is column name
+                        if col[2] != 'INTEGER':  # col[2] is column type
+                            logger.error(f"❌ Schema issue: {table_name}.updated_at should be INTEGER, found {col[2]}")
+                            return False
+                        if col[4] is not None:  # col[4] is default value
+                            logger.error(f"❌ Schema issue: {table_name}.updated_at should not have DEFAULT value")
+                            return False
+            
+            # Check that plex_rating_key is not UNIQUE
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='shows'")
+            table_def = cursor.fetchone()
+            if table_def and 'plex_rating_key TEXT UNIQUE' in table_def[0]:
+                logger.error("❌ Schema issue: plex_rating_key should not be UNIQUE")
+                return False
+            
+            # Check that source_id is UNIQUE
+            if table_def and 'source_id TEXT UNIQUE NOT NULL' not in table_def[0]:
+                logger.error("❌ Schema issue: source_id should be UNIQUE NOT NULL")
+                return False
+            
+            logger.info("✅ Schema is consistent - all checks passed")
             return True
             
         except Exception as e:
-            print(f"❌ Error verifying schema: {e}")
+            logger.error(f"❌ Error verifying schema: {e}")
             return False
     
     # Legacy methods for backward compatibility
@@ -929,12 +1039,12 @@ class RetrovueDatabase:
             cursor.execute("""
                 INSERT OR REPLACE INTO libraries 
                 (server_id, library_key, library_name, library_type, library_root, sync_enabled, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (server_id, library_key, library_name, library_type, library_root, sync_enabled))
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (server_id, library_key, library_name, library_type, library_root, sync_enabled, int(datetime.now().timestamp())))
             self.connection.commit()
             return cursor.lastrowid
         except Exception as e:
-            print(f"❌ Failed to add library: {e}")
+            logger.error(f"❌ Failed to add library: {e}")
             return 0
     
     def get_server_libraries(self, server_id: int = None) -> List[Dict]:
@@ -957,7 +1067,7 @@ class RetrovueDatabase:
                 """)
             return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
-            print(f"❌ Failed to get libraries: {e}")
+            logger.error(f"❌ Failed to get libraries: {e}")
             return []
     
     def get_library(self, server_id: int, library_key: str) -> Optional[Dict]:
@@ -972,7 +1082,7 @@ class RetrovueDatabase:
             row = cursor.fetchone()
             return dict(row) if row else None
         except Exception as e:
-            print(f"❌ Failed to get library: {e}")
+            logger.error(f"❌ Failed to get library: {e}")
             return None
     
     def update_library_sync(self, server_id: int, library_key: str, sync_enabled: bool) -> bool:
@@ -980,13 +1090,13 @@ class RetrovueDatabase:
         try:
             cursor = self.connection.cursor()
             cursor.execute("""
-                UPDATE libraries SET sync_enabled = ?, updated_at = CURRENT_TIMESTAMP
+                UPDATE libraries SET sync_enabled = ?, updated_at = ?
                 WHERE server_id = ? AND library_key = ?
-            """, (sync_enabled, server_id, library_key))
+            """, (sync_enabled, int(datetime.now().timestamp()), server_id, library_key))
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to update library sync: {e}")
+            logger.error(f"❌ Failed to update library sync: {e}")
             return False
     
     def delete_libraries(self, server_id: int) -> bool:
@@ -997,7 +1107,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return True
         except Exception as e:
-            print(f"❌ Failed to delete libraries: {e}")
+            logger.error(f"❌ Failed to delete libraries: {e}")
             return False
     
     def add_plex_path_mapping(self, plex_path: str, local_path: str, server_id: int = None, 
@@ -1102,7 +1212,7 @@ class RetrovueDatabase:
                 return cursor.rowcount > 0
             return False
         except Exception as e:
-            print(f"❌ Failed to update path mapping: {e}")
+            logger.error(f"❌ Failed to update path mapping: {e}")
             return False
     
     def delete_plex_path_mapping(self, mapping_id: int) -> bool:
@@ -1113,7 +1223,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to delete path mapping: {e}")
+            logger.error(f"❌ Failed to delete path mapping: {e}")
             return False
     
     # Legacy methods for backward compatibility
@@ -1166,8 +1276,8 @@ class RetrovueDatabase:
         cursor.execute("""
             INSERT OR REPLACE INTO media_files
             (file_path, duration, media_type, source_type, source_id, library_name, server_id, updated_at, plex_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-        """, (file_path, duration, media_type, source_type, source_id, library_name, server_id, plex_path))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (file_path, duration, media_type, source_type, source_id, library_name, server_id, int(datetime.now().timestamp()), plex_path))
         
         # Get the media_file_id
         if source_id:
@@ -1495,7 +1605,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to set movie timestamp: {e}")
+            logger.error(f"❌ Failed to set movie timestamp: {e}")
             return False
     
     def set_episode_ts_by_guid(self, guid: str, ts: int) -> bool:
@@ -1512,7 +1622,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to set episode timestamp: {e}")
+            logger.error(f"❌ Failed to set episode timestamp: {e}")
             return False
     
     def set_show_ts_by_guid(self, guid: str, ts: int) -> bool:
@@ -1527,41 +1637,42 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to set show timestamp: {e}")
+            logger.error(f"❌ Failed to set show timestamp: {e}")
             return False
     
     def update_media_file(self, media_file_id: int, file_path: str, duration: int, library_name: str = None, plex_path: str = None) -> bool:
         """Update a media file"""
         try:
             cursor = self.connection.cursor()
+            current_timestamp = int(datetime.now().timestamp())
             if library_name is not None and plex_path is not None:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, library_name = ?, plex_path = ?, updated_at = CURRENT_TIMESTAMP
+                    SET file_path = ?, duration = ?, library_name = ?, plex_path = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, library_name, plex_path, media_file_id))
+                """, (file_path, duration, library_name, plex_path, current_timestamp, media_file_id))
             elif library_name is not None:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, library_name = ?, updated_at = CURRENT_TIMESTAMP
+                    SET file_path = ?, duration = ?, library_name = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, library_name, media_file_id))
+                """, (file_path, duration, library_name, current_timestamp, media_file_id))
             elif plex_path is not None:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, plex_path = ?, updated_at = CURRENT_TIMESTAMP
+                    SET file_path = ?, duration = ?, plex_path = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, plex_path, media_file_id))
+                """, (file_path, duration, plex_path, current_timestamp, media_file_id))
             else:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, updated_at = CURRENT_TIMESTAMP
+                    SET file_path = ?, duration = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, media_file_id))
+                """, (file_path, duration, current_timestamp, media_file_id))
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to update media file: {e}")
+            logger.error(f"❌ Failed to update media file: {e}")
             return False
     
     def update_movie(self, movie_id: int, title: str, year: Optional[int], 
@@ -1577,7 +1688,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to update movie: {e}")
+            logger.error(f"❌ Failed to update movie: {e}")
             return False
     
     def update_episode(self, episode_id: int, episode_title: str, season_number: int,
@@ -1593,7 +1704,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to update episode: {e}")
+            logger.error(f"❌ Failed to update episode: {e}")
             return False
     
     def remove_movie_by_source_id(self, source_id: str) -> bool:
@@ -1611,7 +1722,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to remove movie: {e}")
+            logger.error(f"❌ Failed to remove movie: {e}")
             return False
     
     def remove_show_by_source_id(self, source_id: str) -> bool:
@@ -1629,7 +1740,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to remove show: {e}")
+            logger.error(f"❌ Failed to remove show: {e}")
             return False
     
     def remove_episode_by_source_id(self, source_id: str) -> bool:
@@ -1647,7 +1758,7 @@ class RetrovueDatabase:
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Failed to remove episode: {e}")
+            logger.error(f"❌ Failed to remove episode: {e}")
             return False
     
     def close(self):
