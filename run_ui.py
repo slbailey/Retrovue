@@ -26,7 +26,9 @@ import sys
 from pathlib import Path
 
 # Add src directory to Python path so we can import retrovue modules
-sys.path.insert(0, str(Path('.').absolute() / 'src'))
+src_path = str(Path(__file__).parent / 'src')
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
 from retrovue.ui.main_window import main
 
