@@ -1558,6 +1558,30 @@ class ContentBrowserTab(QWidget):
         self.library_combo.currentTextChanged.connect(self._filter_content)
         filter_layout.addWidget(self.library_combo)
         
+        # Add backfill button
+        self.backfill_btn = QPushButton("Fix Missing Data")
+        self.backfill_btn.setToolTip("Backfill missing library names and server data")
+        self.backfill_btn.clicked.connect(self.backfill_missing_data)
+        filter_layout.addWidget(self.backfill_btn)
+        
+        # Add library mapping fix button
+        self.fix_mapping_btn = QPushButton("Fix Library Names")
+        self.fix_mapping_btn.setToolTip("Fix incorrect library name mappings (e.g., 'Adult content' -> 'Anime TV')")
+        self.fix_mapping_btn.clicked.connect(self.fix_library_mapping)
+        filter_layout.addWidget(self.fix_mapping_btn)
+        
+        # Add cleanup orphaned data button
+        self.cleanup_btn = QPushButton("Clean Orphaned Data")
+        self.cleanup_btn.setToolTip("Remove media files from deleted Plex servers")
+        self.cleanup_btn.clicked.connect(self.cleanup_orphaned_data)
+        filter_layout.addWidget(self.cleanup_btn)
+        
+        # Add fix missing records button
+        self.fix_records_btn = QPushButton("Fix Missing Records")
+        self.fix_records_btn.setToolTip("Create missing episode/movie records for media files")
+        self.fix_records_btn.clicked.connect(self.fix_missing_records)
+        filter_layout.addWidget(self.fix_records_btn)
+        
         filter_group.setLayout(filter_layout)
         layout.addWidget(filter_group)
         
@@ -1565,7 +1589,7 @@ class ContentBrowserTab(QWidget):
         self.content_table = QTableWidget()
         self.content_table.setColumnCount(8)
         self.content_table.setHorizontalHeaderLabels([
-            "Title", "Type", "Duration", "Rating", "Show", "Season/Episode", "Library", "Media Path"
+            "Title", "Type", "Duration", "Rating", "Show", "Season/Episode", "Library", "Resolved Path"
         ])
         
         # Enable context menu for the table
@@ -1591,8 +1615,8 @@ class ContentBrowserTab(QWidget):
         for show in shows:
             self.show_combo.addItem(show['title'])
         
-        # Load libraries
-        libraries = self.database.get_libraries()
+        # Load libraries from media_files (not libraries table)
+        libraries = self.database.get_distinct_libraries_from_media()
         self.library_combo.clear()
         self.library_combo.addItem("All Libraries")
         for library in libraries:
@@ -1631,6 +1655,10 @@ class ContentBrowserTab(QWidget):
                 episode_num = episode.get('episode_number', '')
                 season_episode = f"S{season:02d}E{episode_num:02d}" if season and episode_num else ""
                 
+                # Get resolved path using path mapping service
+                resolved_path = self.database.get_local_path_for_media_file(episode['id']) \
+                    if episode.get('id') else episode.get('file_path', '')
+                
                 self.content_table.setItem(row, 0, QTableWidgetItem(episode['episode_title']))
                 self.content_table.setItem(row, 1, QTableWidgetItem("Episode"))
                 self.content_table.setItem(row, 2, QTableWidgetItem(duration_str))
@@ -1638,7 +1666,10 @@ class ContentBrowserTab(QWidget):
                 self.content_table.setItem(row, 4, QTableWidgetItem(episode['show_title']))
                 self.content_table.setItem(row, 5, QTableWidgetItem(season_episode))
                 self.content_table.setItem(row, 6, QTableWidgetItem(episode.get('library_name', '')))
-                self.content_table.setItem(row, 7, QTableWidgetItem(episode.get('file_path', '')))
+                self.content_table.setItem(row, 7, QTableWidgetItem(resolved_path))
+                
+                # Store media_file_id for context menu operations
+                self.content_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, episode['id'])
         
         if media_type == "All" or media_type == "movie":
             movies = self.database.get_movies_with_metadata()
@@ -1652,6 +1683,10 @@ class ContentBrowserTab(QWidget):
                 duration = movie['duration']
                 duration_str = format_duration_milliseconds(duration)
                 
+                # Get resolved path using path mapping service
+                resolved_path = self.database.get_local_path_for_media_file(movie['id']) \
+                    if movie.get('id') else movie.get('file_path', '')
+                
                 self.content_table.setItem(row, 0, QTableWidgetItem(movie['title']))
                 self.content_table.setItem(row, 1, QTableWidgetItem("Movie"))
                 self.content_table.setItem(row, 2, QTableWidgetItem(duration_str))
@@ -1659,10 +1694,113 @@ class ContentBrowserTab(QWidget):
                 self.content_table.setItem(row, 4, QTableWidgetItem(""))
                 self.content_table.setItem(row, 5, QTableWidgetItem(""))
                 self.content_table.setItem(row, 6, QTableWidgetItem(movie.get('library_name', '')))
-                self.content_table.setItem(row, 7, QTableWidgetItem(movie.get('file_path', '')))
+                self.content_table.setItem(row, 7, QTableWidgetItem(resolved_path))
+                
+                # Store media_file_id for context menu operations
+                self.content_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, movie['id'])
         
         # Resize columns to content
         self.content_table.resizeColumnsToContents()
+    
+    def refresh_content(self):
+        """Refresh the content browser after database updates"""
+        self._load_content()
+    
+    def backfill_missing_data(self):
+        """Backfill missing library data and refresh the browser"""
+        try:
+            result = self.database.backfill_missing_library_data()
+            if result["total"] > 0:
+                QMessageBox.information(
+                    self, "Data Backfill Complete",
+                    f"Backfilled {result['updated']} rows, {result['skipped']} still missing data.\n\n"
+                    f"Total rows processed: {result['total']}"
+                )
+                self.refresh_content()
+            else:
+                QMessageBox.information(
+                    self, "No Backfill Needed",
+                    "All media files already have complete library data."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Backfill Error",
+                f"Failed to backfill missing data: {str(e)}"
+            )
+    
+    def fix_library_mapping(self):
+        """Fix incorrect library name mappings"""
+        try:
+            result = self.database.fix_library_name_mapping()
+            if result["fixed"] > 0:
+                QMessageBox.information(
+                    self, "Library Mapping Fixed",
+                    f"Fixed {result['fixed']} items with incorrect library names.\n\n"
+                    f"Applied {result['mappings_applied']} library name corrections."
+                )
+                self.refresh_content()
+            else:
+                QMessageBox.information(
+                    self, "No Mapping Issues Found",
+                    "All library names are correctly mapped."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Library Mapping Error",
+                f"Failed to fix library mappings: {str(e)}"
+            )
+    
+    def cleanup_orphaned_data(self):
+        """Remove media files from deleted servers"""
+        try:
+            result = self.database.cleanup_orphaned_media_files()
+            if result["total"] > 0:
+                QMessageBox.information(
+                    self, "Orphaned Data Cleaned",
+                    f"Removed {result['removed']} orphaned media files from deleted servers.\n\n"
+                    f"Details:\n"
+                    f"• Episodes removed: {result['episodes_removed']}\n"
+                    f"• Movies removed: {result['movies_removed']}\n"
+                    f"• Shows removed: {result['shows_removed']}\n"
+                    f"• Total items: {result['total']}"
+                )
+                self.refresh_content()
+            else:
+                QMessageBox.information(
+                    self, "No Orphaned Data Found",
+                    "All media files are properly linked to existing servers."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Cleanup Error",
+                f"Failed to cleanup orphaned data: {str(e)}"
+            )
+    
+    def fix_missing_records(self):
+        """Create missing episode and movie records"""
+        try:
+            result = self.database.fix_missing_episode_movie_records()
+            if result["episodes_created"] > 0 or result["movies_created"] > 0:
+                QMessageBox.information(
+                    self, "Missing Records Fixed",
+                    f"Created missing records:\n\n"
+                    f"• Episodes created: {result['episodes_created']}\n"
+                    f"• Movies created: {result['movies_created']}\n\n"
+                    f"Missing before fix:\n"
+                    f"• Episodes: {result['missing_episodes']}\n"
+                    f"• Movies: {result['missing_movies']}"
+                )
+                self.refresh_content()
+            else:
+                QMessageBox.information(
+                    self, "No Missing Records Found",
+                    "All media files already have corresponding episode/movie records."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Fix Records Error",
+                f"Failed to create missing records: {str(e)}"
+            )
     
     def _show_context_menu(self, position):
         """Show context menu for table items"""
@@ -1671,13 +1809,16 @@ class ContentBrowserTab(QWidget):
             return
         
         row = item.row()
-        media_path_item = self.content_table.item(row, 7)  # Media Path column
+        media_path_item = self.content_table.item(row, 7)  # Resolved Path column
         if media_path_item is None:
             return
         
         media_path = media_path_item.text()
         if not media_path:
             return
+        
+        # Get media_file_id from stored data
+        media_file_id = self.content_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         
         # Create context menu
         menu = QMenu(self)
@@ -1688,16 +1829,15 @@ class ContentBrowserTab(QWidget):
         menu.addAction(copy_action)
         
         # Copy local path action (if path mapping is configured)
-        try:
-            local_path = self.database.get_local_path_for_media_file(
-                self.content_table.item(row, 0).data(Qt.ItemDataRole.UserRole)  # We'll need to store media_file_id
-            )
-            if local_path != media_path:
-                copy_local_action = QAction("Copy Local Path", self)
-                copy_local_action.triggered.connect(lambda: self._copy_to_clipboard(local_path))
-                menu.addAction(copy_local_action)
-        except:
-            pass  # Ignore if we can't get local path
+        if media_file_id:
+            try:
+                local_path = self.database.get_local_path_for_media_file(media_file_id)
+                if local_path and local_path != media_path:
+                    copy_local_action = QAction("Copy Local Path", self)
+                    copy_local_action.triggered.connect(lambda: self._copy_to_clipboard(local_path))
+                    menu.addAction(copy_local_action)
+            except:
+                pass  # Ignore if we can't get local path
         
         # Show in Explorer action
         show_action = QAction("Show in Explorer", self)
@@ -1781,7 +1921,7 @@ class RetrovueMainWindow(QMainWindow):
     
     def refresh_content_browser(self):
         """Refresh the content browser tab"""
-        self.browser_tab._load_content()
+        self.browser_tab.refresh_content()
     
     def closeEvent(self, event):
         """Handle application close"""

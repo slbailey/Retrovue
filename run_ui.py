@@ -30,6 +30,11 @@ src_path = str(Path(__file__).parent / 'src')
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
+# Add venv site-packages to Python path to ensure dependencies are found
+venv_site_packages = str(Path(__file__).parent / 'venv' / 'Lib' / 'site-packages')
+if venv_site_packages not in sys.path:
+    sys.path.insert(0, venv_site_packages)
+
 from retrovue.ui.main_window import main
 
 if __name__ == "__main__":

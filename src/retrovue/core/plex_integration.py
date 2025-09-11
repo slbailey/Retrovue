@@ -105,7 +105,7 @@ You can connect multiple Plex servers:
 ### Path Mapping System
 Plex stores file paths differently than your local file system:
 - **Plex Path**: `/media/movies/Avengers (2012)/Avengers.mkv`
-- **Local Path**: `D:\Media\Movies\Avengers (2012)\Avengers.mkv`
+- **Local Path**: `D:\\Media\\Movies\\Avengers (2012)\\Avengers.mkv`
 - The system automatically converts between these formats
 
 ## Error Handling
@@ -852,9 +852,9 @@ class PlexImporter:
         plex_movies = self.get_library_items(library_key, 'movie')
         plex_movie_ids = {movie.get('guid', '') for movie in plex_movies}  # Use stable GUID
         
-        # Get current movies from database for this library
+        # Get current movies from database for this server only
         db_movies = self.database.get_movies_by_source('plex')
-        db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id']}
+        db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id'] and movie.get('server_id') == self.server_id}
         
         # Get library root paths for path mapping
         library_root_paths = self.get_library_root_paths(library_key)
@@ -924,6 +924,14 @@ class PlexImporter:
             library_type = library.get('type', 'movie')
             library_name = library.get('title', 'Unknown Library')
             
+            # Debug: Show library loop entry
+            if progress_callback:
+                progress_callback(
+                    library_progress=None,
+                    item_progress=None,
+                    message=f"🔄 LOOP: Processing library {i+1}/{len(libraries)}: '{library_name}' (key: {library_key}, type: {library_type})"
+                )
+            
             # Check if this library is enabled for sync
             if library_key in sync_enabled_libraries and not sync_enabled_libraries[library_key]:
                 # Library is disabled for sync, skip it
@@ -935,12 +943,29 @@ class PlexImporter:
                     )
                 continue
             
+            # Debug: Show library sync status
+            sync_status = "enabled" if library_key in sync_enabled_libraries and sync_enabled_libraries[library_key] else "default"
+            if progress_callback:
+                progress_callback(
+                    library_progress=None,
+                    item_progress=None,
+                    message=f"🔍 Processing library: {library_name} (key: {library_key}, sync: {sync_status})"
+                )
+            
             # Emit library progress: current library / total libraries
             if progress_callback:
                 progress_callback(
                     library_progress=(i, len(libraries), library_name),
                     item_progress=None,
                     message=None  # No status message for library processing
+                )
+            
+            # Debug: Show library type detection
+            if progress_callback:
+                progress_callback(
+                    library_progress=None,
+                    item_progress=None,
+                    message=f"🔍 Library '{library_name}' (key: {library_key}): type='{library_type}'"
                 )
             
             if library_type == 'movie':
@@ -967,7 +992,7 @@ class PlexImporter:
                     # Check if movie exists in database (cache for performance)
                     if 'db_movie_ids' not in locals():
                         db_movies = self.database.get_movies_by_source('plex')
-                        db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id']}
+                        db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id'] and movie.get('server_id') == self.server_id}
                     
                     # Get the Plex file path for this movie
                     movie_file_path = self._get_file_path_from_media(movie.get('Media', []))
@@ -1008,8 +1033,40 @@ class PlexImporter:
                         )
                 
             elif library_type == 'show':
+                # Debug: Entering show library processing
+                if progress_callback:
+                    progress_callback(
+                        library_progress=None,
+                        item_progress=None,
+                        message=f"🎬 ENTERING show library processing for '{library_name}' (key: {library_key})"
+                    )
+                
                 # Get all shows from this library
                 plex_shows = self.get_library_items(library_key, 'show')
+                
+                # Debug: Show library content
+                if progress_callback:
+                    progress_callback(
+                        library_progress=None,
+                        item_progress=None,
+                        message=f"📊 Library '{library_name}': Found {len(plex_shows)} shows"
+                    )
+                if len(plex_shows) == 0:
+                    if progress_callback:
+                        progress_callback(
+                            library_progress=None,
+                            item_progress=None,
+                            message=f"⚠️ Library '{library_name}' is empty - no shows found"
+                        )
+                else:
+                    # Show first few show titles for debugging
+                    show_titles = [show.get('title', 'Unknown') for show in plex_shows[:3]]
+                    if progress_callback:
+                        progress_callback(
+                            library_progress=None,
+                            item_progress=None,
+                            message=f"📺 Sample shows: {', '.join(show_titles)}{'...' if len(plex_shows) > 3 else ''}"
+                        )
                 
                 # Get library root paths for path mapping (use cache)
                 if library_key not in library_root_cache:
@@ -1025,14 +1082,35 @@ class PlexImporter:
                     show_guid = show.get('guid', '')
                     show_title = show.get('title', 'Unknown Show')
                     
+                    # Debug: Show loop entry
+                    if progress_callback:
+                        progress_callback(
+                            library_progress=None,
+                            item_progress=None,
+                            message=f"🎭 SHOW LOOP: Processing show {j+1}/{len(plex_shows)}: '{show_title}'"
+                        )
+                    
                     # Check if show-level timestamp has changed before processing episodes
                     show_ts = plex_ts(show)
                     db_show_ts_raw = self.database.get_show_ts_by_guid(show_guid)
                     db_show_ts = db_ts_to_int(db_show_ts_raw)
                     
+                    # Debug: Show timestamp details
+                    if progress_callback:
+                        progress_callback(
+                            library_progress=None,
+                            item_progress=None,
+                            message=f"🔍 Show '{show_title}': Plex ts={show_ts}, DB ts={db_show_ts}, updatedAt={show.get('updatedAt')}, addedAt={show.get('addedAt')}"
+                        )
+                    
                     # Short-circuit: skip episode processing if show timestamp hasn't changed
                     if db_show_ts is not None and show_ts is not None and show_ts <= db_show_ts:
-                        self._emit_status(f"⏭️ SKIP Show '{show_title}': Plex timestamp ({show_ts}) <= DB timestamp ({db_show_ts}), skipping episode walk", debug_only=True)
+                        if progress_callback:
+                            progress_callback(
+                                library_progress=None,
+                                item_progress=None,
+                                message=f"⏭️ SKIP Show '{show_title}': Plex timestamp ({show_ts}) <= DB timestamp ({db_show_ts}), skipping episode walk"
+                            )
                         # Still emit progress for the show
                         if progress_callback:
                             progress_callback(
@@ -1041,6 +1119,14 @@ class PlexImporter:
                                 message=None
                             )
                         continue
+                    
+                    # Debug: Show timestamp comparison for shows that will be processed
+                    if progress_callback:
+                        progress_callback(
+                            library_progress=None,
+                            item_progress=None,
+                            message=f"🔄 PROCESSING Show '{show_title}': Plex timestamp ({show_ts}) > DB timestamp ({db_show_ts})"
+                        )
                     
                     # Process show and its episodes
                     episode_changes = self._sync_show_episodes(
@@ -1128,9 +1214,9 @@ class PlexImporter:
         plex_shows = self.get_library_items(library_key, 'show')
         plex_show_ids = {show.get('guid', '') for show in plex_shows}  # Use stable GUID
         
-        # Get current shows from database for this library
+        # Get current shows from database for this server only
         db_shows = self.database.get_shows_by_source('plex')
-        db_show_ids = {show['source_id'] for show in db_shows if show['source_id']}
+        db_show_ids = {show['source_id'] for show in db_shows if show['source_id'] and show.get('server_id') == self.server_id}
         
         updated_count = 0
         added_count = 0

@@ -265,6 +265,7 @@ class RetrovueDatabase:
                 server_id INTEGER,  -- Server ID for multi-server support
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at INTEGER,  -- Unix timestamp from Plex
+                FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE,
                 UNIQUE(source_type, source_id)
             )
         """)
@@ -872,6 +873,7 @@ class RetrovueDatabase:
                         server_id INTEGER,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at INTEGER,
+                        FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE,
                         UNIQUE(source_type, source_id)
                     )
                 """)
@@ -897,6 +899,53 @@ class RetrovueDatabase:
             
         except Exception as e:
             logger.warning(f"⚠️ Migration warning: {e}")
+        
+        # Migration 14: Add foreign key constraint to media_files if missing
+        try:
+            # Check if foreign key constraint exists
+            cursor.execute("PRAGMA foreign_key_list(media_files)")
+            fk_list = cursor.fetchall()
+            has_server_fk = any(fk[2] == 'server_id' for fk in fk_list)
+            
+            if not has_server_fk:
+                logger.info("🔧 Migration 14: Adding foreign key constraint to media_files")
+                # SQLite doesn't support adding foreign keys to existing tables
+                # We need to recreate the table with the constraint
+                cursor.execute("""
+                    CREATE TABLE media_files_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_path TEXT NOT NULL,
+                        duration INTEGER NOT NULL,
+                        media_type TEXT NOT NULL,
+                        source_type TEXT NOT NULL,
+                        source_id TEXT,
+                        library_name TEXT,
+                        plex_path TEXT,
+                        server_id INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at INTEGER,
+                        FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE,
+                        UNIQUE(source_type, source_id)
+                    )
+                """)
+                
+                # Copy data from old table to new table
+                cursor.execute("""
+                    INSERT INTO media_files_new 
+                    SELECT * FROM media_files
+                """)
+                
+                # Drop old table and rename new table
+                cursor.execute("DROP TABLE media_files")
+                cursor.execute("ALTER TABLE media_files_new RENAME TO media_files")
+                
+                self.connection.commit()
+                logger.info("✅ Migration 14: Added foreign key constraint to media_files")
+            else:
+                logger.info("✅ Migration 14: Foreign key constraint already exists")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Migration 14 warning: {e}")
     
     def _ensure_schema_consistency(self):
         """Ensure the database schema is consistent with the latest requirements"""
@@ -1435,16 +1484,315 @@ class RetrovueDatabase:
         return self.add_plex_path_mapping(plex_path, local_path)
     
     def get_libraries(self) -> List[str]:
-        """Get all unique library names from media files"""
+        """Get all unique library names from the libraries table"""
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT DISTINCT library_name 
-            FROM media_files 
+            FROM libraries 
             WHERE library_name IS NOT NULL AND library_name != ''
             ORDER BY library_name
         """)
         results = cursor.fetchall()
         return [row['library_name'] for row in results]
+    
+    def get_distinct_libraries_from_media(self) -> List[str]:
+        """Get distinct library names from media_files table (for Browse tab dropdown)"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT DISTINCT library_name
+            FROM media_files
+            WHERE library_name IS NOT NULL AND library_name != ''
+            ORDER BY library_name
+        """)
+        results = cursor.fetchall()
+        return [row['library_name'] for row in results]
+    
+    def backfill_missing_library_data(self) -> Dict[str, int]:
+        """Backfill missing library_name, server_id, and plex_path data in media_files"""
+        cursor = self.connection.cursor()
+        
+        # Count rows that need backfilling
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM media_files
+            WHERE library_name IS NULL OR library_name = '' OR server_id IS NULL OR plex_path IS NULL
+        """)
+        total_missing = cursor.fetchone()['count']
+        
+        if total_missing == 0:
+            return {"updated": 0, "skipped": 0, "total": 0}
+        
+        # Try to backfill from libraries table
+        cursor.execute("""
+            UPDATE media_files
+            SET library_name = (
+                SELECT l.library_name
+                FROM libraries l
+                WHERE l.library_name IS NOT NULL
+                LIMIT 1
+            )
+            WHERE (library_name IS NULL OR library_name = '') 
+            AND EXISTS (SELECT 1 FROM libraries WHERE library_name IS NOT NULL)
+        """)
+        
+        # Try to backfill server_id from plex_servers table
+        cursor.execute("""
+            UPDATE media_files
+            SET server_id = (
+                SELECT ps.id
+                FROM plex_servers ps
+                WHERE ps.is_active = 1
+                LIMIT 1
+            )
+            WHERE server_id IS NULL
+            AND EXISTS (SELECT 1 FROM plex_servers WHERE is_active = 1)
+        """)
+        
+        # For plex_path, if it's missing but file_path exists, copy file_path to plex_path
+        cursor.execute("""
+            UPDATE media_files
+            SET plex_path = file_path
+            WHERE plex_path IS NULL AND file_path IS NOT NULL
+        """)
+        
+        # Count how many were actually updated
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM media_files
+            WHERE library_name IS NULL OR library_name = '' OR server_id IS NULL OR plex_path IS NULL
+        """)
+        still_missing = cursor.fetchone()['count']
+        
+        updated_count = total_missing - still_missing
+        
+        return {
+            "updated": updated_count,
+            "skipped": still_missing,
+            "total": total_missing
+        }
+    
+    def fix_library_name_mapping(self) -> Dict[str, int]:
+        """Fix incorrect library name mappings in media_files table"""
+        cursor = self.connection.cursor()
+        
+        # Define the correct library name mappings
+        library_fixes = {
+            "Adult content ": "Anime TV",  # Fix trailing space and wrong name
+            "Adult content": "Anime TV",   # Fix wrong name without trailing space
+        }
+        
+        total_fixed = 0
+        
+        for wrong_name, correct_name in library_fixes.items():
+            # Check if the correct library exists in libraries table
+            cursor.execute("""
+                SELECT COUNT(*) FROM libraries 
+                WHERE library_name = ?
+            """, (correct_name,))
+            
+            if cursor.fetchone()[0] > 0:
+                # Update the library names
+                cursor.execute("""
+                    UPDATE media_files 
+                    SET library_name = ?
+                    WHERE library_name = ?
+                """, (correct_name, wrong_name))
+                
+                fixed_count = cursor.rowcount
+                total_fixed += fixed_count
+                
+                if fixed_count > 0:
+                    print(f"Fixed {fixed_count} items: '{wrong_name}' -> '{correct_name}'")
+        
+        # Also fix any NULL library names by assigning them to the most common library
+        cursor.execute("""
+            SELECT library_name, COUNT(*) as count 
+            FROM media_files 
+            WHERE library_name IS NOT NULL AND library_name != ''
+            GROUP BY library_name 
+            ORDER BY count DESC 
+            LIMIT 1
+        """)
+        
+        result = cursor.fetchone()
+        if result:
+            most_common_library = result[0]
+            cursor.execute("""
+                UPDATE media_files 
+                SET library_name = ?
+                WHERE library_name IS NULL OR library_name = ''
+            """, (most_common_library,))
+            
+            null_fixed = cursor.rowcount
+            total_fixed += null_fixed
+            
+            if null_fixed > 0:
+                print(f"Fixed {null_fixed} NULL library names to '{most_common_library}'")
+        
+        return {
+            "fixed": total_fixed,
+            "mappings_applied": len(library_fixes)
+        }
+    
+    def cleanup_orphaned_media_files(self) -> Dict[str, int]:
+        """Remove media files that reference non-existent servers"""
+        cursor = self.connection.cursor()
+        
+        # Count orphaned media files
+        cursor.execute("""
+            SELECT COUNT(*) FROM media_files mf
+            WHERE mf.server_id IS NOT NULL 
+            AND NOT EXISTS (
+                SELECT 1 FROM plex_servers ps 
+                WHERE ps.id = mf.server_id
+            )
+        """)
+        orphaned_count = cursor.fetchone()[0]
+        
+        if orphaned_count == 0:
+            return {"removed": 0, "total": 0}
+        
+        # Get details of what will be removed
+        cursor.execute("""
+            SELECT mf.id, mf.media_type, mf.source_id, mf.server_id
+            FROM media_files mf
+            WHERE mf.server_id IS NOT NULL 
+            AND NOT EXISTS (
+                SELECT 1 FROM plex_servers ps 
+                WHERE ps.id = mf.server_id
+            )
+            LIMIT 10
+        """)
+        sample_orphaned = cursor.fetchall()
+        
+        # Remove orphaned media files and related data
+        # First, remove episodes that reference orphaned media files
+        cursor.execute("""
+            DELETE FROM episodes 
+            WHERE media_file_id IN (
+                SELECT mf.id FROM media_files mf
+                WHERE mf.server_id IS NOT NULL 
+                AND NOT EXISTS (
+                    SELECT 1 FROM plex_servers ps 
+                    WHERE ps.id = mf.server_id
+                )
+            )
+        """)
+        episodes_removed = cursor.rowcount
+        
+        # Remove movies that reference orphaned media files
+        cursor.execute("""
+            DELETE FROM movies 
+            WHERE media_file_id IN (
+                SELECT mf.id FROM media_files mf
+                WHERE mf.server_id IS NOT NULL 
+                AND NOT EXISTS (
+                    SELECT 1 FROM plex_servers ps 
+                    WHERE ps.id = mf.server_id
+                )
+            )
+        """)
+        movies_removed = cursor.rowcount
+        
+        # Remove orphaned media files
+        cursor.execute("""
+            DELETE FROM media_files 
+            WHERE server_id IS NOT NULL 
+            AND NOT EXISTS (
+                SELECT 1 FROM plex_servers ps 
+                WHERE ps.id = server_id
+            )
+        """)
+        media_files_removed = cursor.rowcount
+        
+        # Clean up orphaned shows (shows with no remaining episodes)
+        cursor.execute("""
+            DELETE FROM shows 
+            WHERE id NOT IN (
+                SELECT DISTINCT show_id FROM episodes 
+                WHERE show_id IS NOT NULL
+            )
+        """)
+        shows_removed = cursor.rowcount
+        
+        return {
+            "removed": media_files_removed,
+            "episodes_removed": episodes_removed,
+            "movies_removed": movies_removed,
+            "shows_removed": shows_removed,
+            "total": orphaned_count,
+            "sample": [dict(row) for row in sample_orphaned]
+        }
+    
+    def fix_missing_episode_movie_records(self) -> Dict[str, int]:
+        """Create missing episode and movie records from media_files"""
+        cursor = self.connection.cursor()
+        
+        # Count missing records
+        cursor.execute("""
+            SELECT COUNT(*) FROM media_files mf
+            WHERE mf.media_type = 'episode' 
+            AND NOT EXISTS (SELECT 1 FROM episodes e WHERE e.media_file_id = mf.id)
+        """)
+        missing_episodes = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT COUNT(*) FROM media_files mf
+            WHERE mf.media_type = 'movie' 
+            AND NOT EXISTS (SELECT 1 FROM movies m WHERE m.media_file_id = mf.id)
+        """)
+        missing_movies = cursor.fetchone()[0]
+        
+        episodes_created = 0
+        movies_created = 0
+        
+        if missing_episodes > 0:
+            # Create episode records for media_files that don't have them
+            # Link them to the first available show
+            cursor.execute("SELECT id FROM shows LIMIT 1")
+            first_show = cursor.fetchone()
+            if first_show:
+                show_id = first_show[0]
+                cursor.execute("""
+                    INSERT INTO episodes (media_file_id, show_id, episode_title, season_number, episode_number, rating, summary)
+                    SELECT 
+                        mf.id,
+                        ? as show_id,
+                        'Unknown Episode' as episode_title,
+                        1 as season_number,
+                        1 as episode_number,
+                        '' as rating,
+                        '' as summary
+                    FROM media_files mf
+                    WHERE mf.media_type = 'episode' 
+                    AND NOT EXISTS (SELECT 1 FROM episodes e WHERE e.media_file_id = mf.id)
+                """, (show_id,))
+                episodes_created = cursor.rowcount
+        
+        if missing_movies > 0:
+            # Create movie records for media_files that don't have them
+            cursor.execute("""
+                INSERT INTO movies (media_file_id, title, year, rating, summary, genre, director)
+                SELECT 
+                    mf.id,
+                    'Unknown Movie' as title,
+                    2024 as year,
+                    '' as rating,
+                    '' as summary,
+                    '' as genre,
+                    '' as director
+                FROM media_files mf
+                WHERE mf.media_type = 'movie' 
+                AND NOT EXISTS (SELECT 1 FROM movies m WHERE m.media_file_id = mf.id)
+            """)
+            movies_created = cursor.rowcount
+        
+        return {
+            "episodes_created": episodes_created,
+            "movies_created": movies_created,
+            "missing_episodes": missing_episodes,
+            "missing_movies": missing_movies
+        }
     
     def get_local_path_for_media_file(self, media_file_id: int) -> str:
         """Get the local mapped path for a media file (for file access)"""
