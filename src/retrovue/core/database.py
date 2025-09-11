@@ -1137,43 +1137,26 @@ class RetrovueDatabase:
         """Get the local mapped path for a media file (for file access)"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT mf.file_path, mf.plex_path, mf.server_id, ppm.plex_path as mapping_plex_path, ppm.local_path, ppm.library_root
+            SELECT mf.file_path, mf.plex_path, mf.server_id
             FROM media_files mf
-            LEFT JOIN plex_path_mappings ppm ON mf.server_id = ppm.server_id
             WHERE mf.id = ?
         """, (media_file_id,))
 
-        results = cursor.fetchall()
-        if not results:
+        result = cursor.fetchone()
+        if not result:
             return ""
 
         # Use plex_path column if available, otherwise fall back to file_path (for backward compatibility)
-        plex_path = results[0]['plex_path'] or results[0]['file_path']
-        server_id = results[0]['server_id']
+        plex_path = result['plex_path'] or result['file_path']
+        server_id = result['server_id']
         
-        # Find the mapping with the longest matching prefix
-        best_match = None
-        best_match_length = 0
+        if not plex_path:
+            return ""
         
-        for result in results:
-            plex_mapping = result['mapping_plex_path']
-            local_mapping = result['local_path']
-
-            if plex_mapping and local_mapping and plex_path.startswith(plex_mapping):
-                if len(plex_mapping) > best_match_length:
-                    best_match = result
-                    best_match_length = len(plex_mapping)
-        
-        if best_match:
-            # Map the path using the best match
-            plex_mapping = best_match['mapping_plex_path']
-            local_mapping = best_match['local_path']
-            relative_path = plex_path[len(plex_mapping):]
-            if relative_path.startswith('/'):
-                relative_path = relative_path[1:]
-            return os.path.join(local_mapping, relative_path)
-        
-        return plex_path
+        # Use the path mapping service as the single source of truth
+        from .path_mapping import PlexPathMappingService
+        path_mapping_service = PlexPathMappingService.create_from_database(self, server_id)
+        return path_mapping_service.get_local_path(plex_path)
     
     def add_media_file(self, file_path: str, duration: int, media_type: str, 
                       source_type: str, source_id: str = None, library_name: str = None, server_id: int = None, plex_path: str = None) -> int:
