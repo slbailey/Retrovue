@@ -6,14 +6,14 @@ This roadmap tracks our progress through development and helps keep us focused o
 
 **End Goal**: A robust IPTV-ready simulation of a professional broadcast television station with multi-channel 24/7 operation, realistic transitions and timing, and a viewer experience indistinguishable from real cable TV.
 
-## 📊 Current Status: Phase 2 - Core System Architecture
+## 📊 Current Status: Phase 2 - Content Management Foundation
 
 ### **Phase 1 — Proof of Concept** ✅ **COMPLETED**
 - [x] Build single-channel playout (`ffmpeg → HLS → VLC`)
 - [x] Solve segment rotation issues (`-hls_delete_threshold`, epoch numbering)
 - [x] Validate continuous playback via local HTTP server
 
-### **Phase 2 — Core System Architecture** 🔄 **IN PROGRESS**
+### **Phase 2 — Content Management Foundation** 🔄 **IN PROGRESS**
 
 #### **2.1 Data Foundation** ✅ **COMPLETED**
 - [x] **Database Schema Design** - Normalized schema for media files, shows, episodes, movies
@@ -22,42 +22,64 @@ This roadmap tracks our progress through development and helps keep us focused o
 - [x] **Smart Sync System** - Intelligent sync with conflict resolution and change detection
 - [x] **Content Import UI** - PySide6 interface with real-time progress updates
 
-#### **2.2 Content Management** 🔄 **IN PROGRESS**
+#### **2.2 Plex Content Ingestion** 🔄 **CURRENT FOCUS**
+- [x] **Basic Plex Integration** - Connect to Plex server and import content
+- [x] **Episode-Level Granularity** - Each TV episode stored separately for precise scheduling
+- [x] **Smart Synchronization** - Only update content that has actually changed (10-50x performance improvement)
+- [x] **Progress Tracking** - Real-time updates during import operations
+- [x] **Multi-Server Support** - Manage multiple Plex servers from one Retrovue installation
 - [x] **Content Browser UI** - Browse and organize content library with proper duration formatting
 - [x] **Database Migrations** - Schema updates without data loss
 - [x] **Library Management** - Store library names as media file attributes
 - [x] **Duration Handling** - Proper millisecond storage and hh:mm:ss.ff display formatting
+
+#### **2.3 Content Management System** 🔄 **NEXT PHASE**
 - [ ] **🚨 CRITICAL: Path Mapping System** - Translate Plex internal paths to accessible file paths (REQUIRED for streaming)
+- [ ] **Content Validation** - Verify media files are playable, check codec support, validate metadata
+- [ ] **Error Handling & Recovery** - Robust error handling with retry logic and recovery strategies
+- [ ] **Background Sync Service** - Automated synchronization with configurable intervals
+- [ ] **State Management** - Track content states (Normal, RemoteOnly, Unavailable, FileNotFound)
+- [ ] **Advanced Metadata Sync** - Comprehensive metadata including artwork, subtitles, chapters
+- [ ] **Cleanup Operations** - Remove orphaned items, archive removed content
+- [ ] **Performance Monitoring** - Track sync performance, error rates, and system health
+
+#### **2.4 User Interface & Experience** 🔄 **NEXT PHASE**
 - [ ] **Menu Bar Structure** - File menu (About, Settings, Quit) and Utilities menu (Sync Media)
 - [ ] **Main Window Content List** - Display all media data with Edit Metadata button and modal popup
 - [ ] **Content Type Handling** - Support for Movies, TV Shows, Commercials, Bumpers, Intros/Outros, Interstitials
 - [ ] **Advanced Metadata Editor** - Media player, chapter markers, and Plex metadata display (read-only)
-- [ ] **Content Validation** - Verify media files are playable, check codec support, validate metadata
-- [ ] **TMM Directory Management** - Configure list of directories containing TMM .nfo files (with subdirectory support)
-- [ ] **Selective Sync System** - Choose to sync ALL sources or select specific Plex libraries and TMM directories
-- [ ] **TMM Integration** - Import content from TinyMediaManager .nfo files (depends on directory management)
+- [ ] **Configuration Management** - Centralized settings for sync intervals, path mappings, error handling
+- [ ] **Selective Sync System** - Choose to sync ALL sources or select specific Plex libraries
 - [ ] **Advanced Filtering** - Filter by source, type, rating, demographic (planned)
 - [ ] **Scheduling Metadata** - Daypart preferences, seasonal targeting, content ratings (planned)
 
-#### **2.3 Scheduling Engine** 🔄 **NEXT PHASE**
+#### **2.5 Multi-Source Content** 🔄 **FUTURE PHASE**
+- [ ] **TMM Directory Management** - Configure list of directories containing TMM .nfo files (with subdirectory support)
+- [ ] **TMM Integration** - Import content from TinyMediaManager .nfo files (depends on directory management)
+- [ ] **Jellyfin Integration** - Support for Jellyfin media servers
+- [ ] **Emby Integration** - Support for Emby media servers
+- [ ] **Local File System** - Direct import from local directories
+- [ ] **Unified Content Model** - Consistent interface across all content sources
+
+### **Phase 3 — Scheduling Engine** 🔄 **FUTURE PHASE**
 - [ ] **Schedule Manager** - Coarse (show-level) and fine (break-level) scheduling
 - [ ] **Program Director** - Orchestrates channels and manages state
 - [ ] **Channel Classes** - Independent broadcast units with pipelines
 - [ ] **Timeline Editor** - Drag & drop scheduling interface
 
-#### **2.4 Streaming Integration** 🔄 **NEXT PHASE**
+### **Phase 4 — Streaming Integration** 🔄 **FUTURE PHASE**
 - [ ] **Pipeline Manager** - Controls playback transitions and timing
 - [ ] **Multi-channel Support** - Run multiple streams simultaneously
 - [ ] **Emergency System** - Priority alert injection across channels
 - [ ] **Schedule-to-Stream** - Convert schedules to live streams
 
-### **Phase 3 — Advanced Features**
+### **Phase 5 — Advanced Features** 🔄 **FUTURE PHASE**
 - [ ] **Graphics Overlay Engine** - Bugs, lower thirds, branding
 - [ ] **Advanced Scheduling** - Commercials, bumpers, promos, live events
 - [ ] **Plex Live TV Integration** - Native Plex channel support
 - [ ] **Professional Features** - Closed captions, multiple audio tracks
 
-## 🎯 Current Focus: Content Management Completion
+## 🎯 Current Focus: Plex Content Ingestion Enhancement
 
 ### **Immediate Next Steps (Priority Order)**
 
@@ -67,124 +89,136 @@ This roadmap tracks our progress through development and helps keep us focused o
 **Status**: Partially implemented, needs completion
 **Estimated Time**: 2-3 hours
 
-#### **2. Menu Bar Structure** 
-**Why**: Professional UI foundation
-**What**: File menu (About, Settings, Quit) and Utilities menu (Sync Media)
+#### **2. Content Validation System** 🚨 **HIGH PRIORITY**
+**Why**: Ensure all imported content is playable before scheduling
+**What**: Verify media files are accessible, check codec support, validate metadata
 **Status**: Not started
-**Estimated Time**: 1-2 hours
+**Estimated Time**: 4-6 hours
 
-#### **3. Main Window Content List**
-**Why**: Core content management interface
-**What**: Display all media data with Edit Metadata button and modal popup
+#### **3. Error Handling & Recovery** 🚨 **HIGH PRIORITY**
+**Why**: Robust content ingestion requires proper error handling
+**What**: Retry logic, error classification, recovery strategies, detailed logging
+**Status**: Basic error handling exists, needs enhancement
+**Estimated Time**: 6-8 hours
+
+#### **4. Background Sync Service** 
+**Why**: Automated synchronization for production use
+**What**: Scheduled sync operations, configurable intervals, service management
 **Status**: Not started
-**Estimated Time**: 3-4 hours
+**Estimated Time**: 8-10 hours
 
-#### **4. Content Type Handling**
-**Why**: Support for different TV network content types
-**What**: Movies, TV Shows, Commercials, Bumpers, Intros/Outros, Interstitials
-**Status**: Not started
-**Estimated Time**: 2-3 hours
-
-#### **5. Advanced Metadata Editor**
-**Why**: Professional content editing capabilities
-**What**: Media player, chapter markers, and Plex metadata display (read-only)
+#### **5. State Management System**
+**Why**: Track content availability and health
+**What**: Normal, RemoteOnly, Unavailable, FileNotFound states with transitions
 **Status**: Not started
 **Estimated Time**: 4-6 hours
 
 ### **Medium-Term Goals (Next 2-4 weeks)**
 
-#### **Content Validation System**
-- Verify media files are playable
-- Check codec support
-- Validate metadata completeness
-- Handle missing or corrupted files
+#### **Advanced Metadata Synchronization**
+- Comprehensive metadata sync (artwork, subtitles, chapters)
+- Relationship management (actors, genres, studios)
+- Metadata validation and consistency checks
+- Artwork download and caching system
 
-#### **TMM Integration**
-- Configure TMM directory management
-- Parse .nfo files for rich metadata
-- Handle adult content metadata
-- Support for custom scheduling preferences
+#### **Performance Monitoring & Analytics**
+- Track sync performance metrics
+- Monitor error rates and system health
+- Performance optimization recommendations
+- Detailed logging and audit trails
 
-#### **Selective Sync System**
-- Choose specific Plex libraries to sync
-- Select specific TMM directories
-- Sync history tracking
-- Conflict resolution between sources
+#### **Cleanup & Maintenance Operations**
+- Remove orphaned items no longer in Plex
+- Archive removed content for potential recovery
+- Database optimization and maintenance
+- Automated cleanup scheduling
 
 ### **Long-Term Goals (Next 1-2 months)**
 
-#### **Scheduling Engine**
-- Timeline management system
-- Drag-and-drop scheduling interface
-- Multi-channel support
-- Commercial break planning
+#### **Multi-Source Content Integration**
+- TMM Integration - Parse .nfo files for rich metadata
+- Jellyfin Integration - Support for Jellyfin media servers
+- Emby Integration - Support for Emby media servers
+- Local File System - Direct import from local directories
+- Unified Content Model - Consistent interface across all sources
 
-#### **Program Director**
-- Channel orchestration
-- State management
-- Emergency system integration
-- Real-time monitoring
+#### **Professional UI & Experience**
+- Menu Bar Structure - File menu (About, Settings, Quit) and Utilities menu
+- Main Window Content List - Display all media data with Edit Metadata button
+- Advanced Metadata Editor - Media player, chapter markers, Plex metadata display
+- Configuration Management - Centralized settings for all sync operations
 
-#### **Multi-Channel Streaming**
-- Simultaneous channel operation
-- Professional transitions
-- HLS streaming optimization
-- Client compatibility testing
+#### **Scheduling Engine Foundation**
+- Timeline management system preparation
+- Content type handling (Movies, TV Shows, Commercials, Bumpers, etc.)
+- Scheduling metadata (daypart preferences, seasonal targeting, content ratings)
+- Advanced filtering and content selection
 
 ## 🏗️ Implementation Strategy
 
-### **Why Media-First Approach?**
-1. **Content drives scheduling** - You need media to schedule before you can build a scheduler
+### **Why Content Management First?**
+1. **Content drives scheduling** - You need reliable media to schedule before you can build a scheduler
 2. **Metadata informs decisions** - Runtime, commercial breaks, content type all affect scheduling
 3. **User workflow is content-centric** - "Schedule this show" vs "Fill this time slot"
 4. **Validation requirements** - Need to verify media files work before scheduling them
+5. **Foundation for scaling** - Robust content management supports future multi-source integration
 
-### **Data Flow Architecture**
+### **Content Management Data Flow**
 ```
-Media Files → Content Manager → Database → Schedule Manager → Program Director → Streaming Pipeline
-     ↑              ↑              ↑              ↑              ↑              ↑
-   File System   Metadata      SQLite DB    Timeline UI    Channel Mgr    FFmpeg
+Plex Server → Plex Integration → Content Validation → Database → Content Browser → Scheduling Engine
+     ↑              ↑                    ↑              ↑              ↑              ↑
+   API Calls    Metadata Sync      File Validation   SQLite DB    UI Management   Future Phase
 ```
 
 ### **Component Dependencies**
-- **Content Manager** ← Independent (can build first)
-- **Database Schema** ← Needed by Content Manager  
+- **Plex Integration** ← Independent (can build first)
+- **Database Schema** ← Needed by Plex Integration  
 - **🚨 Path Mapping System** ← CRITICAL: Required before streaming integration
-- **Media Browser UI** ← Depends on Content Manager + Database
-- **Schedule Manager** ← Depends on Database + Media metadata
-- **Program Director** ← Depends on Schedule Manager
-- **Streaming Pipeline** ← Depends on Program Director + Path Mapping System
+- **Content Validation** ← Depends on Path Mapping System
+- **Error Handling** ← Depends on Content Validation
+- **Background Sync Service** ← Depends on Error Handling
+- **State Management** ← Depends on Background Sync Service
+- **Scheduling Engine** ← Depends on State Management (Future Phase)
+- **Streaming Pipeline** ← Depends on Scheduling Engine (Future Phase)
 
 ## 📈 Success Metrics
 
-### **Phase 2 Completion Criteria**
-- [ ] All content types supported (Movies, TV Shows, Commercials, Bumpers, etc.)
-- [ ] Complete metadata editing capabilities
+### **Phase 2.2 Completion Criteria (Plex Content Ingestion)**
 - [ ] Path mapping system fully functional
 - [ ] Content validation system operational
-- [ ] TMM integration working
-- [ ] Selective sync system implemented
+- [ ] Error handling & recovery system robust
+- [ ] Background sync service automated
+- [ ] State management system tracking content health
+- [ ] Performance monitoring and analytics working
 
-### **Phase 3 Readiness Criteria**
-- [ ] Content management system complete and stable
+### **Phase 2.3 Completion Criteria (Content Management System)**
+- [ ] Advanced metadata synchronization complete
+- [ ] Cleanup & maintenance operations automated
+- [ ] Performance monitoring providing actionable insights
 - [ ] All media files accessible and playable
-- [ ] Metadata system supports scheduling requirements
-- [ ] UI provides professional content management experience
-- [ ] Database schema supports scheduling and streaming needs
+- [ ] Database schema optimized for scheduling requirements
+
+### **Phase 3 Readiness Criteria (Scheduling Engine)**
+- [ ] Content management system complete and stable
+- [ ] Multi-source content integration working
+- [ ] Professional UI & experience implemented
+- [ ] Scheduling metadata system ready
+- [ ] All content validated and ready for scheduling
 
 ## 🎯 Next Work Session Focus
 
 **Recommended Next Steps**:
 1. **Complete Path Mapping System** - Critical for streaming integration
-2. **Implement Menu Bar Structure** - Professional UI foundation
-3. **Build Main Window Content List** - Core content management interface
+2. **Implement Content Validation System** - Ensure all content is playable
+3. **Enhance Error Handling & Recovery** - Robust content ingestion
 
-**Estimated Time**: 6-9 hours total
-**Expected Outcome**: Professional content management interface with full metadata editing capabilities
+**Estimated Time**: 12-17 hours total
+**Expected Outcome**: Production-ready content management system with reliable Plex integration
 
 ## 📝 Notes
 
-- **Current Status**: Content management foundation is solid, ready to build scheduling engine
-- **Key Achievement**: Robust Plex integration with smart sync system
-- **Next Milestone**: Complete content management system before moving to scheduling
-- **Risk Mitigation**: Path mapping system is critical path item for streaming integration
+- **Current Status**: Basic Plex integration working, focusing on production-grade reliability
+- **Key Achievement**: Smart sync system with 10-50x performance improvement
+- **Next Milestone**: Complete content management foundation before moving to scheduling
+- **Risk Mitigation**: Path mapping and content validation are critical path items
+- **Strategic Focus**: Building enterprise-grade content management to support future TV simulation features
