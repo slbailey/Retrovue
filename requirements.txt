@@ -15,6 +15,9 @@ pyside6==6.9.2
 # HTTP client for Plex API
 requests==2.31.0
 
+# XML parsing for Plex API responses
+xmltodict==0.13.0
+
 # Additional utilities (to be added as needed)
 # python-dotenv - for environment variables
 # aiofiles - for async file operations
