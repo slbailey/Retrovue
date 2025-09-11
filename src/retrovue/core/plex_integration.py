@@ -448,7 +448,7 @@ class PlexImporter:
                 return part_array[0].get('file', '')
         return ''
     
-    def _get_local_path_from_plex_path(self, plex_path: str, library_root_paths: List[str]) -> str:
+    def _get_local_path_from_plex_path(self, plex_path: str) -> str:
         """Convert Plex path to local path using path mappings"""
         if not plex_path:
             return ''
@@ -481,7 +481,7 @@ class PlexImporter:
             content_rating = self._map_plex_rating(plex_rating)
             
             # Convert Plex path to local path
-            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path)
             
             # Add media file to database
             media_file_id = self.database.add_media_file(
@@ -586,7 +586,7 @@ class PlexImporter:
                     content_rating = self._map_plex_rating(plex_rating)
                     
                     # Convert Plex path to local path
-                    local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+                    local_file_path = self._get_local_path_from_plex_path(plex_file_path)
                     
                     # Add media file to database
                     media_file_id = self.database.add_media_file(
@@ -706,6 +706,15 @@ class PlexImporter:
                     # Movie already processed by another library, skip to avoid conflicts
                     continue
                 
+                # Compare timestamps before updating
+                ts = plex_ts(movie)
+                db_ts_raw = self.database.get_movie_ts_by_guid(movie_guid)
+                db_ts = db_ts_to_int(db_ts_raw)
+                
+                if db_ts is not None and ts is not None and ts <= db_ts:
+                    # Skip update - Plex timestamp is older or equal, no changes
+                    continue
+                
                 # Update existing movie (only count if there were actual changes)
                 if self._update_movie(movie, library_name, primary_library_root, library_root_paths):
                     updated_count += 1
@@ -800,9 +809,9 @@ class PlexImporter:
                         db_ts_raw = self.database.get_movie_ts_by_guid(movie_guid)
                         db_ts = db_ts_to_int(db_ts_raw)
                         
-                        if db_ts is not None and ts is not None and ts == db_ts:
-                            # Skip update - timestamps match, no changes
-                            self._emit_status(f"⏭️ SKIP Movie '{movie_title}': Timestamps match ({ts}), no changes", debug_only=True)
+                        if db_ts is not None and ts is not None and ts <= db_ts:
+                            # Skip update - Plex timestamp is older or equal, no changes
+                            self._emit_status(f"⏭️ SKIP Movie '{movie_title}': Plex timestamp ({ts}) <= DB timestamp ({db_ts}), no changes", debug_only=True)
                             action = None
                         else:
                             # Update existing movie
@@ -852,8 +861,8 @@ class PlexImporter:
                     db_show_ts = db_ts_to_int(db_show_ts_raw)
                     
                     # Short-circuit: skip episode processing if show timestamp hasn't changed
-                    if db_show_ts is not None and show_ts is not None and show_ts == db_show_ts:
-                        self._emit_status(f"⏭️ SKIP Show '{show_title}': Show timestamp unchanged ({show_ts}), skipping episode walk", debug_only=True)
+                    if db_show_ts is not None and show_ts is not None and show_ts <= db_show_ts:
+                        self._emit_status(f"⏭️ SKIP Show '{show_title}': Plex timestamp ({show_ts}) <= DB timestamp ({db_show_ts}), skipping episode walk", debug_only=True)
                         # Still emit progress for the show
                         if progress_callback:
                             progress_callback(
@@ -967,6 +976,15 @@ class PlexImporter:
             # Process show silently
             
             if show_guid in db_show_ids:
+                # Compare timestamps before updating
+                ts = plex_ts(show)
+                db_ts_raw = self.database.get_show_ts_by_guid(show_guid)
+                db_ts = db_ts_to_int(db_ts_raw)
+                
+                if db_ts is not None and ts is not None and ts <= db_ts:
+                    # Skip update - Plex timestamp is older or equal, no changes
+                    continue
+                
                 # Update existing show and its episodes
                 show_id = self.database.add_show(
                     title=show.get('title', 'Unknown Show'),
@@ -1045,6 +1063,16 @@ class PlexImporter:
             existing_show = self.database.get_show_by_source_id(show_guid)
             
             if existing_show:
+                # Compare timestamps before updating
+                ts = plex_ts(show['raw_metadata'])
+                db_ts_raw = self.database.get_show_ts_by_guid(show_guid)
+                db_ts = db_ts_to_int(db_ts_raw)
+                
+                if db_ts is not None and ts is not None and ts <= db_ts:
+                    # Skip update - Plex timestamp is older or equal, no changes
+                    self._emit_status(f"⏭️ Skipping show (no changes): {show['display_name']}")
+                    continue
+                
                 # Update existing show
                 self._emit_status(f"🔄 Updating existing show: {show['display_name']}")
                 show_id = self.database.add_show(
@@ -1113,7 +1141,7 @@ class PlexImporter:
                 return False
             
             # Convert Plex path to local path
-            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path)
             
             # Check if anything has actually changed
             has_changes = False
@@ -1215,9 +1243,9 @@ class PlexImporter:
                     db_ts_raw = self.database.get_episode_ts_by_guid(episode_guid)
                     db_ts = db_ts_to_int(db_ts_raw)
                     
-                    if db_ts is not None and ts is not None and ts == db_ts:
-                        # Skip update - timestamps match, no changes
-                        self._emit_status(f"⏭️ SKIP Episode '{episode_title}': Timestamps match ({ts}), no changes", debug_only=True)
+                    if db_ts is not None and ts is not None and ts <= db_ts:
+                        # Skip update - Plex timestamp is older or equal, no changes
+                        self._emit_status(f"⏭️ SKIP Episode '{episode_title}': Plex timestamp ({ts}) <= DB timestamp ({db_ts}), no changes", debug_only=True)
                         # Emit progress but no status message
                         if progress_callback:
                             progress_callback(
@@ -1276,13 +1304,16 @@ class PlexImporter:
             # Update show's updated_at if any episodes were processed
             if total_changes > 0:
                 # Update the show's updated_at to reflect that it was processed
-                cursor = self.database.connection.cursor()
-                cursor.execute("""
-                    UPDATE shows 
-                    SET updated_at = CURRENT_TIMESTAMP 
-                    WHERE source_id = ?
-                """, (show_guid,))
-                self.database.connection.commit()
+                # Use the show's Plex timestamp instead of CURRENT_TIMESTAMP
+                show_ts = plex_ts(show)
+                if show_ts is not None:
+                    cursor = self.database.connection.cursor()
+                    cursor.execute("""
+                        UPDATE shows 
+                        SET updated_at = ? 
+                        WHERE source_id = ?
+                    """, (show_ts, show_guid))
+                    self.database.connection.commit()
             
             # Always persist the show's Plex timestamp after processing
             show_ts = plex_ts(show)
@@ -1331,7 +1362,7 @@ class PlexImporter:
                 return False
             
             # Convert Plex path to local path
-            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path)
             
             # Check if anything has actually changed
             has_changes = False
@@ -1452,7 +1483,7 @@ class PlexImporter:
                 return False
             
             # Convert Plex path to local path
-            local_file_path = self._get_local_path_from_plex_path(plex_file_path, library_root_paths)
+            local_file_path = self._get_local_path_from_plex_path(plex_file_path)
             
             # Add media file
             media_file_id = self.database.add_media_file(
