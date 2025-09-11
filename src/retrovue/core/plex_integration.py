@@ -344,10 +344,12 @@ class PlexImporter:
         """Get total episode count for a library section using allLeaves endpoint"""
         try:
             all_leaves_url = f"{self.server_url}/library/sections/{section_key}/allLeaves"
-            response = requests.get(all_leaves_url, headers=self.headers)
+            # Use a small page size to get just the container info
+            params = {'X-Plex-Container-Start': 0, 'X-Plex-Container-Size': 1}
+            response = requests.get(all_leaves_url, headers=self.headers, params=params)
             response.raise_for_status()
             
-            episodes_data = response.json()
+            episodes_data = parse_plex_response(response)
             media_container = episodes_data.get('MediaContainer', {})
             total_episodes = media_container.get('size', 0)
             
@@ -357,19 +359,50 @@ class PlexImporter:
             return 0
     
     def get_show_episodes(self, show_key: str) -> List[Dict]:
-        """Get all episodes for a specific show using allLeaves endpoint"""
+        """Get all episodes for a specific show using allLeaves endpoint with pagination support"""
         try:
-            # Use allLeaves endpoint to get all episodes directly
-            all_leaves_url = f"{self.server_url}{show_key}/allLeaves"
-            response = requests.get(all_leaves_url, headers=self.headers)
-            response.raise_for_status()
+            all_episodes = []
+            start = 0
+            size = 50  # Default page size
             
-            episodes_data = parse_plex_response(response)
-            self._emit_status(f"📡 Parsed {response.headers.get('Content-Type', 'unknown')} response from {all_leaves_url}", debug_only=True)
+            while True:
+                # Use allLeaves endpoint to get episodes with pagination
+                all_leaves_url = f"{self.server_url}{show_key}/allLeaves"
+                params = {'X-Plex-Container-Start': start, 'X-Plex-Container-Size': size}
+                
+                response = requests.get(all_leaves_url, headers=self.headers, params=params)
+                response.raise_for_status()
+                
+                episodes_data = parse_plex_response(response)
+                self._emit_status(f"📡 Parsed {response.headers.get('Content-Type', 'unknown')} response from {all_leaves_url} (start={start}, size={size})", debug_only=True)
+                
+                media_container = episodes_data.get('MediaContainer', {})
+                episodes = media_container.get('Metadata', [])
+                
+                if not episodes:
+                    # No more episodes, we're done
+                    break
+                
+                all_episodes.extend(episodes)
+                
+                # Check if we got a partial response (pagination needed)
+                container_size = media_container.get('size', 0)
+                container_start = media_container.get('offset', 0)
+                
+                if len(episodes) < size or container_start + len(episodes) >= container_size:
+                    # We got all episodes in this page or reached the end
+                    break
+                
+                # Move to next page
+                start += size
+                
+                # Safety check to prevent infinite loops
+                if start > 10000:  # Reasonable limit for episode count
+                    self._emit_status(f"⚠️ Pagination limit reached at {start} episodes, stopping", debug_only=True)
+                    break
             
-            episodes = episodes_data.get('MediaContainer', {}).get('Metadata', [])
-            
-            return episodes
+            self._emit_status(f"📺 Retrieved {len(all_episodes)} episodes for show {show_key}", debug_only=True)
+            return all_episodes
         except Exception as e:
             self._emit_status(f"❌ allLeaves failed, trying fallback method: {e}", debug_only=True)
             # Fallback to the old method if allLeaves fails
@@ -456,63 +489,13 @@ class PlexImporter:
         if not plex_path:
             return ''
         
-        # Choose the appropriate library root
-        chosen_library_root = self._choose_library_root(plex_path, library_root_paths)
-        
-        # Get path mappings for this server
-        path_mappings = self.database.get_plex_path_mappings(self.server_id)
-        
-        # Find the best matching path mapping
-        best_match = None
-        best_match_length = 0
-        
-        for mapping in path_mappings:
-            plex_mapping = mapping['plex_path']
-            local_mapping = mapping['local_path']
-            
-            if plex_mapping and local_mapping and plex_path.startswith(plex_mapping):
-                if len(plex_mapping) > best_match_length:
-                    best_match = mapping
-                    best_match_length = len(plex_mapping)
-        
-        if best_match:
-            # Map the path using the best match
-            plex_mapping = best_match['plex_path']
-            local_mapping = best_match['local_path']
-            relative_path = plex_path[len(plex_mapping):]
-            if relative_path.startswith('/'):
-                relative_path = relative_path[1:]
-            return os.path.join(local_mapping, relative_path)
-        
-        return plex_path  # Fallback to original path if no mapping found
+        # Use the path mapping service as the single source of truth
+        return self.path_mapping_service.get_local_path(plex_path)
     
     def get_local_path(self, plex_path: str, library_root: str = None) -> str:
         """Get the local mapped path for a Plex path (for file access)"""
         return self.path_mapping_service.get_local_path(plex_path, library_root)
     
-    def _choose_library_root(self, plex_path: str, library_root_paths: List[str]) -> str:
-        """
-        Choose the correct library root for a Plex path based on longest matching prefix.
-        
-        Args:
-            plex_path: The Plex file path
-            library_root_paths: List of available library root paths
-            
-        Returns:
-            The best matching library root path, or None if no match
-        """
-        if not library_root_paths or not plex_path:
-            return None
-        
-        best_match = None
-        best_match_length = 0
-        
-        for root_path in library_root_paths:
-            if plex_path.startswith(root_path) and len(root_path) > best_match_length:
-                best_match = root_path
-                best_match_length = len(root_path)
-        
-        return best_match
     
     def import_movie(self, item: Dict, library_name: str = None, library_root: str = None) -> bool:
         """Import a single movie"""
@@ -844,9 +827,8 @@ class PlexImporter:
                         db_movies = self.database.get_movies_by_source('plex')
                         db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id']}
                     
-                    # Choose the correct library root for this movie
+                    # Get the Plex file path for this movie
                     movie_file_path = self._get_file_path_from_media(movie.get('Media', []))
-                    chosen_library_root = self._choose_library_root(movie_file_path, library_root_paths)
                     
                     if movie_guid in db_movie_ids:
                         # Compare timestamps before updating
@@ -1258,14 +1240,13 @@ class PlexImporter:
                                 message=None
                             )
                     else:
-                        # Choose the correct library root for this episode
+                        # Get the Plex file path for this episode
                         episode_file_path = self._get_file_path_from_media(episode.get('Media', []))
-                        chosen_library_root = self._choose_library_root(episode_file_path, library_root_paths or [])
                         
                         # Update existing episode (only count if there were actual changes)
                         self._emit_status(f"🔄 UPDATE Episode '{episode_title}': Timestamps differ (Plex: {ts}, DB: {db_ts})", debug_only=True)
                         db_episode = db_episode_lookup[episode_guid]
-                        if self._update_episode(episode, show, library_name, chosen_library_root, db_episode, library_root_paths):
+                        if self._update_episode(episode, show, library_name, None, db_episode, library_root_paths):
                             updated_count += 1
                             # Emit status message for database change
                             if progress_callback:
@@ -1275,12 +1256,11 @@ class PlexImporter:
                                     message=f"Updated episode: {episode_title}"
                                 )
                 else:
-                    # Choose the correct library root for this episode
+                    # Get the Plex file path for this episode
                     episode_file_path = self._get_file_path_from_media(episode.get('Media', []))
-                    chosen_library_root = self._choose_library_root(episode_file_path, library_root_paths or [])
                     
                     # Add new episode
-                    if self._add_episode(episode, show, library_name, chosen_library_root, library_root_paths):
+                    if self._add_episode(episode, show, library_name, None, library_root_paths):
                         added_count += 1
                         # Emit status message for database change
                         if progress_callback:
