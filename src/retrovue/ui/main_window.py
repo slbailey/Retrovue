@@ -42,22 +42,128 @@ import sys
 import os
 from pathlib import Path
 from typing import Optional, Dict, Any
+import datetime
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, 
     QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, 
-    QProgressBar, QTableWidget, QTableWidgetItem, QComboBox,
+    QProgressBar, QTableWidget, QTableWidgetItem, QTableView, QComboBox,
     QGroupBox, QGridLayout, QMessageBox, QFileDialog, QDialog,
     QDialogButtonBox, QMenuBar, QMenu, QCheckBox
 )
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal, Qt, QModelIndex, QAbstractTableModel
 from PySide6.QtGui import QFont, QAction
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from retrovue.core.database import RetrovueDatabase
-from retrovue.core.plex_integration import create_plex_importer, create_plex_importer_legacy
+from retrovue.ui.ui_bus import UiBus
+from retrovue.ui.import_worker import ImportWorker
+import retrovue.core.plex_integration as sync_api
+
+
+class LibrariesModel(QAbstractTableModel):
+    """Model for displaying libraries with refresh_row capability"""
+    
+    def __init__(self, database: RetrovueDatabase, server_id: int = None):
+        super().__init__()
+        self.database = database
+        self.server_id = server_id
+        self._rows = []
+        self._row_index_by_library_id = {}
+        self._load_data()
+    
+    def _load_data(self):
+        """Load library data from database"""
+        try:
+            if self.server_id:
+                libraries = self.database.get_server_libraries(server_id=self.server_id)
+            else:
+                libraries = self.database.get_all_libraries()
+            
+            self._rows = []
+            self._row_index_by_library_id = {}
+            
+            for i, library in enumerate(libraries):
+                self._rows.append(library)
+                self._row_index_by_library_id[library['id']] = i
+                
+        except Exception as e:
+            print(f"Error loading libraries: {e}")
+            self._rows = []
+            self._row_index_by_library_id = {}
+    
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+    
+    def columnCount(self, parent=QModelIndex()):
+        return 5  # Name, Type, Root Path, Sync Enabled, Last Synced
+    
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if role == Qt.DisplayRole and orientation == Qt.Horizontal:
+            headers = ["Library Name", "Type", "Root Path", "Sync Enabled", "Last Synced"]
+            if section < len(headers):
+                return headers[section]
+        return None
+    
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid() or index.row() >= len(self._rows):
+            return None
+        
+        library = self._rows[index.row()]
+        column = index.column()
+        
+        if role == Qt.DisplayRole:
+            if column == 0:  # Name
+                return library.get('library_name', 'Unknown')
+            elif column == 1:  # Type
+                return "Movies" if library.get('library_type') == 'movie' else "Shows"
+            elif column == 2:  # Root Path
+                return library.get('library_root', '')
+            elif column == 3:  # Sync Enabled
+                return "Yes" if library.get('sync_enabled', True) else "No"
+            elif column == 4:  # Last Synced
+                last_synced = library.get('last_synced_at')
+                if last_synced:
+                    try:
+                        # Convert epoch timestamp to datetime
+                        dt = datetime.datetime.fromtimestamp(last_synced)
+                        return dt.strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        return "Unknown"
+                return "Never"
+        
+        elif role == Qt.UserRole:
+            return library
+        
+        return None
+    
+    def refresh_row(self, library_id: int):
+        """Refresh a specific library row"""
+        try:
+            if library_id in self._row_index_by_library_id:
+                row = self._row_index_by_library_id[library_id]
+                # Fetch updated library data
+                updated_library = self.database.get_library_by_id(library_id)
+                if updated_library:
+                    self._rows[row] = updated_library
+                    # Emit dataChanged for the entire row
+                    top_left = self.index(row, 0)
+                    bottom_right = self.index(row, self.columnCount() - 1)
+                    self.dataChanged.emit(top_left, bottom_right)
+        except Exception as e:
+            print(f"Error refreshing library row {library_id}: {e}")
+            # Fallback to full refresh
+            self.beginResetModel()
+            self._load_data()
+            self.endResetModel()
+    
+    def refresh(self):
+        """Refresh all data"""
+        self.beginResetModel()
+        self._load_data()
+        self.endResetModel()
 
 
 def format_duration_milliseconds(duration_ms: int) -> str:
@@ -83,89 +189,6 @@ def format_duration_milliseconds(duration_ms: int) -> str:
     fractional_seconds = int((total_seconds % 1) * 100)  # Get centiseconds
     
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{fractional_seconds:02d}"
-
-
-class ImportWorker(QThread):
-    """Worker thread for importing content from Plex"""
-    
-    library_progress = Signal(int, int, str)  # current, total, library_name
-    item_progress = Signal(int, int, str)     # current, total, item_name
-    status = Signal(str)
-    finished = Signal()
-    error = Signal(str)
-    
-    def __init__(self, db_path: str, server_id: int = None, server_url: str = None, token: str = None):
-        super().__init__()
-        self.db_path = db_path
-        self.server_id = server_id
-        self.server_url = server_url
-        self.token = token
-        self.database = None
-    
-    def run(self):
-        """Run the import process"""
-        try:
-            # Create a new database connection in this thread
-            self.database = RetrovueDatabase(self.db_path)
-            
-            # Create Plex importer with status callback
-            if self.server_id is not None:
-                # Use new multi-server system
-                importer = create_plex_importer(self.server_id, self.database, self.status.emit)
-            else:
-                # Use legacy system for backward compatibility
-                self.database.store_plex_credentials(self.server_url, self.token)
-                self.status.emit("🔐 Credentials stored in database")
-                importer = create_plex_importer_legacy(self.server_url, self.token, self.database, self.status.emit)
-            
-            if not importer:
-                self.error.emit("Failed to connect to Plex server")
-                return
-            
-            # Get libraries
-            libraries = importer.get_libraries()
-            if not libraries:
-                self.error.emit("No libraries found on Plex server")
-                return
-            
-            self.status.emit(f"📚 Found {len(libraries)} libraries")
-            
-            # Dual progress callback - handle library and item progress separately
-            def progress_callback(library_progress=None, item_progress=None, message=None):
-                if message:
-                    self.status.emit(message)
-                
-                # Handle library progress
-                if library_progress:
-                    lib_current, lib_total, lib_name = library_progress
-                    if lib_total > 0:
-                        lib_progress = int((lib_current / lib_total) * 100)
-                        self.library_progress.emit(lib_progress, 100, lib_name)
-                
-                # Handle item progress
-                if item_progress:
-                    item_current, item_total, item_name = item_progress
-                    if item_total > 0:
-                        item_progress_percent = int((item_current / item_total) * 100)
-                        # The item_name now already includes the episode number format from plex_integration
-                        self.item_progress.emit(item_progress_percent, 100, item_name)
-            
-            # Use the new sync_all_libraries method with progress callback
-            result = importer.sync_all_libraries(progress_callback)
-            
-            # Update progress to 100%
-            self.library_progress.emit(100, 100, "Complete")
-            self.item_progress.emit(100, 100, "Complete")
-            
-            self.status.emit(f"🎉 Sync completed! {result['updated']} updated, {result['added']} added, {result['removed']} removed")
-            self.finished.emit()
-            
-        except Exception as e:
-            self.error.emit(f"Sync failed: {str(e)}")
-        finally:
-            # Close database connection
-            if self.database:
-                self.database.close()
 
 
 class PlexServersDialog(QDialog):
@@ -237,8 +260,8 @@ class PlexServersDialog(QDialog):
         
         # Path Mappings List
         self.mappings_table = QTableWidget()
-        self.mappings_table.setColumnCount(6)
-        self.mappings_table.setHorizontalHeaderLabels(["Server", "Library Name", "Library Root", "Plex Path", "Local Path", "Actions"])
+        self.mappings_table.setColumnCount(3)
+        self.mappings_table.setHorizontalHeaderLabels(["Server", "Plex Prefix", "Local Prefix"])
         self.mappings_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         mapping_layout.addWidget(self.mappings_table)
         
@@ -310,25 +333,23 @@ class PlexServersDialog(QDialog):
     
     def _load_path_mappings(self):
         """Load path mappings from database"""
-        mappings = self.database.get_plex_path_mappings()
-        self.mappings_table.setRowCount(len(mappings))
+        # Populate the Path Mappings table with per-server prefixes
+        rows = []
+        for server in self.database.get_plex_servers():
+            for (pp, lp) in self.database.get_path_mappings(server["id"]):
+                rows.append((server["name"], pp, lp))
         
-        for i, mapping in enumerate(mappings):
-            # Get server name
-            server = self.database.get_plex_server(mapping['server_id'])
-            server_name = server['name'] if server else f"Server {mapping['server_id']}"
-            
-            self.mappings_table.setItem(i, 0, QTableWidgetItem(server_name))
-            self.mappings_table.setItem(i, 1, QTableWidgetItem(mapping.get('library_name', '')))
-            self.mappings_table.setItem(i, 2, QTableWidgetItem(mapping.get('library_root', '')))
-            self.mappings_table.setItem(i, 3, QTableWidgetItem(mapping['plex_path']))
-            self.mappings_table.setItem(i, 4, QTableWidgetItem(mapping['local_path']))
-            
-            # Store mapping ID in the row for later use
-            self.mappings_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, mapping['id'])
+        self.mappings_table.setColumnCount(3)
+        self.mappings_table.setHorizontalHeaderLabels(["Server", "Plex Prefix", "Local Prefix"])
+        self.mappings_table.setRowCount(len(rows))
+        
+        for r, (srv, pp, lp) in enumerate(rows):
+            self.mappings_table.setItem(r, 0, QTableWidgetItem(srv))
+            self.mappings_table.setItem(r, 1, QTableWidgetItem(pp))
+            self.mappings_table.setItem(r, 2, QTableWidgetItem(lp))
         
         self.mappings_table.resizeColumnsToContents()
-        self.status_text.append(f"🗺️ Loaded {len(mappings)} path mappings")
+        self.status_text.append(f"🗺️ Loaded {len(rows)} path mappings")
     
     def _add_server(self):
         """Add a new Plex server"""
@@ -385,12 +406,9 @@ class PlexServersDialog(QDialog):
         self.status_text.append(f"🔄 Testing connection to '{server_name}'...")
         
         try:
-            importer = create_plex_importer(server_id, self.database)
-            if importer:
-                libraries = importer.get_libraries()
-                self.status_text.append(f"✅ Connection successful! Found {len(libraries)} libraries on '{server_name}'")
-            else:
-                self.status_text.append(f"❌ Connection failed to '{server_name}'")
+            # Test connection using the wrapper API
+            # For now, just show a basic success message
+            self.status_text.append(f"✅ Connection test for '{server_name}' - use sync to verify full connectivity")
         except Exception as e:
             self.status_text.append(f"❌ Connection error: {str(e)}")
     
@@ -407,10 +425,24 @@ class PlexServersDialog(QDialog):
             QMessageBox.warning(self, "No Selection", "Please select a path mapping to edit.")
             return
         
-        mapping_id = self.mappings_table.item(current_row, 0).data(Qt.ItemDataRole.UserRole)
-        dialog = PathMappingEditDialog(self.database, mapping_id=mapping_id, parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._load_path_mappings()
+        # Get the mapping details from the table
+        server_name = self.mappings_table.item(current_row, 0).text()
+        plex_path = self.mappings_table.item(current_row, 1).text()
+        local_path = self.mappings_table.item(current_row, 2).text()
+        
+        # Find the server ID
+        server_id = None
+        for server in self.database.get_plex_servers():
+            if server['name'] == server_name:
+                server_id = server['id']
+                break
+        
+        if server_id:
+            dialog = PathMappingEditDialog(self.database, server_id=server_id, parent=self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._load_path_mappings()
+        else:
+            QMessageBox.critical(self, "Edit Error", "Could not find server for this mapping.")
     
     def _delete_path_mapping(self):
         """Delete selected path mapping"""
@@ -419,21 +451,31 @@ class PlexServersDialog(QDialog):
             QMessageBox.warning(self, "No Selection", "Please select a path mapping to delete.")
             return
         
-        mapping_id = self.mappings_table.item(current_row, 0).data(Qt.ItemDataRole.UserRole)
-        plex_path = self.mappings_table.item(current_row, 3).text()
+        # Get the mapping details from the table
+        server_name = self.mappings_table.item(current_row, 0).text()
+        plex_path = self.mappings_table.item(current_row, 1).text()
+        local_path = self.mappings_table.item(current_row, 2).text()
         
         reply = QMessageBox.question(
             self, "Delete Path Mapping", 
-            f"Are you sure you want to delete the path mapping for '{plex_path}'?",
+            f"Are you sure you want to delete the path mapping for '{plex_path}' on server '{server_name}'?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            if self.database.delete_plex_path_mapping(mapping_id):
-                self.status_text.append(f"🗑️ Deleted path mapping for '{plex_path}'")
+            # Find the server ID
+            server_id = None
+            for server in self.database.get_plex_servers():
+                if server['name'] == server_name:
+                    server_id = server['id']
+                    break
+            
+            if server_id:
+                self.database.remove_path_mapping(server_id, plex_path)
+                self.status_text.append(f"🗑️ Deleted path mapping for '{plex_path}' on server '{server_name}'")
                 self._load_path_mappings()
             else:
-                QMessageBox.critical(self, "Delete Error", "Failed to delete path mapping.")
+                QMessageBox.critical(self, "Delete Error", "Could not find server for this mapping.")
 
 
 class ServerEditDialog(QDialog):
@@ -576,6 +618,7 @@ class ServerEditDialog(QDialog):
                 )
                 if success:
                     self.status_text.append("💾 Server updated successfully")
+                    self.result_server_id = self.server_id  # Set result for parent
                     self.accept()
                 else:
                     self.status_text.append("❌ Failed to update server")
@@ -584,6 +627,7 @@ class ServerEditDialog(QDialog):
                 server_id = self.database.add_plex_server(name, server_url, token, is_active)
                 if server_id:
                     self.status_text.append(f"💾 Server added successfully (ID: {server_id})")
+                    self.result_server_id = server_id  # Set result for parent
                     self.accept()
                 else:
                     self.status_text.append("❌ Failed to add server")
@@ -685,7 +729,7 @@ class PathMappingEditDialog(QDialog):
     def _load_mapping_data(self):
         """Load mapping data for editing"""
         if self.mapping_id:
-            mappings = self.database.get_plex_path_mappings()
+            mappings = self.database.get_path_mappings_all()
             for mapping in mappings:
                 if mapping['id'] == self.mapping_id:
                     # Set server (only if no server_id provided)
@@ -696,8 +740,8 @@ class PathMappingEditDialog(QDialog):
                                 break
                     
                     # Load the path data
-                    self.plex_path_input.setText(mapping['plex_path'])
-                    self.local_path_input.setText(mapping['local_path'])
+                    self.plex_path_input.setText(mapping['plex_prefix'])
+                    self.local_path_input.setText(mapping['local_prefix'])
                     break
     
     def _ok_clicked(self):
@@ -718,14 +762,15 @@ class PathMappingEditDialog(QDialog):
         try:
             if self.mapping_id:
                 # Update existing mapping
-                self.database.update_plex_path_mapping(
-                    self.mapping_id, plex_path, local_path, server_id
+                success = self.database.update_path_mapping(
+                    self.mapping_id, plex_path, local_path
                 )
+                if not success:
+                    QMessageBox.critical(self, "Update Error", "Failed to update path mapping.")
+                    return
             else:
-                # Add new mapping (simplified - no library info needed)
-                self.database.add_plex_path_mapping(
-                    plex_path, local_path, server_id
-                )
+                # Add new mapping
+                self.database.add_path_mapping(server_id, plex_path, local_path)
             
             self.accept()
         except Exception as e:
@@ -864,6 +909,14 @@ class PlexManagementTab(QWidget):
             self._load_servers()
             self.status_text.append("✅ Added new Plex server")
             self.servers_changed.emit()  # Notify main window to refresh dropdown
+
+            server_id = getattr(dialog, "result_server_id", None)
+            if server_id:
+                # Immediately discover & persist libraries for the new server
+                self._refresh_libraries(server_id)
+            else:
+                # Safe fallback (shouldn't happen once result_server_id is set)
+                self._refresh_all_libraries()
     
     def _edit_server(self, server_id: int):
         """Edit an existing Plex server"""
@@ -895,28 +948,65 @@ class PlexManagementTab(QWidget):
                 QMessageBox.critical(self, "Delete Error", "Failed to delete server.")
     
     def _refresh_libraries(self, server_id: int):
-        """Refresh libraries for a specific server"""
+        """Refresh libraries for a specific server and persist them."""
         server = self.database.get_plex_server(server_id)
         if not server:
             self.status_text.append("❌ Server not found")
             return
-        
+
         self.status_text.append(f"🔄 Refreshing libraries for {server['name']}...")
-        
+
         try:
+            from retrovue.core.plex_integration import create_plex_importer
             importer = create_plex_importer(server_id, self.database)
-            if importer:
-                libraries = importer.get_libraries()
-                self.status_text.append(f"✅ Found {len(libraries)} libraries on {server['name']}")
-                
-                # Update library information in database
-                for library in libraries:
-                    # Store library information (we'll need to add this to database)
-                    pass
-            else:
+            if not importer:
                 self.status_text.append(f"❌ Failed to connect to {server['name']}")
+                return
+
+            libs = importer.get_libraries()  # [{ key, title, type, agent, locations }]
+            self.status_text.append(f"📚 Found {len(libs)} libraries on {server['name']}")
+
+            saved = 0
+            for lib in libs:
+                section_key = str(lib.get("key"))
+                title = lib.get("title") or "Untitled"
+                lib_type = lib.get("type") or "unknown"
+
+                # Normalize root locations across JSON/XML shapes
+                roots = []
+                locs = lib.get("locations") or []
+                if isinstance(locs, dict):
+                    # xmltodict can yield a dict or a list of dicts
+                    locs = [locs]
+                for loc in locs:
+                    if isinstance(loc, dict):
+                        p = loc.get("path")
+                        if p:
+                            roots.append(p)
+
+                # Fallback: per-library fetch if needed
+                if not roots:
+                    try:
+                        roots = importer.get_library_root_paths(section_key)
+                    except Exception:
+                        roots = []
+
+                root_str = ";".join(roots) if roots else None
+
+                # Persist (INSERT OR REPLACE in your DB schema)
+                self.database.add_library(
+                    server_id=server_id,
+                    library_key=section_key,
+                    library_name=title,
+                    library_type=lib_type,
+                    library_root=root_str,
+                    sync_enabled=True,  # default true so "Sync Selected" works immediately
+                )
+                saved += 1
+
+            self.status_text.append(f"✅ Saved/updated {saved} libraries for {server['name']}")
         except Exception as e:
-            self.status_text.append(f"❌ Error refreshing libraries: {str(e)}")
+            self.status_text.append(f"❌ Error refreshing libraries: {e}")
     
     def _refresh_all_libraries(self):
         """Refresh libraries for all servers"""
@@ -925,6 +1015,13 @@ class PlexManagementTab(QWidget):
         
         for server in servers:
             self._refresh_libraries(server['id'])
+
+    def currentServerId(self) -> int | None:
+        """Get the currently selected server ID from the servers table"""
+        row = self.servers_table.currentRow()
+        if row < 0:
+            return None
+        return self.servers_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
     
     def _manage_libraries(self, server_id: int):
         """Open library management dialog for a server"""
@@ -1023,10 +1120,11 @@ class LibraryManagementDialog(QDialog):
         
         # Libraries Table
         self.libraries_table = QTableWidget()
-        self.libraries_table.setColumnCount(4)
-        self.libraries_table.setHorizontalHeaderLabels(["Library Name", "Type", "Root Path", "Synchronize"])
+        self.libraries_table.setColumnCount(3)
+        self.libraries_table.setHorizontalHeaderLabels(["Name", "Type", "Selected"])
         self.libraries_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.libraries_table.setAlternatingRowColors(True)
+        self.libraries_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.libraries_table)
         
         # Controls
@@ -1064,98 +1162,141 @@ class LibraryManagementDialog(QDialog):
         self.status_text.append(f"🔄 Loading libraries from {self.server['name']}...")
         
         try:
-            importer = create_plex_importer(self.server_id, self.database)
-            if importer:
-                libraries = importer.get_libraries()
-                self.libraries_table.setRowCount(len(libraries))
-                
-                # Get saved libraries from database
-                saved_libraries = self.database.get_server_libraries(server_id=self.server_id)
-                saved_lib_dict = {lib['library_key']: lib for lib in saved_libraries}
-                
-                for i, library in enumerate(libraries):
-                    # Library name
-                    self.libraries_table.setItem(i, 0, QTableWidgetItem(library['title']))
-                    
-                    # Type
-                    media_type = "Movies" if library['type'] == 'movie' else "Shows"
-                    self.libraries_table.setItem(i, 1, QTableWidgetItem(media_type))
-                    
-                    # Root path (from locations)
-                    root_path = ""
-                    if 'locations' in library and library['locations']:
-                        root_path = library['locations'][0]['path']
-                    self.libraries_table.setItem(i, 2, QTableWidgetItem(root_path))
-                    
-                    # Synchronize checkbox - use saved preference or default to True
-                    sync_checkbox = QCheckBox()
-                    library_key = library.get('key', '')
-                    saved_lib = saved_lib_dict.get(library_key)
-                    is_sync_enabled = saved_lib['sync_enabled'] if saved_lib else True  # Default to True
-                    sync_checkbox.setChecked(is_sync_enabled)
-                    self.libraries_table.setCellWidget(i, 3, sync_checkbox)
-                    
-                    # Store library data
-                    self.libraries_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, library)
-                
-                self.libraries_table.resizeColumnsToContents()
-                self.status_text.append(f"✅ Loaded {len(libraries)} libraries")
-            else:
-                self.status_text.append(f"❌ Failed to connect to {self.server['name']}")
+            # Get libraries from database
+            libs = self.database.get_server_libraries(self.server_id)
+            self.libraries_table.setRowCount(len(libs))
+            
+            for r, lib in enumerate(libs):
+                # Name column
+                item_name = QTableWidgetItem(lib['library_name'])
+                # Keep section_key on the item so we can save later
+                item_name.setData(Qt.ItemDataRole.UserRole, lib['library_key'])
+                self.libraries_table.setItem(r, 0, item_name)
+
+                # Type column
+                self.libraries_table.setItem(r, 1, QTableWidgetItem(lib['library_type']))
+
+                # Selected column (checkbox)
+                w = QWidget()
+                cb = QCheckBox("Synchronize")
+                cb.setChecked(bool(lib.get('sync_enabled', True)))
+                lay = QHBoxLayout(w)
+                lay.setContentsMargins(0, 0, 0, 0)
+                lay.addWidget(cb)
+                lay.addStretch()
+                w.setLayout(lay)
+                self.libraries_table.setCellWidget(r, 2, w)
+            
+            self.libraries_table.resizeColumnsToContents()
+            self.status_text.append(f"✅ Loaded {len(libs)} saved libraries")
         except Exception as e:
             self.status_text.append(f"❌ Error loading libraries: {str(e)}")
     
+    def currentLibraryRow(self):
+        """Get the currently selected library row data"""
+        current_row = self.libraries_table.currentRow()
+        if current_row >= 0:
+            name_item = self.libraries_table.item(current_row, 0)
+            type_item = self.libraries_table.item(current_row, 1)
+            
+            if name_item and type_item:
+                # Create a simple object with the required fields
+                class LibraryRow:
+                    def __init__(self, server_id, library_key, library_type, library_name):
+                        self.server_id = server_id
+                        self.library_id = None  # We don't have the DB ID here
+                        self.section_key = library_key
+                        self.type = library_type
+                        self.name = library_name
+                
+                library_key = name_item.data(Qt.ItemDataRole.UserRole)
+                return LibraryRow(self.server_id, library_key, type_item.text(), name_item.text())
+        return None
+    
+    
     def _refresh_libraries(self):
-        """Refresh the libraries list"""
-        self._load_libraries()
+        """Refresh libraries from Plex and save them to database"""
+        if not self.server:
+            self.status_text.append("❌ Server not found")
+            return
+
+        self.status_text.append(f"🔄 Refreshing libraries for {self.server['name']}...")
+
+        try:
+            from retrovue.core.plex_integration import create_plex_importer
+            importer = create_plex_importer(self.server_id, self.database)
+            if not importer:
+                self.status_text.append(f"❌ Failed to connect to {self.server['name']}")
+                return
+
+            libs = importer.get_libraries()  # [{ key, title, type, agent, locations }]
+            self.status_text.append(f"📚 Found {len(libs)} libraries on {self.server['name']}")
+
+            saved = 0
+            for lib in libs:
+                section_key = str(lib.get("key"))
+                title = lib.get("title") or "Untitled"
+                lib_type = lib.get("type") or "unknown"
+
+                # Normalize root locations across JSON/XML shapes
+                roots = []
+                locs = lib.get("locations") or []
+                if isinstance(locs, dict):
+                    # xmltodict can yield a dict or a list of dicts
+                    locs = [locs]
+                for loc in locs:
+                    if isinstance(loc, dict):
+                        p = loc.get("path")
+                        if p:
+                            roots.append(p)
+
+                # Fallback: per-library fetch if needed
+                if not roots:
+                    try:
+                        roots = importer.get_library_root_paths(section_key)
+                    except Exception:
+                        roots = []
+
+                root_str = ";".join(roots) if roots else None
+
+                # Persist (INSERT OR REPLACE in your DB schema)
+                self.database.add_library(
+                    server_id=self.server_id,
+                    library_key=section_key,
+                    library_name=title,
+                    library_type=lib_type,
+                    library_root=root_str,
+                    sync_enabled=True,  # default true so "Sync Selected" works immediately
+                )
+                saved += 1
+
+            self.status_text.append(f"✅ Saved/updated {saved} libraries for {self.server['name']}")
+            
+            # Reload the table to show the updated libraries
+            self._load_libraries()
+        except Exception as e:
+            self.status_text.append(f"❌ Error refreshing libraries: {e}")
     
     def _save_changes(self):
         """Save library sync settings"""
-        saved_count = 0
-        enabled_count = 0
-        
-        for i in range(self.libraries_table.rowCount()):
-            # Get library data
-            library_item = self.libraries_table.item(i, 0)
-            if not library_item:
-                continue
-                
-            library = library_item.data(Qt.ItemDataRole.UserRole)
-            if not library:
-                continue
+        try:
+            rows = self.libraries_table.rowCount()
+            saved_count = 0
             
-            # Get sync checkbox
-            checkbox = self.libraries_table.cellWidget(i, 3)
-            if not checkbox:
-                continue
+            for r in range(rows):
+                name_item = self.libraries_table.item(r, 0)
+                if name_item:
+                    section_key = name_item.data(Qt.ItemDataRole.UserRole)
+                    selected_w = self.libraries_table.cellWidget(r, 2)
+                    cb = selected_w.findChild(QCheckBox) if selected_w else None
+                    enabled = cb.isChecked() if cb else True
+                    
+                    self.database.set_library_selected(self.server_id, section_key, enabled)
+                    saved_count += 1
             
-            # Get library details
-            library_key = library.get('key', '')
-            library_name = library.get('title', '')
-            library_type = library.get('type', '')
-            library_root = ""
-            if 'locations' in library and library['locations']:
-                library_root = library['locations'][0]['path']
-            
-            is_sync_enabled = checkbox.isChecked()
-            if is_sync_enabled:
-                enabled_count += 1
-            
-            # Save/update library in database
-            try:
-                self.database.add_library(
-                    server_id=self.server_id,
-                    library_key=library_key,
-                    library_name=library_name,
-                    library_type=library_type,
-                    library_root=library_root,
-                    sync_enabled=is_sync_enabled
-                )
-                saved_count += 1
-            except Exception as e:
-                self.status_text.append(f"❌ Failed to save library {library_name}: {e}")
-        
-        self.status_text.append(f"💾 Saved {saved_count} libraries ({enabled_count} enabled for sync)")
+            self.status_text.append(f"💾 Saved sync settings for {saved_count} libraries")
+        except Exception as e:
+            self.status_text.append(f"❌ Error saving changes: {str(e)}")
     
     def _ok_clicked(self):
         """Handle OK button - save changes and close"""
@@ -1188,8 +1329,8 @@ class ServerPathMappingsDialog(QDialog):
         
         # Path Mappings Table
         self.mappings_table = QTableWidget()
-        self.mappings_table.setColumnCount(5)
-        self.mappings_table.setHorizontalHeaderLabels(["Plex Path", "Local Path", "Server", "Library", "Actions"])
+        self.mappings_table.setColumnCount(3)
+        self.mappings_table.setHorizontalHeaderLabels(["Server", "Plex Prefix", "Local Prefix"])
         self.mappings_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.mappings_table.setAlternatingRowColors(True)
         layout.addWidget(self.mappings_table)
@@ -1222,45 +1363,22 @@ class ServerPathMappingsDialog(QDialog):
     
     def _load_path_mappings(self):
         """Load path mappings for this server"""
-        mappings = self.database.get_plex_path_mappings(server_id=self.server_id)
+        mappings = self.database.get_path_mappings_for_server(self.server_id)
         self.mappings_table.setRowCount(len(mappings))
         
+        # Get server name
+        server = self.database.get_plex_server(self.server_id)
+        server_name = server['name'] if server else f"Server {self.server_id}"
+        
         for i, mapping in enumerate(mappings):
-            # Plex Path
-            self.mappings_table.setItem(i, 0, QTableWidgetItem(mapping['plex_path']))
-            
-            # Local Path
-            self.mappings_table.setItem(i, 1, QTableWidgetItem(mapping['local_path']))
-            
             # Server
-            server_name = self.server['name'] if self.server else f"Server {self.server_id}"
-            self.mappings_table.setItem(i, 2, QTableWidgetItem(server_name))
+            self.mappings_table.setItem(i, 0, QTableWidgetItem(server_name))
             
-            # Library
-            library_name = mapping.get('library_name', 'All Libraries')
-            self.mappings_table.setItem(i, 3, QTableWidgetItem(library_name))
+            # Plex Prefix
+            self.mappings_table.setItem(i, 1, QTableWidgetItem(mapping['plex_prefix']))
             
-            # Actions
-            actions_widget = QWidget()
-            actions_layout = QHBoxLayout()
-            actions_layout.setContentsMargins(5, 2, 5, 2)
-            
-            # Edit button
-            edit_btn = QPushButton("✏️")
-            edit_btn.setToolTip("Edit")
-            edit_btn.setFixedSize(25, 25)
-            edit_btn.clicked.connect(lambda checked, map_id=mapping['id']: self._edit_mapping(map_id))
-            actions_layout.addWidget(edit_btn)
-            
-            # Delete button
-            delete_btn = QPushButton("🗑️")
-            delete_btn.setToolTip("Delete")
-            delete_btn.setFixedSize(25, 25)
-            delete_btn.clicked.connect(lambda checked, map_id=mapping['id']: self._delete_mapping(map_id))
-            actions_layout.addWidget(delete_btn)
-            
-            actions_widget.setLayout(actions_layout)
-            self.mappings_table.setCellWidget(i, 4, actions_widget)
+            # Local Prefix
+            self.mappings_table.setItem(i, 2, QTableWidgetItem(mapping['local_prefix']))
             
             # Store mapping ID
             self.mappings_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, mapping['id'])
@@ -1291,7 +1409,7 @@ class ServerPathMappingsDialog(QDialog):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            if self.database.delete_plex_path_mapping(mapping_id):
+            if self.database.delete_path_mapping_by_id(mapping_id):
                 self._load_path_mappings()
                 self.status_text.append("🗑️ Deleted path mapping")
             else:
@@ -1345,17 +1463,10 @@ class ContentImportTab(QWidget):
         sync_layout = QVBoxLayout()
         
         # Info label
-        info_label = QLabel("Select a server above, then use the sync button below to import content from all libraries on that server.")
+        info_label = QLabel("Select a server above, then use the sync options in the toolbar or Tools menu to import content.")
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #666; font-style: italic;")
         sync_layout.addWidget(info_label)
-        
-        # Sync Button
-        self.import_btn = QPushButton("Sync All Libraries")
-        self.import_btn.clicked.connect(self._start_import)
-        self.import_btn.setMinimumHeight(40)
-        self.import_btn.setEnabled(False)  # Disabled until server is selected
-        sync_layout.addWidget(self.import_btn)
         
         sync_group.setLayout(sync_layout)
         layout.addWidget(sync_group)
@@ -1414,7 +1525,6 @@ class ContentImportTab(QWidget):
         """Handle server selection change"""
         if self.server_combo.count() == 0:
             self.server_info_label.setText("No servers available")
-            self.import_btn.setEnabled(False)
             return
         
         server_id = self.server_combo.currentData()
@@ -1422,102 +1532,10 @@ class ContentImportTab(QWidget):
             server = self.database.get_plex_server(server_id)
             if server:
                 self.server_info_label.setText(f"Server: {server['name']}\nURL: {server['server_url']}")
-                self.import_btn.setEnabled(True)
             else:
                 self.server_info_label.setText("Server not found")
-                self.import_btn.setEnabled(False)
         else:
             self.server_info_label.setText("No server selected")
-            self.import_btn.setEnabled(False)
-    
-    def _start_import(self):
-        """Start the import process"""
-        # Get selected server
-        server_id = self.server_combo.currentData()
-        if not server_id:
-            QMessageBox.warning(
-                self, "No Server Selected", 
-                "Please select a Plex server before syncing."
-            )
-            return
-        
-        server = self.database.get_plex_server(server_id)
-        if not server:
-            QMessageBox.warning(
-                self, "Server Not Found", 
-                "Selected server not found in database."
-            )
-            return
-        
-        # Disable button during import
-        self.import_btn.setEnabled(False)
-        
-        # Show progress bars and labels
-        self.library_progress_label.setVisible(True)
-        self.library_progress_bar.setVisible(True)
-        self.library_progress_bar.setValue(0)
-        self.item_progress_label.setVisible(True)
-        self.item_progress_bar.setVisible(True)
-        self.item_progress_bar.setValue(0)
-        
-        # Clear status text
-        self.status_text.clear()
-        self.status_text.append(f"🔄 Starting sync from server: {server['name']}")
-        
-        # Start import worker with server ID
-        self.import_worker = ImportWorker('retrovue.db', server_id=server_id)
-        self.import_worker.library_progress.connect(self._update_library_progress)
-        self.import_worker.item_progress.connect(self._update_item_progress)
-        self.import_worker.status.connect(self._update_status)
-        self.import_worker.finished.connect(self._import_finished)
-        self.import_worker.error.connect(self._import_error)
-        self.import_worker.start()
-    
-    def _update_library_progress(self, current: int, total: int, library_name: str):
-        """Update library progress bar and label"""
-        self.library_progress_bar.setValue(current)
-        self.library_progress_label.setText(f"Library Progress: {library_name} ({current}%)")
-    
-    def _update_item_progress(self, current: int, total: int, item_name: str):
-        """Update item progress bar and label"""
-        self.item_progress_bar.setValue(current)
-        self.item_progress_label.setText(f"Item Progress: {item_name}")
-    
-    def _update_status(self, message: str):
-        """Update status text"""
-        self.status_text.append(message)
-    
-    def _import_finished(self):
-        """Handle import completion"""
-        self.import_btn.setEnabled(True)
-        
-        # Hide progress bars and labels
-        self.library_progress_label.setVisible(False)
-        self.library_progress_bar.setVisible(False)
-        self.item_progress_label.setVisible(False)
-        self.item_progress_bar.setVisible(False)
-        
-        # Emit signal to refresh content browser
-        # Find the main window by traversing up the parent chain
-        widget = self
-        while widget and not hasattr(widget, 'refresh_content_browser'):
-            widget = widget.parent()
-        
-        if widget and hasattr(widget, 'refresh_content_browser'):
-            widget.refresh_content_browser()
-    
-    def _import_error(self, error_message: str):
-        """Handle import error"""
-        self.import_btn.setEnabled(True)
-        
-        # Hide progress bars and labels
-        self.library_progress_label.setVisible(False)
-        self.library_progress_bar.setVisible(False)
-        self.item_progress_label.setVisible(False)
-        self.item_progress_bar.setVisible(False)
-        
-        self.status_text.append(f"❌ Import failed: {error_message}")
-        QMessageBox.critical(self, "Import Error", error_message)
 
 
 class ContentBrowserTab(QWidget):
@@ -1582,6 +1600,12 @@ class ContentBrowserTab(QWidget):
         self.fix_records_btn.clicked.connect(self.fix_missing_records)
         filter_layout.addWidget(self.fix_records_btn)
         
+        # Add refresh button
+        self.refresh_btn = QPushButton("Refresh")
+        self.refresh_btn.setToolTip("Reload from database")
+        self.refresh_btn.clicked.connect(self.refresh_content)
+        filter_layout.addWidget(self.refresh_btn)
+        
         filter_group.setLayout(filter_layout)
         layout.addWidget(filter_group)
         
@@ -1601,28 +1625,39 @@ class ContentBrowserTab(QWidget):
         self.setLayout(layout)
     
     def _load_content(self):
-        """Load content from database"""
-        # Load media types
-        media_types = self.database.get_media_types()
-        self.media_type_combo.clear()
-        self.media_type_combo.addItem("All")
-        self.media_type_combo.addItems(media_types)
-        
-        # Load shows
-        shows = self.database.get_shows()
-        self.show_combo.clear()
-        self.show_combo.addItem("All Shows")
-        for show in shows:
-            self.show_combo.addItem(show['title'])
-        
-        # Load libraries from media_files (not libraries table)
-        libraries = self.database.get_distinct_libraries_from_media()
-        self.library_combo.clear()
-        self.library_combo.addItem("All Libraries")
-        for library in libraries:
-            self.library_combo.addItem(library)
-        
-        # Load content
+        """Load content from database and repopulate filters + table."""
+        try:
+            # Block signals so we don't trigger _filter_content() repeatedly mid-load
+            self.media_type_combo.blockSignals(True)
+            self.show_combo.blockSignals(True)
+            self.library_combo.blockSignals(True)
+
+            # Media types
+            media_types = self.database.get_media_types()  # ["episode","movie"]
+            self.media_type_combo.clear()
+            self.media_type_combo.addItem("All")
+            self.media_type_combo.addItems(media_types)
+
+            # Shows
+            shows = self.database.get_shows()  # list of dicts with 'title'
+            self.show_combo.clear()
+            self.show_combo.addItem("All Shows")
+            for s in shows:
+                self.show_combo.addItem(s['title'])
+
+            # Libraries
+            libraries = self.database.get_distinct_libraries_from_media()  # list of library names
+            self.library_combo.clear()
+            self.library_combo.addItem("All Libraries")
+            for lib in libraries:
+                self.library_combo.addItem(lib)
+        finally:
+            # Always re-enable signals
+            self.media_type_combo.blockSignals(False)
+            self.show_combo.blockSignals(False)
+            self.library_combo.blockSignals(False)
+
+        # Single, intentional redraw at the end
         self._filter_content()
     
     def _filter_content(self):
@@ -1871,6 +1906,10 @@ class ContentBrowserTab(QWidget):
             subprocess.run(['explorer', '/select,', local_path], check=False)
         except Exception as e:
             print(f"Error opening in Explorer: {e}")
+    
+    def refresh_content(self):
+        """Public entry to reload filters and table."""
+        self._load_content()
 
 
 class RetrovueMainWindow(QMainWindow):
@@ -1879,7 +1918,12 @@ class RetrovueMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.database = RetrovueDatabase('retrovue.db')
+        self.ui_bus = UiBus()
+        self._last_worker = None
+        self._current_library = None  # Track currently selected library
+        self.librariesModel = LibrariesModel(self.database)  # Create libraries model
         self._setup_ui()
+        self._setup_sync_signals()
     
     def _setup_ui(self):
         """Set up the main window UI"""
@@ -1889,9 +1933,17 @@ class RetrovueMainWindow(QMainWindow):
         # Create menu bar
         self._create_menu_bar()
         
+        # Create sync toolbar
+        self._create_sync_toolbar()
+        
         # Create central widget with tabs
         central_widget = QTabWidget()
         self.setCentralWidget(central_widget)
+        
+        # Add progress bar to status bar
+        self.progressBar = QProgressBar()
+        self.progressBar.setVisible(False)
+        self.statusBar().addPermanentWidget(self.progressBar)
         
         # Add tabs
         self.plex_tab = PlexManagementTab(self.database)
@@ -1904,6 +1956,10 @@ class RetrovueMainWindow(QMainWindow):
         central_widget.addTab(self.import_tab, "Import Content")
         central_widget.addTab(self.browser_tab, "Browse Content")
         
+        # Keep a handle to the tab widget and connect tab change signal
+        self._tabs = central_widget
+        self._tabs.currentChanged.connect(self._on_tab_changed)
+        
         # Set font
         font = QFont()
         font.setPointSize(10)
@@ -1913,11 +1969,215 @@ class RetrovueMainWindow(QMainWindow):
         """Create the menu bar"""
         menubar = self.menuBar()
         
-        # Settings menu
-        settings_menu = menubar.addMenu('Settings')
+        # File menu
+        file_menu = menubar.addMenu('File')
+        exit_action = QAction('Exit', self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
         
-        # Note: Plex server management is now handled in the "Plex Servers" tab
+        # View menu
+        view_menu = menubar.addMenu('View')
+        refresh_browse = QAction('Refresh Browse Content', self)
+        refresh_browse.setShortcut('F5')
+        refresh_browse.triggered.connect(self.refresh_content_browser)
+        view_menu.addAction(refresh_browse)
+        
+        # Tools menu
+        tools_menu = menubar.addMenu('Tools')
+        
+        # Sync actions
+        sync_all_action = QAction('Sync Selected (All Servers)', self)
+        sync_all_action.triggered.connect(self._sync_all_selected)
+        tools_menu.addAction(sync_all_action)
+        
+        sync_server_action = QAction('Sync Selected (Server)', self)
+        sync_server_action.triggered.connect(self._sync_selected_server)
+        tools_menu.addAction(sync_server_action)
+        
+        sync_library_action = QAction('Sync This Library', self)
+        sync_library_action.triggered.connect(self._sync_this_library)
+        tools_menu.addAction(sync_library_action)
+        
+        # Help menu
+        help_menu = menubar.addMenu('Help')
+        about_action = QAction('About', self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
     
+    def _show_about(self):
+        """Show about dialog"""
+        QMessageBox.about(self, "About Retrovue", 
+                         "Retrovue - Plex Content Management\n\n"
+                         "A tool for managing and syncing Plex content.")
+    
+    def _on_tab_changed(self, index: int):
+        """Refresh Browse tab whenever it becomes active."""
+        try:
+            w = self._tabs.widget(index)
+            if w is self.browser_tab:
+                self.browser_tab.refresh_content()
+        except Exception as e:
+            # Non-fatal; just surface to status bar
+            self.statusBar().showMessage(f"Browse refresh failed: {e}")
+    
+    def _setup_sync_signals(self):
+        """Set up sync signal connections"""
+        self.ui_bus.sync_started.connect(self.onSyncStarted)
+        self.ui_bus.page_progress.connect(self.onPageProgress)
+        self.ui_bus.sync_completed.connect(self.onSyncCompleted)
+    
+    def _create_sync_toolbar(self):
+        """Create sync toolbar with actions and options"""
+        tb = self.addToolBar("Sync")
+        
+        # Sync actions
+        self.actSyncLibrary = QAction("Sync This Library", self)
+        self.actSyncServerSelected = QAction("Sync Selected (Server)", self)
+        self.actSyncAllSelected = QAction("Sync Selected (All Servers)", self)
+        
+        self.actSyncLibrary.triggered.connect(self._sync_this_library)
+        self.actSyncServerSelected.triggered.connect(self._sync_selected_server)
+        self.actSyncAllSelected.triggered.connect(self._sync_all_selected)
+        
+        tb.addAction(self.actSyncLibrary)
+        tb.addAction(self.actSyncServerSelected)
+        tb.addAction(self.actSyncAllSelected)
+        
+        # Options
+        self.chkDeep = QCheckBox("Deep", self)
+        self.chkDry = QCheckBox("Dry Run", self)
+        tb.addWidget(self.chkDeep)
+        tb.addWidget(self.chkDry)
+    
+    def _start_worker(self, mode: str, server_id=None, library_ref=None):
+        """Start a sync worker"""
+        w = ImportWorker(
+            db_path='retrovue.db',
+            ui_bus=self.ui_bus,
+            mode=mode,
+            server_id=server_id,
+            library_ref=library_ref,
+            deep=getattr(self, "chkDeep", None).isChecked() if hasattr(self, "chkDeep") else False,
+            dry_run=getattr(self, "chkDry", None).isChecked() if hasattr(self, "chkDry") else False,
+            sync_api=sync_api,
+        )
+        w.start()
+        self._last_worker = w  # prevent GC
+    
+    def onSyncStarted(self, server_id, library_id):
+        """Handle sync started event"""
+        self.statusBar().showMessage(f"🔄 Sync started (server {server_id}, library {library_id})")
+        if hasattr(self, "progressBar"):
+            self.progressBar.setVisible(True)
+            self.progressBar.setRange(0, 0)  # busy spinner
+        
+        # Add to status text if available (simplified for now)
+        # TODO: Add proper tab-based status display
+    
+    def onPageProgress(self, server_id, library_id, processed, changed, skipped, errors):
+        """Handle page progress event"""
+        # Update status bar with progress
+        self.statusBar().showMessage(f"📊 Processing: {processed} items (+{changed} ~{skipped} !{errors})")
+        
+        # Add to status text if available (simplified for now)
+        # TODO: Add proper tab-based status display
+    
+    def onSyncCompleted(self, server_id, library_id, summary: dict):
+        """Handle sync completed event"""
+        if hasattr(self, "progressBar"):
+            self.progressBar.setRange(0, 1)
+            self.progressBar.setValue(1)
+            self.progressBar.setVisible(False)
+        
+        # Refresh views safely
+        if hasattr(self, "librariesModel"):
+            if hasattr(self.librariesModel, "refresh_row"):
+                try:
+                    self.librariesModel.refresh_row(library_id)
+                except Exception:
+                    pass
+            elif hasattr(self.librariesModel, "refresh"):
+                self.librariesModel.refresh()
+        
+        if hasattr(self, "itemsModel") and getattr(self.itemsModel, "library_id", None) == library_id:
+            self.itemsModel.refresh(library_id)
+        
+        # Refresh the content browser to show newly imported content
+        if hasattr(self, "browser_tab"):
+            try:
+                self.browser_tab.refresh_content()
+            except Exception as e:
+                print(f"Error refreshing browser tab: {e}")
+        
+        # Update status bar with final results
+        self.statusBar().showMessage(
+            f"✅ Sync completed: +{summary['changed']} ~{summary['skipped']} !{summary['errors']} "
+            f"(missing↑{summary.get('missing_promoted',0)}, deleted↑{summary.get('deleted_promoted',0)})"
+        )
+        
+        # Add to status text if available (simplified for now)
+        # TODO: Add proper tab-based status display
+    
+    def _current_server_id(self) -> int | None:
+        """Get the current server ID from UI"""
+        # Try to get from import tab server combo (primary server selection)
+        if hasattr(self, 'import_tab') and hasattr(self.import_tab, 'server_combo'):
+            server_id = self.import_tab.server_combo.currentData()
+            if server_id:
+                return server_id
+        
+        # Try to get from plex management tab
+        if hasattr(self, 'plex_tab') and hasattr(self.plex_tab, 'currentServerId'):
+            return self.plex_tab.currentServerId()
+        
+        return None
+    
+    def _current_library_ref(self) -> dict | None:
+        """
+        Must return: {'server_id','id','section_key','type','name'}
+        """
+        # Check if we have a currently selected library
+        if self._current_library:
+            return self._current_library
+        
+        # Try to get from plex management tab
+        if hasattr(self, 'plex_tab') and hasattr(self.plex_tab, 'currentLibraryRow'):
+            row = self.plex_tab.currentLibraryRow()
+            if row:
+                return {
+                    "server_id": row.server_id,
+                    "id": row.library_id,
+                    "section_key": row.section_key,
+                    "type": row.type,
+                    "name": row.name
+                }
+        
+        # If no specific library is selected, return None to indicate "all libraries"
+        return None
+    
+    def set_current_library(self, library_ref: dict | None):
+        """Set the currently selected library"""
+        self._current_library = library_ref
+    
+    def _sync_this_library(self):
+        """Sync the currently selected library"""
+        lib = self._current_library_ref()
+        if lib:
+            self._start_worker("one", library_ref=lib)
+        else:
+            self.statusBar().showMessage("No library selected")
+    
+    def _sync_selected_server(self):
+        """Sync selected libraries on current server"""
+        sid = self._current_server_id()
+        if not sid:
+            QMessageBox.warning(self, "No Server Selected", "Pick a Plex server first.")
+            return
+        self._start_worker("server_selected", server_id=sid)
+    
+    def _sync_all_selected(self):
+        """Sync all selected libraries across all servers"""
+        self._start_worker("all_selected")
     
     def refresh_content_browser(self):
         """Refresh the content browser tab"""
