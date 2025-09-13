@@ -11,6 +11,13 @@ Retrovue's core philosophy centers around the **media-first approach**:
 - **Metadata Layering**: Rich metadata is layered on top of the media file without modifying the original
 - **Playback Guarantee**: Every scheduled item can be played because it has a verified media file
 
+### **Plex-First Integration**
+Retrovue is designed with **Plex Media Server integration** as the primary content source:
+- **Seamless Import**: Automatically syncs your existing Plex library with episode-level granularity
+- **Smart Synchronization**: Only updates content that has actually changed for optimal performance
+- **Path Mapping**: Translates Plex internal paths to accessible local file paths
+- **Multi-Server Support**: Manage multiple Plex servers from one Retrovue installation
+
 ### **Network-Grade IPTV System**
 Retrovue functions as a **network-grade IPTV system** that simulates a realistic broadcast TV station experience. Think of it as your own personal cable TV network that can serve multiple viewers simultaneously with professional-grade features and reliability.
 
@@ -32,14 +39,14 @@ Instead of just watching your media files one at a time, Retrovue creates **24/7
 
 ### Smart Content Management
 - **Plex Integration**: Automatically imports your existing Plex library with episode-level granularity
-- **TinyMediaManager Support**: Imports content and metadata from TMM .nfo files
-- **Manual UI Entries**: Supports direct content entry for non-Plex/TMM media
 - **Smart Sync**: Only updates content that has actually changed (super fast!)
 - **Episode-Level Control**: Each TV episode is managed separately for precise scheduling
 - **Metadata Storage**: Tracks everything you need for professional scheduling
+- **Path Mapping**: Translates Plex internal paths to accessible local file paths
+- **Multi-Server Support**: Manage multiple Plex servers from one installation
 
 ### Advanced Metadata Management
-- **Editorial Overrides**: Customize metadata without overwriting source data from Plex/TMM
+- **Editorial Overrides**: Customize metadata without overwriting source data from Plex
 - **Namespaced Tagging**: Organize content with structured tags like `audience:kids`, `holiday:christmas`, `brand:fast_food`
 - **Parental Controls**: MPAA/TV ratings system with daypart restrictions
 - **Content Classification**: Flexible tagging system for audience targeting, seasonal content, and brand management
@@ -48,11 +55,11 @@ Instead of just watching your media files one at a time, Retrovue creates **24/7
 
 ### 1. Content Management (✅ Working Now)
 ```
-Your Plex Library → Retrovue Database → Content Browser
+Your Plex Library → Plex Sync CLI → Retrovue Database
 ```
-- **Import**: Pulls movies and TV shows from your Plex server
+- **Import**: Pulls movies and TV shows from your Plex server using the Plex Sync CLI
 - **Organize**: Stores metadata, durations, and scheduling preferences
-- **Browse**: View and manage your content library through a desktop app
+- **Manage**: Configure servers, libraries, and path mappings via command line
 
 ### 2. Scheduling System (🔄 Coming Next)
 ```
@@ -133,10 +140,12 @@ HLS Streams → Network → VLC/Plex/Smart TV
 ## 🎯 Current Status
 
 ### ✅ What's Working Now
-- **Content Import**: Sync movies and TV shows from Plex
-- **Library Management**: Browse and organize your content
+- **Plex Integration**: Complete CLI-based Plex server management and content import
+- **Library Management**: Sync and manage Plex libraries with granular control
+- **Path Mapping**: Translate Plex paths to accessible local file paths
+- **Content Ingestion**: Import movies and TV shows with full metadata
 - **Database System**: Store all metadata and scheduling information
-- **Basic Streaming**: Single-channel streaming with simple content looping
+- **Smart Sync**: Only update content that has actually changed
 
 ### 🔄 What's Coming Next
 - **Schedule Editor**: Drag-and-drop timeline management
@@ -153,12 +162,12 @@ A **robust IPTV system** that provides a viewer experience **indistinguishable f
 
 ## 📚 Learn More
 
+- **[Plex Sync CLI Reference](plex-sync-cli.md)** - Complete command-line interface documentation
+- **[Quick Start Guide](quick-start.md)** - Step-by-step setup instructions
 - **[Development Roadmap](development-roadmap.md)** - Track progress and see what's coming next
 - **[System Architecture](architecture.md)** - Technical details about how Retrovue works
 - **[Database Schema](database-schema.md)** - How content and scheduling data is stored
-- **[Plex Integration](plex-integration.md)** - How Retrovue connects to your Plex server
 - **[Streaming Engine](streaming-engine.md)** - How video streaming works
-- **[Quick Start Guide](quick-start.md)** - Step-by-step setup instructions
 
 ## 🤝 Contributing
 

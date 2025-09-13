@@ -6,14 +6,23 @@ This roadmap tracks our progress through development and helps keep us focused o
 
 **End Goal**: A robust IPTV-ready simulation of a professional broadcast television station with multi-channel 24/7 operation, realistic transitions and timing, and a viewer experience indistinguishable from real cable TV.
 
-## 📊 Current Status: Media-First Architecture Implementation
+## 📊 Current Status: CLI-First Plex Integration
 
 ### **Phase 1 — Proof of Concept** ✅ **COMPLETED**
 - [x] Build single-channel playout (`ffmpeg → HLS → VLC`)
 - [x] Solve segment rotation issues (`-hls_delete_threshold`, epoch numbering)
 - [x] Validate continuous playback via local HTTP server
 
-### **Phase 2 — Media-First Content Foundation** 🔄 **IN PROGRESS**
+### **Phase 2 — CLI-First Plex Integration** ✅ **COMPLETED**
+- [x] **Repository Cleanup** - Focused codebase with only plex_sync.py dependencies
+- [x] **Complete CLI Interface** - Full command-line interface for all Plex operations
+- [x] **Server Management** - Add, configure, and manage multiple Plex servers
+- [x] **Library Synchronization** - Sync and manage Plex libraries with granular control
+- [x] **Path Mapping System** - Translate Plex paths to accessible local file paths
+- [x] **Content Ingestion** - Import movies and TV shows with full metadata
+- [x] **Smart Synchronization** - Only update content that has actually changed
+
+### **Phase 3 — Media-First Content Foundation** 🔄 **IN PROGRESS**
 
 #### **Core Media-First Features** ✅ **IMPLEMENTED**
 - [x] **Media-First Architecture**: Every record begins with a physical media file
@@ -31,19 +40,22 @@ This roadmap tracks our progress through development and helps keep us focused o
 - [x] **Smart Sync System** - Intelligent sync with conflict resolution and change detection
 - [x] **Content Import UI** - PySide6 interface with real-time progress updates
 
-#### **2.2 Plex Content Ingestion** 🔄 **CURRENT FOCUS**
-- [x] **Basic Plex Integration** - Connect to Plex server and import content
+#### **2.2 Plex Content Ingestion** ✅ **COMPLETED**
+- [x] **Complete Plex Integration** - Full CLI-based Plex server management and content import
 - [x] **Episode-Level Granularity** - Each TV episode stored separately for precise scheduling
 - [x] **Smart Synchronization** - Only update content that has actually changed (10-50x performance improvement)
 - [x] **Progress Tracking** - Real-time updates during import operations
 - [x] **Multi-Server Support** - Manage multiple Plex servers from one Retrovue installation
-- [x] **Content Browser UI** - Browse and organize content library with proper duration formatting
+- [x] **CLI Interface** - Complete command-line interface for all Plex operations
 - [x] **Database Migrations** - Schema updates without data loss
 - [x] **Library Management** - Store library names as media file attributes
 - [x] **Duration Handling** - Proper millisecond storage and hh:mm:ss.ff display formatting
+- [x] **Path Mapping System** - Translate Plex internal paths to accessible local file paths
+- [x] **Server Management** - Add, delete, update, and configure Plex servers
+- [x] **Content Ingestion** - Full and incremental content import with dry-run support
 
 #### **2.3 Content Management System** 🔄 **NEXT PHASE**
-- [ ] **🚨 CRITICAL: Path Mapping System** - Translate Plex internal paths to accessible file paths (REQUIRED for streaming)
+- [x] **Path Mapping System** - Translate Plex internal paths to accessible file paths (COMPLETED)
 - [ ] **Content Validation** - Verify media files are playable, check codec support, validate metadata
 - [ ] **Error Handling & Recovery** - Robust error handling with retry logic and recovery strategies
 - [ ] **Background Sync Service** - Automated synchronization with configurable intervals

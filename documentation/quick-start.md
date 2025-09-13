@@ -5,21 +5,21 @@
 Retrovue follows a **media-first approach** with a streamlined 6-step process to get your retro IPTV system up and running:
 
 ### **Step 1: Install Requirements** 
-Set up the technical foundation with Python, FFmpeg, and optional Plex integration
+Set up the technical foundation with Python, FFmpeg, and Plex integration
 
-### **Step 2: Run Retrovue**
-Launch the management UI and streaming engine
+### **Step 2: Configure Plex Server**
+Add your Plex server and configure authentication
 
 ### **Step 3: Import Media**
-Connect to Plex server, sync libraries, and configure path mappings
+Sync libraries from Plex and configure path mappings
 
-### **Step 4: Tag & Configure**
-Apply namespaced tags for scheduling and add ratings/parental codes
+### **Step 4: Ingest Content**
+Import movies and TV shows into the Retrovue database
 
-### **Step 5: Schedule**
+### **Step 5: Schedule** (Coming Soon)
 Create schedule blocks and fill automatically or specify shows
 
-### **Step 6: Stream**
+### **Step 6: Stream** (Coming Soon)
 Start channel stream and view in VLC or Plex Live TV
 
 ---
@@ -63,60 +63,132 @@ pip install -r requirements.txt
 
 ### **Step 4: Verify Installation**
 ```bash
-python -c "import retrovue; print('Retrovue installed successfully!')"
+# Test the Plex Sync CLI
+python -m cli.plex_sync --help
 ```
 
-## 🎬 Step 3: Import Media - Detailed Instructions
+## 🎬 Step 2: Configure Plex Server
 
-### **Launch the Management Interface**
+### **Get Your Plex Token**
+1. Open Plex Web Interface: `http://your-plex-server:32400/web`
+2. Press `F12` → Network tab → Refresh page
+3. Find `X-Plex-Token` in request headers
+4. Copy the token value
+
+### **Add Plex Server**
 ```bash
-python run_ui.py
+python -m cli.plex_sync servers add \
+  --db ./retrovue.db \
+  --name "HomePlex" \
+  --base-url "http://your-plex-server:32400" \
+  --token "your-plex-token-here"
 ```
 
-### **Import Content from Plex (Primary Method)**
-1. **Get Your Plex Token**:
-   - Open Plex Web Interface: `http://your-plex-server:32400/web`
-   - Press `F12` → Network tab → Refresh page
-   - Find `X-Plex-Token` in request headers
-   - Copy the token value
+### **Set as Default Server**
+```bash
+python -m cli.plex_sync servers set-default \
+  --db ./retrovue.db \
+  --server-name "HomePlex"
+```
 
-2. **Add Plex Server**:
-   - Click "Import" tab in Retrovue
-   - Enter Plex server URL: `http://your-plex-server:32400`
-   - Enter your Plex token
-   - Click "Test Connection"
-   - Click "Sync Libraries"
+### **Verify Server Connection**
+```bash
+python -m cli.plex_sync servers list --db ./retrovue.db
+```
 
-3. **Configure Path Mappings** (Critical for Streaming):
-   - Navigate to Settings → Path Mappings
-   - Map Plex internal paths to accessible local paths
-   - Example: `/media/movies` → `R:\movies`
-   - Test each mapping to ensure files are accessible
+## 🎬 Step 3: Import Media Libraries
 
-4. **Browse Your Content**:
-   - Click "Browser" tab
-   - View your imported movies and TV shows
-   - Content is now ready for tagging and scheduling!
+### **Sync Libraries from Plex**
+```bash
+python -m cli.plex_sync libraries sync-from-plex \
+  --db ./retrovue.db \
+  --enable-all
+```
 
-### **Import from TinyMediaManager (Alternative Method)**
-1. **Configure TMM Directories**:
-   - Go to Settings → TMM Directories
-   - Add directories containing .nfo files
-   - Enable subdirectory scanning if needed
+### **List Available Libraries**
+```bash
+python -m cli.plex_sync libraries list --db ./retrovue.db
+```
 
-2. **Sync TMM Content**:
-   - Click "Import" tab → TMM Sync
-   - Select directories to scan
-   - Review imported content and metadata
+### **Configure Path Mappings** (Critical for Streaming)
+```bash
+# Add path mapping for movies
+python -m cli.plex_sync add-mapping \
+  --db ./retrovue.db \
+  --server-id 1 \
+  --library-id 1 \
+  --plex-prefix "/data/Movies" \
+  --local-prefix "C:\Media\Movies"
 
-### **Manual Content Entry**
-1. **Add Manual Content**:
-   - Click "Add Content" button
-   - Enter media file path
-   - Fill in basic metadata (title, type, duration)
-   - Save to database
+# Add path mapping for TV shows
+python -m cli.plex_sync add-mapping \
+  --db ./retrovue.db \
+  --server-id 1 \
+  --library-id 2 \
+  --plex-prefix "/data/TV" \
+  --local-prefix "C:\Media\TV"
+```
 
-## 🏷️ Step 4: Tag & Configure - Advanced Metadata Management
+### **Test Path Resolution**
+```bash
+python -m cli.plex_sync resolve-path \
+  --db ./retrovue.db \
+  --server-id 1 \
+  --library-id 1 \
+  --plex-path "/data/Movies/Test.mkv"
+```
+
+## 🎬 Step 4: Ingest Content
+
+### **Preview Content (Optional)**
+```bash
+python -m cli.plex_sync preview-items \
+  --db ./retrovue.db \
+  --library-key 1 \
+  --kind movie \
+  --limit 5
+```
+
+### **Ingest Content (Dry Run First)**
+```bash
+python -m cli.plex_sync ingest \
+  --db ./retrovue.db \
+  --mode full \
+  --dry-run
+```
+
+### **Ingest Content (Commit to Database)**
+```bash
+python -m cli.plex_sync ingest \
+  --db ./retrovue.db \
+  --mode full \
+  --commit
+```
+
+### **Check Ingest Status**
+```bash
+python -m cli.plex_sync ingest-status --db ./retrovue.db
+```
+
+## 🎬 Step 5: Schedule (Coming Soon)
+
+The scheduling system is currently in development. Once available, you'll be able to:
+
+- Create schedule blocks and timelines
+- Drag and drop content into schedules
+- Set up multiple channels
+- Configure commercial breaks and transitions
+
+## 🎬 Step 6: Stream (Coming Soon)
+
+The streaming engine is currently in development. Once available, you'll be able to:
+
+- Start 24/7 TV channels
+- Stream to VLC, Plex Live TV, and other IPTV clients
+- Monitor channel status and performance
+- Handle multiple simultaneous streams
+
+## 🏷️ Advanced Metadata Management (Future)
 
 ### **Apply Namespaced Tags**
 Retrovue uses a powerful **namespaced tagging system** for flexible content organization:

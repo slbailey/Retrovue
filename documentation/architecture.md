@@ -40,18 +40,16 @@ Content is organized using **namespaced tags** that drive scheduling and ad targ
 ## 🧩 Core Components
 
 ### **1. Ingestion System**
-The **Ingestion System** is responsible for bringing content into Retrovue from various sources:
+The **Ingestion System** is responsible for bringing content into Retrovue from Plex Media Server:
 
-#### **Primary Metadata Sources**
-- **Plex Integration**: Automatically imports movies, TV shows, and metadata from Plex Media Server
-- **TinyMediaManager (TMM)**: Imports content and metadata from TMM .nfo files
-- **Manual UI Entries**: Supports direct content entry for non-Plex/TMM media
+#### **Primary Metadata Source**
+- **Plex Integration**: Automatically imports movies, TV shows, and metadata from Plex Media Server via the Plex Sync CLI
 
 #### **Path Mapping Resolution**
 - **Plex Path Translation**: Converts Plex internal paths to accessible local file paths
-- **TMM Directory Mapping**: Maps TMM directory structures to local storage
 - **Cross-Platform Support**: Handles Windows, macOS, and Linux path differences
 - **Storage Validation**: Ensures all mapped paths point to accessible media files
+- **Longest Prefix Matching**: Uses efficient path resolution with cached mappings
 
 #### **Content Validation**
 - **File Accessibility**: Verifies that all media files can be opened and played
