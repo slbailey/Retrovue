@@ -43,9 +43,12 @@ class PathMapper:
         Returns:
             Normalized path
         """
-        # Convert backslashes to forward slashes for consistent comparison
-        # Treat Plex paths as POSIX (forward slashes)
-        return path.replace('\\', '/')
+        if not path:
+            return ""
+        
+        # Convert backslashes to forward slashes and trim trailing slashes
+        normalized = path.replace('\\', '/').rstrip('/')
+        return normalized
     
     def _get_mappings(self, server_id: int, library_id: int) -> List[Mapping]:
         """
@@ -93,7 +96,7 @@ class PathMapper:
         logger.debug(f"Loaded {len(mappings)} path mappings")
         return mappings
     
-    def resolve(self, server_id: int, library_id: int, plex_path: str) -> Optional[str]:
+    def resolve(self, server_id: int, library_id: int, plex_path: str, case_sensitive: bool = (os.name != 'nt')) -> Optional[str]:
         """
         Resolve a Plex path to a local path using longest-prefix matching.
         
@@ -101,6 +104,8 @@ class PathMapper:
             server_id: Server ID
             library_id: Library ID
             plex_path: Plex file path
+            case_sensitive: Whether to perform case-sensitive matching 
+                          (default: False on Windows, True on other platforms)
             
         Returns:
             Local file path if mapping found, None otherwise
@@ -115,20 +120,37 @@ class PathMapper:
         
         # Find longest matching prefix
         for mapping in mappings:
-            if plex_path_norm.startswith(mapping.plex_prefix_norm):
-                # Replace the prefix in the original plex_path (preserve case/slashes)
-                local_path = plex_path.replace(mapping.plex_prefix, mapping.local_prefix, 1)
-                
-                # Handle path separators properly
-                if not mapping.local_prefix.endswith(('/', '\\')):
-                    # If local_prefix doesn't end with separator, use os.path.join
-                    remainder = plex_path[len(mapping.plex_prefix):]
-                    if remainder.startswith(('/', '\\')):
-                        remainder = remainder[1:]
-                    local_path = os.path.join(mapping.local_prefix, remainder)
-                
-                logger.debug(f"Mapped {plex_path} -> {local_path}")
-                return local_path
+            # Normalize both stored prefix and incoming path
+            stored_prefix_norm = self._normalize_path(mapping.plex_prefix)
+            local_prefix_norm = self._normalize_path(mapping.local_prefix)
+            
+            # Perform comparison (case-sensitive or case-insensitive)
+            if case_sensitive:
+                if plex_path_norm.startswith(stored_prefix_norm):
+                    match_prefix = stored_prefix_norm
+                    match_local = local_prefix_norm
+                else:
+                    continue
+            else:
+                if plex_path_norm.lower().startswith(stored_prefix_norm.lower()):
+                    match_prefix = stored_prefix_norm
+                    match_local = local_prefix_norm
+                else:
+                    continue
+            
+            # Compute the remainder from the normalized strings
+            remainder = plex_path_norm[len(match_prefix):]
+            if remainder.startswith('/'):
+                remainder = remainder[1:]
+            
+            # Join with local prefix using os.path.join and normalize
+            if remainder:
+                local_path = os.path.normpath(os.path.join(match_local, *remainder.split('/')))
+            else:
+                local_path = os.path.normpath(match_local)
+            
+            logger.debug(f"Mapped {plex_path} -> {local_path}")
+            return local_path
         
         logger.warning(f"No path mapping found for: {plex_path}")
         return None

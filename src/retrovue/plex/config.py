@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
+# Centralized exit codes
+OFFLINE_EXIT = 3
+
 
 @dataclass
 class PlexConfig:

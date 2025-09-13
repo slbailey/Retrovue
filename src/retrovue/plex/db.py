@@ -297,144 +297,73 @@ class Db:
         self.commit()
         return season_id
     
-    # Content item operations
-    
-    def upsert_movie(
-        self, 
-        content_item: ContentItemData,
-        plex_rating_key: str
-    ) -> int:
-        """
-        Upsert a movie.
-        
-        Args:
-            content_item: ContentItemData object
-            plex_rating_key: Plex rating key for the movie
-            
-        Returns:
-            Movie ID
-        """
-        logger.debug(f"Upserting movie: {content_item.title}")
-        
-        # Check if movie exists (by plex_rating_key)
-        cursor = self.execute(
-            "SELECT id FROM movies WHERE plex_rating_key = ?",
-            (plex_rating_key,)
-        )
-        existing = cursor.fetchone()
-        
-        if existing:
-            movie_id = existing['id']
-            logger.debug(f"Movie exists with ID: {movie_id}")
-        else:
-            # Insert new movie
-            cursor = self.execute(
-                """INSERT INTO movies 
-                   (plex_rating_key, title, year, summary, duration_ms, content_rating, rating)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (plex_rating_key, content_item.title, None, content_item.synopsis, 
-                 content_item.duration_ms, content_item.rating_code, None)
-            )
-            movie_id = cursor.lastrowid
-            logger.info(f"Created new movie with ID: {movie_id}")
-        
-        self.commit()
-        return movie_id
-    
-    def upsert_episode(
-        self, 
-        content_item: ContentItemData,
-        plex_rating_key: str
-    ) -> int:
-        """
-        Upsert an episode.
-        
-        Args:
-            content_item: ContentItemData object
-            plex_rating_key: Plex rating key for the episode
-            
-        Returns:
-            Episode ID
-        """
-        logger.debug(f"Upserting episode: {content_item.title}")
-        
-        # Check if episode exists (by plex_rating_key)
-        cursor = self.execute(
-            "SELECT id FROM episodes WHERE plex_rating_key = ?",
-            (plex_rating_key,)
-        )
-        existing = cursor.fetchone()
-        
-        if existing:
-            episode_id = existing['id']
-            logger.debug(f"Episode exists with ID: {episode_id}")
-        else:
-            # Insert new episode
-            cursor = self.execute(
-                """INSERT INTO episodes 
-                   (plex_rating_key, show_title, season_number, episode_number, title, year, 
-                    summary, duration_ms, content_rating, rating)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (plex_rating_key, content_item.show_title or "Unknown Show", 
-                 content_item.season_number or 1, content_item.episode_number or 1,
-                 content_item.title, None, content_item.synopsis, 
-                 content_item.duration_ms, content_item.rating_code, None)
-            )
-            episode_id = cursor.lastrowid
-            logger.info(f"Created new episode with ID: {episode_id}")
-        
-        self.commit()
-        return episode_id
+    # Content item operations (v1.2.3 schema)
     
     # Media file operations
     
     def upsert_media_file(
         self, 
         media_file: MediaFileData,
-        movie_id: Optional[int] = None,
-        episode_id: Optional[int] = None
+        server_id: int, 
+        library_id: int, 
+        content_item_id: int
     ) -> int:
         """
-        Upsert a media file.
+        Upsert a media file using the v1.2.3 schema.
         
         Args:
             media_file: MediaFileData object
-            movie_id: Movie ID (if this is a movie file)
-            episode_id: Episode ID (if this is an episode file)
+            server_id: Server ID
+            library_id: Library ID
+            content_item_id: Content item ID
             
         Returns:
             Media file ID
         """
-        logger.debug(f"Upserting media file: {media_file.file_path}")
+        import time
+        current_time = int(time.time())
         
-        # Validate that exactly one of movie_id or episode_id is provided
-        if (movie_id is None) == (episode_id is None):
-            raise ValueError("Exactly one of movie_id or episode_id must be provided")
-        
-        # Check if media file exists (by plex_file_path)
-        cursor = self.execute(
-            "SELECT id FROM media_files WHERE plex_file_path = ?",
-            (media_file.file_path,)
-        )
-        existing = cursor.fetchone()
-        
-        if existing:
-            media_file_id = existing['id']
-            logger.debug(f"Media file exists with ID: {media_file_id}")
-        else:
-            # Insert new media file
-            cursor = self.execute(
-                """INSERT INTO media_files 
-                   (movie_id, episode_id, plex_file_path, local_file_path, file_size_bytes,
-                    video_codec, audio_codec, width, height, duration_ms, container)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (movie_id, episode_id, media_file.file_path, None, media_file.size_bytes,
-                 media_file.video_codec, media_file.audio_codec, media_file.width, 
-                 media_file.height, None, media_file.container)
+        cursor = self.execute("""
+            INSERT INTO media_files(
+                server_id, library_id, content_item_id, plex_rating_key, file_path,
+                size_bytes, container, video_codec, audio_codec, width, height, bitrate,
+                frame_rate, channels, updated_at_plex, first_seen_at, last_seen_at
             )
-            media_file_id = cursor.lastrowid
-            logger.info(f"Created new media file with ID: {media_file_id}")
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(server_id, file_path) DO UPDATE SET
+                content_item_id=excluded.content_item_id,
+                size_bytes=excluded.size_bytes,
+                container=excluded.container,
+                video_codec=excluded.video_codec,
+                audio_codec=excluded.audio_codec,
+                width=excluded.width,
+                height=excluded.height,
+                bitrate=excluded.bitrate,
+                frame_rate=excluded.frame_rate,
+                channels=excluded.channels,
+                updated_at_plex=excluded.updated_at_plex,
+                last_seen_at=excluded.last_seen_at
+        """, (
+            server_id,
+            library_id,
+            content_item_id,
+            media_file.plex_rating_key,
+            media_file.file_path,
+            media_file.size_bytes,
+            media_file.container,
+            media_file.video_codec,
+            media_file.audio_codec,
+            media_file.width,
+            media_file.height,
+            media_file.bitrate,
+            media_file.frame_rate,
+            media_file.channels,
+            media_file.updated_at_plex,
+            current_time,  # first_seen_at
+            current_time   # last_seen_at
+        ))
         
+        media_file_id = cursor.lastrowid
         self.commit()
         return media_file_id
     
@@ -842,65 +771,6 @@ class Db:
         self.commit()
         return content_item_id
     
-    def upsert_media_file(self, media_file, server_id: int, library_id: int, content_item_id: int) -> int:
-        """
-        Upsert a media file.
-        
-        Args:
-            media_file: MediaFileData object
-            server_id: Server ID
-            library_id: Library ID
-            content_item_id: Content item ID
-            
-        Returns:
-            Media file ID
-        """
-        import time
-        current_time = int(time.time())
-        
-        cursor = self.execute("""
-            INSERT INTO media_files(
-                server_id, library_id, content_item_id, plex_rating_key, file_path,
-                size_bytes, container, video_codec, audio_codec, width, height, bitrate,
-                frame_rate, channels, updated_at_plex, first_seen_at, last_seen_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(server_id, file_path) DO UPDATE SET
-                content_item_id=excluded.content_item_id,
-                size_bytes=excluded.size_bytes,
-                container=excluded.container,
-                video_codec=excluded.video_codec,
-                audio_codec=excluded.audio_codec,
-                width=excluded.width,
-                height=excluded.height,
-                bitrate=excluded.bitrate,
-                frame_rate=excluded.frame_rate,
-                channels=excluded.channels,
-                updated_at_plex=excluded.updated_at_plex,
-                last_seen_at=excluded.last_seen_at
-        """, (
-            server_id,
-            library_id,
-            content_item_id,
-            media_file.plex_rating_key,
-            media_file.file_path,
-            media_file.size_bytes,
-            media_file.container,
-            media_file.video_codec,
-            media_file.audio_codec,
-            media_file.width,
-            media_file.height,
-            media_file.bitrate,
-            media_file.frame_rate,
-            media_file.channels,
-            media_file.updated_at_plex,
-            current_time,  # first_seen_at
-            current_time   # last_seen_at
-        ))
-        
-        media_file_id = cursor.lastrowid
-        self.commit()
-        return media_file_id
     
     def link_content_item_file(self, content_item_id: int, media_file_id: int, role: str = 'primary') -> None:
         """

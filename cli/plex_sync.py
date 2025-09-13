@@ -20,6 +20,7 @@ from retrovue.plex.guid import GuidParser
 from retrovue.plex.pathmap import PathMapper
 from retrovue.plex.mapper import Mapper
 from retrovue.plex.db import Db
+from retrovue.plex.config import OFFLINE_EXIT
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -51,7 +52,7 @@ def parse_args():
                 global_flags['format'] = sys.argv[i + 1]
                 i += 2
             else:
-                global_flags['format'] = True
+                global_flags['format'] = 'json'
                 i += 1
         elif arg.startswith('--format='):
             global_flags['format'] = arg.split('=', 1)[1]
@@ -467,31 +468,52 @@ def cmd_libraries_list(args):
             
             libraries = db.list_libraries(server_id_filter)
             
-            if not libraries:
-                print("No libraries found")
-                return
-            
-            print(f"Libraries (showing {len(libraries)}):")
-            print(f"{'ID':<4} {'Key':<6} {'Title':<20} {'Type':<8} {'Sync':<5} {'Last Full':<20} {'Last Incr':<20}")
-            print("-" * 90)
-            
-            for lib in libraries:
-                sync_status = "ON" if lib['sync_enabled'] else "OFF"
+            # Check for JSON format
+            if args.get('format') == 'json':
+                result = {
+                    "libraries": [
+                        {
+                            "id": lib['id'],
+                            "server_id": lib['server_id'],
+                            "plex_library_key": lib['plex_library_key'],
+                            "title": lib['title'],
+                            "library_type": lib['library_type'],
+                            "sync_enabled": bool(lib['sync_enabled']),
+                            "last_full_sync_epoch": lib['last_full_sync_epoch'],
+                            "last_incremental_sync_epoch": lib['last_incremental_sync_epoch'],
+                            "created_at": lib['created_at'],
+                            "updated_at": lib['updated_at']
+                        }
+                        for lib in libraries
+                    ]
+                }
+                print(json.dumps(result))
+            else:
+                if not libraries:
+                    print("No libraries found")
+                    return
                 
-                # Format timestamps
-                last_full = "Never"
-                if lib['last_full_sync_epoch']:
-                    import datetime
-                    dt = datetime.datetime.fromtimestamp(lib['last_full_sync_epoch'])
-                    last_full = f"{dt.strftime('%Y-%m-%d %H:%M')}"
+                print(f"Libraries (showing {len(libraries)}):")
+                print(f"{'ID':<4} {'Key':<6} {'Title':<20} {'Type':<8} {'Sync':<5} {'Last Full':<20} {'Last Incr':<20}")
+                print("-" * 90)
                 
-                last_incr = "Never"
-                if lib['last_incremental_sync_epoch']:
-                    import datetime
-                    dt = datetime.datetime.fromtimestamp(lib['last_incremental_sync_epoch'])
-                    last_incr = f"{dt.strftime('%Y-%m-%d %H:%M')}"
-                
-                print(f"{lib['id']:<4} {lib['plex_library_key']:<6} {lib['title'][:19]:<20} {lib['library_type']:<8} {sync_status:<5} {last_full:<20} {last_incr:<20}")
+                for lib in libraries:
+                    sync_status = "ON" if lib['sync_enabled'] else "OFF"
+                    
+                    # Format timestamps
+                    last_full = "Never"
+                    if lib['last_full_sync_epoch']:
+                        import datetime
+                        dt = datetime.datetime.fromtimestamp(lib['last_full_sync_epoch'])
+                        last_full = f"{dt.strftime('%Y-%m-%d %H:%M')}"
+                    
+                    last_incr = "Never"
+                    if lib['last_incremental_sync_epoch']:
+                        import datetime
+                        dt = datetime.datetime.fromtimestamp(lib['last_incremental_sync_epoch'])
+                        last_incr = f"{dt.strftime('%Y-%m-%d %H:%M')}"
+                    
+                    print(f"{lib['id']:<4} {lib['plex_library_key']:<6} {lib['title'][:19]:<20} {lib['library_type']:<8} {sync_status:<5} {last_full:<20} {last_incr:<20}")
                 
     except ValueError as e:
         print(f"[ERROR] {e}")
@@ -535,7 +557,7 @@ def cmd_libraries_sync(args):
     # Check for offline mode
     if args.get('offline'):
         print("[ERROR] Offline mode: network operations disabled.")
-        sys.exit(3)
+        sys.exit(OFFLINE_EXIT)
     
     try:
         # Lazy import to avoid pulling requests for non-network commands
@@ -567,11 +589,17 @@ def cmd_libraries_sync(args):
                 # Check if library already exists
                 existing = db.get_library_by_key(server['id'], plex_lib.key)
                 
+                # Use section type (movie/show) instead of item kind
+                library_type = plex_lib.type
+                if library_type not in ['movie', 'show']:
+                    logger.warning(f"Unknown library type '{library_type}' for library {plex_lib.key}, defaulting to 'movie'")
+                    library_type = 'movie'
+                
                 library_id = db.upsert_library(
                     server['id'], 
                     int(plex_lib.key), 
                     plex_lib.title, 
-                    plex_lib.type
+                    library_type
                 )
                 
                 if existing:
@@ -623,10 +651,10 @@ def cmd_libraries_sync(args):
                     print(f"[ERROR] Authentication failed (HTTP {e.response.status_code}): Invalid token")
                 else:
                     print(f"[ERROR] HTTP error {e.response.status_code}: {e}")
-                sys.exit(3)
+                sys.exit(OFFLINE_EXIT)
             else:
                 print(f"[ERROR] Connection failed: {e}")
-                sys.exit(3)
+                sys.exit(OFFLINE_EXIT)
         else:
             print(f"[ERROR] Failed to sync libraries from Plex: {e}")
             sys.exit(1)
@@ -753,12 +781,21 @@ def cmd_libraries_delete(args):
                 library_count = len(libraries)
                 
                 if library_count == 0:
-                    print(f"[OK] No libraries found for server '{server_name_display}' (ID: {server_id_filter})")
+                    if args.get('format') == 'json':
+                        result = {"libraries": []}
+                        print(json.dumps(result))
+                    else:
+                        print(f"[OK] No libraries found for server '{server_name_display}' (ID: {server_id_filter})")
                     return
                 
                 # Delete all libraries for the server
                 rows_affected = db.delete_all_libraries_for_server(server_id_filter)
-                print(f"[OK] Deleted {rows_affected} libraries from server '{server_name_display}' (ID: {server_id_filter})")
+                
+                if args.get('format') == 'json':
+                    result = {"libraries": []}
+                    print(json.dumps(result))
+                else:
+                    print(f"[OK] Deleted {rows_affected} libraries from server '{server_name_display}' (ID: {server_id_filter})")
                 
         except ValueError as e:
             print(f"[ERROR] {e}")
@@ -1007,7 +1044,7 @@ def cmd_ingest_run(args):
     # Check for offline mode
     if args.get('offline'):
         print("[ERROR] Offline mode: network operations disabled.")
-        sys.exit(3)
+        sys.exit(OFFLINE_EXIT)
     
     try:
         # Lazy import to avoid pulling requests for non-network commands
@@ -1106,10 +1143,10 @@ def cmd_ingest_run(args):
                     print(f"[ERROR] Authentication failed (HTTP {e.response.status_code}): Invalid token")
                 else:
                     print(f"[ERROR] HTTP error {e.response.status_code}: {e}")
-                sys.exit(3)
+                sys.exit(OFFLINE_EXIT)
             else:
                 print(f"[ERROR] Connection failed: {e}")
-                sys.exit(3)
+                sys.exit(OFFLINE_EXIT)
         else:
             print(f"[ERROR] Ingest failed: {e}")
             sys.exit(1)
@@ -1211,7 +1248,7 @@ def cmd_items_preview(args):
     # Check for offline mode
     if args.get('offline'):
         print("[ERROR] Offline mode: network operations disabled.")
-        sys.exit(3)
+        sys.exit(OFFLINE_EXIT)
     
     try:
         # Lazy import to avoid pulling requests for non-network commands
@@ -1257,10 +1294,10 @@ def cmd_items_preview(args):
                     print(f"[ERROR] Library {library_key} not found")
                 else:
                     print(f"[ERROR] HTTP error {e.response.status_code}: {e}")
-                sys.exit(3)
+                sys.exit(OFFLINE_EXIT)
             else:
                 print(f"[ERROR] Connection failed: {e}")
-                sys.exit(3)
+                sys.exit(OFFLINE_EXIT)
         else:
             print(f"[ERROR] Failed to fetch items: {e}")
             sys.exit(1)
