@@ -122,39 +122,30 @@ content_items (
 
 ### **Media Files (Physical File Storage)**
 ```sql
+-- MEDIA FILES (polymorphic via two FKs; exactly one must be set)
 media_files (
     id INTEGER PRIMARY KEY,
-    server_id INTEGER NOT NULL REFERENCES plex_servers(id) ON DELETE CASCADE,
-    library_id INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
-    content_item_id INTEGER REFERENCES content_items(id) ON DELETE SET NULL,
-    plex_rating_key TEXT NOT NULL,     -- Plex's unique identifier
-    file_path TEXT NOT NULL,           -- Local accessible file path
-    size_bytes INTEGER,                -- File size in bytes
-    container TEXT,                    -- Container format (mp4, mkv, etc.)
-    video_codec TEXT,                  -- Video codec
-    audio_codec TEXT,                  -- Audio codec
+    movie_id   INTEGER,                -- References movies(id) if this is a movie file
+    episode_id INTEGER,                -- References episodes(id) if this is an episode file
+    plex_file_path   TEXT NOT NULL,    -- Plex file path
+    local_file_path  TEXT,             -- Local accessible file path
+    file_size_bytes  INTEGER,          -- File size in bytes
+    video_codec      TEXT,             -- Video codec
+    audio_codec      TEXT,             -- Audio codec
     width INTEGER,                     -- Video width
     height INTEGER,                    -- Video height
-    bitrate INTEGER,                   -- Bitrate
-    frame_rate REAL,                   -- Frame rate
-    channels INTEGER,                  -- Audio channels
-    updated_at_plex INTEGER,           -- EPOCH SECONDS from Plex
-    first_seen_at INTEGER,             -- EPOCH SECONDS
-    last_seen_at INTEGER,              -- EPOCH SECONDS
+    duration_ms INTEGER,               -- Duration in milliseconds
+    container TEXT,                    -- Container format (mp4, mkv, etc.)
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (datetime('now')),
+    CHECK ((movie_id IS NOT NULL) <> (episode_id IS NOT NULL)),
+    FOREIGN KEY (movie_id)   REFERENCES movies(id)   ON DELETE CASCADE,
+    FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE
 )
 ```
 
-### **Content Item Files (Content-to-Media Mapping)**
-```sql
-content_item_files (
-    content_item_id INTEGER NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
-    media_file_id INTEGER NOT NULL REFERENCES media_files(id) ON DELETE CASCADE,
-    role TEXT NOT NULL DEFAULT 'primary',  -- 'primary', 'secondary', 'trailer', etc.
-    PRIMARY KEY (content_item_id, media_file_id, role)
-)
-```
+**Note**: The `media_files` table is polymorphic via two foreign keys (`movie_id` and `episode_id`). Exactly one of these must be set (enforced by a CHECK constraint), allowing the same table to store files for both movies and episodes while maintaining referential integrity.
+
 
 ### **Content Tags (Namespaced Tagging System)**
 ```sql
