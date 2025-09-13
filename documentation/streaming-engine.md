@@ -71,7 +71,7 @@ ffmpeg -i input.mp4 \
 
 ## 🎯 Streaming Modes
 
-### **Phase 1: Simple Loop Mode** ✅ **IMPLEMENTED**
+### **Loop Mode (Basic)** ✅ **IMPLEMENTED**
 ```bash
 # Single channel with simple content looping
 python main.py
@@ -79,8 +79,9 @@ python main.py
 - **Use Case**: Proof of concept and testing
 - **Features**: Basic HLS streaming with content looping
 - **Limitations**: Single channel, no scheduling, simple transitions
+- **Best For**: Initial setup and testing
 
-### **Phase 2: Concat Mode** ✅ **IMPLEMENTED**
+### **Concat Mode (Advanced)** ✅ **IMPLEMENTED**
 ```bash
 # ErsatzTV-style concatenation mode
 python main.py --mode concat
@@ -88,8 +89,9 @@ python main.py --mode concat
 - **Use Case**: More sophisticated content playback
 - **Features**: Better content transitions, improved timing
 - **Limitations**: Still single channel, limited scheduling
+- **Best For**: Production use with single channel
 
-### **Phase 3: Multi-Channel Mode** 🔄 **PLANNED**
+### **Multi-Channel Mode (Future)** 🔄 **PLANNED**
 ```bash
 # Multiple simultaneous channels
 python main.py --channels 3 --port 8080
@@ -97,6 +99,82 @@ python main.py --channels 3 --port 8080
 - **Use Case**: Full broadcast TV simulation
 - **Features**: Multiple channels, scheduling, emergency overrides
 - **Benefits**: Professional broadcast TV experience
+- **Best For**: Complete TV network simulation
+
+## 🎛️ Streaming Engine Responsibilities
+
+### **Core Responsibilities**
+The streaming engine is responsible for:
+
+#### **Schedule Instance Processing**
+- **Read Schedule Instances**: Process scheduled content from the database
+- **Content Validation**: Ensure all scheduled content is accessible and playable
+- **Timing Management**: Maintain precise timing for scheduled content
+- **Transition Handling**: Manage smooth transitions between content items
+
+#### **Ad Break Management**
+- **Media Markers Integration**: Use `media_markers` table to define ad break points
+- **Chapter Integration**: Integrate with video chapter markers for automatic ad placement
+- **Manual Override**: Allow manual ad break placement and timing
+- **Commercial Insertion**: Seamlessly insert commercials during ad breaks
+
+#### **EPG/Guide Data Export**
+- **Plex Live TV**: Export Electronic Program Guide data for Plex Live TV integration
+- **Prevue Channel**: Generate program guide data for Prevue-style channel information
+- **Real-time Updates**: Update guide data as schedules change
+- **Standard Formats**: Support industry-standard EPG formats for maximum compatibility
+
+#### **Playback Transition Management**
+- **FFmpeg Integration**: Use FFmpeg for video processing and HLS segment generation
+- **Quality Control**: Maintain consistent video/audio quality across all content
+- **Error Handling**: Manage playback errors and recovery
+- **Performance Monitoring**: Track streaming performance and resource usage
+
+## 🎬 Advanced Ad Handling
+
+### **Ad Break Management System**
+The streaming engine handles ad breaks through multiple approaches:
+
+#### **Ad Break Sources**
+- **Chapter Markers**: Automatic ad break detection from video chapters
+- **Manual Markers**: Custom ad break placement and timing control
+- **Detection Algorithms**: Future support for automatic ad break detection
+- **Plex Integration**: Import ad break markers from Plex metadata
+
+#### **Ad Policy Enforcement**
+- **Brand Separation**: Prevent competing brands from airing together
+- **Category Separation**: Control commercial category placement
+- **Audience Targeting**: Match commercials to appropriate content
+- **Seasonal Targeting**: Schedule seasonal commercials appropriately
+- **Duration Management**: Control commercial break length and timing
+
+#### **Commercial Insertion Process**
+1. **Marker Detection**: Identify ad break points in content
+2. **Commercial Selection**: Choose appropriate commercials based on policies
+3. **Timing Calculation**: Calculate precise insertion timing
+4. **Seamless Integration**: Insert commercials without disrupting flow
+5. **Quality Maintenance**: Ensure consistent video/audio quality
+
+### **Overlay System (Future)**
+Placeholder support for advanced graphics and overlays:
+
+#### **Logo Bugs**
+- **Station Branding**: Display station logos and branding
+- **Timing Control**: Show/hide logos at specific cue points
+- **Positioning**: Flexible logo placement and sizing
+- **Transparency**: Support for semi-transparent overlays
+
+#### **Lower Thirds**
+- **Show Information**: Display show titles and information
+- **Dynamic Updates**: Update information based on current content
+- **Styling**: Customizable appearance and animation
+- **Timing**: Precise control over display duration
+
+#### **Emergency Graphics**
+- **Alert Overlays**: Emergency information and alerts
+- **Priority System**: Override normal programming with alerts
+- **Channel Targeting**: Target specific channels or all channels
+- **Duration Control**: Set alert duration and return timing
 
 ## 🎬 Content Processing
 

@@ -170,12 +170,12 @@ The system includes comprehensive error handling:
 ### API Endpoints Used
 - `/library/sections`: List all libraries
 - `/library/sections/{key}/all`: Get all items in library
-- `/library/sections/{key}/allLeaves`: Get all episodes (TV shows)
+- `/library/metadata/{key}/children`: Get children (seasons/episodes) of shows
 - `/status/sessions`: Test server connectivity
 
 ### Database Integration
 - Stores servers in `plex_servers` table
-- Stores path mappings in `plex_path_mappings` table
+- Stores path mappings in `path_mappings` table
 - Stores content in `media_files`, `movies`, `shows`, `episodes` tables
 - Maintains proper relationships between all entities
 
@@ -203,11 +203,224 @@ to ensure reliable operation even with large libraries.
 import requests
 import xml.etree.ElementTree as ET
 import xmltodict
+import hashlib
+import os
+import logging
+import time
+from datetime import datetime
 from typing import List, Dict, Optional, Any
 from .database import RetrovueDatabase
-from .path_mapping import PlexPathMappingService
+from .path_mapping import resolve_local_path
 from .guid_parser import GUIDParser, extract_guids_from_plex_metadata, get_show_disambiguation_key, format_show_for_display
 
+# XML→JSON-ish normalization helpers
+def _coerce_list(x):
+    if x is None:
+        return []
+    return x if isinstance(x, list) else [x]
+
+def _strip_at_keys(obj):
+    """Recursively strip leading '@' from keys in xmltodict-style dicts."""
+    if isinstance(obj, list):
+        return [_strip_at_keys(i) for i in obj]
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            nk = k[1:] if isinstance(k, str) and k.startswith('@') else k
+            out[nk] = _strip_at_keys(v)
+        return out
+    return obj
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Digest System for Change Detection
+# ============================================================================
+
+def streams_signature(media_dict: dict) -> str:
+    """
+    Summarize video/audio/sub track info into a small stable string for change detection.
+    
+    Args:
+        media_dict: Plex media dictionary containing stream information
+        
+    Returns:
+        String signature of the media streams
+    """
+    v = f"v:{media_dict.get('videoCodec', '?')}"
+    a = f"a:{media_dict.get('audioChannels', '?')}@{media_dict.get('audioCodec', '?')}"
+    s = f"s:{media_dict.get('subtitleCount', 0)}"
+    return "|".join([v, a, s])
+
+
+def digest_episode_or_movie(*, rating_key: str, updated_at: int, duration: int, 
+                           file_size: int, part_count: int, streams_signature: str, 
+                           guid_primary: str) -> str:
+    """
+    Create a digest for an episode or movie to detect changes.
+    
+    Args:
+        rating_key: Plex rating key
+        updated_at: Plex updated timestamp
+        duration: Media duration in milliseconds
+        file_size: File size in bytes
+        part_count: Number of media parts
+        streams_signature: Stream signature from streams_signature()
+        guid_primary: Primary GUID for the item
+        
+    Returns:
+        SHA1 hex digest string
+    """
+    h = hashlib.sha1()
+    for v in (rating_key, str(updated_at or 0), str(duration or 0), str(file_size or 0),
+              str(part_count or 0), streams_signature or "", guid_primary or ""):
+        h.update(v.encode("utf-8"))
+        h.update(b"|")
+    return h.hexdigest()
+
+
+def digest_show(child_count: int, leaf_count: int, show_updated_at: int, 
+                children_updated_max: int) -> str:
+    """
+    Create a digest for a show to detect changes at the show level.
+    
+    Args:
+        child_count: Number of child items (seasons)
+        leaf_count: Number of leaf items (episodes)
+        show_updated_at: Show's updated timestamp
+        children_updated_max: Maximum updated timestamp across all children
+        
+    Returns:
+        SHA1 hex digest string
+    """
+    h = hashlib.sha1()
+    for v in (str(child_count or 0), str(leaf_count or 0),
+              str(show_updated_at or 0), str(children_updated_max or 0)):
+        h.update(v.encode("utf-8"))
+        h.update(b"|")
+    return h.hexdigest()
+
+
+def _streams_sig_from_media(media: dict) -> str:
+    """Create streams signature from media dict."""
+    v = f"v:{media.get('videoCodec','?')}"
+    a = f"a:{media.get('audioChannels','?')}@{media.get('audioCodec','?')}"
+    s = f"s:{media.get('subtitleCount', 0)}"
+    return "|".join([v,a,s])
+
+
+
+
+def _summarize_media_from_detail(detail: dict) -> dict:
+    """Normalize fields from Plex detail response into a small dict."""
+    # Expect: detail['Media'][0]['Part'][0] etc. Adjust for your client shape.
+    media = (detail.get('Media') or [{}])[0]
+    part = (media.get('Part') or [{}])[0]
+    return {
+        "duration_ms": int(media.get('duration') or 0),
+        "file_size": int(part.get('size') or 0),
+        "part_count": len(media.get('Part') or []),
+        "streams_signature": _streams_sig_from_media({
+            "videoCodec": media.get('videoCodec'),
+            "audioChannels": media.get('audioChannels'),
+            "audioCodec": media.get('audioCodec'),
+            "subtitleCount": len([s for s in (part.get('Stream') or []) if s.get('streamType') == 3]),
+        }),
+        "guid_primary": (detail.get('Guid') or [{}])[0].get('id') if detail.get('Guid') else None,
+        "plex_path": part.get('file') or ''
+    }
+
+
+def summarize_media_from_item(item: dict) -> dict:
+    """
+    Same fields as _summarize_media_from_detail(), but reads from an episode/movie item
+    that already contains Media/Part (as returned by /children).
+    """
+    media_list = item.get('Media') or []
+    media = media_list[0] if isinstance(media_list, list) and media_list else (media_list or {})
+    parts = media.get('Part') or []
+    part = parts[0] if isinstance(parts, list) and parts else (parts or {})
+
+    subtitle_streams = [s for s in (part.get('Stream') or []) if s.get('streamType') == 3]
+    sig = _streams_sig_from_media({
+        "videoCodec": media.get('videoCodec'),
+        "audioChannels": media.get('audioChannels'),
+        "audioCodec": media.get('audioCodec'),
+        "subtitleCount": len(subtitle_streams),
+    })
+
+    return {
+        "duration": int(media.get('duration') or 0),
+        "duration_ms": int(media.get('duration') or 0),
+        "file_size": int(part.get('size') or 0),
+        "part_count": len(parts) if isinstance(parts, list) else (1 if parts else 0),
+        "streams_signature": sig,
+        "guid_primary": (item.get('Guid') or [{}])[0].get('id') if item.get('Guid') else None,
+        "plex_path": part.get('file') or ''
+    }
+
+
+def summarize_media(detail_dict: dict) -> dict:
+    """
+    Extract and summarize media information from Plex item detail.
+    
+    Args:
+        detail_dict: Plex item detail dictionary
+        
+    Returns:
+        Dictionary with summarized media information
+    """
+    media_info = {
+        'duration': 0,
+        'file_size': 0,
+        'part_count': 0,
+        'streams_signature': '',
+        'plex_path': '',
+        'guid_primary': ''
+    }
+    
+    # Extract media information
+    if 'Media' in detail_dict:
+        media_list = detail_dict['Media']
+        if isinstance(media_list, list) and len(media_list) > 0:
+            media = media_list[0]
+        elif isinstance(media_list, dict):
+            media = media_list
+        else:
+            return media_info
+            
+        media_info['duration'] = int(media.get('duration', 0))
+        media_info['streams_signature'] = streams_signature(media)
+        
+        # Extract part information
+        if 'Part' in media:
+            parts = media['Part']
+            if isinstance(parts, list):
+                media_info['part_count'] = len(parts)
+                if len(parts) > 0:
+                    part = parts[0]
+                    media_info['file_size'] = int(part.get('size', 0))
+                    media_info['plex_path'] = part.get('file', '')
+            elif isinstance(parts, dict):
+                media_info['part_count'] = 1
+                media_info['file_size'] = int(parts.get('size', 0))
+                media_info['plex_path'] = parts.get('file', '')
+    
+    # Extract primary GUID
+    if 'Guid' in detail_dict:
+        guids = detail_dict['Guid']
+        if isinstance(guids, list) and len(guids) > 0:
+            media_info['guid_primary'] = guids[0].get('id', '')
+        elif isinstance(guids, dict):
+            media_info['guid_primary'] = guids.get('id', '')
+    
+    return media_info
+
+
+# ============================================================================
+# Existing Functions
+# ============================================================================
 
 def plex_ts(item: dict) -> int | None:
     """
@@ -326,8 +539,14 @@ class PlexImporter:
             'Accept': 'application/json'
         }
         
-        # Initialize path mapping service for this server
-        self.path_mapping_service = PlexPathMappingService.create_from_database(database, server_id)
+        # Use requests.Session for HTTP connection reuse
+        import requests
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+        
+        # Store database reference for dynamic path resolution
+        self.database = database
+        self.server_id = server_id
     
     def _emit_status(self, message: str, debug_only: bool = False):
         """Emit status message via callback"""
@@ -338,7 +557,7 @@ class PlexImporter:
         """Test connection to Plex server"""
         try:
             url = f"{self.server_url}/status/sessions"
-            response = requests.get(url, headers=self.headers, timeout=10)
+            response = self.session.get(url,  timeout=10)
             return response.status_code == 200
         except Exception as e:
             return False
@@ -347,7 +566,7 @@ class PlexImporter:
         """Get all libraries from Plex server"""
         try:
             url = f"{self.server_url}/library/sections"
-            response = requests.get(url, headers=self.headers)
+            response = self.session.get(url, headers=self.headers)
             response.raise_for_status()
             
             data = parse_plex_response(response)
@@ -373,7 +592,7 @@ class PlexImporter:
         """Get the root paths for a specific library"""
         try:
             url = f"{self.server_url}/library/sections/{library_key}"
-            response = requests.get(url, headers=self.headers)
+            response = self.session.get(url, headers=self.headers)
             response.raise_for_status()
             
             data = parse_plex_response(response)
@@ -393,17 +612,51 @@ class PlexImporter:
             self._emit_status(f"❌ Error getting library root paths: {e}", debug_only=True)
             return []
     
-    def get_library_items(self, library_key: str, library_type: str) -> List[Dict]:
-        """Get all items from a specific library"""
+    def get_library_items(self, library_key: str, library_type: str, start: int = 0, size: int = None) -> List[Dict]:
+        """
+        Get items from a specific library with optional pagination. Works with JSON or XML.
+        """
         try:
             url = f"{self.server_url}/library/sections/{library_key}/all"
-            response = requests.get(url, headers=self.headers)
+            params = {}
+            # Ensure we filter by type so Plex returns a consistent container
+            if str(library_type).lower() in ("show", "shows", "tv"):
+                params["type"] = 2
+            elif str(library_type).lower() in ("movie", "movies", "film", "films"):
+                params["type"] = 1
+
+            # Pagination (Plex accepts these as query params)
+            params["X-Plex-Container-Start"] = max(0, int(start))
+            if size is not None:
+                params["X-Plex-Container-Size"] = int(size)
+
+            print(f"🔍 DEBUG: get_library_items URL: {url}")
+            print(f"🔍 DEBUG: get_library_items params: {params}")
+
+            # IMPORTANT: send headers so token + Accept are applied
+            response = self.session.get(url,  params=params, timeout=30)
             response.raise_for_status()
-            
+
+            print(f"🔍 DEBUG: Response status: {response.status_code}")
+            print(f"🔍 DEBUG: Response content length: {len(response.content)}")
+            print(f"🔍 DEBUG: Content-Type: {response.headers.get('Content-Type')}")
+
             data = parse_plex_response(response)
-            self._emit_status(f"📡 Parsed {response.headers.get('Content-Type', 'unknown')} response from {url}", debug_only=True)
-            
-            return data.get('MediaContainer', {}).get('Metadata', [])
+            # If XML, attributes are '@*' — normalize to plain keys so downstream code sees ratingKey/key/etc.
+            data = _strip_at_keys(data)
+
+            mc = data.get("MediaContainer", {}) if isinstance(data, dict) else {}
+            # In JSON, lists are often under 'Metadata' for shows and movies.
+            # In XML-parsed dicts, shows often come as 'Directory', movies as 'Video'.
+            items = mc.get("Metadata") or mc.get("Directory") or mc.get("Video") or []
+            items = _coerce_list(items)
+
+            # Debugging
+            print(f"🔍 DEBUG: MediaContainer keys: {list(mc.keys()) if isinstance(mc, dict) else 'n/a'}")
+            print(f"🔍 DEBUG: MediaContainer size: {mc.get('size', 'n/a')} totalSize: {mc.get('totalSize', 'n/a')}")
+            print(f"🔍 DEBUG: Found {len(items)} items in response")
+
+            return items
         except Exception as e:
             self._emit_status(f"❌ Error getting library items: {e}", debug_only=True)
             return []
@@ -430,7 +683,7 @@ class PlexImporter:
             if year:
                 params['year'] = year
             
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self.session.get(url,  params=params)
             response.raise_for_status()
             
             data = response.json()
@@ -472,100 +725,23 @@ class PlexImporter:
             self._emit_status(f"❌ Error discovering shows: {e}")
             return []
     
-    def get_library_episode_count(self, section_key: str) -> int:
-        """Get total episode count for a library section using allLeaves endpoint"""
-        try:
-            all_leaves_url = f"{self.server_url}/library/sections/{section_key}/allLeaves"
-            # Use a small page size to get just the container info
-            params = {'X-Plex-Container-Start': 0, 'X-Plex-Container-Size': 1}
-            response = requests.get(all_leaves_url, headers=self.headers, params=params)
-            response.raise_for_status()
-            
-            episodes_data = parse_plex_response(response)
-            media_container = episodes_data.get('MediaContainer', {})
-            total_episodes = media_container.get('size', 0)
-            
-            return total_episodes
-        except Exception as e:
-            self._emit_status(f"❌ Error getting episode count: {e}")
-            return 0
     
     def get_show_episodes(self, show_key: str) -> List[Dict]:
-        """Get all episodes for a specific show using allLeaves endpoint with pagination support"""
+        """Get all episodes for a specific show using /children endpoint (standardized approach)"""
         try:
+            # Use the standardized /children approach
+            seasons = self._fetch_show_children(show_key)
             all_episodes = []
-            start = 0
-            size = 50  # Default page size
             
-            while True:
-                # Use allLeaves endpoint to get episodes with pagination
-                all_leaves_url = f"{self.server_url}{show_key}/allLeaves"
-                params = {'X-Plex-Container-Start': start, 'X-Plex-Container-Size': size}
-                
-                response = requests.get(all_leaves_url, headers=self.headers, params=params)
-                response.raise_for_status()
-                
-                episodes_data = parse_plex_response(response)
-                self._emit_status(f"📡 Parsed {response.headers.get('Content-Type', 'unknown')} response from {all_leaves_url} (start={start}, size={size})", debug_only=True)
-                
-                media_container = episodes_data.get('MediaContainer', {})
-                episodes = media_container.get('Metadata', [])
-                
-                if not episodes:
-                    # No more episodes, we're done
-                    break
-                
+            for season in seasons:
+                episodes = self._fetch_season_children(season['ratingKey'])
                 all_episodes.extend(episodes)
-                
-                # Check if we got a partial response (pagination needed)
-                container_size = media_container.get('size', 0)
-                container_start = media_container.get('offset', 0)
-                
-                if len(episodes) < size or container_start + len(episodes) >= container_size:
-                    # We got all episodes in this page or reached the end
-                    break
-                
-                # Move to next page
-                start += size
-                
-                # Safety check to prevent infinite loops
-                if start > 10000:  # Reasonable limit for episode count
-                    self._emit_status(f"⚠️ Pagination limit reached at {start} episodes, stopping", debug_only=True)
-                    break
             
             self._emit_status(f"📺 Retrieved {len(all_episodes)} episodes for show {show_key}", debug_only=True)
             return all_episodes
         except Exception as e:
-            self._emit_status(f"❌ allLeaves failed, trying fallback method: {e}", debug_only=True)
-            # Fallback to the old method if allLeaves fails
-            try:
-                # First get seasons, then get episodes from each season
-                seasons_url = f"{self.server_url}{show_key}"
-                response = requests.get(seasons_url, headers=self.headers)
-                response.raise_for_status()
-                
-                seasons_data = parse_plex_response(response)
-                seasons = seasons_data.get('MediaContainer', {}).get('Metadata', [])
-                
-                all_episodes = []
-                
-                # Get episodes from each season
-                for season in seasons:
-                    season_key = season.get('key', '')
-                    if season_key:
-                        # Get episodes from this season
-                        episodes_url = f"{self.server_url}{season_key}"
-                        episodes_response = requests.get(episodes_url, headers=self.headers)
-                        episodes_response.raise_for_status()
-                        
-                        episodes_data = parse_plex_response(episodes_response)
-                        episodes = episodes_data.get('MediaContainer', {}).get('Metadata', [])
-                        all_episodes.extend(episodes)
-                
-                return all_episodes
-            except Exception as e2:
-                self._emit_status(f"❌ Fallback method also failed: {e2}", debug_only=True)
-                return []
+            self._emit_status(f"❌ Error getting show episodes: {e}")
+            return []
     
     def _map_plex_rating(self, plex_rating: str) -> str:
         """Map Plex rating to standard rating"""
@@ -621,12 +797,12 @@ class PlexImporter:
         if not plex_path:
             return ''
         
-        # Use the path mapping service as the single source of truth
-        return self.path_mapping_service.get_local_path(plex_path)
+        # Use the dynamic path resolution function
+        return resolve_local_path(self.database, self.server_id, plex_path) or plex_path
     
-    def get_local_path(self, plex_path: str, library_root: str = None) -> str:
+    def get_local_path(self, plex_path: str) -> str:
         """Get the local mapped path for a Plex path (for file access)"""
-        return self.path_mapping_service.get_local_path(plex_path, library_root)
+        return resolve_local_path(self.database, self.server_id, plex_path) or plex_path
     
     
     def import_movie(self, item: Dict, library_name: str = None, library_root: str = None) -> bool:
@@ -653,7 +829,6 @@ class PlexImporter:
             
             # Add media file to database
             media_file_id = self.database.add_media_file(
-                file_path=local_file_path,
                 duration=duration,
                 media_type='movie',
                 source_type='plex',
@@ -758,7 +933,7 @@ class PlexImporter:
                     
                     # Add media file to database
                     media_file_id = self.database.add_media_file(
-                        file_path=local_file_path,
+                        file_path=None,  # No longer store local paths
                         duration=duration,
                         media_type='episode',
                         source_type='plex',
@@ -825,11 +1000,265 @@ class PlexImporter:
             Dictionary with sync results: {'updated': int, 'added': int, 'removed': int}
         """
         if library_type == 'movie':
-            return self._sync_movie_library(library_key)
+            return self.sync_movie_library(library_key)
         elif library_type == 'show':
-            return self._sync_show_library(library_key)
+            return self.sync_tv_library(library_key)
         else:
             return {'updated': 0, 'added': 0, 'removed': 0}
+    
+    def sync_tv_library(self, library_key: str, *, deep: bool = False, progress_callback=None) -> Dict[str, int]:
+        """Sync TV library with selective expansion and digest-based change detection."""
+        # Get library information
+        library_info = self.database.get_library_by_key(library_key, self.server_id)
+        if not library_info:
+            # Create library record if it doesn't exist
+            library_id = self.database.add_library(
+                server_id=self.server_id,
+                library_key=library_key,
+                library_name=f"Library {library_key}",
+                library_type="show"
+            )
+        else:
+            library_id = library_info['id']
+        
+        now_epoch = int(time.time())
+        processed = changed = skipped = errors = 0
+        seen = set()
+        
+        def progress(event, payload):
+            if progress_callback:
+                if event == "library_start":
+                    progress_callback("library_start", payload)
+                elif event == "page_progress":
+                    progress_callback("page_progress", payload)
+                elif event == "library_done":
+                    progress_callback("library_done", payload)
+        
+        print(f"🔍 DEBUG: sync_tv_library called with library_key: {library_key}, deep: {deep}")
+        
+        progress("library_start", {"server_id": self.server_id, "library_id": library_id})
+        
+        # Get shows in pages for better memory management
+        page_size = 200
+        page_start = 0
+        
+        while True:
+            # Get a page of shows
+            shows_page = self.get_library_items(library_key, 'show', start=page_start, size=page_size)
+            print(f"🔍 DEBUG: get_library_items returned {len(shows_page) if shows_page else 0} shows for page {page_start}-{page_start + page_size}")
+            if not shows_page:
+                print(f"🔍 DEBUG: No more shows, breaking out of loop")
+                break
+            
+            to_expand = []
+            
+            # Process each show in the page
+            for show in shows_page:
+                rating_key = show.get('ratingKey', '')
+                if not rating_key:
+                    continue
+                
+                lite_digest = digest_show(
+                    show.get('childCount'), show.get('leafCount'),
+                    show.get('updatedAt'), show.get('childrenUpdatedAtMax') or show.get('updatedAt')
+                )
+                
+                # Decide if we should expand this show to episodes
+                show_guid = show.get('guid') or ''
+                children_hydrated = self.database.children_hydrated(self.server_id, library_id, rating_key)
+                show_digest_changed = self.database.show_digest_changed(self.server_id, library_id, rating_key, lite_digest)
+                
+                # NEW: if the DB has no episodes for this show GUID, we must hydrate
+                needs_children_due_to_missing = False
+                try:
+                    needs_children_due_to_missing = (self.database.count_episodes_for_show_source_id(show_guid) == 0)
+                except Exception:
+                    needs_children_due_to_missing = False
+                
+                should_expand_children = (
+                    deep
+                    or show_digest_changed
+                    or not children_hydrated
+                    or needs_children_due_to_missing  # <— NEW: ensure episodes exist at least once
+                )
+                
+                if should_expand_children:
+                    to_expand.append((show, lite_digest))
+                else:
+                    skipped += 1
+                processed += 1
+            
+            # Batch writes per page with transaction
+            conn = self.database.connection
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Expand selected shows to episodes
+                for show, lite_digest in to_expand:
+                    try:
+                        print(f"🔍 DEBUG: Expanding show: {show.get('title', 'Unknown')} (ratingKey: {show['ratingKey']})")
+                        children_updated_max = 0
+                        
+                        # before fetching seasons, ensure show row exists and get show_id
+                        show_id = self.database.upsert_show_basic(
+                            server_id=self.server_id, library_id=library_id, show=show
+                        )
+                        
+                        print(f"🔍 DEBUG: Fetching show children for {show['ratingKey']}...")
+                        seasons = self._fetch_show_children(show['ratingKey'])
+                        print(f"🔍 DEBUG: Found {len(seasons)} seasons for show {show.get('title', 'Unknown')}")
+                        for season in seasons:
+                            episodes = self._fetch_season_children(season['ratingKey'])
+                            for ep in episodes:
+                                # (unchanged) fetch detail if needed, compute media summary & digest
+                                detail = self._fetch_item_detail(ep['ratingKey']) if not ep.get('Media') else None
+                                media = (_summarize_media_from_detail(detail)
+                                         if detail else summarize_media_from_item(ep))  # see perf patch below
+                                d = digest_episode_or_movie(
+                                    rating_key=ep['ratingKey'], updated_at=ep.get('updatedAt'),
+                                    duration=media["duration_ms" if "duration_ms" in media else "duration"],
+                                    file_size=media["file_size"],
+                                    part_count=media["part_count"],
+                                    streams_signature=media["streams_signature"],
+                                    guid_primary=media["guid_primary"]
+                                )
+                                self.database.upsert_episode(
+                                    server_id=self.server_id, library_id=library_id,
+                                    parent_show_key=show['ratingKey'], ep=ep, media=media,
+                                    digest=d, now_epoch=now_epoch
+                                )
+                                seen.add(ep['ratingKey'])
+                                children_updated_max = max(children_updated_max, ep.get('updatedAt') or 0)
+                                changed += 1
+                        
+                        self.database.upsert_show_digest(
+                            self.server_id, library_id, show['ratingKey'],
+                            digest_show(show.get('childCount'), show.get('leafCount'),
+                                       show.get('updatedAt'), children_updated_max),
+                            children_hydrated=True
+                        )
+                    except Exception as e:
+                        logger.error(f"Error expanding show {show.get('title', 'Unknown')}: {e}")
+                        errors += 1
+                
+                # Commit the transaction for this page
+                conn.commit()
+            except Exception as e:
+                # Rollback on any error
+                conn.rollback()
+                logger.error(f"Error processing page, rolled back: {e}")
+                raise
+            
+            # Emit progress after each page
+            progress("page_progress", {
+                "server_id": self.server_id, "library_id": library_id,
+                "processed": processed, "changed": changed, "skipped": skipped, "errors": errors
+            })
+            
+            page_start += page_size
+        
+        # Finalize deletes (soft) and emit summary
+        missing_promoted = self.database.mark_missing_not_seen(library_id=library_id, seen=seen, now_epoch=now_epoch)
+        deleted_promoted = self.database.promote_deleted_past_retention(library_id=library_id, now_epoch=now_epoch, retention_days=30)
+        
+        progress("library_done", {
+            "server_id": self.server_id, "library_id": library_id, 
+            "summary": {
+                "processed": processed, "changed": changed, "skipped": skipped, "errors": errors,
+                "missing_promoted": missing_promoted, "deleted_promoted": deleted_promoted,
+                "last_synced_at": now_epoch
+            }
+        })
+        
+        return {'updated': changed, 'added': 0, 'removed': missing_promoted + deleted_promoted}
+    
+    def sync_movie_library(self, library_key: str, *, deep: bool = False, progress_callback=None) -> Dict[str, int]:
+        """Sync movie library with digest-based change detection."""
+        # Get library information
+        library_info = self.database.get_library_by_key(library_key, self.server_id)
+        if not library_info:
+            # Create library record if it doesn't exist
+            library_id = self.database.add_library(
+                server_id=self.server_id,
+                library_key=library_key,
+                library_name=f"Library {library_key}",
+                library_type="movie"
+            )
+        else:
+            library_id = library_info['id']
+        
+        now_epoch = int(time.time())
+        processed = changed = skipped = errors = 0
+        seen = set()
+        
+        def progress(event, payload):
+            if progress_callback:
+                if event == "library_start":
+                    progress_callback("library_start", payload)
+                elif event == "page_progress":
+                    progress_callback("page_progress", payload)
+                elif event == "library_done":
+                    progress_callback("library_done", payload)
+        
+        progress("library_start", {"server_id": self.server_id, "library_id": library_id})
+        
+        # Get movies in pages for better memory management
+        page_size = 200
+        page_start = 0
+        
+        while True:
+            # Get a page of movies
+            movies_page = self.get_library_items(library_key, 'movie', start=page_start, size=page_size)
+            if not movies_page:
+                break
+            
+            for mv in movies_page:
+                try:
+                    # We rely on digest; details needed to read Media/Part safely
+                    detail = self._fetch_item_detail(mv['ratingKey'])
+                    if not detail:
+                        continue
+                        
+                    media = _summarize_media_from_detail(detail)
+                    d = digest_episode_or_movie(
+                        rating_key=mv['ratingKey'], updated_at=mv.get('updatedAt'),
+                        duration=media["duration_ms"], file_size=media["file_size"],
+                        part_count=media["part_count"], streams_signature=media["streams_signature"],
+                        guid_primary=media["guid_primary"]
+                    )
+                    # If unchanged digest, just touch last_seen_at by re-upserting identical digest (no heavy write)
+                    self.database.upsert_movie(
+                        server_id=self.server_id, library_id=library_id,
+                        mv=mv, media=media, digest=d, now_epoch=now_epoch
+                    )
+                    seen.add(mv['ratingKey'])
+                    changed += 1  # counts "touched"; adjust if you want strict changes only
+                except Exception as e:
+                    logger.error(f"Error processing movie {mv.get('title', 'Unknown')}: {e}")
+                    errors += 1
+                processed += 1
+            
+            # Emit progress after each page
+            progress("page_progress", {
+                "server_id": self.server_id, "library_id": library_id,
+                "processed": processed, "changed": changed, "skipped": skipped, "errors": errors
+            })
+            
+            page_start += page_size
+        
+        # Finalize deletes (soft) and emit summary
+        missing_promoted = self.database.mark_missing_not_seen(library_id=library_id, seen=seen, now_epoch=now_epoch)
+        deleted_promoted = self.database.promote_deleted_past_retention(library_id=library_id, now_epoch=now_epoch, retention_days=30)
+        
+        progress("library_done", {
+            "server_id": self.server_id, "library_id": library_id, 
+            "summary": {
+                "processed": processed, "changed": changed, "skipped": skipped, "errors": errors,
+                "missing_promoted": missing_promoted, "deleted_promoted": deleted_promoted,
+                "last_synced_at": now_epoch
+            }
+        })
+        
+        return {'updated': changed, 'added': 0, 'removed': missing_promoted + deleted_promoted}
     
     def _import_movie_library(self, library_key: str, library_name: str = None) -> int:
         """Import all movies from a movie library"""
@@ -846,63 +1275,6 @@ class PlexImporter:
         
         return imported_count
     
-    def _sync_movie_library(self, library_key: str, library_name: str = None, progress_callback=None) -> Dict[str, int]:
-        """Sync a movie library with Plex"""
-        # Get current movies from Plex
-        plex_movies = self.get_library_items(library_key, 'movie')
-        plex_movie_ids = {movie.get('guid', '') for movie in plex_movies}  # Use stable GUID
-        
-        # Get current movies from database for this server only
-        db_movies = self.database.get_movies_by_source('plex')
-        db_movie_ids = {movie['source_id'] for movie in db_movies if movie['source_id'] and movie.get('server_id') == self.server_id}
-        
-        # Get library root paths for path mapping
-        library_root_paths = self.get_library_root_paths(library_key)
-        primary_library_root = library_root_paths[0] if library_root_paths else None
-        
-        updated_count = 0
-        added_count = 0
-        removed_count = 0
-        
-        # Update existing and add new movies
-        for i, movie in enumerate(plex_movies):
-            movie_guid = movie.get('guid', '')  # Use stable GUID
-            if movie_guid in db_movie_ids:
-                # Check if movie already has a library name (processed by another library)
-                db_movie = self.database.get_movie_by_source_id(movie_guid)
-                if db_movie and db_movie.get('library_name'):
-                    # Movie already processed by another library, skip to avoid conflicts
-                    continue
-                
-                # Compare timestamps before updating
-                ts = plex_ts(movie)
-                db_ts_raw = self.database.get_movie_ts_by_guid(movie_guid)
-                db_ts = db_ts_to_int(db_ts_raw)
-                
-                if db_ts is not None and ts is not None and ts <= db_ts:
-                    # Skip update - Plex timestamp is older or equal, no changes
-                    continue
-                
-                # Update existing movie (only count if there were actual changes)
-                if self._update_movie(movie, library_name, primary_library_root, library_root_paths):
-                    updated_count += 1
-            else:
-                # Add new movie
-                if self.import_movie(movie, library_name, primary_library_root):
-                    added_count += 1
-            
-            # Emit progress for each movie processed
-            if progress_callback:
-                progress_callback(
-                    library_progress=None,
-                    item_progress=(i + 1, len(plex_movies), movie.get('title', 'Unknown')),
-                    message=None  # No status message during processing
-                )
-        
-        # NOTE: We don't remove movies here because this is per-library sync
-        # Removal should be handled at the global level after all libraries are processed
-        
-        return {'updated': updated_count, 'added': added_count, 'removed': removed_count}
     
     def sync_all_libraries(self, progress_callback=None) -> Dict[str, int]:
         """Sync all libraries and remove orphaned content"""
@@ -1208,8 +1580,445 @@ class PlexImporter:
         
         return total_episodes
     
-    def _sync_show_library(self, library_key: str, progress_callback=None) -> Dict[str, int]:
-        """Sync a show library with Plex"""
+    
+    def _expand_show(self, show: dict, library_id: int, now_epoch: int, seen_keys: set) -> Dict[str, int]:
+        """
+        Expand a show by fetching and processing all its episodes.
+        
+        Args:
+            show: Show metadata from Plex
+            library_id: Library ID in database
+            now_epoch: Current timestamp
+            seen_keys: Set to track seen rating keys
+            
+        Returns:
+            Dictionary with expansion results
+        """
+        rating_key = show.get('ratingKey', '')
+        show_title = show.get('title', 'Unknown Show')
+        changed_count = 0
+        child_max = 0
+        
+        try:
+            # Fetch show children (seasons)
+            seasons = self._fetch_show_children(rating_key)
+            
+            # Process each season
+            for season in seasons:
+                season_key = season.get('ratingKey', '')
+                if not season_key:
+                    continue
+                
+                # Fetch season children (episodes)
+                episodes = self._fetch_season_children(season_key)
+                
+                # Process each episode
+                for episode in episodes:
+                    episode_key = episode.get('ratingKey', '')
+                    if not episode_key:
+                        continue
+                    
+                    # Fetch episode detail to get media information
+                    episode_detail = self._fetch_item_detail(episode_key)
+                    if not episode_detail:
+                        continue
+                    
+                    # Summarize media information
+                    media = summarize_media(episode_detail)
+                    
+                    # Create episode digest
+                    digest = digest_episode_or_movie(
+                        rating_key=episode_key,
+                        updated_at=episode.get('updatedAt', 0),
+                        duration=media['duration'],
+                        file_size=media['file_size'],
+                        part_count=media['part_count'],
+                        streams_signature=media['streams_signature'],
+                        guid_primary=media['guid_primary']
+                    )
+                    
+                    # Upsert episode in database
+                    self.database.upsert_episode(
+                        server_id=self.server_id,
+                        library_id=library_id,
+                        parent_show_key=rating_key,
+                        ep=episode,
+                        media=media,
+                        digest=digest,
+                        now_epoch=now_epoch
+                    )
+                    
+                    seen_keys.add(episode_key)
+                    child_max = max(child_max, episode.get('updatedAt', 0))
+                    changed_count += 1
+            
+            # Update show digest and mark as hydrated
+            final_digest = digest_show(
+                show.get('childCount', 0),
+                show.get('leafCount', 0),
+                show.get('updatedAt', 0),
+                child_max
+            )
+            
+            self.database.upsert_show_digest(
+                library_id=library_id,
+                show_key=rating_key,
+                digest=final_digest,
+                children_hydrated=True
+            )
+            
+            return {'changed': changed_count}
+            
+        except Exception as ex:
+            logger.warning(f"⚠️ Error expanding show {show_title}: {ex}")
+            return {'changed': 0}
+    
+    def _finalize_library(self, library_id: int, seen_keys: set, now_epoch: int, retention_days: int = 30) -> tuple[int, int]:
+        """
+        Finalize library sync by processing state transitions and cleanup.
+        
+        This method implements the complete state management lifecycle:
+        1. Process state transitions (ACTIVE -> MISSING, MISSING -> ACTIVE)
+        2. Promote missing items to deleted after retention period
+        3. Clean up old deleted items (optional)
+        
+        Args:
+            library_id: Library ID
+            seen_keys: Set of rating keys seen in this scan
+            now_epoch: Current timestamp
+            retention_days: Days to retain missing items before marking as deleted
+            
+        Returns:
+            Tuple of (missing_promoted, deleted_promoted)
+        """
+        try:
+            # Process state transitions
+            transitions = self._process_state_transitions(library_id, seen_keys, now_epoch)
+            
+            # Promote missing items to deleted after retention period
+            deleted_promoted = self._promote_missing_to_deleted(library_id, retention_days)
+            
+            # Optional: Clean up very old deleted items (90+ days)
+            # This can be enabled for maintenance
+            # cleanup_count = self._cleanup_old_deleted_items(library_id, 90)
+            
+            logger.info(f"📊 Library {library_id} finalized: "
+                       f"{transitions['active_to_missing']} marked missing, "
+                       f"{deleted_promoted} promoted to deleted")
+            
+            return transitions['active_to_missing'], deleted_promoted
+            
+        except Exception as ex:
+            logger.warning(f"⚠️ Error finalizing library {library_id}: {ex}")
+            return 0, 0
+    
+    def _fetch_show_children(self, show_key: str) -> list[dict]:
+        """
+        Returns list of seasons for a show.
+        Works for JSON (MediaContainer.Metadata) and XML (MediaContainer.Directory).
+        """
+        url = f"{self.server_url}/library/metadata/{show_key}/children"
+        print(f"🔍 DEBUG: _fetch_show_children URL: {url}")
+        try:
+            resp = self.session.get(url,  timeout=30)
+            print(f"🔍 DEBUG: _fetch_show_children response status: {resp.status_code}")
+            resp.raise_for_status()
+            data = parse_plex_response(resp)          # <-- robust: JSON or XML
+            data = _strip_at_keys(data)               # <-- normalize @ratingKey -> ratingKey
+            mc = data.get("MediaContainer", {}) if isinstance(data, dict) else {}
+            seasons = mc.get("Metadata") or mc.get("Directory") or []
+            seasons = _coerce_list(seasons)
+            print(f"🔍 DEBUG: _fetch_show_children found {len(seasons)} seasons for {show_key}")
+            return seasons
+        except Exception as ex:
+            logger.warning(f"⚠️ Error fetching show children for {show_key}: {ex}")
+            return []
+    
+    def _fetch_season_children(self, season_key: str) -> list[dict]:
+        """
+        Returns list of episodes for a season.
+        JSON: MediaContainer.Metadata; XML: MediaContainer.Video
+        """
+        url = f"{self.server_url}/library/metadata/{season_key}/children"
+        try:
+            resp = self.session.get(url,  timeout=30)
+            resp.raise_for_status()
+            data = parse_plex_response(resp)
+            data = _strip_at_keys(data)
+            mc = data.get("MediaContainer", {}) if isinstance(data, dict) else {}
+            episodes = mc.get("Metadata") or mc.get("Video") or []
+            episodes = _coerce_list(episodes)
+            # print(f"🔍 episodes for season {season_key}: {len(episodes)}")
+            return episodes
+        except Exception as ex:
+            logger.warning(f"⚠️ Error fetching season children for {season_key}: {ex}")
+            return []
+    
+    def _fetch_item_detail(self, item_key: str) -> dict:
+        """
+        Return a single episode/movie dict (normalized), handling JSON or XML.
+        """
+        url = f"{self.server_url}/library/metadata/{item_key}"
+        try:
+            resp = self.session.get(url,  timeout=30)
+            resp.raise_for_status()
+            data = parse_plex_response(resp)
+            data = _strip_at_keys(data)
+            mc = data.get("MediaContainer", {}) if isinstance(data, dict) else {}
+            meta = mc.get("Metadata") or mc.get("Video")
+            if isinstance(meta, list):
+                return meta[0] if meta else {}
+            return meta or {}
+        except Exception as ex:
+            logger.warning(f"⚠️ Error fetching item detail for {item_key}: {ex}")
+            return {}
+    
+    def _validate_item_state(self, item_id: int, plex_path: str, media_info: dict) -> str:
+        """
+        Validate an item and determine its appropriate state.
+        
+        Args:
+            item_id: Database ID of the item
+            plex_path: Plex path for the item
+            media_info: Media information from Plex
+            
+        Returns:
+            The appropriate state for the item
+        """
+        try:
+            # Try to resolve local path
+            local_path = resolve_local_path(self.database, self.server_id, plex_path) or plex_path
+            
+            if local_path == plex_path:
+                # No path mapping found - check if Plex can stream
+                if media_info.get('duration', 0) > 0:
+                    return 'REMOTE_ONLY'
+                else:
+                    return 'UNAVAILABLE'
+            
+            # Check if local file exists and is accessible
+            if os.path.exists(local_path) and os.path.isfile(local_path):
+                # Check file size matches
+                local_size = os.path.getsize(local_path)
+                plex_size = media_info.get('file_size', 0)
+                
+                if plex_size > 0 and abs(local_size - plex_size) > 1024:  # Allow 1KB difference
+                    logger.warning(f"⚠️ File size mismatch for {local_path}: local={local_size}, plex={plex_size}")
+                    return 'UNAVAILABLE'
+                
+                return 'ACTIVE'
+            else:
+                # Local file doesn't exist
+                if media_info.get('duration', 0) > 0:
+                    return 'REMOTE_ONLY'
+                else:
+                    return 'UNAVAILABLE'
+                    
+        except Exception as ex:
+            logger.warning(f"⚠️ Error validating item state for {plex_path}: {ex}")
+            return 'UNAVAILABLE'
+    
+    def _update_item_state(self, item_id: int, new_state: str, error_message: str = None) -> bool:
+        """
+        Update the state of a media item in the database.
+        
+        Args:
+            item_id: Database ID of the item
+            new_state: New state to set
+            error_message: Optional error message for error states
+            
+        Returns:
+            True if state was updated successfully
+        """
+        try:
+            return self.database.update_item_state(item_id, new_state, error_message)
+        except Exception as ex:
+            logger.warning(f"⚠️ Error updating item state: {ex}")
+            return False
+    
+    def _process_state_transitions(self, library_id: int, seen_keys: set, now_epoch: int) -> Dict[str, int]:
+        """
+        Process state transitions for items in a library.
+        
+        Args:
+            library_id: Library ID
+            seen_keys: Set of rating keys seen in this scan
+            now_epoch: Current timestamp
+            
+        Returns:
+            Dictionary with transition counts
+        """
+        transitions = {
+            'active_to_missing': 0,
+            'missing_to_deleted': 0,
+            'state_updates': 0
+        }
+        
+        try:
+            # Get all items in this library
+            cursor = self.database.connection.cursor()
+            cursor.execute("""
+                SELECT id, rating_key, state, plex_path, last_seen_at
+                FROM media_files 
+                WHERE library_id = ?
+            """, (library_id,))
+            
+            items = cursor.fetchall()
+            
+            for item in items:
+                item_id, rating_key, current_state, plex_path, last_seen_at = item
+                
+                if rating_key not in seen_keys:
+                    # Item not seen in this scan
+                    if current_state == 'ACTIVE':
+                        # Mark as missing
+                        self.database.update_item_state(item_id, 'MISSING')
+                        transitions['active_to_missing'] += 1
+                        transitions['state_updates'] += 1
+                        
+                        # Update missing_since timestamp
+                        cursor.execute("""
+                            UPDATE media_files 
+                            SET missing_since = ?
+                            WHERE id = ?
+                        """, (now_epoch, item_id))
+                        
+                elif current_state == 'MISSING':
+                    # Item was missing but now seen again
+                    self.database.update_item_state(item_id, 'ACTIVE')
+                    transitions['state_updates'] += 1
+                    
+                    # Clear missing_since timestamp
+                    cursor.execute("""
+                        UPDATE media_files 
+                        SET missing_since = NULL
+                        WHERE id = ?
+                    """, (item_id,))
+            
+            self.database.connection.commit()
+            return transitions
+            
+        except Exception as ex:
+            logger.warning(f"⚠️ Error processing state transitions: {ex}")
+            self.database.connection.rollback()
+            return transitions
+    
+    def _promote_missing_to_deleted(self, library_id: int, retention_days: int = 30) -> int:
+        """
+        Promote missing items to deleted status after retention period.
+        
+        Args:
+            library_id: Library ID
+            retention_days: Days to retain missing items
+            
+        Returns:
+            Number of items promoted to deleted
+        """
+        try:
+            cutoff_epoch = int(datetime.now().timestamp()) - (retention_days * 24 * 60 * 60)
+            
+            cursor = self.database.connection.cursor()
+            cursor.execute("""
+                UPDATE media_files 
+                SET state = 'DELETED', last_scan_at = ?
+                WHERE library_id = ? AND state = 'MISSING' AND missing_since < ?
+            """, (int(datetime.now().timestamp()), library_id, cutoff_epoch))
+            
+            promoted_count = cursor.rowcount
+            self.database.connection.commit()
+            
+            if promoted_count > 0:
+                logger.info(f"📊 Promoted {promoted_count} missing items to deleted in library {library_id}")
+            
+            return promoted_count
+            
+        except Exception as ex:
+            logger.warning(f"⚠️ Error promoting missing to deleted: {ex}")
+            self.database.connection.rollback()
+            return 0
+    
+    def _cleanup_old_deleted_items(self, library_id: int, days_old: int = 90) -> int:
+        """
+        Remove old deleted items from the database.
+        
+        Args:
+            library_id: Library ID
+            days_old: Days old before removal
+            
+        Returns:
+            Number of items removed
+        """
+        try:
+            return self.database.cleanup_old_deleted_items(library_id, days_old)
+        except Exception as ex:
+            logger.warning(f"⚠️ Error cleaning up deleted items: {ex}")
+            return 0
+    
+    def get_library_health_report(self, library_id: int) -> Dict:
+        """
+        Get a comprehensive health report for a library.
+        
+        Args:
+            library_id: Library ID
+            
+        Returns:
+            Dictionary with health report data
+        """
+        try:
+            stats = self.database.get_library_stats(library_id)
+            missing_count, deleted_count = self.database.library_missing_deleted_counts(library_id)
+            
+            # Calculate health score
+            total_items = stats['total_items']
+            if total_items == 0:
+                health_score = 100
+            else:
+                active_ratio = stats['active_items'] / total_items
+                health_score = int(active_ratio * 100)
+            
+            return {
+                'library_id': library_id,
+                'health_score': health_score,
+                'total_items': total_items,
+                'active_items': stats['active_items'],
+                'remote_only_items': stats['remote_only_items'],
+                'unavailable_items': stats['unavailable_items'],
+                'missing_items': missing_count,
+                'deleted_items': deleted_count,
+                'last_scan_at': stats['last_scan_at'],
+                'status': self._get_health_status(health_score)
+            }
+            
+        except Exception as ex:
+            logger.warning(f"⚠️ Error getting library health report: {ex}")
+            return {
+                'library_id': library_id,
+                'health_score': 0,
+                'total_items': 0,
+                'active_items': 0,
+                'remote_only_items': 0,
+                'unavailable_items': 0,
+                'missing_items': 0,
+                'deleted_items': 0,
+                'last_scan_at': None,
+                'status': 'ERROR'
+            }
+    
+    def _get_health_status(self, health_score: int) -> str:
+        """Get health status based on score."""
+        if health_score >= 95:
+            return 'EXCELLENT'
+        elif health_score >= 85:
+            return 'GOOD'
+        elif health_score >= 70:
+            return 'FAIR'
+        elif health_score >= 50:
+            return 'POOR'
+        else:
+            return 'CRITICAL'
+    
+    def _sync_show_library_legacy(self, library_key: str, progress_callback=None) -> Dict[str, int]:
+        """Legacy sync method - kept for fallback if needed"""
         # Get current shows from Plex
         plex_shows = self.get_library_items(library_key, 'show')
         plex_show_ids = {show.get('guid', '') for show in plex_shows}  # Use stable GUID
@@ -1402,14 +2211,12 @@ class PlexImporter:
             # Check if anything has actually changed
             has_changes = False
             
-            # Check media file changes
-            if (db_movie.get('file_path') != local_file_path or 
-                db_movie.get('duration') != duration or
+            # Check media file changes (no longer compare file_path since we don't store local paths)
+            if (db_movie.get('duration') != duration or
                 db_movie.get('library_name') != library_name):
                 has_changes = True
                 self.database.update_media_file(
                     media_file_id=db_movie['media_file_id'],
-                    file_path=local_file_path,
                     duration=duration,
                     library_name=library_name,
                     plex_path=plex_file_path
@@ -1630,23 +2437,20 @@ class PlexImporter:
             # Only update library_name if it's currently NULL (first-time assignment)
             library_name_changed = (db_episode.get('library_name') is None and library_name is not None)
             
-            # Check for file path or duration changes (these are legitimate updates)
-            file_path_changed = (db_episode.get('file_path') != local_file_path)
+            # Check for duration changes (no longer check file_path since we don't store local paths)
             duration_changed = (db_episode.get('duration') != duration)
             
-            if (file_path_changed or duration_changed or library_name_changed):
+            if (duration_changed or library_name_changed):
                 # Update the media file data
                 update_library_name = library_name if library_name_changed else db_episode.get('library_name')
                 self.database.update_media_file(
                     media_file_id=db_episode['media_file_id'],
-                    file_path=local_file_path,
                     duration=duration,
                     library_name=update_library_name,
                     plex_path=plex_file_path
                 )
                 
-                # Only count as "changes" if it's not just a file path change
-                # File path changes are often due to library reorganization and shouldn't be treated as major updates
+                # Count as "changes" if duration or library name changed
                 if duration_changed or library_name_changed:
                     has_changes = True
             
@@ -1746,7 +2550,6 @@ class PlexImporter:
             
             # Add media file
             media_file_id = self.database.add_media_file(
-                file_path=local_file_path,
                 duration=duration,
                 media_type='episode',
                 source_type='plex',
@@ -1835,3 +2638,196 @@ def create_plex_importer_legacy(server_url: str, token: str, database: RetrovueD
     
     # Create importer using the new method
     return create_plex_importer(server_id, database, status_callback)
+
+
+# ============================================================================
+# Dev Sync Wrapper API
+# ============================================================================
+
+from typing import Callable, Dict, Any
+
+ProgressCb = Callable[[str, Dict[str, Any]], None]
+
+def make_library_ref(db, server_id: int, section_key: str):
+    """
+    Create a library reference object for sync operations.
+    
+    Args:
+        db: Database instance
+        server_id: Server ID
+        section_key: Library section key
+        
+    Returns:
+        Library reference dict with server_id, id, section_key, type
+    """
+    # Get library info from database
+    library_info = db.get_library_by_key(section_key, server_id)
+    if library_info:
+        return {
+            'server_id': server_id,
+            'id': library_info['id'],
+            'section_key': section_key,
+            'type': library_info['library_type'],
+            'name': library_info['library_name']
+        }
+    else:
+        # Create a minimal reference - the sync methods will create the library record
+        return {
+            'server_id': server_id,
+            'id': None,
+            'section_key': section_key,
+            'type': 'unknown',  # Will be determined during sync
+            'name': f"Library {section_key}"
+        }
+
+def sync_one_library(db, library_ref, *, deep=False, dry_run=False, progress: ProgressCb=lambda *_: None):
+    """
+    Sync a single library.
+    
+    Args:
+        db: Database instance
+        library_ref: Library reference object with server_id, section_key, type
+        deep: Force full expansion
+        dry_run: Don't make changes
+        progress: Progress callback
+        
+    Returns:
+        Summary dict with processed, changed, skipped, errors, missing_promoted, deleted_promoted
+    """
+    print(f"🔍 DEBUG: Starting sync for library: {library_ref.get('name', 'Unknown')} (type: {library_ref.get('type', 'unknown')})")
+    print(f"🔍 DEBUG: Library ref: {library_ref}")
+    
+    # Create Plex importer for the server
+    importer = create_plex_importer(library_ref['server_id'], db)
+    if not importer:
+        print(f"🔍 DEBUG: Failed to create Plex importer for server {library_ref['server_id']}")
+        return {"processed": 0, "changed": 0, "skipped": 0, "errors": 1, "missing_promoted": 0, "deleted_promoted": 0}
+    
+    print(f"🔍 DEBUG: Created Plex importer successfully")
+    
+    # Emit library start event
+    progress("library_start", {
+        "server_id": library_ref['server_id'],
+        "library_id": library_ref.get('id', 0),
+        "library_name": library_ref.get('name', 'Unknown')
+    })
+    
+    try:
+        # Call the appropriate sync method based on library type
+        if library_ref['type'] in ("show", "shows", "tv"):
+            result = importer.sync_tv_library(library_ref['section_key'], deep=deep, progress_callback=progress)
+        elif library_ref['type'] in ("movie", "movies"):
+            result = importer.sync_movie_library(library_ref['section_key'], deep=deep, progress_callback=progress)
+        else:
+            # Try to determine type from Plex API
+            libraries = importer.get_libraries()
+            library_type = "movie"  # default
+            for lib in libraries:
+                if lib.get('key') == library_ref['section_key']:
+                    library_type = lib.get('type', 'movie')
+                    break
+            
+            if library_type in ("show", "shows", "tv"):
+                result = importer.sync_tv_library(library_ref['section_key'], deep=deep, progress_callback=progress)
+            else:
+                result = importer.sync_movie_library(library_ref['section_key'], deep=deep, progress_callback=progress)
+        
+        # Convert result format to match expected summary format
+        summary = {
+            "processed": result.get('updated', 0) + result.get('added', 0),
+            "changed": result.get('updated', 0),
+            "skipped": 0,  # Not tracked in current implementation
+            "errors": 0,   # Not tracked in current implementation
+            "missing_promoted": 0,  # Not tracked separately in current implementation
+            "deleted_promoted": result.get('removed', 0)
+        }
+        
+        # Emit library done event
+        progress("library_done", {
+            "server_id": library_ref['server_id'],
+            "library_id": library_ref.get('id', 0),
+            "summary": summary
+        })
+        
+        return summary
+        
+    except Exception as e:
+        # Emit error event
+        progress("library_done", {
+            "server_id": library_ref['server_id'],
+            "library_id": library_ref.get('id', 0),
+            "summary": {
+                "processed": 0,
+                "changed": 0,
+                "skipped": 0,
+                "errors": 1,
+                "missing_promoted": 0,
+                "deleted_promoted": 0
+            }
+        })
+        return {"processed": 0, "changed": 0, "skipped": 0, "errors": 1, "missing_promoted": 0, "deleted_promoted": 0}
+
+def sync_selected_on_server(db, server_id: int, *, deep=False, dry_run=False, progress: ProgressCb=lambda *_: None):
+    """
+    Sync all selected libraries on a specific server.
+    
+    Args:
+        db: Database instance
+        server_id: Server ID
+        deep: Force full expansion
+        dry_run: Don't make changes
+        progress: Progress callback
+        
+    Returns:
+        Aggregated summary across all libraries
+    """
+    # Get selected libraries for this server
+    libs = db.get_server_libraries(server_id=server_id)
+    selected_libs = [lib for lib in libs if lib.get('sync_enabled', True)]
+    
+    print(f"🔍 DEBUG: Found {len(libs)} total libraries for server {server_id}")
+    print(f"🔍 DEBUG: {len(selected_libs)} libraries are enabled for sync")
+    for lib in selected_libs:
+        print(f"🔍 DEBUG: - {lib['library_name']} ({lib['library_type']}) - sync_enabled: {lib.get('sync_enabled', True)}")
+    
+    totals = {"processed": 0, "changed": 0, "skipped": 0, "errors": 0, "missing_promoted": 0, "deleted_promoted": 0}
+    
+    for lib in selected_libs:
+        lib_ref = {
+            'server_id': lib['server_id'],
+            'id': lib['id'],
+            'section_key': lib['library_key'],
+            'type': lib['library_type'],
+            'name': lib['library_name']
+        }
+        
+        summary = sync_one_library(db, lib_ref, deep=deep, dry_run=dry_run, progress=progress)
+        for k in totals:
+            totals[k] += summary.get(k, 0)
+    
+    return totals
+
+def sync_selected_across_all_servers(db, *, deep=False, dry_run=False, progress: ProgressCb=lambda *_: None):
+    """
+    Sync all selected libraries across all servers.
+    
+    Args:
+        db: Database instance
+        deep: Force full expansion
+        dry_run: Don't make changes
+        progress: Progress callback
+        
+    Returns:
+        Grand total summary across all servers and libraries
+    """
+    servers = db.get_plex_servers()
+    active_servers = [s for s in servers if s.get('is_active', True)]
+    
+    grand = {"processed": 0, "changed": 0, "skipped": 0, "errors": 0, "missing_promoted": 0, "deleted_promoted": 0}
+    
+    for server in active_servers:
+        sub = sync_selected_on_server(db, server_id=server['id'], deep=deep, dry_run=dry_run, progress=progress)
+        for k in grand:
+            grand[k] += sub.get(k, 0)
+    
+    return grand

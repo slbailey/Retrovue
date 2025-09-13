@@ -1,0 +1,6 @@
+# Windows Shell Rules
+- On Windows, ALWAYS assume PowerShell 7+ (pwsh), not cmd.exe.
+- Do NOT use `findstr`. Use PowerShell `Select-String -Quiet` for pattern checks.
+- Generate Windows scripts as `.ps1` using pwsh syntax.
+- Run Windows scripts via: `pwsh -NoProfile -ExecutionPolicy Bypass -File <script>.ps1`.
+- For cross-platform docs, show both bash and PowerShell variants.

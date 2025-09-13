@@ -1,5 +1,28 @@
 # 🏗️ System Architecture
 
+## 🎯 Core Design Principles
+
+### **Media-First Architecture**
+Retrovue is built on a **media-first foundation** where every record begins with a physical media file. This approach ensures that:
+- **Physical Reality**: All content must have an actual playable media file as its foundation
+- **Logical Wrappers**: Content items (movies, episodes, bumpers, commercials, etc.) are logical wrappers around media files
+- **Metadata Layering**: Rich metadata is layered on top of the media file without modifying the original
+- **Playback Guarantee**: Every scheduled item can be played because it has a verified media file
+
+### **Editorial Override System**
+The system supports **editorial overrides** that allow customization without overwriting source metadata:
+- **Source Preservation**: Original Plex/TMM metadata remains intact and accessible
+- **Customization Layer**: Editorial changes are stored separately and take precedence during scheduling
+- **Flexible Editing**: Users can modify titles, descriptions, ratings, and other metadata without losing source data
+- **Audit Trail**: All editorial changes are tracked with timestamps and user attribution
+
+### **Namespaced Tagging System**
+Content is organized using **namespaced tags** that drive scheduling and ad targeting:
+- **Structured Organization**: Tags follow `namespace:value` format (e.g., `audience:kids`, `holiday:christmas`, `brand:fast_food`)
+- **Flexible Targeting**: Multiple tag namespaces allow complex scheduling rules and ad targeting
+- **Hierarchical Control**: Tags can be combined for sophisticated content selection and scheduling
+- **Extensible Design**: New namespaces can be added without schema changes
+
 ## 📐 Overall Architecture
 
 **Program Director** (Top-level Controller)  
@@ -16,21 +39,121 @@
 
 ## 🧩 Core Components
 
-### **Program Director**
-- Orchestrates all channels and manages global state
-- Coordinates emergency alerts across all channels
-- Manages system-wide configuration and monitoring
-- Handles channel lifecycle (start, stop, restart)
+### **1. Ingestion System**
+The **Ingestion System** is responsible for bringing content into Retrovue from Plex Media Server:
 
-### **Channel Management**
-- **Channel**: Independent broadcast unit with its own schedule and pipeline
-- **Schedule Manager**: Maintains coarse (show-level) and fine (break-level) scheduling logs
-- **Pipeline Manager**: Controls playback transitions, timing, and stream quality
-- **Graphics Manager**: Overlays bugs, branding, emergency graphics, and lower thirds
+#### **Primary Metadata Source**
+- **Plex Integration**: Automatically imports movies, TV shows, and metadata from Plex Media Server via the Plex Sync CLI
+
+#### **Path Mapping Resolution**
+- **Plex Path Translation**: Converts Plex internal paths to accessible local file paths
+- **Cross-Platform Support**: Handles Windows, macOS, and Linux path differences
+- **Storage Validation**: Ensures all mapped paths point to accessible media files
+- **Longest Prefix Matching**: Uses efficient path resolution with cached mappings
+
+#### **Content Validation**
+- **File Accessibility**: Verifies that all media files can be opened and played
+- **Codec Support**: Validates that media files use supported video/audio codecs
+- **Metadata Integrity**: Checks that imported metadata is complete and consistent
+- **Error Recovery**: Handles missing files, corrupted metadata, and sync failures
+
+### **2. Metadata Management System**
+The **Metadata Management System** stores and organizes all content information:
+
+#### **Content Items Storage**
+- **Primary Metadata**: Stored in `content_items` table with core information
+- **Editorial Overrides**: Stored in `content_editorial` table for custom modifications
+- **Source Preservation**: Original Plex/TMM metadata remains intact and accessible
+- **Version Control**: Tracks changes and maintains metadata history
+
+#### **Namespaced Tagging System**
+- **Structured Tags**: Uses `namespace:value` format for organized content classification
+- **Audience Targeting**: Tags like `audience:kids`, `audience:adult`, `audience:family`
+- **Seasonal Content**: Tags like `holiday:christmas`, `holiday:halloween`, `season:summer`
+- **Brand Management**: Tags like `brand:fast_food`, `brand:automotive`, `brand:retail`
+- **Content Tone**: Tags like `tone:comedy`, `tone:drama`, `tone:action`, `tone:educational`
+
+#### **Parental Control System**
+- **MPAA Ratings**: Movie ratings (G, PG, PG-13, R, NC-17)
+- **TV Ratings**: Television content ratings (TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA)
+- **Custom Ratings**: User-defined rating systems for specialized content
+- **Daypart Restrictions**: Automatic content filtering based on time of day and audience
+
+### **3. Scheduling Engine**
+The **Scheduling Engine** manages when and how content is broadcast:
+
+#### **Schedule Blocks (Templates)**
+- **High-Level Rules**: Define programming patterns like "Sitcoms at 5pm weekdays"
+- **Day-of-Week Rules**: Specify different programming for different days
+- **Time Window Management**: Define specific time slots for different content types
+- **Rotation Policies**: Control how often content repeats and when
+
+#### **Schedule Instances (Specific Events)**
+- **Exact Scheduling**: Specific content scheduled for specific date/time combinations
+- **Event Management**: Handle special programming, live events, and one-time broadcasts
+- **Conflict Resolution**: Manage scheduling conflicts and overlapping content
+- **Approval Workflow**: Require approval for schedule changes and special events
+
+#### **Advanced Scheduling Features**
+- **Daypart Rules**: Different programming for morning, afternoon, evening, late night
+- **Rotation Rules**: Prevent content from repeating too frequently
+- **Commercial Spacing Rules**: Control commercial placement and separation
+- **Seasonal Programming**: Automatic seasonal content scheduling
+
+### **4. Playback/Streaming Engine**
+The **Playback/Streaming Engine** handles the actual content delivery:
+
+#### **FFmpeg Integration**
+- **HLS/TS Output**: Generates industry-standard HTTP Live Streaming segments
+- **Real-time Processing**: Processes content in real-time for live streaming
+- **Format Conversion**: Converts various input formats to streaming-compatible output
+- **Quality Management**: Maintains consistent video/audio quality across all content
+
+#### **Ad Break Management**
+- **Media Markers**: Uses `media_markers` table to define ad break points
+- **Chapter Integration**: Integrates with video chapter markers for automatic ad placement
+- **Manual Override**: Allows manual ad break placement and timing
+- **Detection Algorithms**: Future support for automatic ad break detection
+
+#### **EPG/Guide Data Export**
+- **Plex Live TV**: Exports Electronic Program Guide data for Plex Live TV integration
+- **Prevue Channel**: Generates program guide data for Prevue-style channel information
+- **Standard Formats**: Supports industry-standard EPG formats for maximum compatibility
+- **Real-time Updates**: Updates guide data as schedules change
+
+### **5. Logging and Analytics System**
+The **Logging System** tracks what content is actually aired:
+
+#### **Play Log Management**
+- **Content Tracking**: Records what programs and ads actually aired
+- **Timing Accuracy**: Tracks actual vs. scheduled timing for all content
+- **Error Logging**: Records playback errors, missing files, and technical issues
+- **Performance Metrics**: Tracks system performance and resource usage
+
+#### **Weekly Rotation System**
+- **Storage Management**: Automatically rotates logs weekly to prevent database bloat
+- **Historical Data**: Maintains accessible historical data for analysis
+- **Archive Strategy**: Archives old logs while keeping recent data readily available
+- **Compliance Tracking**: Maintains records for regulatory and audit purposes
+
+### **Program Director (Legacy Architecture)**
+The **Program Director** serves as the top-level controller in the traditional broadcast architecture:
+
+#### **Channel Orchestration**
+- **Multi-Channel Management**: Orchestrates all channels and manages global state
+- **Emergency Coordination**: Coordinates emergency alerts across all channels
+- **System Monitoring**: Manages system-wide configuration and performance monitoring
+- **Lifecycle Management**: Handles channel lifecycle (start, stop, restart, maintenance)
+
+#### **Channel Management (Legacy)**
+- **Independent Channels**: Each channel operates as an independent broadcast unit
+- **Schedule Management**: Maintains coarse (show-level) and fine (break-level) scheduling
+- **Pipeline Control**: Controls playback transitions, timing, and stream quality
+- **Graphics Overlay**: Manages bugs, branding, emergency graphics, and lower thirds
 - **Playback Pipeline**: Handles actual media playback and stream generation
 
-### **Shared Resources**
-- **Content Manager**: Ingests and validates assets, stores metadata, distributes to channels
+#### **Shared Resources (Legacy)**
+- **Content Distribution**: Ingests and validates assets, stores metadata, distributes to channels
 - **Emergency System**: Provides priority alert injection across all channels
 
 ## 🎛️ Playback Engine Architecture

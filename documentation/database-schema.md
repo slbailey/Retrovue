@@ -1,226 +1,192 @@
 # 🗄️ Database Schema Design
 
-## 📊 Core Tables - Scheduling & Content Delivery Focus
+## 🎯 Schema Version 1.2 - Media-First Architecture
 
-### **Media Files (Core Content Storage)**
+### **Core Design Philosophy**
+The Retrovue database schema is built on a **media-first foundation** where every record begins with a physical media file. This approach ensures that:
+- **Physical Reality**: All content must have an actual playable media file as its foundation
+- **Logical Wrappers**: Content items are logical wrappers around media files
+- **Metadata Layering**: Rich metadata is layered on top without modifying the original
+- **Playback Guarantee**: Every scheduled item can be played because it has a verified media file
+
+### **Schema Management Methodology**
+Retrovue uses a **schema-first approach** with no migration framework:
+- **Single Source of Truth**: `sql/retrovue_schema_v1.2.sql` is the authoritative schema
+- **No Migrations**: Schema changes are made directly to the SQL file
+- **Clean Recreate**: Database is deleted and recreated from the SQL file for any changes
+- **Deterministic**: Every database creation produces identical results
+- **Simple Workflow**: Delete `.db` → Update `.sql` → Run `scripts/db_reset.py`
+
+### **Core Entities Overview**
+- **plex_servers**: Plex server configurations and connections
+- **libraries**: Plex library definitions and metadata
+- **path_mappings**: Critical mappings from Plex paths to accessible local paths
+- **media_files**: Physical representation of content with technical metadata
+- **content_items**: Logical content with editorial metadata and scheduling information
+- **content_editorial**: Source metadata preservation and editorial overrides
+- **content_tags**: Namespaced tags for audience/holiday/brand-based scheduling
+
+## 📊 Core Tables - Current v1.2 Schema
+
+### **Plex Servers (Server Configuration)**
 ```sql
-media_files (
+plex_servers (
     id INTEGER PRIMARY KEY,
-    file_path TEXT NOT NULL,           -- Local accessible file path
-    plex_path TEXT,                    -- Plex internal path (for reference)
-    duration INTEGER NOT NULL,         -- Duration in milliseconds
-    media_type TEXT NOT NULL,          -- 'movie', 'episode', 'commercial', 'bumper', etc.
-    source_type TEXT NOT NULL,         -- 'plex', 'tmm', 'manual'
-    source_id TEXT,                    -- External source identifier
-    library_name TEXT,                 -- Plex library name or TMM directory
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    name TEXT NOT NULL,                -- Human-readable server name
+    base_url TEXT,                     -- Plex server base URL
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-### **Movies (TV Network Content)**
+### **Libraries (Plex Library Definitions)**
 ```sql
-movies (
+libraries (
     id INTEGER PRIMARY KEY,
-    media_file_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    year INTEGER,
-    rating TEXT,                       -- 'G', 'PG', 'PG-13', 'R', 'Adult', 'NR'
-    summary TEXT,
-    genre TEXT,
-    director TEXT,
-    plex_rating_key TEXT UNIQUE,       -- Plex's unique identifier
-    updated_at_plex TIMESTAMP,         -- Last update from Plex
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (media_file_id) REFERENCES media_files(id)
+    server_id INTEGER NOT NULL REFERENCES plex_servers(id) ON DELETE CASCADE,
+    plex_library_key TEXT NOT NULL,    -- Plex's internal library key
+    title TEXT NOT NULL,               -- Library display name
+    library_type TEXT NOT NULL,        -- 'movie', 'show', 'music', etc.
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-### **TV Shows**
+### **Path Mappings (Critical for Streaming)**
+```sql
+path_mappings (
+    id INTEGER PRIMARY KEY,
+    server_id INTEGER NOT NULL REFERENCES plex_servers(id) ON DELETE CASCADE,
+    library_id INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+    plex_path TEXT NOT NULL,           -- Plex internal path
+    local_path TEXT NOT NULL,          -- Accessible local path
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+)
+```
+
+### **Shows (TV Series Metadata)**
 ```sql
 shows (
     id INTEGER PRIMARY KEY,
-    title TEXT NOT NULL,
+    server_id INTEGER NOT NULL REFERENCES plex_servers(id) ON DELETE CASCADE,
+    library_id INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+    plex_rating_key TEXT NOT NULL,     -- Plex's unique identifier
+    title TEXT NOT NULL,               -- Show title
     year INTEGER,                      -- Year for disambiguation
-    total_seasons INTEGER,
-    total_episodes INTEGER,
-    show_rating TEXT,                  -- 'G', 'PG', 'PG-13', 'R', 'Adult', 'NR'
-    show_summary TEXT,
-    genre TEXT,
-    source_type TEXT NOT NULL,         -- 'plex', 'tmm', 'manual'
-    source_id TEXT,                    -- External source identifier
-    plex_rating_key TEXT UNIQUE,       -- Plex's unique identifier
-    updated_at_plex TIMESTAMP,         -- Last update from Plex
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(title, year)                -- Prevent duplicate shows
+    originally_available_at TEXT,      -- Original air date
+    summary TEXT,                      -- Show description
+    studio TEXT,                       -- Production studio
+    artwork_url TEXT,                  -- Show artwork URL
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-### **Episodes**
+### **Seasons (TV Season Metadata)**
 ```sql
-episodes (
+seasons (
     id INTEGER PRIMARY KEY,
-    media_file_id INTEGER NOT NULL,
-    show_id INTEGER NOT NULL,
-    episode_title TEXT NOT NULL,
-    season_number INTEGER NOT NULL,
-    episode_number INTEGER NOT NULL,
-    rating TEXT,                       -- 'G', 'PG', 'PG-13', 'R', 'Adult', 'NR'
-    summary TEXT,
-    plex_rating_key TEXT UNIQUE,       -- Plex's unique identifier
-    updated_at_plex TIMESTAMP,         -- Last update from Plex
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (media_file_id) REFERENCES media_files(id),
-    FOREIGN KEY (show_id) REFERENCES shows(id)
+    show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+    season_number INTEGER NOT NULL,    -- Season number
+    plex_rating_key TEXT,              -- Plex's season identifier
+    title TEXT,                        -- Season title
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-### **Show GUIDs (External Identifiers)**
+### **Content Items (Logical Content Wrappers)**
 ```sql
-show_guids (
+content_items (
     id INTEGER PRIMARY KEY,
-    show_id INTEGER NOT NULL,
-    provider TEXT NOT NULL,            -- 'tvdb', 'tmdb', 'imdb', 'plex'
-    external_id TEXT NOT NULL,         -- The actual ID from provider
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (show_id) REFERENCES shows(id),
-    UNIQUE(provider, external_id)      -- Prevent duplicate GUIDs
+    kind TEXT NOT NULL CHECK (kind IN ('movie','episode','interstitial','intro','outro','promo','bumper','clip','ad','unknown')),
+    title TEXT,                        -- Content title
+    synopsis TEXT,                     -- Content description
+    duration_ms INTEGER,               -- Duration in milliseconds
+    rating_system TEXT,                -- Rating system (MPAA, TV, etc.)
+    rating_code TEXT,                  -- Rating code (G, PG, TV-14, etc.)
+    is_kids_friendly INTEGER DEFAULT 0 CHECK (is_kids_friendly IN (0,1)),
+    artwork_url TEXT,                  -- Artwork URL
+    guid_primary TEXT,                 -- Primary external identifier
+    external_ids_json TEXT,            -- JSON of all external IDs
+    metadata_updated_at INTEGER,       -- EPOCH SECONDS (editorial freshness)
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    show_id INTEGER REFERENCES shows(id) ON DELETE SET NULL,
+    season_id INTEGER REFERENCES seasons(id) ON DELETE SET NULL,
+    season_number INTEGER,             -- For episodes
+    episode_number INTEGER             -- For episodes
 )
 ```
 
-### **Content Type Specific Metadata**
+### **Media Files (Physical File Storage)**
 ```sql
-content_scheduling_metadata (
+-- MEDIA FILES (polymorphic via two FKs; exactly one must be set)
+media_files (
     id INTEGER PRIMARY KEY,
-    media_file_id INTEGER NOT NULL,
-    content_type TEXT NOT NULL,        -- 'movie', 'tv_show', 'commercial', 'bumper', 'intro', 'outro', 'interstitial'
-    daypart_preference TEXT,           -- 'morning', 'afternoon', 'evening', 'late_night'
-    seasonal_preference TEXT,          -- 'spring', 'summer', 'fall', 'winter', 'holiday'
-    content_rating TEXT,               -- 'G', 'PG', 'PG-13', 'R', 'Adult'
-    commercial_company TEXT,           -- For commercials: "Coca-Cola", "McDonald's"
-    commercial_category TEXT,          -- For commercials: "food", "automotive", "retail"
-    commercial_duration INTEGER,       -- For commercials: 15, 30, 60 (seconds)
-    commercial_expiration DATE,        -- For commercials: when to stop airing
-    target_demographic TEXT,           -- "family", "adult", "children", "seniors"
-    content_warnings TEXT,             -- "violence", "language", "adult_themes"
-    scheduling_notes TEXT,             -- Custom notes for schedulers
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (media_file_id) REFERENCES media_files(id)
+    movie_id   INTEGER,                -- References movies(id) if this is a movie file
+    episode_id INTEGER,                -- References episodes(id) if this is an episode file
+    plex_file_path   TEXT NOT NULL,    -- Plex file path
+    local_file_path  TEXT,             -- Local accessible file path
+    file_size_bytes  INTEGER,          -- File size in bytes
+    video_codec      TEXT,             -- Video codec
+    audio_codec      TEXT,             -- Audio codec
+    width INTEGER,                     -- Video width
+    height INTEGER,                    -- Video height
+    duration_ms INTEGER,               -- Duration in milliseconds
+    container TEXT,                    -- Container format (mp4, mkv, etc.)
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    CHECK ((movie_id IS NOT NULL) <> (episode_id IS NOT NULL)),
+    FOREIGN KEY (movie_id)   REFERENCES movies(id)   ON DELETE CASCADE,
+    FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE
 )
 ```
 
-## 🔗 External Source Integration
+**Note**: The `media_files` table is polymorphic via two foreign keys (`movie_id` and `episode_id`). Exactly one of these must be set (enforced by a CHECK constraint), allowing the same table to store files for both movies and episodes while maintaining referential integrity.
 
-### **Content Sources**
+
+### **Content Tags (Namespaced Tagging System)**
 ```sql
-content_sources (
-    id INTEGER PRIMARY KEY,
-    source_type TEXT NOT NULL,         -- 'plex', 'tmm'
-    source_name TEXT NOT NULL,         -- Human-readable name
-    plex_server_url TEXT,              -- For Plex integration
-    plex_token TEXT,                   -- For Plex integration
-    last_sync_time TIMESTAMP,
-    sync_enabled BOOLEAN DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+content_tags (
+    content_item_id INTEGER NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+    namespace TEXT NOT NULL,           -- 'audience', 'holiday', 'brand', 'tone', 'genre', 'season'
+    key TEXT NOT NULL,                -- Tag key within namespace
+    value TEXT,                       -- Tag value
+    PRIMARY KEY (content_item_id, namespace, key)
 )
 ```
 
-### **Plex Path Mapping (CRITICAL for streaming)**
+### **Content Editorial (Source Metadata & Overrides)**
 ```sql
-plex_path_mappings (
-    id INTEGER PRIMARY KEY,
-    plex_media_source_id INTEGER NOT NULL,
-    plex_path TEXT NOT NULL,           -- "/media/movies" (Plex internal path)
-    local_path TEXT NOT NULL,          -- "R:\movies" (accessible path)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (plex_media_source_id) REFERENCES content_sources(id)
+content_editorial (
+    content_item_id INTEGER PRIMARY KEY REFERENCES content_items(id) ON DELETE CASCADE,
+    source_name TEXT,                 -- 'plex', 'tmm', 'manual'
+    source_payload_json TEXT,         -- Complete source metadata as JSON
+    original_title TEXT,              -- Original title from source
+    original_synopsis TEXT,           -- Original synopsis from source
+    override_title TEXT,              -- Editorial override title
+    override_synopsis TEXT,           -- Editorial override synopsis
+    override_updated_at INTEGER       -- EPOCH SECONDS when override was last updated
 )
 ```
 
-### **TMM Directory Management**
-```sql
-tmm_directories (
-    id INTEGER PRIMARY KEY,
-    directory_path TEXT NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    include_subdirectories BOOLEAN DEFAULT 1,
-    enabled BOOLEAN DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
-```
+## 🎬 Media Markers & Ad Breaks
 
-### **Sync History Tracking**
+### **Media Markers (Ad Breaks & Cue Points)**
 ```sql
-sync_history (
+media_markers (
     id INTEGER PRIMARY KEY,
-    source_type TEXT NOT NULL,         -- 'plex', 'tmm'
-    source_name TEXT NOT NULL,
-    sync_type TEXT NOT NULL,           -- 'full', 'incremental', 'selective'
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP,
-    status TEXT NOT NULL,              -- 'running', 'completed', 'failed'
-    items_processed INTEGER DEFAULT 0,
-    items_added INTEGER DEFAULT 0,
-    items_updated INTEGER DEFAULT 0,
-    items_removed INTEGER DEFAULT 0,
-    error_message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
-```
-
-## 🎬 Chapter Markers & Media Processing
-
-### **Chapter Markers**
-```sql
-chapter_markers (
-    id INTEGER PRIMARY KEY,
-    media_file_id INTEGER NOT NULL,
-    chapter_title TEXT NOT NULL,
-    timestamp_ms INTEGER NOT NULL,     -- Timestamp in milliseconds
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (media_file_id) REFERENCES media_files(id)
-)
-```
-
-### **Commercial Break Scheduling**
-```sql
-commercial_breaks (
-    id INTEGER PRIMARY KEY,
-    media_file_id INTEGER NOT NULL,
-    chapter_marker_id INTEGER,         -- Optional: specific chapter marker
-    commercial_content_id INTEGER,     -- Media file ID of commercial
-    start_time INTEGER NOT NULL,       -- Start time in milliseconds
-    end_time INTEGER NOT NULL,         -- End time in milliseconds
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (media_file_id) REFERENCES media_files(id),
-    FOREIGN KEY (chapter_marker_id) REFERENCES chapter_markers(id),
-    FOREIGN KEY (commercial_content_id) REFERENCES media_files(id)
-)
-```
-
-### **Generated Media Segments**
-```sql
-media_segments (
-    id INTEGER PRIMARY KEY,
-    media_file_id INTEGER NOT NULL,
-    segment_path TEXT NOT NULL,
-    start_time INTEGER NOT NULL,       -- Start time in milliseconds
-    end_time INTEGER NOT NULL,         -- End time in milliseconds
-    chapter_marker_id INTEGER,         -- Associated chapter marker
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (media_file_id) REFERENCES media_files(id),
-    FOREIGN KEY (chapter_marker_id) REFERENCES chapter_markers(id)
+    media_file_id INTEGER NOT NULL REFERENCES media_files(id) ON DELETE CASCADE,
+    marker_kind TEXT NOT NULL CHECK (marker_kind IN ('chapter','ad_break','cue')),
+    start_ms INTEGER NOT NULL,         -- Start time in milliseconds
+    end_ms INTEGER,                    -- End time in milliseconds (for ad breaks)
+    label TEXT,                        -- Marker label/description
+    source TEXT NOT NULL CHECK (source IN ('file','manual','detected')),
+    confidence REAL,                   -- Confidence score for detected markers
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
@@ -230,146 +196,281 @@ media_segments (
 ```sql
 channels (
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    target_demographic TEXT,           -- "family", "adult", "children", "seniors"
-    content_rating_limit TEXT,         -- "G", "PG", "PG-13", "R", "Adult"
-    enabled BOOLEAN DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    name TEXT NOT NULL,                -- Channel name
+    number TEXT,                       -- Channel number
+    callsign TEXT,                     -- Channel callsign
+    is_active INTEGER DEFAULT 1 CHECK (is_active IN (0,1)),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-### **Schedules**
+### **Schedule Blocks (Programming Templates)**
 ```sql
-schedules (
+schedule_blocks (
     id INTEGER PRIMARY KEY,
-    channel_id INTEGER NOT NULL,
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP NOT NULL,
-    content_id INTEGER NOT NULL,       -- Media file ID
-    schedule_type TEXT NOT NULL,       -- 'show', 'commercial', 'bumper', 'emergency'
-    priority INTEGER DEFAULT 0,        -- Higher priority overrides lower
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (channel_id) REFERENCES channels(id),
-    FOREIGN KEY (content_id) REFERENCES media_files(id)
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,                -- Block name (e.g., "Sitcoms at 5pm")
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sun..6=Sat
+    start_time TEXT NOT NULL,          -- 'HH:MM:SS' format
+    end_time TEXT NOT NULL,            -- 'HH:MM:SS' format
+    strategy TEXT NOT NULL CHECK (strategy IN ('auto','series','specific','collection')),
+    constraints_json TEXT,             -- JSON constraints for content selection
+    ad_policy_id INTEGER,              -- Reference to ad policy
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-### **Playout Logs**
+### **Schedule Instances (Specific Scheduled Content)**
 ```sql
-playout_logs (
+schedule_instances (
     id INTEGER PRIMARY KEY,
-    channel_id INTEGER NOT NULL,
-    content_id INTEGER NOT NULL,
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP,
-    status TEXT NOT NULL,              -- 'scheduled', 'playing', 'completed', 'failed'
-    errors TEXT,                       -- Error messages if any
-    actual_duration INTEGER,           -- Actual duration in milliseconds
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (channel_id) REFERENCES channels(id),
-    FOREIGN KEY (content_id) REFERENCES media_files(id)
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    block_id INTEGER REFERENCES schedule_blocks(id) ON DELETE SET NULL,
+    air_date TEXT NOT NULL,            -- 'YYYY-MM-DD' format
+    start_time TEXT NOT NULL,          -- 'HH:MM:SS' format
+    end_time TEXT NOT NULL,            -- 'HH:MM:SS' format
+    content_item_id INTEGER REFERENCES content_items(id) ON DELETE SET NULL,
+    show_id INTEGER REFERENCES shows(id) ON DELETE SET NULL,
+    pick_strategy TEXT NOT NULL CHECK (pick_strategy IN ('auto','specific','series_next')),
+    status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','approved','played','canceled')),
+    notes TEXT,                        -- Scheduler notes
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-## ⚙️ System Configuration
-
-### **System Configuration**
+### **Ad Policies (Commercial Targeting Rules)**
 ```sql
-system_config (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    description TEXT,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
-```
-
-### **Emergency Alerts**
-```sql
-emergency_alerts (
+ad_policies (
     id INTEGER PRIMARY KEY,
-    message TEXT NOT NULL,
-    priority INTEGER NOT NULL,         -- Higher priority overrides lower
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP,
-    channels TEXT,                     -- JSON array of channel IDs
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    name TEXT NOT NULL,                -- Policy name
+    rules_json TEXT NOT NULL,          -- JSON rules for commercial targeting
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 )
 ```
 
-## 🎯 Key Design Decisions - Scheduling-First Approach
-
-### **1. Content-Centric Design**
-- All scheduling references content items by ID
-- Media files are the foundation of the entire system
-- Content metadata drives scheduling decisions
-
-### **2. Scheduling Metadata**
-- Daypart preferences (morning, afternoon, evening, late night)
-- Seasonal targeting (spring, summer, fall, winter, holiday)
-- Demographic targeting (family, adult, children, seniors)
-- Content rating system (G, PG, PG-13, R, Adult)
-
-### **3. External Source Integration**
-- Plex API integration with episode-level granularity
-- TinyMediaManager .nfo file support
-- Multiple source support with conflict resolution
-
-### **4. Content Delivery Focus**
-- Commercial company and category tracking
-- Target audience and content warnings
-- Commercial duration and expiration dates
-- Scheduling notes for content creators
-
-### **5. Audit Trail**
-- Complete playout logging with actual vs scheduled duration
-- Sync history tracking for all sources
-- Error logging and status tracking
-- Performance monitoring capabilities
-
-### **6. Multi-Channel Ready**
-- Channel abstraction with demographic targeting
-- Independent channel scheduling
-- Emergency alert system across all channels
-- Scalable architecture for multiple simultaneous streams
-
-## 🔄 Database Migrations
-
-### **Migration Strategy**
-- Automatic schema updates without data loss
-- Version tracking for database schema
-- Backward compatibility with existing data
-- Safe migration rollback capabilities
-
-### **Key Migration Examples**
+### **Play Log (What Actually Aired)**
 ```sql
--- Add updated_at_plex to episodes table
-ALTER TABLE episodes ADD COLUMN updated_at_plex TIMESTAMP;
-
--- Add updated_at_plex to movies table  
-ALTER TABLE movies ADD COLUMN updated_at_plex TIMESTAMP;
-
--- Add year-based disambiguation to shows table
-ALTER TABLE shows ADD COLUMN year INTEGER;
-CREATE UNIQUE INDEX idx_shows_title_year ON shows(title, year);
+play_log (
+    id INTEGER PRIMARY KEY,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    ts_start TEXT NOT NULL,            -- ISO8601 timestamp
+    ts_end TEXT,                       -- ISO8601 timestamp
+    item_kind TEXT NOT NULL CHECK (item_kind IN ('program','ad','promo','bumper','clip','unknown')),
+    content_item_id INTEGER REFERENCES content_items(id) ON DELETE SET NULL,
+    media_file_id INTEGER REFERENCES media_files(id) ON DELETE SET NULL,
+    schedule_instance_id INTEGER REFERENCES schedule_instances(id) ON DELETE SET NULL,
+    ad_block_seq INTEGER,              -- Sequence within ad block
+    notes TEXT                         -- Additional notes
+)
 ```
+
+## 🔄 Schema Management Methodology
+
+### **Schema-First Approach**
+Retrovue uses a **schema-first approach** with no migration framework:
+
+#### **Single Source of Truth**
+- **`sql/retrovue_schema_v1.2.sql`** is the authoritative schema file
+- All schema changes are made directly to this SQL file
+- No migration scripts, no version tracking, no incremental changes
+
+#### **Clean Recreate Workflow**
+1. **Delete existing database**: Remove the `.db` file
+2. **Update schema**: Modify `sql/retrovue_schema_v1.2.sql` as needed
+3. **Recreate database**: Run `scripts/db_reset.py` to create fresh database
+4. **Re-import data**: Use the UI to re-sync from Plex/TMM sources
+
+#### **Benefits of This Approach**
+- **Deterministic**: Every database creation produces identical results
+- **Simple**: No complex migration logic or version management
+- **Reliable**: No risk of migration failures or data corruption
+- **Fast**: Schema changes are immediate, no migration downtime
+- **Clean**: No legacy migration artifacts or version tracking
+
+#### **Development Workflow**
+```bash
+# Make schema changes
+# Edit sql/retrovue_schema_v1.2.sql
+
+# Reset database with new schema
+python scripts/db_reset.py
+
+# Re-import content
+# Use UI to sync from Plex/TMM
+```
+
+#### **Production Considerations**
+- **Backup First**: Always backup existing data before schema changes
+- **Data Export**: Export any custom data before reset
+- **Re-import**: Plan for re-importing content after schema changes
+- **Testing**: Test schema changes in development first
+
+## 🎯 Key Design Decisions - Media-First Architecture
+
+### **1. Media-First Design**
+- **Physical Foundation**: Every content item must have a verified media file
+- **Logical Wrappers**: Content items are logical wrappers around media files
+- **Metadata Layering**: Rich metadata is layered on top without modifying originals
+- **Playback Guarantee**: Every scheduled item can be played because it has a verified media file
+
+### **2. Unified Content Model**
+- **Single Content Table**: `content_items` replaces separate movies/episodes tables
+- **Content Type Field**: Distinguishes between movies, episodes, commercials, bumpers, etc.
+- **Consistent Ratings**: Standardized rating system across all content types
+- **Unified Scheduling**: All content types use the same scheduling system
+
+### **3. Editorial Override System**
+- **Source Preservation**: Original Plex/TMM metadata remains intact
+- **Customization Layer**: Editorial changes stored separately in `content_editorial`
+- **Audit Trail**: All editorial changes tracked with timestamps
+- **Flexible Editing**: Users can modify metadata without losing source data
+
+### **4. Namespaced Tagging System**
+- **Structured Organization**: Tags follow `namespace:value` format
+- **Flexible Targeting**: Multiple namespaces for complex scheduling rules
+- **Extensible Design**: New namespaces can be added without schema changes
+- **Hierarchical Control**: Tags can be combined for sophisticated content selection
+
+### **5. Advanced Scheduling Architecture**
+- **Schedule Blocks**: High-level programming templates (e.g., "Sitcoms at 5pm")
+- **Schedule Instances**: Specific content scheduled for exact date/time
+- **Tag-Based Selection**: Content selection based on namespaced tags
+- **Rating Compliance**: Automatic content filtering based on parental ratings
+
+### **6. Comprehensive Logging**
+- **Play Log Tracking**: Records what programs and ads actually aired
+- **Weekly Rotation**: Automatic log management to prevent database bloat
+- **Performance Metrics**: Track system performance and resource usage
+- **Error Logging**: Record playback errors and technical issues
+
+### **7. Multi-Channel Ready**
+- **Channel Abstraction**: Independent channel scheduling and control
+- **Emergency System**: Priority alert injection across all channels
+- **Resource Management**: CPU and memory allocation per channel
+- **Scalable Architecture**: Support for multiple simultaneous streams
+
+## 🔧 Schema Conflict Resolution
+
+### **Rating System Standardization**
+- **Unified Ratings**: All tables now use consistent rating values
+- **MPAA + TV Ratings**: Support for both movie and TV rating systems
+- **Migration Path**: Clear migration from old simple ratings to comprehensive system
+
+### **Metadata Consolidation**
+- **Single Source**: `content_editorial` consolidates all metadata
+- **No Overlap**: Eliminated duplicate metadata fields across tables
+- **Clear Separation**: Source metadata vs. editorial overrides clearly defined
+
+### **Scheduling System Unification**
+- **Single Scheduling**: `schedule_instances` replaces old `schedules` table
+- **Content Items**: All scheduling references `content_item_id` instead of `media_file_id`
+- **Backward Compatibility**: Old tables marked as deprecated but preserved
+
+### **Logging System Consolidation**
+- **Single Logging**: `play_log` replaces old `playout_logs` table
+- **Enhanced Tracking**: More detailed logging with actual vs. scheduled timing
+- **Weekly Rotation**: Built-in log management to prevent database bloat
+
+## 🎯 Key Design Decisions - v1.2 Architecture
+
+### **1. Plex-Centric Design**
+- **Server Management**: `plex_servers` table manages multiple Plex server connections
+- **Library Organization**: `libraries` table organizes content by Plex library
+- **Path Mapping**: Critical `path_mappings` table enables streaming by mapping Plex paths to accessible paths
+- **Plex Integration**: All content references Plex rating keys for reliable synchronization
+
+### **2. Media-First Foundation**
+- **Physical Files**: `media_files` table stores actual file information with technical metadata
+- **Content Wrappers**: `content_items` provides logical content organization
+- **File Mapping**: `content_item_files` links content to media files with role support
+- **Playback Guarantee**: Every scheduled item has verified media file access
+
+### **3. Flexible Content Model**
+- **Content Kinds**: Support for movies, episodes, commercials, bumpers, promos, etc.
+- **TV Structure**: Proper show/season/episode hierarchy with Plex integration
+- **Rating Systems**: Flexible rating system and code storage
+- **Kids-Friendly**: Boolean flag for quick family content filtering
+
+### **4. Editorial Override System**
+- **Source Preservation**: Complete source metadata stored as JSON in `content_editorial`
+- **Override Support**: Separate fields for editorial title and synopsis overrides
+- **Audit Trail**: Timestamp tracking for when overrides were last updated
+- **Flexible Sources**: Support for Plex, TMM, and manual content sources
+
+### **5. Advanced Tagging System**
+- **Namespaced Tags**: `content_tags` uses namespace/key/value structure
+- **Flexible Organization**: Support for audience, holiday, brand, tone, genre, season tags
+- **Efficient Queries**: Indexed for fast content selection and filtering
+- **Extensible**: New namespaces can be added without schema changes
+
+### **6. Sophisticated Scheduling**
+- **Schedule Blocks**: Template-based programming with day-of-week and time constraints
+- **Strategy Support**: Auto, series, specific, and collection-based content selection
+- **Schedule Instances**: Specific scheduled content with approval workflow
+- **Ad Integration**: Built-in ad policy support for commercial management
+
+### **7. Comprehensive Media Markers**
+- **Multiple Types**: Support for chapters, ad breaks, and cue points
+- **Source Tracking**: File-based, manual, or detected markers
+- **Confidence Scoring**: For automatically detected markers
+- **Flexible Timing**: Start/end time support for various marker types
+
+### **8. Detailed Play Logging**
+- **ISO8601 Timestamps**: Precise time tracking for all aired content
+- **Item Classification**: Programs, ads, promos, bumpers, clips
+- **Schedule Linking**: Links to original schedule instances
+- **Ad Block Sequencing**: Support for ad block sequence tracking
+
+## 🔧 Schema Management Benefits
+
+### **No Migration Complexity**
+- **Simple Changes**: Schema changes are made directly to the SQL file
+- **No Version Tracking**: No need to manage migration versions or rollbacks
+- **No Data Corruption**: No risk of migration failures or partial updates
+- **Immediate Results**: Schema changes take effect immediately
+
+### **Deterministic Database Creation**
+- **Identical Results**: Every database creation produces the same structure
+- **Reproducible**: Same schema file always creates identical database
+- **Testable**: Easy to test schema changes in isolation
+- **Reliable**: No dependency on migration state or order
+
+### **Development Efficiency**
+- **Fast Iteration**: Schema changes are immediate, no migration downtime
+- **Clean Environment**: Fresh database for each development session
+- **Simple Testing**: Easy to test with clean database state
+- **No Artifacts**: No migration files or version tracking to maintain
 
 ## 📊 Performance Considerations
 
 ### **Indexing Strategy**
-- Primary keys on all tables
-- Foreign key indexes for join performance
-- Unique constraints for data integrity
-- Composite indexes for common query patterns
+- **Primary Keys**: All tables have efficient primary key indexes
+- **Foreign Keys**: CASCADE deletes for data integrity and performance
+- **Unique Constraints**: Prevent duplicate data and enable fast lookups
+- **Composite Indexes**: Optimized for common query patterns
+- **Content Queries**: Indexed on namespace/key for fast tag-based filtering
+- **Scheduling**: Indexed on date/time for efficient schedule queries
 
 ### **Query Optimization**
-- Normalized schema reduces data duplication
-- Efficient joins between related tables
-- Proper indexing for common access patterns
-- Optimized queries for large library support
+- **Normalized Schema**: Reduces data duplication and storage requirements
+- **Efficient Joins**: Proper foreign key relationships for fast joins
+- **Plex Integration**: Direct Plex rating key lookups for synchronization
+- **Content Selection**: Optimized queries for tag-based content filtering
+- **Schedule Queries**: Efficient date/time range queries for scheduling
 
 ### **Scalability**
-- SQLite for single-user deployment
-- Schema designed for potential PostgreSQL migration
-- Efficient pagination for large datasets
-- Optimized sync operations for large libraries
+- **SQLite Foundation**: Single-user deployment with excellent performance
+- **Plex Integration**: Leverages Plex's existing metadata and file organization
+- **Efficient Sync**: Only updates changed content based on Plex timestamps
+- **Large Libraries**: Optimized for libraries with thousands of items
+- **Memory Efficient**: Proper indexing prevents full table scans
+
+### **Schema Management Performance**
+- **Fast Creation**: SQLite database creation is very fast
+- **No Migration Overhead**: No migration scripts to run or maintain
+- **Clean State**: Fresh database ensures optimal performance
+- **Deterministic**: Same schema always produces same performance characteristics

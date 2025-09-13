@@ -86,6 +86,68 @@ Retrovue is designed to be a community-driven project. Whether you're a develope
 - **Testing**: Try it out and provide feedback
 - **Documentation**: Help improve guides and tutorials
 
+## 🧪 Running Tests with Live Plex
+
+The smoke tests can run against a live Plex server for comprehensive integration testing.
+
+### Required Environment Variables
+
+Set these environment variables to enable live Plex testing:
+
+```bash
+# Required: Your Plex server base URL
+export PLEX_BASE_URL="http://192.168.1.100:32400"
+
+# Required: Your Plex authentication token
+# Get this from: https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
+export PLEX_TOKEN="your_plex_token_here"
+
+# Optional: Custom name for the test server (defaults to "LivePlex")
+export PLEX_SERVER_NAME="HomePlex"
+```
+
+### Running Live Tests
+
+```bash
+# Run simple smoke tests
+python scripts/smoke_test_simple.py
+
+# Run comprehensive smoke tests
+python scripts/smoke_test.py
+
+# Run shell-based smoke tests
+bash scripts/smoke.sh
+```
+
+### Windows (PowerShell)
+```powershell
+$env:PLEX_BASE_URL="http://192.168.1.100:32400"
+$env:PLEX_TOKEN="xxxxx"
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1
+```
+
+### Offline Mode
+
+For CI/testing without network access, set:
+
+```bash
+export PLEX_OFFLINE=1
+```
+
+This will run tests in offline mode, validating CLI structure without network operations.
+
+### JSON Output
+
+Many commands support `--format json` for machine-readable output:
+
+```bash
+# Get server information as JSON
+python cli/plex_sync.py --format json servers list
+
+# Add server and get ID as JSON
+python cli/plex_sync.py --format json servers add --name "Test" --base-url "http://test" --token "abc123"
+```
+
 ## 📞 Support
 
 - **GitHub Issues**: Report bugs and request features

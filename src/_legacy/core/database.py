@@ -27,7 +27,7 @@ Retrovue simulates a professional TV broadcast station by:
 - **shows**: Information about TV series (total seasons, episodes, etc.)
 - **episodes**: Individual TV episodes linked to their parent show
 - **plex_servers**: Configuration for your Plex Media Servers
-- **plex_path_mappings**: How to find your video files on your computer
+- **path_mappings**: How to find your video files on your computer
 
 ### Why This Architecture?
 - **Scalability**: Can handle thousands of movies and TV episodes
@@ -53,7 +53,7 @@ Think of this like a digital filing cabinet for your TV station:
 ## Technical Details
 
 - **Database Engine**: SQLite (file-based, no server required)
-- **Schema Version**: 2 (automatically migrates from older versions)
+- **Schema Version**: 3 (automatically migrates from older versions)
 - **Foreign Keys**: Enabled for data integrity
 - **Timestamps**: Unix epoch integers for consistent time handling
 - **Multi-Server**: Supports multiple Plex servers with proper isolation
@@ -70,7 +70,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Schema version constant - increment this when making schema changes
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 class RetrovueDatabase:
@@ -153,7 +153,7 @@ class RetrovueDatabase:
     ### Server Management Tables
     - **plex_servers**: Plex Media Server configurations
     - **libraries**: Library configurations for each server
-    - **plex_path_mappings**: Path conversion rules for each server
+    - **path_mappings**: Path conversion rules for each server
     
     ### Scheduling Tables (Future)
     - **channels**: TV channels that will broadcast content
@@ -241,6 +241,11 @@ class RetrovueDatabase:
         self._create_tables()
         self._run_migrations()
         self._ensure_schema_consistency()
+        self.apply_retrovue_schema_upgrade_v5()
+        self.migrate_media_files_drop_file_path()
+        self.migrate_drop_legacy_unique_source()
+        self.repair_source_id_for_episodes()
+        self.apply_retrovue_schema_upgrade_media_files()
         self._update_schema_version()
         
         # Verify schema consistency on startup
@@ -255,7 +260,6 @@ class RetrovueDatabase:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS media_files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_path TEXT NOT NULL,
                 duration INTEGER NOT NULL,
                 media_type TEXT NOT NULL,  -- 'movie', 'episode', 'commercial', 'bumper'
                 source_type TEXT NOT NULL,  -- 'plex', 'tmm', 'manual'
@@ -491,22 +495,28 @@ class RetrovueDatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_guids_provider ON show_guids (provider)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_guids_external_id ON show_guids (external_id)")
         
+        # Performance indexes for UPSERT and browse operations
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_media_files_source ON media_files(source_type, source_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_episodes_media ON episodes(media_file_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_episodes_show ON episodes(show_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shows_source ON shows(source_type, source_id)")
+        
         self.connection.commit()
+    
+    def _column_exists(self, table_name: str, column_name: str) -> bool:
+        """Check if a column exists in a table"""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = [row[1] for row in cursor.fetchall()]
+            return column_name in columns
+        except Exception as e:
+            logger.warning(f"⚠️ Error checking column {column_name} in {table_name}: {e}")
+            return False
     
     def _run_migrations(self):
         """Run database migrations to update schema"""
         cursor = self.connection.cursor()
-        
-        # Helper function to check if a column exists in a table
-        def column_exists(table_name: str, column_name: str) -> bool:
-            """Check if a column exists in a table"""
-            try:
-                cursor.execute(f"PRAGMA table_info({table_name})")
-                columns = [row[1] for row in cursor.fetchall()]
-                return column_name in columns
-            except Exception as e:
-                logger.warning(f"⚠️ Error checking column {column_name} in {table_name}: {e}")
-                return False
         
         # Helper function to get column info
         def get_column_info(table_name: str, column_name: str) -> Optional[Dict]:
@@ -562,7 +572,7 @@ class RetrovueDatabase:
         
         # Migration 1: Add library_name column to media_files table
         try:
-            if not column_exists('media_files', 'library_name'):
+            if not self._column_exists('media_files', 'library_name'):
                 cursor.execute("ALTER TABLE media_files ADD COLUMN library_name TEXT")
                 self.connection.commit()
                 logger.info("✅ Added library_name column to media_files table")
@@ -582,7 +592,7 @@ class RetrovueDatabase:
             cursor.execute("ALTER TABLE shows ADD COLUMN guid_primary TEXT")
             cursor.execute("ALTER TABLE shows ADD COLUMN updated_at_plex TIMESTAMP")
             # Only add updated_at with DEFAULT if it doesn't exist and we're not using the new schema
-            if not column_exists('shows', 'updated_at'):
+            if not self._column_exists('shows', 'updated_at'):
                 cursor.execute("ALTER TABLE shows ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             self.connection.commit()
             logger.info("✅ Added year-based disambiguation columns to shows table")
@@ -602,7 +612,7 @@ class RetrovueDatabase:
             cursor.execute("ALTER TABLE episodes ADD COLUMN updated_at_plex TIMESTAMP")
             cursor.execute("ALTER TABLE episodes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             # Only add updated_at with DEFAULT if it doesn't exist and we're not using the new schema
-            if not column_exists('episodes', 'updated_at'):
+            if not self._column_exists('episodes', 'updated_at'):
                 cursor.execute("ALTER TABLE episodes ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             self.connection.commit()
             logger.info("✅ Added additional columns to episodes table")
@@ -668,18 +678,26 @@ class RetrovueDatabase:
         except sqlite3.IntegrityError as e:
             logger.warning(f"⚠️ Migration warning: {e}")
         
-        # Migration 6: Update plex_path_mappings table for per-library support
+        # Migration 6: Update path_mappings table for per-library support
         try:
-            # Add server_id and library_root columns to plex_path_mappings
-            cursor.execute("ALTER TABLE plex_path_mappings ADD COLUMN server_id INTEGER")
-            cursor.execute("ALTER TABLE plex_path_mappings ADD COLUMN library_root TEXT")
-            cursor.execute("ALTER TABLE plex_path_mappings ADD COLUMN library_name TEXT")
-            self.connection.commit()
-            pass  # Migration completed
+            # Check if plex_path_mappings table exists before trying to alter it
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='plex_path_mappings'")
+            if cursor.fetchone():
+                # Add server_id and library_root columns to path_mappings
+                cursor.execute("ALTER TABLE plex_path_mappings ADD COLUMN server_id INTEGER")
+                cursor.execute("ALTER TABLE plex_path_mappings ADD COLUMN library_root TEXT")
+                cursor.execute("ALTER TABLE plex_path_mappings ADD COLUMN library_name TEXT")
+                self.connection.commit()
+                logger.info("✅ Migration 6: Updated plex_path_mappings table")
+            else:
+                logger.info("✅ Migration 6: plex_path_mappings table doesn't exist, skipping")
         except sqlite3.OperationalError as e:
             if "duplicate column name" in str(e):
                 # Columns already exist, that's fine
-                pass
+                logger.info("✅ Migration 6: Columns already exist")
+            elif "no such table" in str(e).lower():
+                # Table doesn't exist, that's fine
+                logger.info("✅ Migration 6: plex_path_mappings table doesn't exist, skipping")
             else:
                 logger.warning(f"⚠️ Migration warning: {e}")
         
@@ -743,7 +761,7 @@ class RetrovueDatabase:
             cursor.execute("ALTER TABLE movies DROP COLUMN updated_at_plex")
             
             # Add updated_at column to movies table if it doesn't exist and we're not using the new schema
-            if not column_exists('movies', 'updated_at'):
+            if not self._column_exists('movies', 'updated_at'):
                 cursor.execute("ALTER TABLE movies ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             
             self.connection.commit()
@@ -822,11 +840,12 @@ class RetrovueDatabase:
                 # Add plex_path column
                 cursor.execute("ALTER TABLE media_files ADD COLUMN plex_path TEXT")
                 
-                # Migrate existing file_path data to plex_path (since file_path currently contains Plex paths)
-                cursor.execute("UPDATE media_files SET plex_path = file_path WHERE plex_path IS NULL")
-                
-                # Clear file_path column (will be populated with local paths during next sync)
-                cursor.execute("UPDATE media_files SET file_path = '' WHERE file_path IS NOT NULL")
+                # Migrate existing file_path data to plex_path (if file_path column still exists)
+                try:
+                    cursor.execute("UPDATE media_files SET plex_path = file_path WHERE plex_path IS NULL AND file_path IS NOT NULL")
+                except Exception:
+                    # file_path column may not exist anymore, that's fine
+                    pass
                 
                 self.connection.commit()
                 logger.info("✅ Migration 12: Added plex_path column and migrated existing data")
@@ -863,7 +882,6 @@ class RetrovueDatabase:
                 cursor.execute("""
                     CREATE TABLE media_files_new (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        file_path TEXT NOT NULL,
                         duration INTEGER NOT NULL,
                         media_type TEXT NOT NULL,
                         source_type TEXT NOT NULL,
@@ -873,15 +891,14 @@ class RetrovueDatabase:
                         server_id INTEGER,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at INTEGER,
-                        FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE,
-                        UNIQUE(source_type, source_id)
+                        FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE
                     )
                 """)
                 
                 # Copy data from old table to new table
                 cursor.execute("""
                     INSERT INTO media_files_new 
-                    SELECT id, file_path, duration, media_type, source_type, source_id, 
+                    SELECT id, duration, media_type, source_type, source_id, 
                            library_name, 
                            COALESCE(plex_path, '') as plex_path,
                            COALESCE(server_id, 0) as server_id,
@@ -911,10 +928,13 @@ class RetrovueDatabase:
                 logger.info("🔧 Migration 14: Adding foreign key constraint to media_files")
                 # SQLite doesn't support adding foreign keys to existing tables
                 # We need to recreate the table with the constraint
+                
+                # Check if media_files_new already exists and drop it
+                cursor.execute("DROP TABLE IF EXISTS media_files_new")
+                
                 cursor.execute("""
                     CREATE TABLE media_files_new (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        file_path TEXT NOT NULL,
                         duration INTEGER NOT NULL,
                         media_type TEXT NOT NULL,
                         source_type TEXT NOT NULL,
@@ -924,16 +944,53 @@ class RetrovueDatabase:
                         server_id INTEGER,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at INTEGER,
-                        FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE,
-                        UNIQUE(source_type, source_id)
+                        FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE
                     )
                 """)
                 
                 # Copy data from old table to new table
-                cursor.execute("""
-                    INSERT INTO media_files_new 
-                    SELECT * FROM media_files
-                """)
+                # Only copy the columns that exist in both tables
+                try:
+                    # Check which columns exist in the old table
+                    cursor.execute("PRAGMA table_info(media_files)")
+                    old_columns = {row[1] for row in cursor.fetchall()}
+                    
+                    # Build column lists based on what actually exists
+                    select_columns = []
+                    insert_columns = []
+                    
+                    # Core columns that should always exist
+                    core_columns = ['id', 'duration', 'media_type', 'source_type', 'source_id', 'library_name', 'plex_path', 'server_id']
+                    for col in core_columns:
+                        if col in old_columns:
+                            select_columns.append(col)
+                            insert_columns.append(col)
+                    
+                    # Optional columns
+                    if 'created_at' in old_columns:
+                        select_columns.append('created_at')
+                        insert_columns.append('created_at')
+                    else:
+                        select_columns.append('CURRENT_TIMESTAMP as created_at')
+                        insert_columns.append('created_at')
+                    
+                    if 'updated_at' in old_columns:
+                        select_columns.append('updated_at')
+                        insert_columns.append('updated_at')
+                    else:
+                        select_columns.append('0 as updated_at')
+                        insert_columns.append('updated_at')
+                    
+                    # Execute the insert with dynamic column lists
+                    insert_sql = f"""
+                        INSERT INTO media_files_new ({', '.join(insert_columns)})
+                        SELECT {', '.join(select_columns)}
+                        FROM media_files
+                    """
+                    cursor.execute(insert_sql)
+                except Exception as e:
+                    logger.warning(f"⚠️ Migration 14 warning: Could not copy data: {e}")
+                    # Continue with empty table if data copy fails
                 
                 # Drop old table and rename new table
                 cursor.execute("DROP TABLE media_files")
@@ -1080,6 +1137,204 @@ class RetrovueDatabase:
             pass
         except Exception as e:
             logger.warning(f"⚠️ Schema consistency warning: {e}")
+        
+        # Migration 15: Add digest-based change detection and state management columns
+        try:
+            logger.info("🔧 Migration 15: Adding digest-based change detection and state management")
+            
+            # Add new columns to media_files table
+            if not self._column_exists('media_files', 'digest'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN digest TEXT")
+            if not self._column_exists('media_files', 'updated_at_plex'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN updated_at_plex BIGINT")
+            if not self._column_exists('media_files', 'first_seen_at'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN first_seen_at BIGINT")
+            if not self._column_exists('media_files', 'last_seen_at'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN last_seen_at BIGINT")
+            if not self._column_exists('media_files', 'last_scan_at'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN last_scan_at BIGINT")
+            if not self._column_exists('media_files', 'state'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN state TEXT DEFAULT 'ACTIVE'")
+            if not self._column_exists('media_files', 'error_count'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN error_count INT DEFAULT 0")
+            if not self._column_exists('media_files', 'last_error_at'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN last_error_at BIGINT")
+            if not self._column_exists('media_files', 'last_error'):
+                cursor.execute("ALTER TABLE media_files ADD COLUMN last_error TEXT")
+            
+            
+            # Check if path_mappings table already exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='path_mappings'")
+            path_mappings_exists = cursor.fetchone() is not None
+            
+            if not path_mappings_exists:
+                # Create new path_mappings table for dynamic path resolution
+                cursor.execute("""
+                    CREATE TABLE path_mappings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        server_id INTEGER NOT NULL,
+                        plex_prefix TEXT NOT NULL,
+                        local_prefix TEXT NOT NULL,
+                        created_at BIGINT DEFAULT (strftime('%s', 'now')),
+                        FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE
+                    )
+                """)
+                
+                # Create index for path mappings
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_path_mappings_server ON path_mappings(server_id)")
+                
+                # Migrate existing path mappings if they exist
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM plex_path_mappings")
+                    if cursor.fetchone()[0] > 0:
+                        logger.info("🔧 Migrating existing path mappings to new format")
+                        cursor.execute("""
+                            INSERT INTO path_mappings (server_id, plex_prefix, local_prefix, created_at)
+                            SELECT 
+                                COALESCE(server_id, 1) as server_id,
+                                plex_path as plex_prefix,
+                                local_path as local_prefix,
+                                strftime('%s', 'now') as created_at
+                            FROM plex_path_mappings
+                            WHERE plex_path IS NOT NULL AND local_path IS NOT NULL
+                        """)
+                except sqlite3.OperationalError as e:
+                    # Old table might not exist, that's fine - don't log as warning
+                    if "no such table" not in str(e).lower():
+                        logger.warning(f"⚠️ Error migrating path mappings: {e}")
+                
+                # Drop old path mappings table
+                cursor.execute("DROP TABLE IF EXISTS plex_path_mappings")
+            else:
+                logger.info("✅ Migration 15: path_mappings table already exists")
+            
+            self.connection.commit()
+            logger.info("✅ Migration 15: Added digest-based change detection and state management")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Migration 15 warning: {e}")
+        
+        # Migration 16: Add last_synced_at column to libraries table
+        try:
+            if not self._column_exists('libraries', 'last_synced_at'):
+                cursor.execute("ALTER TABLE libraries ADD COLUMN last_synced_at INTEGER")
+                self.connection.commit()
+                logger.info("✅ Migration 16: Added last_synced_at column to libraries table")
+            else:
+                logger.info("✅ Migration 16: last_synced_at column already exists")
+        except Exception as e:
+            logger.warning(f"⚠️ Migration 16 warning: {e}")
+        
+        # Migration 17: Add library_id column to shows table
+        try:
+            if not self._column_exists('shows', 'library_id'):
+                cursor.execute("ALTER TABLE shows ADD COLUMN library_id INTEGER")
+                self.connection.commit()
+                logger.info("✅ Migration 17: Added library_id column to shows table")
+            else:
+                logger.info("✅ Migration 17: library_id column already exists")
+        except Exception as e:
+            logger.warning(f"⚠️ Migration 17 warning: {e}")
+        
+        # Migration 18: Add plex_rating_key column to episodes table
+        try:
+            if not self._column_exists('episodes', 'plex_rating_key'):
+                cursor.execute("ALTER TABLE episodes ADD COLUMN plex_rating_key TEXT")
+                self.connection.commit()
+                logger.info("✅ Migration 18: Added plex_rating_key column to episodes table")
+            else:
+                logger.info("✅ Migration 18: plex_rating_key column already exists")
+        except Exception as e:
+            logger.warning(f"⚠️ Migration 18 warning: {e}")
+    
+    def apply_retrovue_schema_upgrade_v5(self):
+        """Apply schema upgrade v5: add digest/state/timestamps, show tracking, and path mappings."""
+        cursor = self.connection.cursor()
+        
+        def _exec(sql):
+            try:
+                cursor.execute(sql)
+            except Exception:
+                pass  # Ignore errors for columns that already exist
+        
+        # media_files: add digest/state/timestamps and identifiers
+        _exec("ALTER TABLE media_files ADD COLUMN digest TEXT;")
+        _exec("ALTER TABLE media_files ADD COLUMN updated_at_plex BIGINT;")
+        _exec("ALTER TABLE media_files ADD COLUMN first_seen_at BIGINT;")
+        _exec("ALTER TABLE media_files ADD COLUMN last_seen_at BIGINT;")
+        _exec("ALTER TABLE media_files ADD COLUMN last_scan_at BIGINT;")
+        _exec("ALTER TABLE media_files ADD COLUMN state TEXT DEFAULT 'ACTIVE';")
+        _exec("ALTER TABLE media_files ADD COLUMN error_count INTEGER DEFAULT 0;")
+        _exec("ALTER TABLE media_files ADD COLUMN last_error_at BIGINT;")
+        _exec("ALTER TABLE media_files ADD COLUMN last_error TEXT;")
+        _exec("ALTER TABLE media_files ADD COLUMN server_id INTEGER;")
+        _exec("ALTER TABLE media_files ADD COLUMN library_id INTEGER;")
+        _exec("ALTER TABLE media_files ADD COLUMN plex_rating_key TEXT;")
+        _exec("ALTER TABLE media_files ADD COLUMN missing_since BIGINT;")
+        _exec("ALTER TABLE media_files ADD COLUMN plex_path TEXT;")
+        
+        # Ensure uniqueness for upserts
+        _exec("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_media_files_unique
+          ON media_files(server_id, library_id, plex_rating_key);
+        """)
+        _exec("CREATE INDEX IF NOT EXISTS idx_media_files_state ON media_files(state);")
+        
+        # Ensure shows and episodes have proper UNIQUE indexes
+        _exec("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_shows_srv_lib_rk
+        ON shows(server_id, library_id, plex_rating_key);
+        """)
+        _exec("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_episodes_show_rk
+        ON episodes(show_id, plex_rating_key);
+        """)
+        
+        # Additional helpful indexes for episode lookups
+        _exec("""
+        CREATE INDEX IF NOT EXISTS idx_shows_source_id ON shows(source_id);
+        """)
+        _exec("""
+        CREATE INDEX IF NOT EXISTS idx_shows_plex_rating_key ON shows(plex_rating_key);
+        """)
+        _exec("""
+        CREATE INDEX IF NOT EXISTS idx_media_files_server_plex ON media_files(server_id, plex_rating_key);
+        """)
+        _exec("""
+        CREATE INDEX IF NOT EXISTS idx_media_files_source_id ON media_files(source_id);
+        """)
+        _exec("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uidx_episodes_media_file_id ON episodes(media_file_id);
+        """)
+        _exec("""
+        CREATE INDEX IF NOT EXISTS idx_episodes_show_id ON episodes(show_id);
+        """)
+        
+        # shows_tracking: per-show selective-expansion tracking
+        _exec("""
+        CREATE TABLE IF NOT EXISTS shows_tracking (
+          server_id INTEGER NOT NULL,
+          library_id INTEGER NOT NULL,
+          rating_key TEXT NOT NULL,
+          show_digest TEXT,
+          children_hydrated INTEGER DEFAULT 0,
+          PRIMARY KEY (server_id, library_id, rating_key)
+        );
+        """)
+        
+        # path_mappings: unified table (plex_prefix/local_prefix)
+        _exec("""
+        CREATE TABLE IF NOT EXISTS path_mappings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          server_id INTEGER NOT NULL,
+          plex_prefix TEXT NOT NULL,
+          local_prefix TEXT NOT NULL
+        );
+        """)
+        _exec("CREATE INDEX IF NOT EXISTS idx_pathmap_server ON path_mappings(server_id);")
+        
+        self.connection.commit()
+        logger.info("✅ Applied schema upgrade v5: digest/state tracking, show tracking, and path mappings")
     
     def _update_schema_version(self):
         """Update the schema version to track the current database schema"""
@@ -1095,12 +1350,673 @@ class RetrovueDatabase:
             cursor.execute("""
                 INSERT INTO schema_version (version, description) 
                 VALUES (?, ?)
-            """, (CURRENT_SCHEMA_VERSION, "Fixed schema consistency - proper updated_at types, plex_path separation, foreign key cascades"))
+            """, (CURRENT_SCHEMA_VERSION, "Added digest-based change detection, state management, and dynamic path mapping system"))
             
             self.connection.commit()
             
         except Exception as e:
             logger.warning(f"⚠️ Schema version warning: {e}")
+    
+    def _get_conn(self):
+        """Be resilient to either .connection or .conn"""
+        return getattr(self, "connection", None) or getattr(self, "conn", None)
+    
+    def _conn(self):
+        return getattr(self, "connection", None) or getattr(self, "conn", None)
+
+    def _table_columns(self, table_name: str) -> dict:
+        cur = self._conn().execute(f"PRAGMA table_info({table_name})")
+        cols = {}
+        for cid, name, ctype, notnull, dflt, pk in cur.fetchall():
+            cols[name] = {"type": ctype, "notnull": notnull, "default": dflt, "pk": pk}
+        return cols
+
+    def migrate_media_files_drop_file_path(self):
+        """
+        Rebuild media_files without file_path (fully removed).
+        Safe to run multiple times.
+        """
+        conn = self._conn(); cur = conn.cursor()
+        cols = self._table_columns("media_files")
+        if not cols:
+            raise RuntimeError("media_files table not found")
+        # Only rebuild if file_path exists
+        if "file_path" not in cols:
+            return
+
+        cur.execute("BEGIN IMMEDIATE")
+
+        # Canonical target schema (no file_path)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS media_files__new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                server_id INTEGER,
+                library_id INTEGER,
+                plex_rating_key TEXT,
+                media_type TEXT,
+                source_type TEXT,
+                source_id TEXT,
+                duration INTEGER,
+                updated_at INTEGER,
+                updated_at_plex BIGINT,
+                first_seen_at BIGINT,
+                last_seen_at BIGINT,
+                last_scan_at BIGINT,
+                state TEXT DEFAULT 'ACTIVE',
+                error_count INTEGER DEFAULT 0,
+                last_error_at BIGINT,
+                last_error TEXT,
+                missing_since BIGINT,
+                plex_path TEXT,
+                part_count INTEGER DEFAULT 0,
+                streams_signature TEXT,
+                digest TEXT
+            );
+        """)
+
+        present = set(cols.keys())
+        def has(c): return c in present
+        def sel(c, default_sql):
+            return c if has(c) else f"{default_sql} AS {c}"
+
+        # Build a tolerant SELECT (use defaults if old column absent)
+        select_sql = f"""
+            INSERT INTO media_files__new (
+                id, server_id, library_id, plex_rating_key, media_type, source_type, source_id,
+                duration, updated_at, updated_at_plex, first_seen_at, last_seen_at, last_scan_at,
+                state, error_count, last_error_at, last_error, missing_since, plex_path,
+                part_count, streams_signature, digest
+            )
+            SELECT
+                {sel('id','NULL')},
+                {sel('server_id','0')},
+                {sel('library_id','0')},
+                {sel('plex_rating_key','NULL')},
+                {sel('media_type','NULL')},
+                {sel('source_type','NULL')},
+                {sel('source_id','NULL')},
+                {sel('duration','0')},
+                {sel('updated_at','0')},
+                {sel('updated_at_plex','0')},
+                {sel('first_seen_at','0')},
+                {sel('last_seen_at','0')},
+                {sel('last_scan_at','0')},
+                {sel('state',"'ACTIVE'")},
+                {sel('error_count','0')},
+                {sel('last_error_at','0')},
+                {sel('last_error','NULL')},
+                {sel('missing_since','0')},
+                {sel('plex_path','NULL')},
+                {sel('part_count','0')},
+                {sel('streams_signature','NULL')},
+                {sel('digest','NULL')}
+            FROM media_files
+        """
+        cur.execute(select_sql)
+
+        cur.execute("DROP TABLE media_files")
+        cur.execute("ALTER TABLE media_files__new RENAME TO media_files")
+
+        # Recreate indexes used by upserts
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_media_files_unique
+            ON media_files(server_id, library_id, plex_rating_key)
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_media_files_state ON media_files(state)")
+
+        conn.commit()
+
+    def migrate_drop_legacy_unique_source(self):
+        """
+        Drop any UNIQUE index on (source_type, source_id) from media_files.
+        Safe to run multiple times.
+        """
+        conn = getattr(self, "connection", None) or getattr(self, "conn", None)
+        cur = conn.cursor()
+
+        # enumerate indexes
+        cur.execute("PRAGMA index_list(media_files)")
+        idx_rows = cur.fetchall()  # seq, name, unique, origin, partial
+
+        for _, idx_name, is_unique, *_ in idx_rows:
+            # inspect index columns
+            cur.execute(f"PRAGMA index_info({idx_name})")
+            cols = [r[2] for r in cur.fetchall()]  # seqno, cid, name
+            if is_unique and len(cols) == 2 and cols[0] == "source_type" and cols[1] == "source_id":
+                cur.execute(f"DROP INDEX IF EXISTS {idx_name}")
+                conn.commit()
+
+        # ensure our intended unique/indexes exist
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_media_files_unique
+            ON media_files(server_id, library_id, plex_rating_key)
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_media_files_state ON media_files(state)")
+        conn.commit()
+
+    def repair_source_id_for_episodes(self):
+        """
+        Repair existing rows' source_id for episodes to use episode ratingKey instead of show key.
+        """
+        conn = getattr(self, "connection", None) or getattr(self, "conn", None)
+        cur = conn.cursor()
+        # Set source_id to the item key we already store: plex_rating_key
+        cur.execute("""
+            UPDATE media_files
+               SET source_id = plex_rating_key
+             WHERE media_type='episode' AND source_type='plex'
+               AND source_id IS NOT plex_rating_key
+        """)
+        conn.commit()
+
+    def apply_retrovue_schema_upgrade_media_files(self):
+        conn = self._conn(); cur = conn.cursor()
+        cur.execute("PRAGMA table_info(media_files)")
+        existing = {r[1] for r in cur.fetchall()}
+        def add(name, ddl): 
+            if name not in existing: cur.execute(f"ALTER TABLE media_files ADD COLUMN {name} {ddl}")
+        add("server_id","INTEGER"); add("library_id","INTEGER"); add("plex_rating_key","TEXT")
+        add("digest","TEXT"); add("updated_at_plex","BIGINT")
+        add("first_seen_at","BIGINT"); add("last_seen_at","BIGINT"); add("last_scan_at","BIGINT")
+        add("state","TEXT DEFAULT 'ACTIVE'"); add("error_count","INTEGER DEFAULT 0")
+        add("last_error_at","BIGINT"); add("last_error","TEXT"); add("missing_since","BIGINT")
+        add("plex_path","TEXT"); add("part_count","INTEGER DEFAULT 0"); add("streams_signature","TEXT")
+        # don't add file_path here; rebuild handles its nullability
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_media_files_unique
+            ON media_files(server_id, library_id, plex_rating_key)
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_media_files_state ON media_files(state)")
+        conn.commit()
+    
+    # ============================================================================
+    # Digest System Database Helpers
+    # ============================================================================
+    
+    def show_digest_changed(self, server_id: int, library_id: int, show_key: str, lite_digest: str) -> bool:
+        """Check if a show's digest has changed since last scan."""
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT show_digest FROM shows_tracking WHERE server_id=? AND library_id=? AND rating_key=?",
+            (server_id, library_id, show_key)
+        )
+        row = cursor.fetchone()
+        return (row is None) or (row[0] != lite_digest)
+    
+    def children_hydrated(self, server_id: int, library_id: int, show_key: str) -> bool:
+        """Check if a show's children have been fully hydrated."""
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT children_hydrated FROM shows_tracking WHERE server_id=? AND library_id=? AND rating_key=?",
+            (server_id, library_id, show_key)
+        )
+        row = cursor.fetchone()
+        return bool(row and row[0])
+    
+    def upsert_show_digest(self, server_id: int, library_id: int, show_key: str, digest: str, *, children_hydrated: bool):
+        """Update or insert a show's digest and hydration status."""
+        self.connection.execute("""
+            INSERT INTO shows_tracking(server_id, library_id, rating_key, show_digest, children_hydrated)
+            VALUES(?,?,?,?,?)
+            ON CONFLICT(server_id, library_id, rating_key) DO UPDATE SET
+              show_digest=excluded.show_digest,
+              children_hydrated=excluded.children_hydrated
+        """, (server_id, library_id, show_key, digest, 1 if children_hydrated else 0))
+        self.connection.commit()
+    
+    def upsert_episode(self, server_id: int, library_id: int, parent_show_key: str, 
+                       ep: dict, media: dict, digest: str, now_epoch: int):
+        """Update or insert an episode with digest information."""
+        cursor = self.connection.cursor()
+        try:
+            # Extract episode information
+            rating_key = ep.get('ratingKey', '')
+            title = ep.get('title', '')
+            season_number = int(ep.get('parentIndex', 0))
+            episode_number = int(ep.get('index', 0))
+            updated_at_plex = int(ep.get('updatedAt', 0))
+
+            # Check if media_file exists for this episode (server+rating_key)
+            cursor.execute("""
+                SELECT id FROM media_files 
+                WHERE server_id = ? AND plex_rating_key = ?
+            """, (server_id, rating_key))
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update existing row
+                cursor.execute("""
+                    UPDATE media_files SET
+                        digest = ?, updated_at_plex = ?, last_seen_at = ?, last_scan_at = ?,
+                        state = 'ACTIVE', error_count = 0, last_error = NULL,
+                        plex_path = ?, duration = ?
+                    WHERE id = ?
+                """, (digest, updated_at_plex, now_epoch, now_epoch, 
+                      media.get('plex_path', ''), media.get('duration', 0), existing[0]))
+                media_file_id = existing[0]
+            else:
+                # Insert new row
+                cursor.execute("""
+                    INSERT INTO media_files (
+                        server_id, library_id, plex_rating_key, plex_path, duration,
+                        media_type, source_type, digest, updated_at_plex,
+                        first_seen_at, last_seen_at, last_scan_at, state
+                    ) VALUES (?, ?, ?, ?, ?, 'episode', 'plex', ?, ?, ?, ?, ?, 'ACTIVE')
+                """, (server_id, library_id, rating_key, media.get('plex_path', ''), 
+                      media.get('duration', 0), digest, updated_at_plex, 
+                      now_epoch, now_epoch, now_epoch))
+                media_file_id = cursor.lastrowid
+
+            # Ensure an episodes row exists/updates
+            cursor.execute("""
+                INSERT OR REPLACE INTO episodes (
+                    media_file_id, show_id, episode_title, season_number, episode_number
+                )
+                VALUES (?, (SELECT id FROM shows WHERE plex_rating_key = ?), ?, ?, ?)
+            """, (media_file_id, parent_show_key, title, season_number, episode_number))
+
+            # self.connection.commit() # Removed for batching
+        except Exception as e:
+            logger.warning(f"⚠️ Error upserting episode: {e}")
+            self.connection.rollback()
+            raise
+    
+    def upsert_movie(self, *, server_id: int, library_id: int, mv: dict, media: dict,
+                     digest: str, now_epoch: int) -> None:
+        """Update or insert a movie with digest information."""
+        pk = mv["ratingKey"]
+        updated_at_plex = mv.get("updatedAt") or 0
+        self.connection.execute("""
+            INSERT INTO media_files(
+                server_id, library_id, plex_rating_key, state, digest,
+                updated_at_plex, first_seen_at, last_seen_at, last_scan_at,
+                duration, media_type, source_type, source_id,
+                plex_path, part_count, streams_signature
+            )
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(server_id, library_id, plex_rating_key) DO UPDATE SET
+                state='ACTIVE',
+                digest=excluded.digest,
+                updated_at_plex=excluded.updated_at_plex,
+                last_seen_at=excluded.last_seen_at,
+                last_scan_at=excluded.last_scan_at,
+                duration=excluded.duration,
+                media_type=excluded.media_type,
+                source_type=excluded.source_type,
+                source_id=excluded.source_id,
+                plex_path=excluded.plex_path,
+                part_count=excluded.part_count,
+                streams_signature=excluded.streams_signature
+        """, (
+            server_id, library_id, pk, 'ACTIVE', digest,
+            updated_at_plex, now_epoch, now_epoch, now_epoch,
+            media.get("duration_ms") or 0, 'movie', 'plex', pk,
+            media.get("plex_path") or '', media.get("part_count") or 0, media.get("streams_signature") or ''
+        ))
+        self.connection.commit()
+    
+    def upsert_show_basic(self, *, server_id: int, library_id: int, show: dict) -> int:
+        """
+        Upsert minimal show metadata and return show_id.
+        Keyed by (server_id, library_id, plex_rating_key).
+        """
+        rk = str(show.get("ratingKey") or "")
+        title = show.get("title") or ""
+        year = int(show.get("year") or 0)
+        show_rating = show.get("contentRating") or ""
+        show_summary = show.get("summary") or ""
+        studio = show.get("studio") or ""
+        originally_at = show.get("originallyAvailableAt")
+        leaf_count = int(show.get("leafCount") or 0)
+        child_count = int(show.get("childCount") or 0)
+
+        cur = self.connection.cursor()
+        cur.execute("""
+            INSERT INTO shows (server_id, library_id, plex_rating_key, title, year,
+                               show_rating, show_summary, studio, originally_available_at,
+                               total_episodes, total_seasons, source_type, source_id, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
+            ON CONFLICT(server_id, library_id, plex_rating_key) DO UPDATE SET
+                title=excluded.title,
+                year=excluded.year,
+                show_rating=excluded.show_rating,
+                show_summary=excluded.show_summary,
+                studio=excluded.studio,
+                originally_available_at=excluded.originally_available_at,
+                total_episodes=excluded.total_episodes,
+                total_seasons=excluded.total_seasons,
+                source_type=excluded.source_type,
+                source_id=excluded.source_id,
+                updated_at=strftime('%s','now')
+        """, (server_id, library_id, rk, title, year, show_rating, show_summary, studio,
+              originally_at, leaf_count, child_count, 'plex', rk))
+
+        cur.execute("""
+            SELECT id FROM shows
+            WHERE server_id=? AND library_id=? AND plex_rating_key=?
+        """, (server_id, library_id, rk))
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
+
+    def count_episodes_for_show_source_id(self, show_source_id: str) -> int:
+        """
+        Return count of episodes linked to the show whose shows.source_id == show_source_id (Plex show GUID).
+        """
+        cur = self.connection.cursor()
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM episodes e
+            JOIN shows s ON e.show_id = s.id
+            WHERE s.source_id = ?
+        """, (show_source_id,))
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
+
+    def upsert_episode_metadata(self, *, show_id: int, ep: dict) -> None:
+        """
+        Upsert minimal per-episode metadata (not file info).
+        Keyed by (show_id, plex_rating_key).
+        """
+        ep_rk = str(ep.get("ratingKey") or "")
+        episode_title = ep.get("title") or ""
+        season = int(ep.get("parentIndex") or 0)
+        number = int(ep.get("index") or 0)
+        summary = ep.get("summary") or ""
+        rating = ep.get("contentRating") or ""
+        updated_at = int(ep.get("updatedAt") or 0)
+
+        self.connection.execute("""
+            INSERT INTO episodes (show_id, plex_rating_key, episode_title, season_number, episode_number,
+                                  summary, rating, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(show_id, plex_rating_key) DO UPDATE SET
+                episode_title=excluded.episode_title,
+                season_number=excluded.season_number,
+                episode_number=excluded.episode_number,
+                summary=excluded.summary,
+                rating=excluded.rating,
+                updated_at=excluded.updated_at
+        """, (show_id, ep_rk, episode_title, season, number, summary, rating, updated_at))
+    
+    def mark_missing_not_seen(self, library_id: int, seen: set[str], now_epoch: int) -> int:
+        """Mark items as missing if they weren't seen in this scan."""
+        if not seen:
+            seen = {"__none__"}  # avoid empty IN ()
+        q = f"""
+            UPDATE media_files
+               SET state='MISSING', missing_since=COALESCE(missing_since, ?)
+             WHERE library_id=? AND state <> 'DELETED' AND plex_rating_key NOT IN ({','.join('?'*len(seen))})
+        """
+        cursor = self.connection.cursor()
+        cursor.execute(q, (now_epoch, library_id, *list(seen)))
+        self.connection.commit()
+        return cursor.rowcount or 0
+    
+    def promote_deleted_past_retention(self, library_id: int, now_epoch: int, retention_days: int) -> int:
+        """Promote missing items to deleted if they've been missing past retention period."""
+        cutoff = now_epoch - retention_days*86400
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            UPDATE media_files
+               SET state='DELETED'
+             WHERE library_id=? AND state='MISSING' AND COALESCE(missing_since, 0) <= ?
+        """, (library_id, cutoff))
+        self.connection.commit()
+        return cursor.rowcount or 0
+    
+    def get_library_by_key(self, library_key: str, server_id: int) -> Optional[Dict]:
+        """Get library information by key and server ID."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM libraries 
+                WHERE library_key = ? AND server_id = ?
+            """, (library_key, server_id))
+            result = cursor.fetchone()
+            return dict(result) if result else None
+        except Exception as e:
+            logger.warning(f"⚠️ Error getting library by key: {e}")
+            return None
+    
+    def add_library(self, server_id: int, library_key: str, library_name: str, library_type: str) -> int:
+        """Add a new library to the database."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO libraries (server_id, library_key, library_name, library_type, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (server_id, library_key, library_name, library_type, 
+                  int(datetime.now().timestamp()), int(datetime.now().timestamp())))
+            
+            library_id = cursor.lastrowid
+            self.connection.commit()
+            return library_id
+        except Exception as e:
+            logger.warning(f"⚠️ Error adding library: {e}")
+            self.connection.rollback()
+            return 0
+    
+    def get_path_mappings(self, server_id: int) -> list[tuple[str, str]]:
+        """Get all path mappings for a server as (plex_prefix, local_prefix) tuples."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("SELECT plex_prefix, local_prefix FROM path_mappings WHERE server_id=? ORDER BY LENGTH(plex_prefix) DESC", (server_id,))
+            rows = cursor.fetchall()
+            return [(r[0], r[1]) for r in rows]
+        except Exception:
+            return []
+    
+    def add_path_mapping(self, server_id: int, plex_prefix: str, local_prefix: str) -> None:
+        """Add a new path mapping."""
+        self.connection.execute("INSERT INTO path_mappings(server_id, plex_prefix, local_prefix) VALUES(?,?,?)",
+                      (server_id, plex_prefix, local_prefix))
+        self.connection.commit()
+    
+    def remove_path_mapping(self, server_id: int, plex_prefix: str) -> None:
+        """Remove a path mapping."""
+        self.connection.execute("DELETE FROM path_mappings WHERE server_id=? AND plex_prefix=?",
+                      (server_id, plex_prefix))
+        self.connection.commit()
+    
+    def update_path_mapping(self, mapping_id: int, plex_prefix: str, local_prefix: str) -> bool:
+        """Update a path mapping by ID."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                UPDATE path_mappings 
+                SET plex_prefix = ?, local_prefix = ?
+                WHERE id = ?
+            """, (plex_prefix, local_prefix, mapping_id))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            return False
+    
+    def delete_path_mapping_by_id(self, mapping_id: int) -> bool:
+        """Delete a path mapping by ID."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("DELETE FROM path_mappings WHERE id = ?", (mapping_id,))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            return False
+    
+    def get_path_mappings_all(self) -> List[Dict]:
+        """Get all path mappings with server names for UI display."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT pm.id, pm.server_id, pm.plex_prefix, pm.local_prefix, ps.name as server_name
+                FROM path_mappings pm
+                LEFT JOIN plex_servers ps ON pm.server_id = ps.id
+                ORDER BY ps.name, LENGTH(pm.plex_prefix) DESC
+            """)
+            rows = cursor.fetchall()
+            return [
+                {
+                    'id': row[0],
+                    'server_id': row[1], 
+                    'plex_prefix': row[2],
+                    'local_prefix': row[3],
+                    'server_name': row[4] or f"Server {row[1]}"
+                }
+                for row in rows
+            ]
+        except Exception:
+            return []
+    
+    def get_path_mappings_for_server(self, server_id: int) -> List[Dict]:
+        """Get path mappings for a specific server."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT id, server_id, plex_prefix, local_prefix
+                FROM path_mappings 
+                WHERE server_id = ?
+                ORDER BY LENGTH(plex_prefix) DESC
+            """, (server_id,))
+            rows = cursor.fetchall()
+            return [
+                {
+                    'id': row[0],
+                    'server_id': row[1], 
+                    'plex_prefix': row[2],
+                    'local_prefix': row[3]
+                }
+                for row in rows
+            ]
+        except Exception:
+            return []
+    
+    def library_missing_deleted_counts(self, library_id: int) -> tuple[int, int]:
+        """Get counts of missing and deleted items for a library."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT
+                    SUM(CASE WHEN state='MISSING' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN state='DELETED' THEN 1 ELSE 0 END)
+                FROM media_files WHERE library_id=?
+            """, (library_id,))
+            row = cursor.fetchone() or (0, 0)
+            return (row[0] or 0, row[1] or 0)
+        except Exception as e:
+            logger.warning(f"⚠️ Error getting library counts: {e}")
+            return (0, 0)
+    
+    def get_library_stats(self, library_id: int) -> Dict:
+        """Get comprehensive statistics for a library."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT
+                    COUNT(*) as total_items,
+                    SUM(CASE WHEN state='ACTIVE' THEN 1 ELSE 0 END) as active_items,
+                    SUM(CASE WHEN state='REMOTE_ONLY' THEN 1 ELSE 0 END) as remote_only_items,
+                    SUM(CASE WHEN state='UNAVAILABLE' THEN 1 ELSE 0 END) as unavailable_items,
+                    SUM(CASE WHEN state='MISSING' THEN 1 ELSE 0 END) as missing_items,
+                    SUM(CASE WHEN state='DELETED' THEN 1 ELSE 0 END) as deleted_items,
+                    MAX(last_scan_at) as last_scan_at
+                FROM media_files WHERE library_id=?
+            """, (library_id,))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'total_items': row[0] or 0,
+                    'active_items': row[1] or 0,
+                    'remote_only_items': row[2] or 0,
+                    'unavailable_items': row[3] or 0,
+                    'missing_items': row[4] or 0,
+                    'deleted_items': row[5] or 0,
+                    'last_scan_at': row[6]
+                }
+            return {
+                'total_items': 0,
+                'active_items': 0,
+                'remote_only_items': 0,
+                'unavailable_items': 0,
+                'missing_items': 0,
+                'deleted_items': 0,
+                'last_scan_at': None
+            }
+        except Exception as e:
+            logger.warning(f"⚠️ Error getting library stats: {e}")
+            return {
+                'total_items': 0,
+                'active_items': 0,
+                'remote_only_items': 0,
+                'unavailable_items': 0,
+                'missing_items': 0,
+                'deleted_items': 0,
+                'last_scan_at': None
+            }
+    
+    def update_item_state(self, item_id: int, new_state: str, error_message: str = None) -> bool:
+        """Update the state of a media item."""
+        cursor = self.connection.cursor()
+        try:
+            now_epoch = int(datetime.now().timestamp())
+            
+            if new_state == 'ACTIVE':
+                cursor.execute("""
+                    UPDATE media_files 
+                    SET state=?, last_seen_at=?, last_scan_at=?, error_count=0, last_error_at=NULL, last_error=NULL
+                    WHERE id=?
+                """, (new_state, now_epoch, now_epoch, item_id))
+            elif new_state in ['REMOTE_ONLY', 'UNAVAILABLE']:
+                cursor.execute("""
+                    UPDATE media_files 
+                    SET state=?, last_scan_at=?, error_count=error_count+1, last_error_at=?, last_error=?
+                    WHERE id=?
+                """, (new_state, now_epoch, now_epoch, error_message or '', item_id))
+            else:
+                cursor.execute("""
+                    UPDATE media_files 
+                    SET state=?, last_scan_at=?
+                    WHERE id=?
+                """, (new_state, now_epoch, item_id))
+            
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.warning(f"⚠️ Error updating item state: {e}")
+            self.connection.rollback()
+            return False
+    
+    def get_items_by_state(self, library_id: int, state: str, limit: int = 100) -> List[Dict]:
+        """Get items by state for a library."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM media_files 
+                WHERE library_id=? AND state=?
+                ORDER BY last_scan_at DESC
+                LIMIT ?
+            """, (library_id, state, limit))
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+        except Exception as e:
+            logger.warning(f"⚠️ Error getting items by state: {e}")
+            return []
+    
+    def cleanup_old_deleted_items(self, library_id: int, days_old: int = 90) -> int:
+        """Remove deleted items older than specified days."""
+        cursor = self.connection.cursor()
+        try:
+            cutoff_epoch = int(datetime.now().timestamp()) - (days_old * 24 * 60 * 60)
+            cursor.execute("""
+                DELETE FROM media_files 
+                WHERE library_id=? AND state='DELETED' AND last_scan_at < ?
+            """, (library_id, cutoff_epoch))
+            
+            deleted_count = cursor.rowcount
+            self.connection.commit()
+            return deleted_count
+        except Exception as e:
+            logger.warning(f"⚠️ Error cleaning up deleted items: {e}")
+            self.connection.rollback()
+            return 0
     
     def get_schema_version(self) -> int:
         """Get the current schema version of the database"""
@@ -1351,6 +2267,12 @@ class RetrovueDatabase:
             logger.error(f"❌ Failed to update library sync: {e}")
             return False
     
+    def update_library_sync_enabled(self, library_id: int, enabled: bool) -> None:
+        """Update sync preference for a library by library_id"""
+        cur = self.connection.cursor()
+        cur.execute("UPDATE libraries SET sync_enabled = ? WHERE id = ?", (1 if enabled else 0, library_id))
+        self.connection.commit()
+    
     def delete_libraries(self, server_id: int) -> bool:
         """Delete all libraries for a server (called during server deletion)"""
         try:
@@ -1362,126 +2284,6 @@ class RetrovueDatabase:
             logger.error(f"❌ Failed to delete libraries: {e}")
             return False
     
-    def add_plex_path_mapping(self, plex_path: str, local_path: str, server_id: int = None, 
-                             library_root: str = None, library_name: str = None) -> int:
-        """Add a new Plex path mapping to the database"""
-        cursor = self.connection.cursor()
-        
-        # Create table if it doesn't exist
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS plex_path_mappings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                plex_path TEXT NOT NULL,
-                local_path TEXT NOT NULL,
-                server_id INTEGER,
-                library_root TEXT,
-                library_name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE
-            )
-        """)
-        
-        cursor.execute("""
-            INSERT INTO plex_path_mappings (plex_path, local_path, server_id, library_root, library_name)
-            VALUES (?, ?, ?, ?, ?)
-        """, (plex_path, local_path, server_id, library_root, library_name))
-        
-        self.connection.commit()
-        return cursor.lastrowid
-    
-    def get_plex_path_mappings(self, server_id: int = None, library_root: str = None) -> List[Dict]:
-        """Get Plex path mappings from the database with optional filtering"""
-        cursor = self.connection.cursor()
-        
-        # Create table if it doesn't exist
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS plex_path_mappings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                plex_path TEXT NOT NULL,
-                local_path TEXT NOT NULL,
-                server_id INTEGER,
-                library_root TEXT,
-                library_name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (server_id) REFERENCES plex_servers(id) ON DELETE CASCADE
-            )
-        """)
-        
-        query = "SELECT id, plex_path, local_path, server_id, library_root, library_name FROM plex_path_mappings WHERE 1=1"
-        params = []
-        
-        if server_id is not None:
-            query += " AND server_id = ?"
-            params.append(server_id)
-        
-        if library_root is not None:
-            query += " AND library_root = ?"
-            params.append(library_root)
-        
-        query += " ORDER BY created_at DESC"
-        
-        cursor.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
-    
-    def get_plex_path_mapping_for_library(self, server_id: int, library_root: str) -> Optional[Dict]:
-        """Get the specific path mapping for a library root on a server"""
-        mappings = self.get_plex_path_mappings(server_id=server_id, library_root=library_root)
-        return mappings[0] if mappings else None
-    
-    def update_plex_path_mapping(self, mapping_id: int, plex_path: str = None, local_path: str = None,
-                                server_id: int = None, library_root: str = None, library_name: str = None) -> bool:
-        """Update a Plex path mapping"""
-        try:
-            cursor = self.connection.cursor()
-            updates = []
-            params = []
-            
-            if plex_path is not None:
-                updates.append("plex_path = ?")
-                params.append(plex_path)
-            if local_path is not None:
-                updates.append("local_path = ?")
-                params.append(local_path)
-            if server_id is not None:
-                updates.append("server_id = ?")
-                params.append(server_id)
-            if library_root is not None:
-                updates.append("library_root = ?")
-                params.append(library_root)
-            if library_name is not None:
-                updates.append("library_name = ?")
-                params.append(library_name)
-            
-            if updates:
-                params.append(mapping_id)
-                cursor.execute(f"""
-                    UPDATE plex_path_mappings 
-                    SET {', '.join(updates)}
-                    WHERE id = ?
-                """, params)
-                
-                self.connection.commit()
-                return cursor.rowcount > 0
-            return False
-        except Exception as e:
-            logger.error(f"❌ Failed to update path mapping: {e}")
-            return False
-    
-    def delete_plex_path_mapping(self, mapping_id: int) -> bool:
-        """Delete a Plex path mapping"""
-        try:
-            cursor = self.connection.cursor()
-            cursor.execute("DELETE FROM plex_path_mappings WHERE id = ?", (mapping_id,))
-            self.connection.commit()
-            return cursor.rowcount > 0
-        except Exception as e:
-            logger.error(f"❌ Failed to delete path mapping: {e}")
-            return False
-    
-    # Legacy methods for backward compatibility
-    def store_plex_path_mapping(self, plex_path: str, local_path: str) -> int:
-        """Store Plex path mapping in the database (legacy method)"""
-        return self.add_plex_path_mapping(plex_path, local_path)
     
     def get_libraries(self) -> List[str]:
         """Get all unique library names from the libraries table"""
@@ -1549,11 +2351,15 @@ class RetrovueDatabase:
         """)
         
         # For plex_path, if it's missing but file_path exists, copy file_path to plex_path
-        cursor.execute("""
-            UPDATE media_files
-            SET plex_path = file_path
-            WHERE plex_path IS NULL AND file_path IS NOT NULL
-        """)
+        try:
+            cursor.execute("""
+                UPDATE media_files
+                SET plex_path = file_path
+                WHERE plex_path IS NULL AND file_path IS NOT NULL
+            """)
+        except Exception:
+            # file_path column may not exist anymore, that's fine
+            pass
         
         # Count how many were actually updated
         cursor.execute("""
@@ -1798,7 +2604,7 @@ class RetrovueDatabase:
         """Get the local mapped path for a media file (for file access)"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT mf.file_path, mf.plex_path, mf.server_id
+            SELECT mf.plex_path, mf.server_id
             FROM media_files mf
             WHERE mf.id = ?
         """, (media_file_id,))
@@ -1807,8 +2613,8 @@ class RetrovueDatabase:
         if not result:
             return ""
 
-        # Use plex_path column if available, otherwise fall back to file_path (for backward compatibility)
-        plex_path = result['plex_path'] or result['file_path']
+        # Use plex_path column
+        plex_path = result['plex_path']
         server_id = result['server_id']
         
         if not plex_path:
@@ -1819,28 +2625,63 @@ class RetrovueDatabase:
         path_mapping_service = PlexPathMappingService.create_from_database(self, server_id)
         return path_mapping_service.get_local_path(plex_path)
     
-    def add_media_file(self, file_path: str, duration: int, media_type: str, 
-                      source_type: str, source_id: str = None, library_name: str = None, server_id: int = None, plex_path: str = None) -> int:
-        """Add a media file to the database"""
-        cursor = self.connection.cursor()
-        
-        cursor.execute("""
-            INSERT OR REPLACE INTO media_files
-            (file_path, duration, media_type, source_type, source_id, library_name, server_id, updated_at, plex_path)
+    def add_media_file(
+        self,
+        file_path: str,
+        duration: int,
+        media_type: str,
+        source_type: str,
+        source_id: str = None,
+        library_name: str = None,
+        server_id: int = None,
+        plex_path: str = None
+    ) -> int:
+        """
+        Upsert a media file; never REPLACE the row (preserve row id & FKs).
+        - file_path can be NULL (we resolve dynamically)
+        - plex_path is the path straight from Plex parts
+        """
+        cur = self.connection.cursor()
+
+        # ensure unique index exists
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_media_files_source
+            ON media_files(source_type, source_id)
+        """)
+
+        cur.execute("""
+            INSERT INTO media_files (
+                file_path, duration, media_type, source_type, source_id,
+                library_name, server_id, updated_at, plex_path
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (file_path, duration, media_type, source_type, source_id, library_name, server_id, int(datetime.now().timestamp()), plex_path))
-        
-        # Get the media_file_id
-        if source_id:
-            cursor.execute("""
-                SELECT id FROM media_files
-                WHERE source_type = ? AND source_id = ?
-            """, (source_type, source_id))
-            result = cursor.fetchone()
-            media_file_id = result['id'] if result else cursor.lastrowid
-        else:
-            media_file_id = cursor.lastrowid
-        
+            ON CONFLICT(source_type, source_id) DO UPDATE SET
+                duration     = excluded.duration,
+                media_type   = excluded.media_type,
+                library_name = excluded.library_name,
+                server_id    = excluded.server_id,
+                updated_at   = excluded.updated_at,
+                plex_path    = excluded.plex_path
+        """, (
+            None,                 # file_path (always resolve dynamically)
+            duration or 0,
+            media_type,
+            source_type,
+            source_id,
+            library_name,
+            server_id,
+            int(datetime.now().timestamp()),
+            plex_path
+        ))
+
+        # stable id fetch (id preserved across UPSERT)
+        cur.execute("""
+            SELECT id FROM media_files
+            WHERE source_type = ? AND source_id = ?
+        """, (source_type, source_id))
+        row = cur.fetchone()
+        media_file_id = row["id"]
+
         self.connection.commit()
         return media_file_id
     
@@ -1852,27 +2693,42 @@ class RetrovueDatabase:
                 source_type: str = None, source_id: str = None, server_id: int = None, plex_updated_at: int = None) -> int:
         """Add a show to the database with year-based disambiguation"""
         cursor = self.connection.cursor()
-        
+        now_ts = plex_updated_at
+
+        # Use UPSERT to update in place so row IDs never change
         cursor.execute("""
-            INSERT OR REPLACE INTO shows
-            (plex_rating_key, title, year, total_seasons, total_episodes, show_rating, 
-             show_summary, genre, studio, originally_available_at, guid_primary, 
-             source_type, source_id, server_id, updated_at)
+            INSERT INTO shows (plex_rating_key, title, year, total_seasons, total_episodes, show_rating,
+                               show_summary, genre, studio, originally_available_at, guid_primary,
+                               source_type, source_id, server_id, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (plex_rating_key, title, year, total_seasons, total_episodes, show_rating, 
-              show_summary, genre, studio, originally_available_at, guid_primary, 
-              source_type, source_id, server_id, plex_updated_at))
+            ON CONFLICT(source_id) DO UPDATE SET
+                plex_rating_key = excluded.plex_rating_key,
+                title = excluded.title,
+                year = excluded.year,
+                total_seasons = excluded.total_seasons,
+                total_episodes = excluded.total_episodes,
+                show_rating = excluded.show_rating,
+                show_summary = excluded.show_summary,
+                genre = excluded.genre,
+                studio = excluded.studio,
+                originally_available_at = excluded.originally_available_at,
+                guid_primary = excluded.guid_primary,
+                source_type = excluded.source_type,
+                server_id = excluded.server_id,
+                updated_at = excluded.updated_at
+            WHERE shows.id = shows.id
+            RETURNING id
+        """, (plex_rating_key, title, year, total_seasons, total_episodes, show_rating,
+              show_summary, genre, studio, originally_available_at, guid_primary,
+              source_type, source_id, server_id, now_ts))
         
-        # Get the show_id using the source_id (GUID) as the unique identifier
-        if source_id:
+        row = cursor.fetchone()
+        if not row:
             cursor.execute("SELECT id FROM shows WHERE source_id = ?", (source_id,))
-            result = cursor.fetchone()
-            show_id = result['id'] if result else cursor.lastrowid
-        else:
-            show_id = cursor.lastrowid
+            row = cursor.fetchone()
         
         self.connection.commit()
-        return show_id
+        return row["id"]
     
     def add_show_guid(self, show_id: int, provider: str, external_id: str) -> int:
         """Add a GUID for a show"""
@@ -1954,45 +2810,60 @@ class RetrovueDatabase:
         
         return [dict(row) for row in cursor.fetchall()]
     
-    def get_episodes_with_show_info(self, show_title: str = None) -> List[Dict]:
-        """Get episodes with their show information"""
-        cursor = self.connection.cursor()
-        
+    def get_episodes_with_show_info(
+        self,
+        library_name: str | None = None,
+        show_title: str | None = None,
+        limit: int = 500,
+        offset: int = 0
+    ) -> list[dict]:
+        """
+        Return episode rows joined with show + media_files, ordered nicely.
+        """
+        cur = self.connection.cursor()
+
+        base_sql = """
+            SELECT
+                e.id                  AS episode_id,
+                e.episode_title       AS episode_title,
+                e.season_number       AS season_number,
+                e.episode_number      AS episode_number,
+                e.plex_rating_key     AS episode_rating_key,
+                s.id                  AS show_id,
+                s.title               AS show_title,
+                s.plex_rating_key     AS show_rating_key,
+                mf.id                 AS media_file_id,
+                mf.duration           AS duration_ms,
+                mf.library_name       AS library_name
+            FROM episodes e
+            JOIN shows s
+              ON s.id = e.show_id
+            JOIN media_files mf
+              ON mf.id = e.media_file_id
+            WHERE 1=1
+        """
+
+        params = []
+        if library_name:
+            base_sql += " AND mf.library_name = ?"
+            params.append(library_name)
+
         if show_title:
-            cursor.execute("""
-                SELECT 
-                    mf.*,
-                    e.episode_title,
-                    e.season_number,
-                    e.episode_number,
-                    e.rating,
-                    e.summary,
-                    s.title as show_title,
-                    s.show_summary
-                FROM media_files mf
-                JOIN episodes e ON mf.id = e.media_file_id
-                JOIN shows s ON e.show_id = s.id
-                WHERE s.title = ?
-                ORDER BY s.title, e.season_number, e.episode_number
-            """, (show_title,))
-        else:
-            cursor.execute("""
-                SELECT 
-                    mf.*,
-                    e.episode_title,
-                    e.season_number,
-                    e.episode_number,
-                    e.rating,
-                    e.summary,
-                    s.title as show_title,
-                    s.show_summary
-                FROM media_files mf
-                JOIN episodes e ON mf.id = e.media_file_id
-                JOIN shows s ON e.show_id = s.id
-                ORDER BY s.title, e.season_number, e.episode_number
-            """)
-        
-        return [dict(row) for row in cursor.fetchall()]
+            base_sql += " AND s.title = ?"
+            params.append(show_title)
+
+        base_sql += """
+            ORDER BY
+                s.title COLLATE NOCASE ASC,
+                e.season_number ASC,
+                e.episode_number ASC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+
+        cur.execute(base_sql, params)
+        rows = [dict(r) for r in cur.fetchall()]
+        return rows
     
     def get_movies_with_metadata(self) -> List[Dict]:
         """Get movies with their metadata"""
@@ -2043,7 +2914,7 @@ class RetrovueDatabase:
         """Get all movies from a specific source"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT m.*, mf.source_id, mf.id as media_file_id, mf.library_name, mf.file_path, mf.duration
+            SELECT m.*, mf.source_id, mf.id as media_file_id, mf.library_name, mf.duration
             FROM movies m
             JOIN media_files mf ON m.media_file_id = mf.id
             WHERE mf.source_type = ?
@@ -2064,7 +2935,7 @@ class RetrovueDatabase:
         """Get all episodes for a show by its source ID"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT e.*, mf.source_id, mf.id as media_file_id, mf.file_path, mf.duration
+            SELECT e.*, mf.source_id, mf.id as media_file_id, mf.duration
             FROM episodes e
             JOIN shows s ON e.show_id = s.id
             JOIN media_files mf ON e.media_file_id = mf.id
@@ -2076,7 +2947,7 @@ class RetrovueDatabase:
         """Get a movie by its source ID"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT m.*, mf.source_id, mf.id as media_file_id, mf.file_path, mf.duration, mf.library_name
+            SELECT m.*, mf.source_id, mf.id as media_file_id, mf.duration, mf.library_name
             FROM movies m
             JOIN media_files mf ON m.media_file_id = mf.id
             WHERE mf.source_id = ?
@@ -2099,7 +2970,7 @@ class RetrovueDatabase:
         """Get an episode by its source ID"""
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT e.*, mf.source_id, mf.id as media_file_id, mf.file_path, mf.duration, mf.library_name
+            SELECT e.*, mf.source_id, mf.id as media_file_id, mf.duration, mf.library_name
             FROM episodes e
             JOIN media_files mf ON e.media_file_id = mf.id
             WHERE mf.source_id = ?
@@ -2191,7 +3062,7 @@ class RetrovueDatabase:
             logger.error(f"❌ Failed to set show timestamp: {e}")
             return False
     
-    def update_media_file(self, media_file_id: int, file_path: str, duration: int, library_name: str = None, plex_path: str = None) -> bool:
+    def update_media_file(self, media_file_id: int, duration: int, library_name: str = None, plex_path: str = None) -> bool:
         """Update a media file"""
         try:
             cursor = self.connection.cursor()
@@ -2199,27 +3070,27 @@ class RetrovueDatabase:
             if library_name is not None and plex_path is not None:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, library_name = ?, plex_path = ?, updated_at = ?
+                    SET duration = ?, library_name = ?, plex_path = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, library_name, plex_path, current_timestamp, media_file_id))
+                """, (duration, library_name, plex_path, current_timestamp, media_file_id))
             elif library_name is not None:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, library_name = ?, updated_at = ?
+                    SET duration = ?, library_name = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, library_name, current_timestamp, media_file_id))
+                """, (duration, library_name, current_timestamp, media_file_id))
             elif plex_path is not None:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, plex_path = ?, updated_at = ?
+                    SET duration = ?, plex_path = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, plex_path, current_timestamp, media_file_id))
+                """, (duration, plex_path, current_timestamp, media_file_id))
             else:
                 cursor.execute("""
                     UPDATE media_files 
-                    SET file_path = ?, duration = ?, updated_at = ?
+                    SET duration = ?, updated_at = ?
                     WHERE id = ?
-                """, (file_path, duration, current_timestamp, media_file_id))
+                """, (duration, current_timestamp, media_file_id))
             self.connection.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -2311,6 +3182,63 @@ class RetrovueDatabase:
         except Exception as e:
             logger.error(f"❌ Failed to remove episode: {e}")
             return False
+    
+    def get_library_by_id(self, library_id: int) -> Optional[Dict]:
+        """Get a library by its ID"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT * FROM libraries WHERE id = ?
+            """, (library_id,))
+            result = cursor.fetchone()
+            if result:
+                return dict(result)
+            return None
+        except Exception as e:
+            logger.error(f"❌ Failed to get library by ID {library_id}: {e}")
+            return None
+    
+    def get_all_libraries(self) -> List[Dict]:
+        """Get all libraries from all servers"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT * FROM libraries ORDER BY server_id, library_name
+            """)
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"❌ Failed to get all libraries: {e}")
+            return []
+    
+    def get_server_libraries(self, server_id: int) -> list[dict]:
+        """Get all libraries for a specific server with sync_enabled status"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT id, server_id, library_key, library_name, library_type, 
+                       COALESCE(sync_enabled, 1) AS sync_enabled
+                FROM libraries
+                WHERE server_id = ?
+                ORDER BY library_name
+            """, (server_id,))
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"❌ Failed to get server libraries: {e}")
+            return []
+
+    def set_library_selected(self, server_id: int, section_key: str, enabled: bool) -> None:
+        """Set the sync_enabled status for a library"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                UPDATE libraries
+                SET sync_enabled = ?
+                WHERE server_id = ? AND library_key = ?
+            """, (1 if enabled else 0, server_id, str(section_key)))
+            self.connection.commit()
+        except Exception as e:
+            logger.error(f"❌ Failed to set library selected: {e}")
     
     def close(self):
         """Close the database connection."""
