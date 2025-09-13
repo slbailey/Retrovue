@@ -6,10 +6,15 @@ Real Plex HTTP client using requests for fetching libraries and items.
 
 import logging
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from typing import Dict, List, Iterator, Any, Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger("retrovue.plex")
+
+# Default timeout for requests
+DEFAULT_TIMEOUT = 20
 
 
 @dataclass
@@ -43,14 +48,61 @@ class PlexClient:
         self.base_url = base_url.rstrip('/')
         self.token = token
         self.session = requests.Session()
+        
+        # Set up headers
         self.session.headers.update({
-            'X-Plex-Token': token,
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'X-Plex-Accept': 'application/json',
+            'X-Plex-Product': 'Retrovue',
+            'X-Plex-Client-Identifier': 'retrovue-cli',
+            'X-Plex-Token': token
         })
+        
+        # Set up retry strategy
+        _retry_kwargs = dict(
+            total=5,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504]
+        )
+        try:
+            retry = Retry(allowed_methods=frozenset(["GET", "POST"]), **_retry_kwargs)
+        except TypeError:
+            # Fallback for older urllib3 versions
+            retry = Retry(method_whitelist=frozenset(["GET", "POST"]), **_retry_kwargs)
+        
+        # Mount adapter with retry strategy
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
+    
+    def _request(self, path: str, params: Optional[Dict[str, Any]] = None, timeout: int = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+        """
+        Make HTTP request to Plex API with proper error handling.
+        
+        Args:
+            path: API endpoint path (without leading slash)
+            params: Query parameters
+            timeout: Request timeout in seconds
+            
+        Returns:
+            JSON response data
+            
+        Raises:
+            requests.RequestException: If request fails
+        """
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        
+        try:
+            response = self.session.get(url, params=params or {}, timeout=timeout)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            logger.error(f"Plex API request failed: {e}")
+            raise
     
     def _make_request(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Make HTTP request to Plex API.
+        Legacy method for backward compatibility.
         
         Args:
             endpoint: API endpoint (without leading slash)
@@ -62,15 +114,7 @@ class PlexClient:
         Raises:
             requests.RequestException: If request fails
         """
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
-        
-        try:
-            response = self.session.get(url, params=params or {})
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            logger.error(f"Plex API request failed: {e}")
-            raise
+        return self._request(endpoint, params)
     
     def get_libraries(self) -> List[PlexLibrary]:
         """
@@ -81,7 +125,7 @@ class PlexClient:
         """
         logger.info("Fetching libraries from Plex server")
         
-        data = self._make_request("/library/sections")
+        data = self._request("/library/sections")
         libraries = []
         
         for section in data.get('MediaContainer', {}).get('Directory', []):
@@ -104,6 +148,24 @@ class PlexClient:
         logger.info(f"Found {len(libraries)} libraries")
         return libraries
     
+    def get_sections(self) -> Dict[str, str]:
+        """
+        Get library sections with their types.
+        
+        Returns:
+            Dictionary mapping section_key to section_type
+        """
+        logger.debug("Fetching library sections")
+        
+        data = self._request("/library/sections")
+        sections = {}
+        
+        for section in data.get('MediaContainer', {}).get('Directory', []):
+            sections[section['key']] = section['type']
+        
+        logger.debug(f"Found {len(sections)} sections")
+        return sections
+    
     def iter_items(
         self, 
         library_key: str, 
@@ -113,7 +175,7 @@ class PlexClient:
         since_epoch: Optional[int] = None
     ) -> Iterator[Dict[str, Any]]:
         """
-        Iterate over items in a specific library.
+        Iterate over items in a specific library with proper pagination.
         
         Args:
             library_key: Library key from get_libraries()
@@ -140,20 +202,27 @@ class PlexClient:
         # Use a reasonable default limit if none provided
         request_limit = limit if limit is not None else 50
         
+        # When using since_epoch, request sort=updatedAt:desc for better performance
         params = {
             'type': plex_type,
             'X-Plex-Container-Start': offset,
             'X-Plex-Container-Size': request_limit
         }
         
+        if since_epoch:
+            params['sort'] = 'updatedAt:desc'
+        
         items_yielded = 0
         
         while True:
-            data = self._make_request(f"/library/sections/{library_key}/all", params)
+            data = self._request(f"/library/sections/{library_key}/all", params)
             
             items = data.get('MediaContainer', {}).get('Metadata', [])
             if not items:
                 break
+            
+            # Get total size for proper pagination
+            total_size = data.get('MediaContainer', {}).get('totalSize', 0)
             
             for item in items:
                 # Client-side filtering for since_epoch
@@ -175,9 +244,8 @@ class PlexClient:
                 if limit is not None and items_yielded >= limit:
                     return
             
-            # Check if we have more items
-            container_size = data.get('MediaContainer', {}).get('size', 0)
-            if offset + len(items) >= container_size:
+            # Check if we have more items using totalSize
+            if offset + len(items) >= total_size or len(items) == 0:
                 break
             
             offset += len(items)
@@ -195,7 +263,7 @@ class PlexClient:
         """
         logger.debug(f"Fetching details for item {rating_key}")
         
-        data = self._make_request(f"/library/metadata/{rating_key}")
+        data = self._request(f"/library/metadata/{rating_key}")
         return data.get('MediaContainer', {}).get('Metadata', [{}])[0]
     
     def get_show_children(self, show_rating_key: str) -> List[Dict[str, Any]]:
@@ -210,7 +278,7 @@ class PlexClient:
         """
         logger.debug(f"Fetching seasons for show {show_rating_key}")
         
-        data = self._make_request(f"/library/metadata/{show_rating_key}/children")
+        data = self._request(f"/library/metadata/{show_rating_key}/children")
         return data.get('MediaContainer', {}).get('Metadata', [])
     
     def get_season_children(self, season_rating_key: str) -> List[Dict[str, Any]]:
@@ -225,7 +293,7 @@ class PlexClient:
         """
         logger.debug(f"Fetching episodes for season {season_rating_key}")
         
-        data = self._make_request(f"/library/metadata/{season_rating_key}/children")
+        data = self._request(f"/library/metadata/{season_rating_key}/children")
         return data.get('MediaContainer', {}).get('Metadata', [])
     
     def test_connection(self) -> bool:
@@ -236,7 +304,7 @@ class PlexClient:
             True if connection is successful, False otherwise
         """
         try:
-            self._make_request("/")
+            self._request("/")
             logger.info("Plex connection test successful")
             return True
         except Exception as e:

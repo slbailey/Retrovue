@@ -72,9 +72,17 @@ class IngestOrchestrator:
         }
         
         try:
-            # Get or create library
+            # Get section types from Plex to determine proper library type
+            sections = self.plex_client.get_sections()
+            section_type = sections.get(str(library_key), 'movie')  # Default to movie if not found
+            
+            if section_type not in ['movie', 'show']:
+                self.logger.warning(f"Unknown section type '{section_type}' for library {library_key}, defaulting to 'movie'")
+                section_type = 'movie'
+            
+            # Get or create library with proper section type
             library_id = self.db.get_or_create_library(
-                server_id, str(library_key), f"Library {library_key}", kind
+                server_id, str(library_key), f"Library {library_key}", section_type
             )
             
             # Determine since_epoch for incremental mode
