@@ -2,7 +2,17 @@
 
 ## 🎬 What is Retrovue?
 
-Retrovue is a **network-grade IPTV system** that simulates a realistic broadcast TV station experience. Think of it as your own personal cable TV network that can serve multiple viewers simultaneously.
+Retrovue is a **retro-inspired IPTV simulation system** designed to recreate the authentic experience of scheduled broadcast television. It is built on a **media-first foundation** where everything begins with a physical media file, and rich metadata is layered on top to create a comprehensive broadcast TV experience.
+
+### **Media-First Architecture**
+Retrovue's core philosophy centers around the **media-first approach**:
+- **Physical Foundation**: Every piece of content must have an actual playable media file as its foundation
+- **Logical Wrappers**: Content items (movies, episodes, bumpers, commercials, etc.) are logical wrappers around media files
+- **Metadata Layering**: Rich metadata is layered on top of the media file without modifying the original
+- **Playback Guarantee**: Every scheduled item can be played because it has a verified media file
+
+### **Network-Grade IPTV System**
+Retrovue functions as a **network-grade IPTV system** that simulates a realistic broadcast TV station experience. Think of it as your own personal cable TV network that can serve multiple viewers simultaneously with professional-grade features and reliability.
 
 ### The Big Picture
 
@@ -21,10 +31,18 @@ Instead of just watching your media files one at a time, Retrovue creates **24/7
 - **Emergency Overrides**: Break into programming with alerts or announcements
 
 ### Smart Content Management
-- **Plex Integration**: Automatically imports your existing Plex library
+- **Plex Integration**: Automatically imports your existing Plex library with episode-level granularity
+- **TinyMediaManager Support**: Imports content and metadata from TMM .nfo files
+- **Manual UI Entries**: Supports direct content entry for non-Plex/TMM media
 - **Smart Sync**: Only updates content that has actually changed (super fast!)
 - **Episode-Level Control**: Each TV episode is managed separately for precise scheduling
 - **Metadata Storage**: Tracks everything you need for professional scheduling
+
+### Advanced Metadata Management
+- **Editorial Overrides**: Customize metadata without overwriting source data from Plex/TMM
+- **Namespaced Tagging**: Organize content with structured tags like `audience:kids`, `holiday:christmas`, `brand:fast_food`
+- **Parental Controls**: MPAA/TV ratings system with daypart restrictions
+- **Content Classification**: Flexible tagging system for audience targeting, seasonal content, and brand management
 
 ## 🏗️ How All The Pieces Fit Together
 
@@ -66,18 +84,36 @@ HLS Streams → Network → VLC/Plex/Smart TV
 ## 🎬 Content Types Supported
 
 ### TV Network Content
-- **Movies**: Feature films with commercial break planning
-- **TV Shows**: Episodes with intro/outro timing
-- **Commercials**: 15s, 30s, 60s spots with targeting
-- **Bumpers**: Station IDs, "We'll be right back" segments
-- **Intros/Outros**: Show openings and closings
-- **Interstitials**: Filler content between shows
+- **Movies**: Feature films with commercial break planning and chapter marker support
+- **TV Shows**: Episodes with intro/outro timing and episode-level scheduling
+- **Commercials**: 15s, 30s, 60s spots with advanced targeting and brand management
+- **Bumpers**: Station IDs, "We'll be right back" segments with timing control
+- **Intros/Outros**: Show openings and closings with seamless integration
+- **Interstitials**: Filler content between shows with flexible placement
+
+### Advanced Content Features
+- **Chapter Markers**: Support for commercial break planning and content segmentation
+- **Manual Ad Break Input**: Custom ad break placement and timing control
+- **Media Markers**: Store ad breaks, chapters, and cue points from various sources
+- **Content Validation**: Verify media files are playable and codec-compatible
+- **Path Mapping**: Translate Plex/TMM paths to accessible local file paths
 
 ### Smart Scheduling Features
-- **Daypart Targeting**: Morning shows, prime time, late night
-- **Seasonal Content**: Holiday specials, summer programming
-- **Demographic Targeting**: Family-friendly, adult content
-- **Content Ratings**: G, PG, PG-13, R, Adult classifications
+- **Schedule Blocks**: High-level programming templates (e.g., "Sitcoms at 5pm weekdays")
+- **Schedule Instances**: Specific content scheduled for exact date/time combinations
+- **Daypart Targeting**: Morning shows, prime time, late night with automatic content filtering
+- **Seasonal Content**: Holiday specials, summer programming with automatic seasonal scheduling
+- **Demographic Targeting**: Family-friendly, adult content with audience-based scheduling
+- **Content Ratings**: G, PG, PG-13, R, Adult classifications with parental control enforcement
+- **Commercial Spacing Rules**: Control commercial placement and brand separation
+- **Episode Rotation Rules**: Prevent content from repeating too frequently
+
+### Advanced Logging and Analytics
+- **Play Log Tracking**: Records what programs and ads actually aired
+- **Weekly Log Rotation**: Automatic log management to prevent database bloat
+- **Performance Metrics**: Track system performance and resource usage
+- **Error Logging**: Record playback errors, missing files, and technical issues
+- **Compliance Tracking**: Maintain records for regulatory and audit purposes
 
 ## 🚀 Getting Started
 
@@ -143,3 +179,4 @@ Retrovue is designed to be a community-driven project. Whether you're a develope
 ---
 
 *Retrovue: Bringing the magic of retro TV to the modern streaming era* 📺✨
+

@@ -6,14 +6,23 @@ This roadmap tracks our progress through development and helps keep us focused o
 
 **End Goal**: A robust IPTV-ready simulation of a professional broadcast television station with multi-channel 24/7 operation, realistic transitions and timing, and a viewer experience indistinguishable from real cable TV.
 
-## 📊 Current Status: Phase 2 - Content Management Foundation
+## 📊 Current Status: Media-First Architecture Implementation
 
 ### **Phase 1 — Proof of Concept** ✅ **COMPLETED**
 - [x] Build single-channel playout (`ffmpeg → HLS → VLC`)
 - [x] Solve segment rotation issues (`-hls_delete_threshold`, epoch numbering)
 - [x] Validate continuous playback via local HTTP server
 
-### **Phase 2 — Content Management Foundation** 🔄 **IN PROGRESS**
+### **Phase 2 — Media-First Content Foundation** 🔄 **IN PROGRESS**
+
+#### **Core Media-First Features** ✅ **IMPLEMENTED**
+- [x] **Media-First Architecture**: Every record begins with a physical media file
+- [x] **Content Items System**: Logical wrappers around media files with rich metadata
+- [x] **Editorial Override System**: Customize metadata without overwriting source data
+- [x] **Namespaced Tagging**: Structured tags for audience/holiday/brand-based scheduling
+- [x] **Parental Control System**: MPAA/TV ratings with daypart restrictions
+
+#### **Advanced Content Management** 🔄 **IN PROGRESS**
 
 #### **2.1 Data Foundation** ✅ **COMPLETED**
 - [x] **Database Schema Design** - Normalized schema for media files, shows, episodes, movies
@@ -61,23 +70,62 @@ This roadmap tracks our progress through development and helps keep us focused o
 - [ ] **Local File System** - Direct import from local directories
 - [ ] **Unified Content Model** - Consistent interface across all content sources
 
-### **Phase 3 — Scheduling Engine** 🔄 **FUTURE PHASE**
-- [ ] **Schedule Manager** - Coarse (show-level) and fine (break-level) scheduling
-- [ ] **Program Director** - Orchestrates channels and manages state
-- [ ] **Channel Classes** - Independent broadcast units with pipelines
-- [ ] **Timeline Editor** - Drag & drop scheduling interface
+### **Phase 3 — Advanced Scheduling Engine** 🔄 **IN PROGRESS**
 
-### **Phase 4 — Streaming Integration** 🔄 **FUTURE PHASE**
-- [ ] **Pipeline Manager** - Controls playback transitions and timing
-- [ ] **Multi-channel Support** - Run multiple streams simultaneously
-- [ ] **Emergency System** - Priority alert injection across channels
-- [ ] **Schedule-to-Stream** - Convert schedules to live streams
+#### **Schedule Blocks & Instances** 🔄 **IN PROGRESS**
+- [ ] **Schedule Blocks**: High-level programming templates (e.g., "Sitcoms at 5pm weekdays")
+- [ ] **Schedule Instances**: Specific content scheduled for exact date/time combinations
+- [ ] **Daypart Rules**: Different programming for morning, afternoon, evening, late night
+- [ ] **Rotation Rules**: Prevent content from repeating too frequently
+- [ ] **Commercial Spacing Rules**: Control commercial placement and brand separation
 
-### **Phase 5 — Advanced Features** 🔄 **FUTURE PHASE**
-- [ ] **Graphics Overlay Engine** - Bugs, lower thirds, branding
-- [ ] **Advanced Scheduling** - Commercials, bumpers, promos, live events
-- [ ] **Plex Live TV Integration** - Native Plex channel support
-- [ ] **Professional Features** - Closed captions, multiple audio tracks
+#### **Advanced Scheduling Features** 🔄 **PLANNED**
+- [ ] **Auto-Fill Scheduling**: System automatically selects content based on rules
+- [ ] **Tag-Based Selection**: Content selection based on namespaced tags
+- [ ] **Rating Compliance**: Automatic content filtering based on parental ratings
+- [ ] **Seasonal Programming**: Automatic seasonal content scheduling
+- [ ] **Approval Workflow**: Schedule review and approval process
+
+### **Phase 4 — Advanced Streaming & Playback** 🔄 **PLANNED**
+
+#### **Ad Break Management** 🔄 **IN PROGRESS**
+- [ ] **Media Markers**: Store ad breaks, chapters, and cue points
+- [ ] **Chapter Integration**: Automatic ad break detection from video chapters
+- [ ] **Manual Ad Break Input**: Custom ad break placement and timing
+- [ ] **Commercial Insertion**: Seamless commercial insertion during playback
+
+#### **EPG/Guide Data Export** 🔄 **PLANNED**
+- [ ] **Plex Live TV Integration**: Export EPG data for Plex Live TV
+- [ ] **Prevue Channel Output**: Generate program guide data for Prevue-style channels
+- [ ] **Real-time Updates**: Guide data updates automatically as schedules change
+- [ ] **Standard Formats**: Industry-standard EPG formats for maximum compatibility
+
+#### **Play Log & Analytics** 🔄 **PLANNED**
+- [ ] **Play Log Tracking**: Records what programs and ads actually aired
+- [ ] **Weekly Log Rotation**: Automatic log management to prevent database bloat
+- [ ] **Performance Metrics**: Track system performance and resource usage
+- [ ] **Error Logging**: Record playback errors, missing files, and technical issues
+
+### **Phase 5 — Multi-Channel & Advanced Features** 🔄 **FUTURE PHASE**
+
+#### **Multi-Channel Support** 🔄 **PLANNED**
+- [ ] **Multiple Channels**: Run multiple TV channels simultaneously
+- [ ] **Channel Management**: Independent channel scheduling and control
+- [ ] **Emergency System**: Priority alert injection across all channels
+- [ ] **Resource Management**: CPU and memory allocation per channel
+
+#### **Professional Features** 🔄 **FUTURE PHASE**
+- [ ] **Graphics Overlay Engine**: Bugs, lower thirds, branding
+- [ ] **Advanced Scheduling**: Commercials, bumpers, promos, live events
+- [ ] **Campaign Management**: Ad campaign and flight window support
+- [ ] **Quality Control**: Optional QC checks and validation
+- [ ] **Professional Features**: Closed captions, multiple audio tracks
+
+#### **Advanced Detection & Automation** 🔄 **FUTURE PHASE**
+- [ ] **Auto Ad Break Detection**: Black frame and loudness detection
+- [ ] **Cue-Based Overlays**: Logo bugs and graphics at specific cue points
+- [ ] **Smart Content Selection**: AI-powered content recommendation
+- [ ] **Automated Scheduling**: Machine learning-based schedule optimization
 
 ## 🎯 Current Focus: Plex Content Ingestion Enhancement
 
