@@ -1,6 +1,30 @@
 # 🚀 Quick Start Guide
 
-## 📋 Prerequisites
+## 🎯 The Retrovue 6-Step Process
+
+Retrovue follows a **media-first approach** with a streamlined 6-step process to get your retro IPTV system up and running:
+
+### **Step 1: Install Requirements** 
+Set up the technical foundation with Python, FFmpeg, and Plex integration
+
+### **Step 2: Configure Plex Server**
+Add your Plex server and configure authentication
+
+### **Step 3: Import Media**
+Sync libraries from Plex and configure path mappings
+
+### **Step 4: Ingest Content**
+Import movies and TV shows into the Retrovue database
+
+### **Step 5: Schedule** (Coming Soon)
+Create schedule blocks and fill automatically or specify shows
+
+### **Step 6: Stream** (Coming Soon)
+Start channel stream and view in VLC or Plex Live TV
+
+---
+
+## 📋 Detailed Prerequisites
 
 ### **Required Software**
 - **Python 3.8+** - The programming language Retrovue is built with
@@ -39,36 +63,228 @@ pip install -r requirements.txt
 
 ### **Step 4: Verify Installation**
 ```bash
-python -c "import retrovue; print('Retrovue installed successfully!')"
+# Test the Plex Sync CLI
+python -m cli.plex_sync --help
 ```
 
-## 🎬 First Run - Content Management
+## 🎬 Step 2: Configure Plex Server
 
-### **Launch the Management Interface**
+### **Get Your Plex Token**
+1. Open Plex Web Interface: `http://your-plex-server:32400/web`
+2. Press `F12` → Network tab → Refresh page
+3. Find `X-Plex-Token` in request headers
+4. Copy the token value
+
+### **Add Plex Server**
 ```bash
-python run_ui.py
+python -m cli.plex_sync servers add \
+  --db ./retrovue.db \
+  --name "HomePlex" \
+  --base-url "http://your-plex-server:32400" \
+  --token "your-plex-token-here"
 ```
 
-### **Import Content from Plex (Optional)**
-1. **Get Your Plex Token**:
-   - Open Plex Web Interface: `http://your-plex-server:32400/web`
-   - Press `F12` → Network tab → Refresh page
-   - Find `X-Plex-Token` in request headers
-   - Copy the token value
+### **Set as Default Server**
+```bash
+python -m cli.plex_sync servers set-default \
+  --db ./retrovue.db \
+  --server-name "HomePlex"
+```
 
-2. **Add Plex Server**:
-   - Click "Import" tab in Retrovue
-   - Enter Plex server URL: `http://your-plex-server:32400`
-   - Enter your Plex token
-   - Click "Test Connection"
-   - Click "Sync Libraries"
+### **Verify Server Connection**
+```bash
+python -m cli.plex_sync servers list --db ./retrovue.db
+```
 
-3. **Browse Your Content**:
-   - Click "Browser" tab
-   - View your imported movies and TV shows
-   - Content is now ready for scheduling!
+## 🎬 Step 3: Import Media Libraries
 
-## 🎛️ First Run - Streaming Server
+### **Sync Libraries from Plex**
+```bash
+python -m cli.plex_sync libraries sync-from-plex \
+  --db ./retrovue.db \
+  --enable-all
+```
+
+### **List Available Libraries**
+```bash
+python -m cli.plex_sync libraries list --db ./retrovue.db
+```
+
+### **Configure Path Mappings** (Critical for Streaming)
+```bash
+# Add path mapping for movies
+python -m cli.plex_sync add-mapping \
+  --db ./retrovue.db \
+  --server-id 1 \
+  --library-id 1 \
+  --plex-prefix "/data/Movies" \
+  --local-prefix "C:\Media\Movies"
+
+# Add path mapping for TV shows
+python -m cli.plex_sync add-mapping \
+  --db ./retrovue.db \
+  --server-id 1 \
+  --library-id 2 \
+  --plex-prefix "/data/TV" \
+  --local-prefix "C:\Media\TV"
+```
+
+### **Test Path Resolution**
+```bash
+python -m cli.plex_sync resolve-path \
+  --db ./retrovue.db \
+  --server-id 1 \
+  --library-id 1 \
+  --plex-path "/data/Movies/Test.mkv"
+```
+
+## 🎬 Step 4: Ingest Content
+
+### **Preview Content (Optional)**
+```bash
+python -m cli.plex_sync preview-items \
+  --db ./retrovue.db \
+  --library-key 1 \
+  --kind movie \
+  --limit 5
+```
+
+### **Ingest Content (Dry Run First)**
+```bash
+python -m cli.plex_sync ingest \
+  --db ./retrovue.db \
+  --mode full \
+  --dry-run
+```
+
+### **Ingest Content (Commit to Database)**
+```bash
+python -m cli.plex_sync ingest \
+  --db ./retrovue.db \
+  --mode full \
+  --commit
+```
+
+### **Check Ingest Status**
+```bash
+python -m cli.plex_sync ingest-status --db ./retrovue.db
+```
+
+## 🎬 Step 5: Schedule (Coming Soon)
+
+The scheduling system is currently in development. Once available, you'll be able to:
+
+- Create schedule blocks and timelines
+- Drag and drop content into schedules
+- Set up multiple channels
+- Configure commercial breaks and transitions
+
+## 🎬 Step 6: Stream (Coming Soon)
+
+The streaming engine is currently in development. Once available, you'll be able to:
+
+- Start 24/7 TV channels
+- Stream to VLC, Plex Live TV, and other IPTV clients
+- Monitor channel status and performance
+- Handle multiple simultaneous streams
+
+## 🏷️ Advanced Metadata Management (Future)
+
+### **Apply Namespaced Tags**
+Retrovue uses a powerful **namespaced tagging system** for flexible content organization:
+
+#### **Audience Targeting Tags**
+- `audience:kids` - Content suitable for children
+- `audience:adult` - Adult-oriented content
+- `audience:family` - Family-friendly content
+- `audience:seniors` - Content appealing to older audiences
+
+#### **Seasonal Content Tags**
+- `holiday:christmas` - Christmas-themed content
+- `holiday:halloween` - Halloween-themed content
+- `holiday:easter` - Easter-themed content
+- `season:summer` - Summer programming
+- `season:winter` - Winter programming
+
+#### **Brand and Category Tags**
+- `brand:fast_food` - Fast food commercials
+- `brand:automotive` - Car commercials
+- `brand:retail` - Retail store commercials
+- `tone:comedy` - Comedic content
+- `tone:drama` - Dramatic content
+- `tone:action` - Action-oriented content
+
+### **Set Parental Ratings**
+Configure content ratings for appropriate scheduling:
+
+#### **Movie Ratings (MPAA)**
+- **G** - General audiences
+- **PG** - Parental guidance suggested
+- **PG-13** - Parents strongly cautioned
+- **R** - Restricted
+- **NC-17** - No children under 17
+
+#### **TV Ratings**
+- **TV-Y** - All children
+- **TV-Y7** - Children 7 and older
+- **TV-G** - General audience
+- **TV-PG** - Parental guidance suggested
+- **TV-14** - Parents strongly cautioned
+- **TV-MA** - Mature audience only
+
+### **Configure Daypart Restrictions**
+Set up automatic content filtering based on time of day:
+- **Morning (6 AM - 12 PM)**: Family-friendly content only
+- **Afternoon (12 PM - 6 PM)**: General audience content
+- **Evening (6 PM - 11 PM)**: All content with parental discretion
+- **Late Night (11 PM - 6 AM)**: Adult content allowed
+
+## 📅 Step 5: Schedule - Advanced Scheduling System
+
+### **Create Schedule Blocks (Programming Templates)**
+Schedule blocks define high-level programming patterns:
+
+#### **Example Schedule Blocks**
+- **"Sitcoms at 5pm"**: Weekdays 5:00 PM - 6:00 PM, comedy content only
+- **"Morning News"**: Daily 7:00 AM - 8:00 AM, news and information
+- **"Late Night Movies"**: Weekends 11:00 PM - 2:00 AM, R-rated movies allowed
+- **"Kids After School"**: Weekdays 3:00 PM - 5:00 PM, TV-Y and TV-G content only
+
+#### **Schedule Block Configuration**
+1. **Basic Settings**:
+   - Name: Descriptive name for the block
+   - Channel: Which channel this applies to
+   - Day of Week: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, Weekday, Weekend, Daily
+   - Time Window: Start and end times
+
+2. **Content Filtering**:
+   - Content Type: Movies, episodes, commercials, etc.
+   - Tag Filters: JSON array of tag requirements
+   - Parental Rating Limit: Maximum rating allowed
+   - Duration Limits: Minimum/maximum content duration
+
+### **Create Schedule Instances (Specific Events)**
+Schedule instances are specific content scheduled for exact date/time combinations:
+
+#### **Automatic Scheduling**
+- **Auto-Fill**: Let the system automatically select content based on schedule block rules
+- **Tag Matching**: System selects content that matches required tags
+- **Rating Compliance**: Ensures content meets parental rating requirements
+- **Rotation Management**: Prevents content from repeating too frequently
+
+#### **Manual Scheduling**
+- **Specific Shows**: Schedule specific movies or episodes for exact times
+- **Special Events**: One-time programming, live events, special presentations
+- **Override Scheduling**: Override automatic scheduling with manual selections
+- **Priority Management**: Set priority levels for content conflicts
+
+### **Schedule Approval Workflow**
+1. **Review Schedule**: Check automatically generated schedule
+2. **Make Adjustments**: Modify content selections as needed
+3. **Approve Schedule**: Finalize schedule for broadcast
+4. **Monitor Changes**: Track any last-minute schedule modifications
+
+## 🎛️ Step 6: Stream - Advanced Streaming Options
 
 ### **Start the Streaming Server**
 ```bash
@@ -82,13 +298,53 @@ python main.py --mode concat
 python main.py --mode concat --loops 10 --port 8081
 ```
 
+### **Streaming Modes Explained**
+
+#### **Loop Mode (Basic)**
+- **Use Case**: Simple content looping for testing and basic operation
+- **Features**: Basic HLS streaming with content looping
+- **Limitations**: Single channel, no scheduling, simple transitions
+- **Best For**: Initial setup and testing
+
+#### **Concat Mode (Advanced)**
+- **Use Case**: More sophisticated content playback with better transitions
+- **Features**: Improved content transitions, better timing control
+- **Limitations**: Still single channel, limited scheduling
+- **Best For**: Production use with single channel
+
+#### **Multi-Channel Mode (Future)**
+- **Use Case**: Full broadcast TV simulation with multiple channels
+- **Features**: Multiple channels, advanced scheduling, emergency overrides
+- **Benefits**: Professional broadcast TV experience
+- **Best For**: Complete TV network simulation
+
 ### **Test the Stream**
 1. **Open VLC Media Player**
 2. **Go to**: Media → Open Network Stream
 3. **Enter**: `http://localhost:8080/channel/1.ts`
 4. **Click Play**
 
-You should see your content streaming continuously!
+You should see your content streaming continuously with proper HLS segment handling!
+
+### **Advanced Streaming Features**
+
+#### **Ad Break Integration**
+- **Chapter Markers**: Automatic ad break detection from video chapters
+- **Manual Markers**: Custom ad break placement and timing
+- **Commercial Insertion**: Seamless commercial insertion during playback
+- **Timing Control**: Precise control over ad break timing and duration
+
+#### **EPG/Guide Data Export**
+- **Plex Live TV**: Export Electronic Program Guide data for Plex integration
+- **Prevue Channel**: Generate program guide data for Prevue-style channel information
+- **Real-time Updates**: Guide data updates automatically as schedules change
+- **Standard Formats**: Industry-standard EPG formats for maximum compatibility
+
+#### **Play Log Tracking**
+- **Content Tracking**: Records what programs and ads actually aired
+- **Timing Accuracy**: Tracks actual vs. scheduled timing for all content
+- **Error Logging**: Records playback errors, missing files, and technical issues
+- **Weekly Rotation**: Automatic log management to prevent database bloat
 
 ## 🎯 What You Can Do Now
 

@@ -6,14 +6,32 @@ This roadmap tracks our progress through development and helps keep us focused o
 
 **End Goal**: A robust IPTV-ready simulation of a professional broadcast television station with multi-channel 24/7 operation, realistic transitions and timing, and a viewer experience indistinguishable from real cable TV.
 
-## 📊 Current Status: Phase 2 - Content Management Foundation
+## 📊 Current Status: CLI-First Plex Integration
 
 ### **Phase 1 — Proof of Concept** ✅ **COMPLETED**
 - [x] Build single-channel playout (`ffmpeg → HLS → VLC`)
 - [x] Solve segment rotation issues (`-hls_delete_threshold`, epoch numbering)
 - [x] Validate continuous playback via local HTTP server
 
-### **Phase 2 — Content Management Foundation** 🔄 **IN PROGRESS**
+### **Phase 2 — CLI-First Plex Integration** ✅ **COMPLETED**
+- [x] **Repository Cleanup** - Focused codebase with only plex_sync.py dependencies
+- [x] **Complete CLI Interface** - Full command-line interface for all Plex operations
+- [x] **Server Management** - Add, configure, and manage multiple Plex servers
+- [x] **Library Synchronization** - Sync and manage Plex libraries with granular control
+- [x] **Path Mapping System** - Translate Plex paths to accessible local file paths
+- [x] **Content Ingestion** - Import movies and TV shows with full metadata
+- [x] **Smart Synchronization** - Only update content that has actually changed
+
+### **Phase 3 — Media-First Content Foundation** 🔄 **IN PROGRESS**
+
+#### **Core Media-First Features** ✅ **IMPLEMENTED**
+- [x] **Media-First Architecture**: Every record begins with a physical media file
+- [x] **Content Items System**: Logical wrappers around media files with rich metadata
+- [x] **Editorial Override System**: Customize metadata without overwriting source data
+- [x] **Namespaced Tagging**: Structured tags for audience/holiday/brand-based scheduling
+- [x] **Parental Control System**: MPAA/TV ratings with daypart restrictions
+
+#### **Advanced Content Management** 🔄 **IN PROGRESS**
 
 #### **2.1 Data Foundation** ✅ **COMPLETED**
 - [x] **Database Schema Design** - Normalized schema for media files, shows, episodes, movies
@@ -22,19 +40,22 @@ This roadmap tracks our progress through development and helps keep us focused o
 - [x] **Smart Sync System** - Intelligent sync with conflict resolution and change detection
 - [x] **Content Import UI** - PySide6 interface with real-time progress updates
 
-#### **2.2 Plex Content Ingestion** 🔄 **CURRENT FOCUS**
-- [x] **Basic Plex Integration** - Connect to Plex server and import content
+#### **2.2 Plex Content Ingestion** ✅ **COMPLETED**
+- [x] **Complete Plex Integration** - Full CLI-based Plex server management and content import
 - [x] **Episode-Level Granularity** - Each TV episode stored separately for precise scheduling
 - [x] **Smart Synchronization** - Only update content that has actually changed (10-50x performance improvement)
 - [x] **Progress Tracking** - Real-time updates during import operations
 - [x] **Multi-Server Support** - Manage multiple Plex servers from one Retrovue installation
-- [x] **Content Browser UI** - Browse and organize content library with proper duration formatting
+- [x] **CLI Interface** - Complete command-line interface for all Plex operations
 - [x] **Database Migrations** - Schema updates without data loss
 - [x] **Library Management** - Store library names as media file attributes
 - [x] **Duration Handling** - Proper millisecond storage and hh:mm:ss.ff display formatting
+- [x] **Path Mapping System** - Translate Plex internal paths to accessible local file paths
+- [x] **Server Management** - Add, delete, update, and configure Plex servers
+- [x] **Content Ingestion** - Full and incremental content import with dry-run support
 
 #### **2.3 Content Management System** 🔄 **NEXT PHASE**
-- [ ] **🚨 CRITICAL: Path Mapping System** - Translate Plex internal paths to accessible file paths (REQUIRED for streaming)
+- [x] **Path Mapping System** - Translate Plex internal paths to accessible file paths (COMPLETED)
 - [ ] **Content Validation** - Verify media files are playable, check codec support, validate metadata
 - [ ] **Error Handling & Recovery** - Robust error handling with retry logic and recovery strategies
 - [ ] **Background Sync Service** - Automated synchronization with configurable intervals
@@ -61,23 +82,62 @@ This roadmap tracks our progress through development and helps keep us focused o
 - [ ] **Local File System** - Direct import from local directories
 - [ ] **Unified Content Model** - Consistent interface across all content sources
 
-### **Phase 3 — Scheduling Engine** 🔄 **FUTURE PHASE**
-- [ ] **Schedule Manager** - Coarse (show-level) and fine (break-level) scheduling
-- [ ] **Program Director** - Orchestrates channels and manages state
-- [ ] **Channel Classes** - Independent broadcast units with pipelines
-- [ ] **Timeline Editor** - Drag & drop scheduling interface
+### **Phase 3 — Advanced Scheduling Engine** 🔄 **IN PROGRESS**
 
-### **Phase 4 — Streaming Integration** 🔄 **FUTURE PHASE**
-- [ ] **Pipeline Manager** - Controls playback transitions and timing
-- [ ] **Multi-channel Support** - Run multiple streams simultaneously
-- [ ] **Emergency System** - Priority alert injection across channels
-- [ ] **Schedule-to-Stream** - Convert schedules to live streams
+#### **Schedule Blocks & Instances** 🔄 **IN PROGRESS**
+- [ ] **Schedule Blocks**: High-level programming templates (e.g., "Sitcoms at 5pm weekdays")
+- [ ] **Schedule Instances**: Specific content scheduled for exact date/time combinations
+- [ ] **Daypart Rules**: Different programming for morning, afternoon, evening, late night
+- [ ] **Rotation Rules**: Prevent content from repeating too frequently
+- [ ] **Commercial Spacing Rules**: Control commercial placement and brand separation
 
-### **Phase 5 — Advanced Features** 🔄 **FUTURE PHASE**
-- [ ] **Graphics Overlay Engine** - Bugs, lower thirds, branding
-- [ ] **Advanced Scheduling** - Commercials, bumpers, promos, live events
-- [ ] **Plex Live TV Integration** - Native Plex channel support
-- [ ] **Professional Features** - Closed captions, multiple audio tracks
+#### **Advanced Scheduling Features** 🔄 **PLANNED**
+- [ ] **Auto-Fill Scheduling**: System automatically selects content based on rules
+- [ ] **Tag-Based Selection**: Content selection based on namespaced tags
+- [ ] **Rating Compliance**: Automatic content filtering based on parental ratings
+- [ ] **Seasonal Programming**: Automatic seasonal content scheduling
+- [ ] **Approval Workflow**: Schedule review and approval process
+
+### **Phase 4 — Advanced Streaming & Playback** 🔄 **PLANNED**
+
+#### **Ad Break Management** 🔄 **IN PROGRESS**
+- [ ] **Media Markers**: Store ad breaks, chapters, and cue points
+- [ ] **Chapter Integration**: Automatic ad break detection from video chapters
+- [ ] **Manual Ad Break Input**: Custom ad break placement and timing
+- [ ] **Commercial Insertion**: Seamless commercial insertion during playback
+
+#### **EPG/Guide Data Export** 🔄 **PLANNED**
+- [ ] **Plex Live TV Integration**: Export EPG data for Plex Live TV
+- [ ] **Prevue Channel Output**: Generate program guide data for Prevue-style channels
+- [ ] **Real-time Updates**: Guide data updates automatically as schedules change
+- [ ] **Standard Formats**: Industry-standard EPG formats for maximum compatibility
+
+#### **Play Log & Analytics** 🔄 **PLANNED**
+- [ ] **Play Log Tracking**: Records what programs and ads actually aired
+- [ ] **Weekly Log Rotation**: Automatic log management to prevent database bloat
+- [ ] **Performance Metrics**: Track system performance and resource usage
+- [ ] **Error Logging**: Record playback errors, missing files, and technical issues
+
+### **Phase 5 — Multi-Channel & Advanced Features** 🔄 **FUTURE PHASE**
+
+#### **Multi-Channel Support** 🔄 **PLANNED**
+- [ ] **Multiple Channels**: Run multiple TV channels simultaneously
+- [ ] **Channel Management**: Independent channel scheduling and control
+- [ ] **Emergency System**: Priority alert injection across all channels
+- [ ] **Resource Management**: CPU and memory allocation per channel
+
+#### **Professional Features** 🔄 **FUTURE PHASE**
+- [ ] **Graphics Overlay Engine**: Bugs, lower thirds, branding
+- [ ] **Advanced Scheduling**: Commercials, bumpers, promos, live events
+- [ ] **Campaign Management**: Ad campaign and flight window support
+- [ ] **Quality Control**: Optional QC checks and validation
+- [ ] **Professional Features**: Closed captions, multiple audio tracks
+
+#### **Advanced Detection & Automation** 🔄 **FUTURE PHASE**
+- [ ] **Auto Ad Break Detection**: Black frame and loudness detection
+- [ ] **Cue-Based Overlays**: Logo bugs and graphics at specific cue points
+- [ ] **Smart Content Selection**: AI-powered content recommendation
+- [ ] **Automated Scheduling**: Machine learning-based schedule optimization
 
 ## 🎯 Current Focus: Plex Content Ingestion Enhancement
 
