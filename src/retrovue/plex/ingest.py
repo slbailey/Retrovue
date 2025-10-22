@@ -8,6 +8,8 @@ import logging
 from typing import Dict, Any, List, Optional
 from .mapper import Mapper, ContentItemData, MediaFileData, EditorialData, TagRow
 from .pathmap import PathMapper
+from .validation import ContentValidator, ValidationStatus
+from .error_handling import ErrorHandler, ErrorContext, ErrorType
 
 logger = logging.getLogger("retrovue.plex")
 
@@ -15,7 +17,8 @@ logger = logging.getLogger("retrovue.plex")
 class IngestOrchestrator:
     """Orchestrates the ingest process from Plex to database."""
     
-    def __init__(self, db, plex_client, path_mapper: PathMapper, logger_instance=None):
+    def __init__(self, db, plex_client, path_mapper: PathMapper, validator: Optional[ContentValidator] = None, 
+                 error_handler: Optional[ErrorHandler] = None, logger_instance=None):
         """
         Initialize ingest orchestrator.
         
@@ -23,11 +26,15 @@ class IngestOrchestrator:
             db: Database connection
             plex_client: Plex client instance
             path_mapper: Path mapper instance
+            validator: Optional content validator instance
+            error_handler: Optional error handler instance
             logger_instance: Optional logger instance
         """
         self.db = db
         self.plex_client = plex_client
         self.path_mapper = path_mapper
+        self.validator = validator or ContentValidator(path_mapper)
+        self.error_handler = error_handler or ErrorHandler(logger_instance)
         self.mapper = Mapper()
         self.logger = logger_instance or logger
     
@@ -128,10 +135,24 @@ class IngestOrchestrator:
                         self._process_batch(items_in_batch, server_id, library_id, stats, verbose)
                         items_in_batch = []
                         batch_count = 0
-                    
+                        
                 except Exception as e:
+                    # Enhanced error handling
+                    context = ErrorContext(
+                        operation="map_plex_item",
+                        item_id=plex_item.get('ratingKey'),
+                        item_title=plex_item.get('title', 'Unknown'),
+                        server_id=server_id,
+                        library_id=library_id
+                    )
+                    
+                    error_record = self.error_handler.handle_error(e, context)
                     stats["errors"] += 1
+                    
+                    # Log error with context
                     self.logger.error(f"Error processing item {plex_item.get('title', 'Unknown')}: {e}")
+                    if error_record.severity.value == 'critical':
+                        self.logger.critical(f"Critical error in ingest process: {error_record.message}")
                     if verbose:
                         import traceback
                         self.logger.debug(traceback.format_exc())
@@ -165,8 +186,25 @@ class IngestOrchestrator:
         """Process a batch of items in a transaction."""
         try:
             for content_item, media_files, editorial, tags in items_batch:
-                self._process_item(content_item, media_files, editorial, tags, 
-                                 server_id, library_id, stats, verbose)
+                try:
+                    self._process_item(content_item, media_files, editorial, tags, 
+                                     server_id, library_id, stats, verbose)
+                except Exception as e:
+                    # Handle individual item errors within batch
+                    context = ErrorContext(
+                        operation="process_item",
+                        item_id=content_item.title,
+                        item_title=content_item.title,
+                        server_id=server_id,
+                        library_id=library_id
+                    )
+                    
+                    error_record = self.error_handler.handle_error(e, context)
+                    stats["errors"] += 1
+                    
+                    self.logger.error(f"Error processing item {content_item.title}: {e}")
+                    if error_record.severity.value == 'critical':
+                        self.logger.critical(f"Critical error processing item: {error_record.message}")
             
             # Commit the batch
             self.db.commit()
@@ -175,9 +213,21 @@ class IngestOrchestrator:
                 self.logger.info(f"  Committed batch of {len(items_batch)} items")
                 
         except Exception as e:
+            # Handle batch-level errors
+            context = ErrorContext(
+                operation="process_batch",
+                server_id=server_id,
+                library_id=library_id,
+                additional_data={"batch_size": len(items_batch)}
+            )
+            
+            error_record = self.error_handler.handle_error(e, context)
             self.logger.error(f"Error processing batch: {e}")
             self.db.rollback()
             stats["errors"] += len(items_batch)
+            
+            if error_record.severity.value == 'critical':
+                self.logger.critical(f"Critical batch processing error: {error_record.message}")
     
     def _process_item(self, content_item: ContentItemData, media_files: List[MediaFileData],
                      editorial: EditorialData, tags: List[TagRow], server_id: int, 
@@ -188,10 +238,16 @@ class IngestOrchestrator:
         
         # Handle episodes - create show and season
         if content_item.kind == 'episode' and content_item.show_title:
-            show_id = self.db.get_or_create_show(
-                server_id, library_id, f"show_{content_item.show_title}", 
-                content_item.show_title
-            )
+            self.logger.info(f"Creating show: {content_item.show_title} for episode: {content_item.title}")
+            try:
+                show_id = self.db.get_or_create_show(
+                    server_id, library_id, f"show_{content_item.show_title}", 
+                    content_item.show_title
+                )
+                self.logger.info(f"Created show with ID: {show_id}")
+            except Exception as e:
+                self.logger.error(f"Failed to create show {content_item.show_title}: {e}")
+                raise
             
             if content_item.season_number:
                 season_id = self.db.get_or_create_season(
@@ -199,23 +255,36 @@ class IngestOrchestrator:
                 )
         
         # Upsert content item
-        content_item_id = self.db.upsert_content_item(content_item, show_id, season_id)
+        content_item_id = self.db.upsert_content_item(content_item, show_id, season_id, media_files)
         stats["inserted_items"] += 1  # Simplified - could track updates vs inserts
         
         # Process media files
         for media_file in media_files:
-            # Resolve file path
-            resolved_path = self.path_mapper.resolve(
+            # Validate media file before processing
+            validation_result = self.validator.validate_media_file(
                 server_id, library_id, media_file.file_path
             )
-            if resolved_path:
-                media_file.file_path = resolved_path
-            else:
-                self.logger.warning(f"No path mapping for: {media_file.file_path}")
+            
+            if validation_result.status != ValidationStatus.VALID:
+                self.logger.warning(f"Media file validation failed for {media_file.file_path}: {validation_result.message}")
+                stats["errors"] += 1
+                continue
+            
+            # Update media file with validated information
+            if validation_result.local_path:
+                media_file.file_path = validation_result.local_path
+            if validation_result.duration_ms:
+                media_file.duration_ms = validation_result.duration_ms
+            if validation_result.video_codec:
+                media_file.video_codec = validation_result.video_codec
+            if validation_result.audio_codec:
+                media_file.audio_codec = validation_result.audio_codec
+            if validation_result.resolution:
+                media_file.width, media_file.height = validation_result.resolution
             
             # Upsert media file
             media_file_id = self.db.upsert_media_file(
-                media_file, server_id, library_id, content_item_id
+                media_file, server_id, library_id, content_item_id, content_item.kind
             )
             stats["inserted_files"] += 1  # Simplified
             

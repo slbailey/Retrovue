@@ -494,11 +494,15 @@ def cmd_libraries_list(args):
                     return
                 
                 print(f"Libraries (showing {len(libraries)}):")
-                print(f"{'ID':<4} {'Key':<6} {'Title':<20} {'Type':<8} {'Sync':<5} {'Last Full':<20} {'Last Incr':<20}")
-                print("-" * 90)
+                print(f"{'ID':<4} {'Key':<6} {'Title':<20} {'Type':<8} {'Sync':<5} {'Path Mapped':<12} {'Last Full':<20} {'Last Incr':<20}")
+                print("-" * 110)
                 
                 for lib in libraries:
                     sync_status = "ON" if lib['sync_enabled'] else "OFF"
+                    
+                    # Check if library has path mappings
+                    has_mappings = db.has_path_mappings(lib['server_id'], lib['id'])
+                    mapping_status = "Yes" if has_mappings else "No"
                     
                     # Format timestamps
                     last_full = "Never"
@@ -513,7 +517,15 @@ def cmd_libraries_list(args):
                         dt = datetime.datetime.fromtimestamp(lib['last_incremental_sync_epoch'])
                         last_incr = f"{dt.strftime('%Y-%m-%d %H:%M')}"
                     
-                    print(f"{lib['id']:<4} {lib['plex_library_key']:<6} {lib['title'][:19]:<20} {lib['library_type']:<8} {sync_status:<5} {last_full:<20} {last_incr:<20}")
+                    print(f"{lib['id']:<4} {lib['plex_library_key']:<6} {lib['title'][:19]:<20} {lib['library_type']:<8} {sync_status:<5} {mapping_status:<12} {last_full:<20} {last_incr:<20}")
+                
+                # Show library paths if available
+                print("\nLibrary Paths:")
+                for lib in libraries:
+                    if lib.get('plex_path'):
+                        print(f"  {lib['title']}: {lib['plex_path']}")
+                    else:
+                        print(f"  {lib['title']}: No path information available")
                 
     except ValueError as e:
         print(f"[ERROR] {e}")
@@ -595,11 +607,21 @@ def cmd_libraries_sync(args):
                     logger.warning(f"Unknown library type '{library_type}' for library {plex_lib.key}, defaulting to 'movie'")
                     library_type = 'movie'
                 
+                # Extract library path from location data
+                plex_path = None
+                if plex_lib.location and len(plex_lib.location) > 0:
+                    # Get the first location path
+                    plex_path = plex_lib.location[0].get('path', '')
+                    logger.debug(f"Library {plex_lib.title} path: {plex_path}")
+                else:
+                    logger.warning(f"No location data found for library {plex_lib.title}")
+                
                 library_id = db.upsert_library(
                     server['id'], 
                     int(plex_lib.key), 
                     plex_lib.title, 
-                    library_type
+                    library_type,
+                    plex_path
                 )
                 
                 if existing:
@@ -1076,6 +1098,16 @@ def cmd_ingest_run(args):
                 if not libraries:
                     print("[ERROR] No sync-enabled libraries found. Use --libraries to specify libraries or enable sync for libraries.")
                     sys.exit(2)
+            
+            # Validate that all libraries have path mappings
+            libraries_without_mappings = db.get_libraries_without_mappings(server['id'])
+            if libraries_without_mappings:
+                print("[ERROR] The following libraries are enabled for sync but don't have path mappings:")
+                for lib in libraries_without_mappings:
+                    print(f"  - {lib['title']} (ID: {lib['id']}) - Plex Path: {lib['plex_path'] or 'Unknown'}")
+                print("\nPlease add path mappings for these libraries before running sync.")
+                print("Use 'mappings add' command to add path mappings.")
+                sys.exit(3)
         
         # Run ingest for each library and kind combination
         total_stats = {
@@ -1085,7 +1117,7 @@ def cmd_ingest_run(args):
         
         with Db(db_path) as db:
             path_mapper = PathMapper(db.conn)
-            orchestrator = IngestOrchestrator(db, plex_client, path_mapper, logger)
+            orchestrator = IngestOrchestrator(db, plex_client, path_mapper, logger_instance=logger)
             
             for library_key in libraries:
                 for kind in kinds:

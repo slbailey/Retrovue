@@ -35,6 +35,7 @@ class MediaFileData:
     """Data class for media files."""
     plex_rating_key: str
     file_path: str
+    plex_path: Optional[str] = None  # Original Plex path
     size_bytes: Optional[int] = None
     container: Optional[str] = None
     video_codec: Optional[str] = None
@@ -302,6 +303,7 @@ class Mapper:
                 media_file = MediaFileData(
                     plex_rating_key=item.get('ratingKey', ''),
                     file_path=file_path,
+                    plex_path=file_path,  # Store original Plex path
                     size_bytes=size_bytes,
                     container=container,
                     video_codec=video_codec,

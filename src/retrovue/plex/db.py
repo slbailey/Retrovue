@@ -32,23 +32,14 @@ class Db:
     def _connect(self):
         """Connect to SQLite database."""
         try:
-            # Import db_utils here to avoid circular imports
-            import sys
-            import pathlib
-            cli_path = pathlib.Path(__file__).resolve().parents[2] / "cli"
-            if str(cli_path) not in sys.path:
-                sys.path.insert(0, str(cli_path))
-            from db_utils import connect_with_row_factory
-            
-            self.conn = connect_with_row_factory(self.db_path)
-            logger.info(f"Connected to database: {self.db_path}")
-        except Exception as e:
-            logger.error(f"Failed to connect to database: {e}")
-            # Fallback to direct sqlite3 connection
+            # Direct sqlite3 connection without db_utils dependency
             self.conn = sqlite3.connect(self.db_path)
             self.conn.row_factory = sqlite3.Row
             self.conn.execute("PRAGMA foreign_keys=ON")
-            logger.info(f"Connected to database (fallback): {self.db_path}")
+            logger.info(f"Connected to database: {self.db_path}")
+        except Exception as e:
+            logger.error(f"Failed to connect to database: {e}")
+            raise
     
     def close(self):
         """Close database connection."""
@@ -652,13 +643,20 @@ class Db:
         Returns:
             Library ID
         """
+        # First try to get existing library
+        cursor = self.execute("""
+            SELECT id FROM libraries 
+            WHERE server_id = ? AND plex_library_key = ?
+        """, (server_id, plex_library_key))
+        
+        existing = cursor.fetchone()
+        if existing:
+            return existing[0]
+        
+        # Create new library
         cursor = self.execute("""
             INSERT INTO libraries (server_id, plex_library_key, title, library_type)
             VALUES (?, ?, ?, ?)
-            ON CONFLICT(server_id, plex_library_key) DO UPDATE SET
-                title=excluded.title,
-                library_type=excluded.library_type,
-                updated_at=datetime('now')
         """, (server_id, plex_library_key, title, library_type))
         
         library_id = cursor.lastrowid
@@ -680,14 +678,21 @@ class Db:
         Returns:
             Show ID
         """
+        # First try to get existing show
+        cursor = self.execute("""
+            SELECT id FROM shows 
+            WHERE server_id = ? AND library_id = ? AND plex_rating_key = ?
+        """, (server_id, library_id, plex_rating_key))
+        
+        existing = cursor.fetchone()
+        if existing:
+            return existing[0]
+        
+        # Create new show
+        print(f"DEBUG: Inserting show with server_id={server_id}, library_id={library_id}, plex_rating_key={plex_rating_key}, title={title}")
         cursor = self.execute("""
             INSERT INTO shows (server_id, library_id, plex_rating_key, title, year, artwork_url)
             VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(server_id, library_id, plex_rating_key) DO UPDATE SET
-                title=excluded.title,
-                year=excluded.year,
-                artwork_url=excluded.artwork_url,
-                updated_at=datetime('now')
         """, (server_id, library_id, plex_rating_key, title, year, artwork_url))
         
         show_id = cursor.lastrowid
@@ -707,20 +712,27 @@ class Db:
         Returns:
             Season ID
         """
+        # First try to get existing season
+        cursor = self.execute("""
+            SELECT id FROM seasons 
+            WHERE show_id = ? AND season_number = ?
+        """, (show_id, season_number))
+        
+        existing = cursor.fetchone()
+        if existing:
+            return existing[0]
+        
+        # Create new season
         cursor = self.execute("""
             INSERT INTO seasons (show_id, season_number, plex_rating_key, title)
             VALUES (?, ?, ?, ?)
-            ON CONFLICT(show_id, season_number) DO UPDATE SET
-                plex_rating_key=excluded.plex_rating_key,
-                title=excluded.title,
-                updated_at=datetime('now')
         """, (show_id, season_number, plex_rating_key, title))
         
         season_id = cursor.lastrowid
         self.commit()
         return season_id
     
-    def upsert_content_item(self, content_item, show_id: Optional[int] = None, season_id: Optional[int] = None) -> int:
+    def upsert_content_item(self, content_item, show_id: Optional[int] = None, season_id: Optional[int] = None, media_files: List[MediaFileData] = None) -> int:
         """
         Upsert a content item.
         
@@ -728,10 +740,94 @@ class Db:
             content_item: ContentItemData object
             show_id: Optional show ID
             season_id: Optional season ID
+            media_files: List of MediaFileData objects
             
         Returns:
             Content item ID
         """
+        # First try to get existing content item by media file path (most reliable)
+        if media_files and media_files[0].file_path:
+            # Simplified: content_items directly references media_files via content_item_id
+            cursor = self.execute("""
+                SELECT ci.id FROM content_items ci
+                JOIN media_files mf ON ci.id = mf.content_item_id
+                WHERE mf.local_file_path = ?
+            """, (media_files[0].file_path,))
+            
+            existing = cursor.fetchone()
+            if existing:
+                content_item_id = existing[0]
+                # Update existing content item
+                cursor = self.execute("""
+                    UPDATE content_items SET
+                        title=?, synopsis=?, duration_ms=?, rating_system=?, rating_code=?,
+                        is_kids_friendly=?, metadata_updated_at=?, season_id=?,
+                        updated_at=datetime('now')
+                    WHERE id = ?
+                """, (
+                    content_item.title,
+                    content_item.synopsis,
+                    content_item.duration_ms,
+                    content_item.rating_system,
+                    content_item.rating_code,
+                    content_item.is_kids_friendly,
+                    content_item.metadata_updated_at,
+                    season_id,
+                    content_item_id
+                ))
+                self.commit()
+                return content_item_id
+        
+        # Fallback to other methods if no media file path
+        if show_id and content_item.season_number is not None and content_item.episode_number is not None:
+            # Episode: check by show_id, season_number, episode_number
+            cursor = self.execute("""
+                SELECT id FROM content_items 
+                WHERE show_id = ? AND season_number = ? AND episode_number = ?
+            """, (show_id, content_item.season_number, content_item.episode_number))
+        elif content_item.kind == 'movie':
+            # Movie: check by title and kind (no show_id)
+            cursor = self.execute("""
+                SELECT id FROM content_items 
+                WHERE kind = ? AND title = ? AND show_id IS NULL
+            """, (content_item.kind, content_item.title))
+        elif show_id:
+            # Other content with show: check by show_id, kind, and title
+            cursor = self.execute("""
+                SELECT id FROM content_items 
+                WHERE show_id = ? AND kind = ? AND title = ?
+            """, (show_id, content_item.kind, content_item.title))
+        else:
+            # Other content without show: check by kind and title only
+            cursor = self.execute("""
+                SELECT id FROM content_items 
+                WHERE kind = ? AND title = ? AND show_id IS NULL
+            """, (content_item.kind, content_item.title))
+        
+        existing = cursor.fetchone()
+        if existing:
+            # Update existing content item
+            cursor = self.execute("""
+                UPDATE content_items SET
+                    synopsis=?, duration_ms=?, rating_system=?, rating_code=?,
+                    is_kids_friendly=?, metadata_updated_at=?, season_id=?,
+                    updated_at=datetime('now')
+                WHERE id = ?
+            """, (
+                content_item.synopsis,
+                content_item.duration_ms,
+                content_item.rating_system,
+                content_item.rating_code,
+                content_item.is_kids_friendly,
+                content_item.metadata_updated_at,
+                season_id,
+                existing[0]
+            ))
+            content_item_id = existing[0]
+            self.commit()
+            return content_item_id
+        
+        # Insert new content item
         cursor = self.execute("""
             INSERT INTO content_items(
                 kind, title, synopsis, duration_ms, rating_system, rating_code,
@@ -739,19 +835,6 @@ class Db:
                 season_number, episode_number
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                title=excluded.title,
-                synopsis=excluded.synopsis,
-                duration_ms=excluded.duration_ms,
-                rating_system=excluded.rating_system,
-                rating_code=excluded.rating_code,
-                is_kids_friendly=excluded.is_kids_friendly,
-                metadata_updated_at=excluded.metadata_updated_at,
-                show_id=excluded.show_id,
-                season_id=excluded.season_id,
-                season_number=excluded.season_number,
-                episode_number=excluded.episode_number,
-                updated_at=datetime('now')
         """, (
             content_item.kind,
             content_item.title,
@@ -771,6 +854,73 @@ class Db:
         self.commit()
         return content_item_id
     
+    def upsert_media_file(self, media_file: MediaFileData, server_id: int, library_id: int, content_item_id: int, content_kind: str) -> int:
+        """
+        Upsert a media file.
+        
+        Args:
+            media_file: MediaFileData object
+            server_id: Server ID
+            library_id: Library ID
+            content_item_id: Content item ID
+            content_kind: Content kind ('movie' or 'episode')
+            
+        Returns:
+            Media file ID
+        """
+        # Check if media file already exists by plex path
+        cursor = self.execute("""
+            SELECT id FROM media_files 
+            WHERE plex_file_path = ?
+        """, (media_file.plex_path,))
+        
+        existing = cursor.fetchone()
+        if existing:
+            # Update existing media file
+            cursor = self.execute("""
+                UPDATE media_files SET
+                    local_file_path=?, file_size_bytes=?, video_codec=?, audio_codec=?,
+                    width=?, height=?, duration_ms=?, container=?, content_item_id=?
+                WHERE id = ?
+            """, (
+                media_file.file_path,
+                media_file.size_bytes,
+                media_file.video_codec,
+                media_file.audio_codec,
+                media_file.width,
+                media_file.height,
+                getattr(media_file, 'duration_ms', None),
+                media_file.container,
+                content_item_id,
+                existing[0]
+            ))
+            media_file_id = existing[0]
+            self.commit()
+        else:
+            # Insert new media file
+            cursor = self.execute("""
+                INSERT INTO media_files(
+                    content_item_id, plex_file_path, local_file_path, file_size_bytes, video_codec,
+                    audio_codec, width, height, duration_ms, container
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                content_item_id,
+                media_file.plex_path,
+                media_file.file_path,
+                media_file.size_bytes,
+                media_file.video_codec,
+                media_file.audio_codec,
+                media_file.width,
+                media_file.height,
+                getattr(media_file, 'duration_ms', None),
+                media_file.container
+            ))
+            
+            media_file_id = cursor.lastrowid
+            self.commit()
+        
+        return media_file_id
     
     def link_content_item_file(self, content_item_id: int, media_file_id: int, role: str = 'primary') -> None:
         """
@@ -913,7 +1063,7 @@ class Db:
             cursor = self.execute("""
                 SELECT id, server_id, plex_library_key, title, library_type,
                        sync_enabled, last_full_sync_epoch, last_incremental_sync_epoch,
-                       created_at, updated_at
+                       created_at, updated_at, plex_path
                 FROM libraries
                 WHERE server_id = ?
                 ORDER BY title
@@ -922,7 +1072,7 @@ class Db:
             cursor = self.execute("""
                 SELECT id, server_id, plex_library_key, title, library_type,
                        sync_enabled, last_full_sync_epoch, last_incremental_sync_epoch,
-                       created_at, updated_at
+                       created_at, updated_at, plex_path
                 FROM libraries
                 ORDER BY title
             """)
@@ -1023,7 +1173,7 @@ class Db:
         
         return [int(row['plex_library_key']) for row in cursor.fetchall()]
     
-    def upsert_library(self, server_id: int, plex_library_key: int, title: str, library_type: str) -> int:
+    def upsert_library(self, server_id: int, plex_library_key: int, title: str, library_type: str, plex_path: str = None) -> int:
         """
         Upsert one library (idempotent).
         
@@ -1032,19 +1182,21 @@ class Db:
             plex_library_key: Plex library key
             title: Library title
             library_type: Library type
+            plex_path: Plex library file system path
             
         Returns:
             Library ID
         """
         cursor = self.execute("""
-            INSERT INTO libraries(server_id, plex_library_key, title, library_type, sync_enabled)
+            INSERT INTO libraries(server_id, plex_library_key, title, library_type, sync_enabled, plex_path)
             VALUES (?, ?, ?, ?, COALESCE(
-                (SELECT sync_enabled FROM libraries WHERE server_id=? AND plex_library_key=?), 1))
+                (SELECT sync_enabled FROM libraries WHERE server_id=? AND plex_library_key=?), 1), ?)
             ON CONFLICT(server_id, plex_library_key) DO UPDATE SET
                 title=excluded.title,
                 library_type=excluded.library_type,
+                plex_path=excluded.plex_path,
                 updated_at=datetime('now')
-        """, (server_id, plex_library_key, title, library_type, server_id, plex_library_key))
+        """, (server_id, plex_library_key, title, library_type, server_id, plex_library_key, plex_path))
         
         library_id = cursor.lastrowid
         self.commit()
@@ -1079,6 +1231,44 @@ class Db:
         rows_affected = cursor.rowcount
         self.commit()
         return rows_affected
+    
+    def has_path_mappings(self, server_id: int, library_id: int) -> bool:
+        """
+        Check if a library has path mappings.
+        
+        Args:
+            server_id: Server ID
+            library_id: Library ID
+            
+        Returns:
+            True if library has path mappings, False otherwise
+        """
+        cursor = self.execute("""
+            SELECT COUNT(*) FROM path_mappings 
+            WHERE server_id = ? AND library_id = ?
+        """, (server_id, library_id))
+        
+        count = cursor.fetchone()[0]
+        return count > 0
+    
+    def get_libraries_without_mappings(self, server_id: int) -> List[Dict]:
+        """
+        Get libraries that don't have path mappings.
+        
+        Args:
+            server_id: Server ID
+            
+        Returns:
+            List of libraries without path mappings
+        """
+        cursor = self.execute("""
+            SELECT l.id, l.title, l.library_type, l.plex_path
+            FROM libraries l
+            LEFT JOIN path_mappings pm ON l.server_id = pm.server_id AND l.id = pm.library_id
+            WHERE l.server_id = ? AND l.sync_enabled = 1 AND pm.id IS NULL
+        """, (server_id,))
+        
+        return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
     
     def get_path_mappings(self, server_id: int, library_id: int) -> List[Tuple[str, str]]:
         """
@@ -1147,3 +1337,249 @@ class Db:
             stats[table] = cursor.fetchone()['count']
         
         return stats
+    
+    # Content browsing methods
+    
+    def get_content_items(self, library_id: Optional[int] = None, kind: Optional[str] = None, 
+                         search: Optional[str] = None, limit: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Get content items with optional filtering.
+        
+        Args:
+            library_id: Optional library ID to filter by
+            kind: Optional content kind to filter by (movie, episode, etc.)
+            search: Optional search term for title/synopsis
+            limit: Maximum number of items to return
+            
+        Returns:
+            List of content item dictionaries
+        """
+        query = """
+            SELECT ci.id, ci.kind, ci.title, ci.synopsis, ci.duration_ms, 
+                   ci.rating_system, ci.rating_code, ci.is_kids_friendly,
+                   ci.season_number, ci.episode_number, ci.created_at, ci.updated_at,
+                   s.title as show_title, s.year as show_year,
+                   l.title as library_title, l.library_type
+            FROM content_items ci
+            LEFT JOIN shows s ON ci.show_id = s.id
+            LEFT JOIN libraries l ON s.library_id = l.id
+            WHERE 1=1
+        """
+        params = []
+        
+        if library_id:
+            query += " AND l.id = ?"
+            params.append(library_id)
+        
+        if kind and kind != "All":
+            query += " AND ci.kind = ?"
+            params.append(kind.lower())
+        
+        if search:
+            query += " AND (ci.title LIKE ? OR ci.synopsis LIKE ?)"
+            search_term = f"%{search}%"
+            params.extend([search_term, search_term])
+        
+        query += " ORDER BY ci.title LIMIT ?"
+        params.append(limit)
+        
+        cursor = self.execute(query, params)
+        return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    
+    def get_shows(self, library_id: Optional[int] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get TV shows with optional filtering.
+        
+        Args:
+            library_id: Optional library ID to filter by
+            search: Optional search term for title
+            
+        Returns:
+            List of show dictionaries
+        """
+        query = """
+            SELECT s.id, s.title, s.year, s.artwork_url, s.created_at, s.updated_at,
+                   l.title as library_title, l.library_type,
+                   COUNT(ci.id) as episode_count,
+                   COUNT(DISTINCT se.id) as season_count
+            FROM shows s
+            LEFT JOIN libraries l ON s.library_id = l.id
+            LEFT JOIN content_items ci ON s.id = ci.show_id
+            LEFT JOIN seasons se ON s.id = se.show_id
+            WHERE 1=1
+        """
+        params = []
+        
+        if library_id:
+            query += " AND l.id = ?"
+            params.append(library_id)
+        
+        if search:
+            query += " AND s.title LIKE ?"
+            params.append(f"%{search}%")
+        
+        query += " GROUP BY s.id ORDER BY s.title"
+        
+        cursor = self.execute(query, params)
+        return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    
+    def get_seasons(self, show_id: int) -> List[Dict[str, Any]]:
+        """
+        Get seasons for a specific show.
+        
+        Args:
+            show_id: Show ID
+            
+        Returns:
+            List of season dictionaries
+        """
+        query = """
+            SELECT se.id, se.season_number, se.title, se.created_at, se.updated_at,
+                   COUNT(ci.id) as episode_count
+            FROM seasons se
+            LEFT JOIN content_items ci ON se.id = ci.season_id
+            WHERE se.show_id = ?
+            GROUP BY se.id
+            ORDER BY se.season_number
+        """
+        
+        cursor = self.execute(query, (show_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_episodes(self, show_id: int, season_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get episodes for a show or specific season.
+        
+        Args:
+            show_id: Show ID
+            season_id: Optional season ID to filter by
+            
+        Returns:
+            List of episode dictionaries
+        """
+        query = """
+            SELECT ci.id, ci.title, ci.synopsis, ci.duration_ms, ci.episode_number,
+                   ci.rating_system, ci.rating_code, ci.created_at, ci.updated_at,
+                   se.season_number
+            FROM content_items ci
+            LEFT JOIN seasons se ON ci.season_id = se.id
+            WHERE ci.show_id = ? AND ci.kind = 'episode'
+        """
+        params = [show_id]
+        
+        if season_id:
+            query += " AND ci.season_id = ?"
+            params.append(season_id)
+        
+        query += " ORDER BY se.season_number, ci.episode_number"
+        
+        cursor = self.execute(query, params)
+        return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    
+    def get_movies(self, library_id: Optional[int] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get movies with optional filtering.
+        
+        Args:
+            library_id: Optional library ID to filter by
+            search: Optional search term for title
+            
+        Returns:
+            List of movie dictionaries
+        """
+        query = """
+            SELECT ci.id, ci.title, ci.synopsis, ci.duration_ms, ci.rating_system, 
+                   ci.rating_code, ci.is_kids_friendly, ci.created_at, ci.updated_at,
+                   l.title as library_title
+            FROM content_items ci
+            LEFT JOIN libraries l ON ci.show_id IS NULL AND l.id = (
+                SELECT library_id FROM shows WHERE id = ci.show_id
+            )
+            WHERE ci.kind = 'movie'
+        """
+        params = []
+        
+        if library_id:
+            query += " AND l.id = ?"
+            params.append(library_id)
+        
+        if search:
+            query += " AND ci.title LIKE ?"
+            params.append(f"%{search}%")
+        
+        query += " ORDER BY ci.title"
+        
+        cursor = self.execute(query, params)
+        return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    
+    def get_content_by_genre(self, genre: str, library_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get content items by genre.
+        
+        Args:
+            genre: Genre name
+            library_id: Optional library ID to filter by
+            
+        Returns:
+            List of content item dictionaries
+        """
+        query = """
+            SELECT ci.id, ci.kind, ci.title, ci.synopsis, ci.duration_ms,
+                   ci.season_number, ci.episode_number, ci.created_at, ci.updated_at,
+                   s.title as show_title, l.title as library_title
+            FROM content_items ci
+            LEFT JOIN shows s ON ci.show_id = s.id
+            LEFT JOIN libraries l ON s.library_id = l.id
+            LEFT JOIN content_tags ct ON ci.id = ct.content_item_id
+            WHERE ct.namespace = 'genre' AND ct.value = ?
+        """
+        params = [genre]
+        
+        if library_id:
+            query += " AND l.id = ?"
+            params.append(library_id)
+        
+        query += " ORDER BY ci.title"
+        
+        cursor = self.execute(query, params)
+        return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    
+    def get_media_files(self, content_item_id: int) -> List[Dict[str, Any]]:
+        """
+        Get media files for a content item.
+        
+        Args:
+            content_item_id: Content item ID
+            
+        Returns:
+            List of media file dictionaries
+        """
+        query = """
+            SELECT mf.id, mf.plex_file_path, mf.local_file_path, mf.file_size_bytes, 
+                   mf.video_codec, mf.audio_codec, mf.width, mf.height, mf.duration_ms,
+                   mf.container, mf.created_at, mf.updated_at
+            FROM media_files mf
+            JOIN content_item_files cif ON mf.id = cif.media_file_id
+            WHERE cif.content_item_id = ?
+            ORDER BY mf.created_at
+        """
+        
+        cursor = self.execute(query, (content_item_id,))
+        return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    
+    def get_available_genres(self) -> List[str]:
+        """
+        Get list of available genres.
+        
+        Returns:
+            List of genre names
+        """
+        query = """
+            SELECT DISTINCT ct.value
+            FROM content_tags ct
+            WHERE ct.namespace = 'genre'
+            ORDER BY ct.value
+        """
+        
+        cursor = self.execute(query)
+        return [row[0] for row in cursor.fetchall()]

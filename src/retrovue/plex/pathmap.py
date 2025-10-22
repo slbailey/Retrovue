@@ -173,3 +173,110 @@ class PathMapper:
         """Clear the path mapping cache."""
         self._cache.clear()
         logger.debug("Path mapping cache cleared")
+    
+    def resolve_local_path(self, server_id: int, library_id: int, plex_path: str, case_sensitive: bool = (os.name != 'nt')) -> Optional[str]:
+        """
+        Resolve a Plex path to a local path (alias for resolve method).
+        
+        Args:
+            server_id: Server ID
+            library_id: Library ID
+            plex_path: Plex file path
+            case_sensitive: Whether to perform case-sensitive matching
+            
+        Returns:
+            Local file path if mapping found, None otherwise
+        """
+        return self.resolve(server_id, library_id, plex_path, case_sensitive)
+    
+    def get_path_mappings(self, server_id: int, library_id: int) -> List[Mapping]:
+        """
+        Get path mappings for a server and library (public interface).
+        
+        Args:
+            server_id: Server ID
+            library_id: Library ID
+            
+        Returns:
+            List of Mapping objects, sorted by plex_prefix length (longest first)
+        """
+        return self._get_mappings(server_id, library_id)
+    
+    def add_path_mapping(self, server_id: int, library_id: int, plex_path: str, local_path: str) -> int:
+        """
+        Add a new path mapping.
+        
+        Args:
+            server_id: Server ID
+            library_id: Library ID
+            plex_path: Plex path prefix
+            local_path: Local path prefix
+            
+        Returns:
+            ID of the created mapping
+        """
+        cursor = self._conn.execute("""
+            INSERT INTO path_mappings (server_id, library_id, plex_path, local_path)
+            VALUES (?, ?, ?, ?)
+        """, (server_id, library_id, plex_path, local_path))
+        
+        mapping_id = cursor.lastrowid
+        self._conn.commit()
+        
+        # Clear cache for this server/library combination
+        cache_key = (server_id, library_id)
+        if cache_key in self._cache:
+            del self._cache[cache_key]
+        
+        logger.info(f"Added path mapping: {plex_path} -> {local_path}")
+        return mapping_id
+    
+    def remove_path_mapping(self, mapping_id: int) -> bool:
+        """
+        Remove a path mapping by ID.
+        
+        Args:
+            mapping_id: ID of the mapping to remove
+            
+        Returns:
+            True if mapping was removed, False if not found
+        """
+        cursor = self._conn.execute("""
+            DELETE FROM path_mappings WHERE id = ?
+        """, (mapping_id,))
+        
+        if cursor.rowcount > 0:
+            self._conn.commit()
+            # Clear all caches since we don't know which server/library this affects
+            self._cache.clear()
+            logger.info(f"Removed path mapping with ID {mapping_id}")
+            return True
+        else:
+            logger.warning(f"Path mapping with ID {mapping_id} not found")
+            return False
+    
+    def list_path_mappings(self, server_id: Optional[int] = None) -> List[Tuple[int, int, str, str]]:
+        """
+        List path mappings, optionally filtered by server.
+        
+        Args:
+            server_id: Optional server ID to filter by
+            
+        Returns:
+            List of (id, server_id, library_id, plex_path, local_path) tuples
+        """
+        if server_id is not None:
+            cursor = self._conn.execute("""
+                SELECT id, server_id, library_id, plex_path, local_path
+                FROM path_mappings
+                WHERE server_id = ?
+                ORDER BY LENGTH(plex_path) DESC
+            """, (server_id,))
+        else:
+            cursor = self._conn.execute("""
+                SELECT id, server_id, library_id, plex_path, local_path
+                FROM path_mappings
+                ORDER BY server_id, LENGTH(plex_path) DESC
+            """)
+        
+        return cursor.fetchall()

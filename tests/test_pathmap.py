@@ -7,7 +7,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from src.retrovue.plex.pathmap import PathMapper, PathMapping
+from src.retrovue.plex.pathmap import PathMapper, Mapping
 
 
 class TestPathMapper:
@@ -63,12 +63,12 @@ class TestPathMapper:
         mappings = self.path_mapper.get_path_mappings(1, 1)
         
         assert len(mappings) == 3
-        assert mappings[0].plex_path == "/data/TV/"  # Longest first
-        assert mappings[0].local_path == "D:/TV/"
-        assert mappings[1].plex_path == "/data/Movies/"
-        assert mappings[1].local_path == "E:/Movies/"
-        assert mappings[2].plex_path == "/data/"
-        assert mappings[2].local_path == "C:/data/"
+        assert mappings[0].plex_prefix == "/data/TV/"  # Longest first
+        assert mappings[0].local_prefix == "D:/TV/"
+        assert mappings[1].plex_prefix == "/data/Movies/"
+        assert mappings[1].local_prefix == "E:/Movies/"
+        assert mappings[2].plex_prefix == "/data/"
+        assert mappings[2].local_prefix == "C:/data/"
     
     def test_resolve_local_path_exact_match(self):
         """Test resolving path with exact match."""
@@ -186,29 +186,15 @@ class TestPathMapper:
         assert mappings1 is not mappings2  # Different objects
         assert len(mappings1) == len(mappings2)  # Same content
     
-    def test_path_mapping_dataclass(self):
-        """Test PathMapping dataclass behavior."""
-        mapping = PathMapping(
-            id=1,
-            server_id=1,
-            library_id=1,
-            plex_path="/test/",
-            local_path="C:/test/"
+    def test_mapping_dataclass(self):
+        """Test Mapping dataclass behavior."""
+        mapping = Mapping(
+            plex_prefix="/test/",
+            local_prefix="C:/test/",
+            plex_prefix_norm="/test/"
         )
         
-        # Should automatically add trailing slashes
-        assert mapping.plex_path == "/test/"
-        assert mapping.local_path == "C:/test/"
-        
-        # Test without trailing slashes
-        mapping2 = PathMapping(
-            id=2,
-            server_id=1,
-            library_id=1,
-            plex_path="/test",
-            local_path="C:/test"
-        )
-        
-        # Should add trailing slashes
-        assert mapping2.plex_path == "/test/"
-        assert mapping2.local_path == "C:/test/"
+        # Test basic properties
+        assert mapping.plex_prefix == "/test/"
+        assert mapping.local_prefix == "C:/test/"
+        assert mapping.plex_prefix_norm == "/test/"
