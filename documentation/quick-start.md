@@ -24,6 +24,59 @@ Start channel stream and view in VLC or Plex Live TV
 
 ---
 
+## 🖥️ GUI Workflow (Recommended for Beginners)
+
+**New in 2025**: Retrovue now includes a modern PySide6/Qt GUI that makes setup much easier!
+
+### **Launch the GUI**
+```powershell
+# Windows
+.\venv\Scripts\python.exe run_enhanced_gui.py
+
+# macOS/Linux
+python run_enhanced_gui.py
+```
+
+### **Guided 3-Step Setup**
+
+#### **1. Servers Tab - Add Your Plex Server**
+- Click the "Servers" tab
+- Enter your Plex server details:
+  - **Name**: Friendly name (e.g., "Home Plex")
+  - **URL**: `http://your-plex-server:32400`
+  - **Token**: [How to get your token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/)
+- Click "Add Server"
+
+#### **2. Libraries Tab - Discover Libraries**
+- Click the "Libraries" tab
+- Select your server from the dropdown
+- Click "Discover Libraries" button
+- Check the boxes for libraries you want to sync
+- Changes are saved automatically
+
+#### **3. Content Sync Tab - Import Content**
+- Click the "Content Sync" tab
+- Select server and library
+- Add path mappings:
+  - **Plex Path**: Path as seen by Plex (e.g., `/mnt/media/movies`)
+  - **Local Path**: Corresponding path on your machine (e.g., `D:\Movies`)
+  - Click "Add Mapping"
+- Set sync limit (optional, useful for testing)
+- Click "Dry Run (Preview)" to test
+- Click "Sync (Write to DB)" to import
+- Watch real-time progress in the log viewer!
+
+### **GUI Features**
+- ✅ **Real-time progress** - See every step of the sync process
+- ✅ **Error visibility** - All validation errors appear in the GUI
+- ✅ **Tooltips** - Hover over any button for helpful guidance
+- ✅ **Non-blocking** - UI stays responsive during long operations
+- ✅ **Visual feedback** - Immediate confirmation of all actions
+
+**For advanced users or automation**, continue with the CLI workflow below.
+
+---
+
 ## 📋 Detailed Prerequisites
 
 ### **Required Software**

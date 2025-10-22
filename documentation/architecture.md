@@ -57,7 +57,72 @@ The **Ingestion System** is responsible for bringing content into Retrovue from 
 - **Metadata Integrity**: Checks that imported metadata is complete and consistent
 - **Error Recovery**: Handles missing files, corrupted metadata, and sync failures
 
-### **2. Metadata Management System**
+### **2. Management GUI (New - 2025)**
+The **Management GUI** provides a modern PySide6/Qt interface for managing content import and scheduling:
+
+#### **Architecture Pattern: GUI ↔ Core API ↔ Managers**
+```
+┌──────────────────────────────────────┐
+│         PySide6/Qt GUI               │
+│  ┌────────────┐  ┌────────────────┐  │
+│  │ Importers  │  │ Schedules      │  │
+│  │ Page       │  │ Page (TODO)    │  │
+│  └────────────┘  └────────────────┘  │
+└──────────────────────────────────────┘
+           │                 │
+           ▼                 ▼
+┌──────────────────────────────────────┐
+│         Core API Façade              │
+│      (src/retrovue/core/api.py)      │
+│                                      │
+│  Unified interface for all features  │
+└──────────────────────────────────────┘
+           │                 │
+           ▼                 ▼
+┌─────────────────┐  ┌─────────────────┐
+│ ServerManager   │  │ LibraryManager  │
+│ SyncManager     │  │ (Future)        │
+└─────────────────┘  └─────────────────┘
+           │                 │
+           ▼                 ▼
+┌──────────────────────────────────────┐
+│        Database Layer                │
+│     (src/retrovue/plex/db.py)        │
+└──────────────────────────────────────┘
+```
+
+#### **GUI Features**
+- **Non-Blocking Operations**: All long-running tasks use QThread workers
+- **Real-Time Progress**: Streaming progress updates with immediate feedback
+- **Error Visibility**: All validation errors appear in GUI (not console)
+- **Comprehensive Tooltips**: User guidance throughout the interface
+
+#### **Importers Page (Plex Import Workflow)**
+Three-tab workflow for importing content from Plex:
+1. **Servers Tab**: Add/manage Plex servers (URL, token)
+2. **Libraries Tab**: Discover and select libraries to sync
+3. **Content Sync Tab**: Configure path mappings and run sync operations
+   - Dry run preview
+   - Real-time progress updates
+   - Validation error display
+   - Granular sync controls (limit, content types)
+
+#### **Schedules Page (Placeholder)**
+UI foundation for future scheduling features:
+- Schedule management table
+- Schedule history viewer
+- Execution log viewer
+- Informative empty states
+
+#### **Technical Details**
+- **Threading**: `Worker` class wraps generator functions for async operations
+- **Progress Streaming**: Generators yield progress updates to keep UI responsive
+- **API Façade**: Clean separation between GUI and business logic
+- **State Management**: Minimal shared state, page-level ownership
+
+See [GUI Migration Notes](../MIGRATION_NOTES.md) for complete implementation history.
+
+### **3. Metadata Management System**
 The **Metadata Management System** stores and organizes all content information:
 
 #### **Content Items Storage**
@@ -79,7 +144,7 @@ The **Metadata Management System** stores and organizes all content information:
 - **Custom Ratings**: User-defined rating systems for specialized content
 - **Daypart Restrictions**: Automatic content filtering based on time of day and audience
 
-### **3. Scheduling Engine**
+### **4. Scheduling Engine**
 The **Scheduling Engine** manages when and how content is broadcast:
 
 #### **Schedule Blocks (Templates)**
@@ -100,7 +165,7 @@ The **Scheduling Engine** manages when and how content is broadcast:
 - **Commercial Spacing Rules**: Control commercial placement and separation
 - **Seasonal Programming**: Automatic seasonal content scheduling
 
-### **4. Playback/Streaming Engine**
+### **5. Playback/Streaming Engine**
 The **Playback/Streaming Engine** handles the actual content delivery:
 
 #### **FFmpeg Integration**
@@ -121,7 +186,7 @@ The **Playback/Streaming Engine** handles the actual content delivery:
 - **Standard Formats**: Supports industry-standard EPG formats for maximum compatibility
 - **Real-time Updates**: Updates guide data as schedules change
 
-### **5. Logging and Analytics System**
+### **6. Logging and Analytics System**
 The **Logging System** tracks what content is actually aired:
 
 #### **Play Log Management**

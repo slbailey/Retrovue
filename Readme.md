@@ -121,6 +121,7 @@ All documentation has been moved to the `documentation/` folder for better organ
 - **[🎬 Plex Sync CLI](documentation/plex-sync-cli.md)** - Command-line interface for Plex integration
 - **[🎛️ Streaming Engine](documentation/streaming-engine.md)** - How video streaming works
 - **[🚀 Quick Start Guide](documentation/quick-start.md)** - Step-by-step setup instructions
+- **[📝 GUI Migration Notes](MIGRATION_NOTES.md)** - Complete history of GUI modularization (Phases 1-8)
 
 ## 🏗️ Project Goals
 
@@ -136,9 +137,10 @@ Simulate a realistic broadcast TV station experience:
 ## 🛠️ Tech Stack
 
 - **Playback:** ffmpeg, Docker
-- **Management UI:** Python (PySide6 / Tkinter)
+- **Management UI:** Python PySide6/Qt (modern modular GUI)
+- **Core API:** Python with clean separation (GUI ↔ Core API ↔ Managers)
 - **Database:** SQLite with versioned schema migrations
-- **Serving:** Python FastAPI / lightweight HTTP server
+- **Serving:** Python FastAPI / lightweight HTTP server (planned)
 - **Clients:** Plex Live TV, VLC
 
 ### Database & Persistence Strategy
