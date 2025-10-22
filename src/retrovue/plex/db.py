@@ -1270,7 +1270,7 @@ class Db:
         
         return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
     
-    def get_path_mappings(self, server_id: int, library_id: int) -> List[Tuple[str, str]]:
+    def get_path_mappings(self, server_id: int, library_id: int) -> List[Dict[str, Any]]:
         """
         Get path mappings for a server and library.
         
@@ -1279,15 +1279,23 @@ class Db:
             library_id: Library ID
             
         Returns:
-            List of (plex_path, local_path) tuples
+            List of mapping dictionaries with keys: id, plex_path, local_path
         """
         cursor = self.execute("""
-            SELECT plex_path, local_path
+            SELECT id, plex_path, local_path
             FROM path_mappings
             WHERE server_id = ? AND library_id = ?
+            ORDER BY id
         """, (server_id, library_id))
         
-        return [(row['plex_path'], row['local_path']) for row in cursor.fetchall()]
+        return [
+            {
+                'id': row['id'],
+                'plex_path': row['plex_path'],
+                'local_path': row['local_path']
+            }
+            for row in cursor.fetchall()
+        ]
     
     def insert_path_mapping(
         self, 

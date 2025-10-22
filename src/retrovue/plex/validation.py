@@ -222,7 +222,16 @@ class ContentValidator:
                 file_path
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            # Use UTF-8 encoding with error replacement to handle unicode metadata
+            # This fixes Windows cp1252 encoding issues with MKV container metadata
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                encoding='utf-8', 
+                errors='replace',
+                timeout=30
+            )
             if result.returncode != 0:
                 logger.warning(f"ffprobe failed for {file_path}: {result.stderr}")
                 return None

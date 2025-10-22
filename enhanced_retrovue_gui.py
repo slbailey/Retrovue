@@ -259,30 +259,8 @@ class EnhancedRetrovueGUI(QMainWindow):
         layout.addWidget(QLabel("Plex Servers:"))
         layout.addWidget(self.server_table)
         
-        # Add server form
-        form_group = QGroupBox("Add New Server")
-        form_layout = QFormLayout()
-        
-        self.server_name = QLineEdit()
-        self.server_name.setPlaceholderText("My Plex Server")
-        
-        self.server_url = QLineEdit()
-        self.server_url.setPlaceholderText("https://plex.example.com")
-        
-        self.server_token = QLineEdit()
-        self.server_token.setPlaceholderText("Your Plex token")
-        self.server_token.setEchoMode(QLineEdit.Password)
-        
-        self.add_server_btn = QPushButton("Add Server")
-        self.add_server_btn.clicked.connect(self.add_server)
-        
-        form_layout.addRow("Name:", self.server_name)
-        form_layout.addRow("URL:", self.server_url)
-        form_layout.addRow("Token:", self.server_token)
-        form_layout.addRow("", self.add_server_btn)
-        
-        form_group.setLayout(form_layout)
-        layout.addWidget(form_group)
+        # Note: Server addition now handled by modular GUI (retrovue/gui/features/importers/view.py)
+        # Use the new Tkinter-based interface for importing from Plex
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -1242,32 +1220,8 @@ Synopsis:
             
         self.server_count.setText(str(len(servers)))
         
-    def add_server(self):
-        """Add a new Plex server."""
-        name = self.server_name.text().strip()
-        url = self.server_url.text().strip()
-        token = self.server_token.text().strip()
-        
-        if not all([name, url, token]):
-            QMessageBox.warning(self, "Warning", "Please fill in all fields")
-            return
-            
-        self.log(f"=== ADDING SERVER: {name} ===")
-        self.run_command([
-            sys.executable, "cli/plex_sync.py", "servers", "add",
-            "--name", name,
-            "--base-url", url,
-            "--token", token
-        ], f"Add server: {name}")
-        
-        # Clear the form after starting the command
-        self.clear_server_form()
-        
-    def clear_server_form(self):
-        """Clear the add server form."""
-        self.server_name.clear()
-        self.server_url.clear()
-        self.server_token.clear()
+    # add_server() and clear_server_form() removed - functionality moved to modular GUI
+    # See: retrovue/gui/features/importers/view.py
         
     def show_server_context_menu(self, position):
         """Show context menu for server table."""
