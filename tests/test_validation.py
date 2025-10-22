@@ -8,8 +8,8 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from src.retrovue.plex.validation import ContentValidator, ValidationStatus, ValidationResult
-from src.retrovue.plex.pathmap import PathMapper
+from src.retrovue.importers.plex.validation import ContentValidator, ValidationStatus, ValidationResult
+from src.retrovue.importers.plex.pathmap import PathMapper
 
 
 class TestContentValidator:

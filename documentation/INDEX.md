@@ -14,11 +14,13 @@ Welcome to the Retrovue documentation! This index will help you find exactly wha
 ## 📖 Core Documentation
 
 ### Architecture & Design
+
 - **[System Architecture](architecture.md)** - How all the pieces fit together
 - **[Database Schema](database-schema.md)** - Data models and table structures
 - **[Development Roadmap](development-roadmap.md)** - Current status and future plans
 
 ### Features & Components
+
 - **[Plex Sync CLI](plex-sync-cli.md)** - Command-line interface for Plex integration
 - **[Streaming Engine](streaming-engine.md)** - Video delivery and playout
 
@@ -32,6 +34,7 @@ Welcome to the Retrovue documentation! This index will help you find exactly wha
 - **[Progress Improvements](../PROGRESS_IMPROVEMENTS.md)** - Real-time progress feedback details
 
 ### GUI Architecture
+
 The new modular Qt GUI follows this structure:
 
 ```
@@ -56,11 +59,13 @@ src/retrovue/
 ## 🔧 Technical Documentation
 
 ### Plex Integration
+
 - **[Plex Integration Overview](Plex Integration/Retrovuew Plex Integration.md)** - How Retrovue integrates with Plex
 - **[Plex Rework Roadmap](Plex Integration/Plex Rework Roadmap.md)** - Plex feature planning
 - **[Gap Analysis](Plex Integration/Retrovue Gap Analysis.md)** - Feature comparison with ErsatzTV
 
 ### UI Design Documents
+
 - **[UI Core Concepts](UI/RetroVue_UI_Core.md)** - Core UI architecture
 - **[Ingest Module Design](UI/RetroVue_UI_Ingest_Module_v0.1.md)** - Content import UI
 - **[Schedule Module Design](UI/RetroVue_UI_Schedule_Module_v0.1.md)** - Scheduling UI concepts
@@ -94,6 +99,7 @@ src/retrovue/
 ## 🔍 Quick Links by Topic
 
 ### I want to...
+
 - **Set up Retrovue for the first time** → [Quick Start Guide](quick-start.md)
 - **Import content from Plex** → [Plex Sync CLI](plex-sync-cli.md)
 - **Understand the architecture** → [System Architecture](architecture.md)
@@ -130,4 +136,3 @@ Retrovue/
 ---
 
 **Need help?** [Open an issue](https://github.com/slbailey/Retrovue/issues) or check the [Contributing Guide](../CONTRIBUTING.md).
-

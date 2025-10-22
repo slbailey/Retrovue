@@ -17,22 +17,22 @@ def test_system():
     
     try:
         # Test database
-        from retrovue.plex.db import Db
+        from retrovue.importers.plex.db import Db
         db = Db("retrovue.db")
         print("[OK] Database connection successful")
         
         # Test path mapping
-        from retrovue.plex.pathmap import PathMapper
+        from retrovue.importers.plex.pathmap import PathMapper
         path_mapper = PathMapper(db.conn)
         print("[OK] Path mapping system ready")
         
         # Test validation
-        from retrovue.plex.validation import ContentValidator
+        from retrovue.importers.plex.validation import ContentValidator
         validator = ContentValidator(path_mapper)
         print("[OK] Content validation system ready")
         
         # Test error handling
-        from retrovue.plex.error_handling import ErrorHandler
+        from retrovue.importers.plex.error_handling import ErrorHandler
         error_handler = ErrorHandler()
         print("[OK] Error handling system ready")
         

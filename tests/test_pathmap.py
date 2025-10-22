@@ -7,7 +7,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from src.retrovue.plex.pathmap import PathMapper, Mapping
+from src.retrovue.importers.plex.pathmap import PathMapper, Mapping
 
 
 class TestPathMapper:

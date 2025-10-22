@@ -24,7 +24,7 @@ class LibraryManager:
     
     def _get_db(self):
         """Get database instance. Import lazily to avoid circular deps."""
-        from retrovue.plex.db import Db
+        from retrovue.importers.plex.db import Db
         return Db(self.db_path)
     
     def list_libraries(self, server_id: int) -> List[Dict[str, Any]]:
@@ -67,7 +67,7 @@ class LibraryManager:
             Exception: On network or database errors
         """
         # Import here to avoid pulling in requests at module level
-        from retrovue.plex.client import PlexClient
+        from retrovue.importers.plex.client import PlexClient
         
         # Get server credentials
         with self._get_db() as db:

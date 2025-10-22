@@ -16,11 +16,11 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 # Import only the non-network components that don't require requests
-from retrovue.plex.guid import GuidParser
-from retrovue.plex.pathmap import PathMapper
-from retrovue.plex.mapper import Mapper
-from retrovue.plex.db import Db
-from retrovue.plex.config import OFFLINE_EXIT
+from retrovue.importers.plex.guid import GuidParser
+from retrovue.importers.plex.pathmap import PathMapper
+from retrovue.importers.plex.mapper import Mapper
+from retrovue.importers.plex.db import Db
+from retrovue.importers.plex.config import OFFLINE_EXIT
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -462,7 +462,7 @@ def cmd_libraries_list(args):
             # Resolve server if specified
             server_id_filter = None
             if server_name or server_id:
-                from retrovue.plex.config import resolve_server
+                from retrovue.importers.plex.config import resolve_server
                 server = resolve_server(db, server_name, int(server_id) if server_id else None)
                 server_id_filter = server['id']
             
@@ -573,12 +573,12 @@ def cmd_libraries_sync(args):
     
     try:
         # Lazy import to avoid pulling requests for non-network commands
-        from retrovue.plex.client import PlexClient
+        from retrovue.importers.plex.client import PlexClient
         import requests
         
         with Db(db_path) as db:
             # Resolve server
-            from retrovue.plex.config import resolve_server
+            from retrovue.importers.plex.config import resolve_server
             server = resolve_server(db, server_name, int(server_id) if server_id else None)
             
             # Create Plex client
@@ -787,13 +787,13 @@ def cmd_libraries_delete(args):
             with Db(db_path) as db:
                 # Resolve server if specified
                 if server_name or server_id:
-                    from retrovue.plex.config import resolve_server
+                    from retrovue.importers.plex.config import resolve_server
                     server = resolve_server(db, server_name, int(server_id) if server_id else None)
                     server_id_filter = server['id']
                     server_name_display = server['name']
                 else:
                     # Use default server
-                    from retrovue.plex.config import resolve_server
+                    from retrovue.importers.plex.config import resolve_server
                     server = resolve_server(db, None, None)
                     server_id_filter = server['id']
                     server_name_display = server['name']
@@ -1070,10 +1070,10 @@ def cmd_ingest_run(args):
     
     try:
         # Lazy import to avoid pulling requests for non-network commands
-        from retrovue.plex.client import PlexClient
-        from retrovue.plex.config import resolve_server
-        from retrovue.plex.ingest import IngestOrchestrator
-        from retrovue.plex.pathmap import PathMapper
+        from retrovue.importers.plex.client import PlexClient
+        from retrovue.importers.plex.config import resolve_server
+        from retrovue.importers.plex.ingest import IngestOrchestrator
+        from retrovue.importers.plex.pathmap import PathMapper
         import requests
         
         # Set logging level
@@ -1206,7 +1206,7 @@ def cmd_ingest_status(args):
             # Resolve server if specified
             server_id_filter = None
             if server_name or server_id:
-                from retrovue.plex.config import resolve_server
+                from retrovue.importers.plex.config import resolve_server
                 server = resolve_server(db, server_name, int(server_id) if server_id else None)
                 server_id_filter = server['id']
             
@@ -1284,8 +1284,8 @@ def cmd_items_preview(args):
     
     try:
         # Lazy import to avoid pulling requests for non-network commands
-        from retrovue.plex.client import PlexClient
-        from retrovue.plex.config import resolve_server
+        from retrovue.importers.plex.client import PlexClient
+        from retrovue.importers.plex.config import resolve_server
         import requests
         
         # Resolve server credentials from database

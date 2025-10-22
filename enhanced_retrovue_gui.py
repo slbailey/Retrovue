@@ -131,7 +131,7 @@ class EnhancedRetrovueGUI(QMainWindow):
         try:
             import sys
             sys.path.insert(0, 'src')
-            from retrovue.plex.db import Db
+            from retrovue.importers.plex.db import Db
             self.db = Db('retrovue.db')
             self.log("Database connected successfully")
         except Exception as e:

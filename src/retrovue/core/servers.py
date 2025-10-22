@@ -25,7 +25,7 @@ class ServerManager:
     
     def _get_db(self):
         """Get database instance. Import lazily to avoid circular deps."""
-        from retrovue.plex.db import Db
+        from retrovue.importers.plex.db import Db
         return Db(self.db_path)
     
     def list_servers(self) -> List[Dict[str, Any]]:

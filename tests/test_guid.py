@@ -3,7 +3,7 @@ Tests for GUID parsing functionality.
 """
 
 import pytest
-from src.retrovue.plex.guid import GuidParser, ParsedGuid
+from src.retrovue.importers.plex.guid import GuidParser, ParsedGuid
 
 
 class TestGuidParser:

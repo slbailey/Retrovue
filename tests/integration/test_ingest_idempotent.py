@@ -19,8 +19,8 @@ from typing import Tuple
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 # Import required modules
-from retrovue.plex.db import Db
-from retrovue.plex.config import OFFLINE_EXIT
+from retrovue.importers.plex.db import Db
+from retrovue.importers.plex.config import OFFLINE_EXIT
 
 
 def plex_env_present() -> bool:

@@ -24,7 +24,7 @@ class SyncManager:
     
     def _get_db(self):
         """Get database instance. Import lazily to avoid circular deps."""
-        from retrovue.plex.db import Db
+        from retrovue.importers.plex.db import Db
         return Db(self.db_path)
     
     def list_path_mappings(self, server_id: int, library_id: int) -> List[Dict[str, Any]]:
@@ -126,9 +126,9 @@ class SyncManager:
             Exception: On network or database errors
         """
         # Import here to avoid pulling in requests at module level
-        from retrovue.plex.client import PlexClient
-        from retrovue.plex.ingest import IngestOrchestrator
-        from retrovue.plex.pathmap import PathMapper
+        from retrovue.importers.plex.client import PlexClient
+        from retrovue.importers.plex.ingest import IngestOrchestrator
+        from retrovue.importers.plex.pathmap import PathMapper
         
         if not library_keys:
             raise ValueError("No libraries specified for sync")

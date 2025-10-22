@@ -2,13 +2,16 @@
 Unified API façade for Retrovue core functionality.
 
 This module provides a clean, consistent interface for both GUI and CLI
-to interact with Plex servers, libraries, and content synchronization.
+to interact with various content sources through the importer framework.
 """
 
 from typing import List, Dict, Any, Optional, Generator
 from .servers import ServerManager
 from .libraries import LibraryManager
 from .sync import SyncManager
+from .content_sources_db import ContentSourcesDB
+from ..importers.registry import registry
+from ..importers.exceptions import ImporterNotFoundError
 
 
 class RetrovueAPI:
@@ -24,6 +27,33 @@ class RetrovueAPI:
         self._server_manager = ServerManager()
         self._library_manager = LibraryManager()
         self._sync_manager = SyncManager()
+        self._content_sources_db = ContentSourcesDB()
+        self._importers = {}  # Cache for importer instances
+    
+    # ========================================================================
+    # Importer Management
+    # ========================================================================
+    
+    def get_importer(self, source_id: str):
+        """Get importer instance by source ID."""
+        if source_id not in self._importers:
+            try:
+                self._importers[source_id] = registry.get_importer(source_id)
+            except ImporterNotFoundError:
+                raise ImporterNotFoundError(f"Importer '{source_id}' not available")
+        return self._importers[source_id]
+    
+    def list_importers(self) -> List[Dict[str, Any]]:
+        """List all available importers."""
+        importers = registry.list_importers()
+        return [
+            {
+                "source_id": importer.source_id,
+                "name": importer.name,
+                "capabilities": [cap.value for cap in importer.capabilities]
+            }
+            for importer in importers
+        ]
     
     # ========================================================================
     # Server Management
@@ -83,24 +113,64 @@ class RetrovueAPI:
     # Library Management
     # ========================================================================
     
-    def discover_libraries(self, server_id: int) -> Generator[Dict[str, Any], None, None]:
+    def discover_libraries(self, server_id: int, source_id: str = "plex") -> Generator[Dict[str, Any], None, None]:
         """
-        Discover libraries on a Plex server (async generator).
+        Discover libraries on a server using CLI (async generator).
         
         This is a long-running operation that yields progress updates.
         Should be run in a background thread to avoid blocking the UI.
         
         Args:
             server_id: Server ID to discover libraries from
+            source_id: Importer source ID (default: "plex")
             
         Yields:
             Progress dictionaries with keys like: stage, msg, library, etc.
             
         Example:
-            for progress in api.discover_libraries(server_id):
+            for progress in api.discover_libraries(server_id, "plex"):
                 print(progress['msg'])
         """
-        yield from self._library_manager.discover_libraries(server_id)
+        import subprocess
+        import sys
+        from pathlib import Path
+        
+        # Build CLI command
+        cli_path = Path(__file__).parent.parent.parent / "cli" / "plex_sync.py"
+        cmd = [
+            sys.executable, str(cli_path), "libraries", "sync",
+            "--server-id", str(server_id),
+            "--disable-all"  # Start with all libraries disabled
+        ]
+        
+        yield {"stage": "start", "msg": f"Discovering libraries from server {server_id}..."}
+        
+        try:
+            # Run CLI command and capture output
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=Path(__file__).parent.parent.parent
+            )
+            
+            # Stream output line by line
+            for line in process.stdout:
+                line = line.strip()
+                if line:
+                    yield {"stage": "progress", "msg": line}
+            
+            # Wait for completion
+            return_code = process.wait()
+            
+            if return_code == 0:
+                yield {"stage": "complete", "msg": "Library discovery completed successfully"}
+            else:
+                yield {"stage": "error", "msg": f"Library discovery failed with return code {return_code}"}
+                
+        except Exception as e:
+            yield {"stage": "error", "msg": f"Error running library discovery: {e}"}
     
     def list_libraries(self, server_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
@@ -201,38 +271,113 @@ class RetrovueAPI:
     def sync_content(
         self,
         server_id: int,
-        library_keys: List[int],
-        kinds: List[str],
-        limit: Optional[int] = None,
-        dry_run: bool = True
+        library_id: int,
+        source_id: str = "plex",
+        **kwargs
     ) -> Generator[Dict[str, Any], None, None]:
         """
-        Synchronize content from Plex to local database (async generator).
+        Synchronize content from a source to local database (async generator).
         
         This is a long-running operation that yields progress updates.
         Should be run in a background thread to avoid blocking the UI.
         
         Args:
             server_id: Server ID to sync from
-            library_keys: List of Plex library keys to sync
-            kinds: List of content types (e.g., ['movie', 'episode'])
-            limit: Optional limit on number of items to process
-            dry_run: If True, preview changes without writing to DB
+            library_id: Library ID to sync
+            source_id: Importer source ID (default: "plex")
+            **kwargs: Additional arguments passed to importer
             
         Yields:
             Progress dictionaries with keys like: stage, msg, stats, etc.
             
         Example:
-            for progress in api.sync_content(server_id, [1], ['movie'], dry_run=True):
+            for progress in api.sync_content(server_id, library_id, "plex", dry_run=True):
                 print(progress['msg'])
         """
-        yield from self._sync_manager.run_sync(
-            server_id, 
-            library_keys, 
-            kinds, 
-            limit, 
-            dry_run
-        )
+        importer = self.get_importer(source_id)
+        yield from importer.sync_content(server_id, library_id, **kwargs)
+    
+    # ========================================================================
+    # Content Sources Management
+    # ========================================================================
+    
+    def add_content_source(self, name: str, source_type: str, config: Dict[str, Any]) -> int:
+        """
+        Add a new content source.
+        
+        Args:
+            name: Friendly name for the content source
+            source_type: Type of content source (e.g., 'plex', 'jellyfin', 'filesystem')
+            config: Configuration dictionary specific to the source type
+            
+        Returns:
+            Content source ID of the newly created source
+            
+        Raises:
+            Exception: If content source cannot be added
+        """
+        return self._content_sources_db.add_content_source(name, source_type, config)
+    
+    def list_content_sources(self) -> List[Dict[str, Any]]:
+        """
+        List all configured content sources.
+        
+        Returns:
+            List of content source dictionaries with keys: id, name, source_type, 
+            config, status, created_at, updated_at
+        """
+        return self._content_sources_db.get_content_sources()
+    
+    def get_content_source(self, source_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific content source by ID.
+        
+        Args:
+            source_id: Content source ID
+            
+        Returns:
+            Content source dictionary or None if not found
+        """
+        return self._content_sources_db.get_content_source(source_id)
+    
+    def update_content_source(self, source_id: int, name: str, config: Dict[str, Any]) -> bool:
+        """
+        Update a content source.
+        
+        Args:
+            source_id: Content source ID to update
+            name: New name for the content source
+            config: Updated configuration dictionary
+            
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        return self._content_sources_db.update_content_source(source_id, name, config)
+    
+    def delete_content_source(self, source_id: int) -> bool:
+        """
+        Delete a content source.
+        
+        Args:
+            source_id: Content source ID to delete
+            
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        return self._content_sources_db.delete_content_source(source_id)
+    
+    def update_content_source_status(self, source_id: int, status: str) -> bool:
+        """
+        Update content source status.
+        
+        Args:
+            source_id: Content source ID
+            status: New status ('active', 'inactive', 'error')
+            
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        return self._content_sources_db.update_content_source_status(source_id, status)
 
 
 # Singleton instance for convenience
