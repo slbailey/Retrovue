@@ -28,6 +28,7 @@ The ultimate objective is to create a true 24x7 live channel with **no defined s
 Each program file (e.g., `episode1.mp4`) should be represented as a **timeline-aware source** rather than a simple file path:
 
 **Example Playback Sequence:**
+
 1. Play `episode1.mp4` from `00:00–03:00`
 2. Insert `ad30.mp4` (commercial break)
 3. Resume `episode1.mp4` from `03:01–06:00`
@@ -66,11 +67,13 @@ The "playlist" should be generated **dynamically in memory**, not from hardcoded
 These streaming concepts are **parked for now**. Current development priorities are:
 
 1. **Content Library Foundation**
+
    - Robust database schema for media metadata
    - Efficient content discovery and retrieval
    - Metadata enrichment and validation
 
 2. **Domain Model & Architecture**
+
    - Clean separation of concerns (Domain, Application, Infrastructure)
    - Unit of Work pattern implementation
    - Repository pattern for data access
