@@ -83,6 +83,156 @@ retrovue assets list --json
 - `--status [pending|canonical|all]` - Filter by asset status (default: all)
 - `--json` - Output in JSON format
 
+#### `retrovue assets select`
+
+Select an asset (returning UUID + lightweight metadata).
+
+This is the primary command for choosing assets. Use this UUID with `retrovue assets get <uuid> --json` to retrieve full details.
+
+```bash
+# Select a random episode from a series (positional argument)
+retrovue assets select "Cheers" --mode random --json
+
+# Select a random episode from a series (flag argument)
+retrovue assets select --series "Cheers" --mode random --json
+
+# Select the next episode in sequence (S01E01 when no history exists)
+retrovue assets select --series "Cheers" --mode sequential
+
+# Select by genre (when implemented)
+retrovue assets select --genre horror --mode random --json
+
+# Typical workflow: select then get full details
+retrovue assets select "Cheers" --mode random --json \
+| jq -r .uuid \
+| xargs retrovue assets get --json
+```
+
+**Arguments:**
+
+- `SERIES` - Series name (positional argument, mutually exclusive with --series)
+
+**Options:**
+
+- `--series TEXT` - Series name (flag argument, mutually exclusive with positional)
+- `--genre TEXT` - Filter by genre (not yet implemented)
+- `--mode [random|sequential]` - Selection mode (default: random)
+- `--json` - Output in JSON format
+
+**Selection Modes:**
+
+- `random` - Choose a random episode from the series
+- `sequential` - Choose the next episode in natural order (by season_number, episode_number)
+  - For now, if there is no play history, picks the first episode (S01E01)
+  - TODO: Add per-channel last-played logic
+
+**JSON Output Format:**
+
+```json
+{
+  "uuid": "b4739f5c-7f91-4937-a7b2-4a5ba8ef4249",
+  "id": 5,
+  "title": "The Tortelli Tort",
+  "series_title": "Cheers",
+  "season_number": 1,
+  "episode_number": 3,
+  "kind": "episode",
+  "selection": {
+    "mode": "random",
+    "criteria": {
+      "series": "Cheers"
+    }
+  }
+}
+```
+
+**Human Output Format:**
+
+```
+Cheers S01E03 "The Tortelli Tort"  b4739f5c-7f91-4937-a7b2-4a5ba8ef4249
+```
+
+**Notes:**
+
+- Numbers must be numeric (not strings)
+- Use this UUID with `retrovue assets get <uuid> --json` to retrieve file_path/duration/etc.
+- Selection requires at least one filter: series or genre
+- You cannot provide both a positional argument and the --series flag
+
+#### `retrovue assets series` (DEPRECATED)
+
+List series or episodes for a specific series.
+
+**DEPRECATED:** When a series is provided, use `assets select` to choose an episode.
+
+```bash
+# List all available series (still works)
+retrovue assets series
+
+# Show episodes for a specific series (DEPRECATED - use assets select)
+retrovue assets series "Batman TAS"  # DEPRECATED: Use 'assets select "Batman TAS"'
+retrovue assets series --series "Batman TAS"  # DEPRECATED: Use 'assets select --series "Batman TAS"'
+
+# Output in JSON format
+retrovue assets series "Batman TAS" --json  # DEPRECATED: Use 'assets select "Batman TAS" --json'
+retrovue assets series --series "Batman TAS" --json  # DEPRECATED: Use 'assets select --series "Batman TAS" --json'
+```
+
+**Arguments:**
+
+- `SERIES` - Series name (positional argument, mutually exclusive with --series)
+
+**Options:**
+
+- `--series TEXT` - Series name (flag argument, mutually exclusive with positional)
+- `--json` - Output in JSON format
+
+**Deprecation Behavior:**
+
+When a series is provided, this command:
+
+1. Prints a deprecation warning to stderr
+2. Delegates internally to `assets select` with the same series and `--mode random`
+3. Returns the same selection JSON as `assets select` (not the old seasons tree)
+
+When no series is provided, it still lists all series as `{"series": [...]}`.
+
+**JSON Output Format:**
+
+When requesting a specific series (DEPRECATED), the JSON output now matches `assets select`:
+
+```json
+{
+  "uuid": "b4739f5c-7f91-4937-a7b2-4a5ba8ef4249",
+  "id": 5,
+  "title": "The Tortelli Tort",
+  "series_title": "Cheers",
+  "season_number": 1,
+  "episode_number": 3,
+  "kind": "episode",
+  "selection": {
+    "mode": "random",
+    "criteria": {
+      "series": "Cheers"
+    }
+  }
+}
+```
+
+When listing all series, the JSON output is:
+
+```json
+{
+  "series": ["Batman TAS", "Frasier", "Cheers"]
+}
+```
+
+**Notes:**
+
+- Numeric fields (id, season_number, episode_number) are returned as numbers, not strings
+- You cannot provide both a positional argument and the --series flag
+- Use `assets select` for new code instead of this deprecated command
+
 ### Review Commands
 
 #### `retrovue review list`
@@ -259,4 +409,3 @@ retrovue ingest --help
 retrovue assets list --help
 retrovue review resolve --help
 ```
-

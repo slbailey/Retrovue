@@ -19,7 +19,8 @@ class AssetSummary(BaseModel):
     
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
-    id: UUID = Field(..., description="Unique asset identifier")
+    id: int = Field(..., description="Internal asset identifier (integer)")
+    uuid: UUID = Field(..., description="Asset UUID for stable external reference")
     uri: str = Field(..., description="Asset URI or file path")
     size: int = Field(..., description="Asset size in bytes")
     duration_ms: int | None = Field(None, description="Asset duration in milliseconds")
@@ -35,6 +36,7 @@ class AssetSummary(BaseModel):
         """Create AssetSummary from ORM Asset entity."""
         return cls(
             id=asset.id,
+            uuid=asset.uuid,
             uri=asset.uri,
             size=asset.size,
             duration_ms=asset.duration_ms,
@@ -53,7 +55,7 @@ class ReviewQueueSummary(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     id: UUID = Field(..., description="Unique review queue identifier")
-    asset_id: UUID = Field(..., description="Associated asset identifier")
+    asset_id: int = Field(..., description="Associated asset identifier (integer)")
     reason: str = Field(..., description="Reason for review")
     confidence: float = Field(..., description="Confidence score (0.0-1.0)")
     status: str = Field(..., description="Review status")
@@ -127,3 +129,32 @@ class IngestResponse(BaseModel):
             # Ensure proper serialization of counts
         }
     }
+
+
+class SeriesListResponse(BaseModel):
+    """Response for series listing endpoints."""
+    
+    series: list[str] = Field(..., description="List of series titles")
+
+
+class EpisodeSummary(BaseModel):
+    """Summary of an episode for series endpoints."""
+    
+    id: int = Field(..., description="Asset ID (integer)")
+    uuid: UUID = Field(..., description="Asset UUID for stable reference")
+    title: str = Field(..., description="Episode title")
+    series_title: str = Field(..., description="Series title")
+    season_number: int = Field(..., description="Season number")
+    episode_number: int = Field(..., description="Episode number")
+    duration_sec: int | None = Field(None, description="Duration in seconds")
+    kind: str = Field(..., description="Asset kind")
+    source: str | None = Field(None, description="Source provider")
+    source_rating_key: str | None = Field(None, description="Source rating key")
+
+
+class EpisodesBySeriesResponse(BaseModel):
+    """Response for episodes by series endpoints."""
+    
+    series: str = Field(..., description="Series title")
+    episodes: list[EpisodeSummary] = Field(..., description="List of episodes")
+    total: int = Field(..., description="Total number of episodes")

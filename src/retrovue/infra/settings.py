@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     """Main application settings using Pydantic BaseSettings."""
     
     # Database settings (keep existing)
-    database_url: str = Field(default="postgresql+psycopg://retrovue:retrovue@localhost:5432/retrovue", alias="DATABASE_URL")
+    database_url: str = Field(default="postgresql+psycopg://retrovue:$1appy!69@192.168.1.50:5432/retrovue", alias="DATABASE_URL")
     echo_sql: bool = Field(default=False, alias="ECHO_SQL")
     pool_size: int = Field(default=5, alias="DB_POOL_SIZE")
     max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW")

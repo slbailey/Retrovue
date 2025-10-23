@@ -11,7 +11,7 @@ import typer
 from typing import Optional
 
 from .uow import session
-from .commands import ingest, assets, review
+from .commands import ingest, assets, review, plex
 # Ensure registry is populated
 import retrovue.adapters.importers  # noqa: F401
 
@@ -25,6 +25,7 @@ app = typer.Typer(
 app.add_typer(ingest.app, name="ingest", help="Content ingestion operations")
 app.add_typer(assets.app, name="assets", help="Asset management operations") 
 app.add_typer(review.app, name="review", help="Review queue operations")
+app.add_typer(plex.app, name="plex", help="Plex server operations")
 
 
 @app.callback()

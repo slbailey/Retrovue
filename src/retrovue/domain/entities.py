@@ -121,7 +121,8 @@ class Asset(Base):
 
     __tablename__ = "assets"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
     uri: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     size: Mapped[int] = mapped_column(BigInteger, nullable=False)  # size in bytes
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -133,6 +134,8 @@ class Asset(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     canonical: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     episodes: Mapped[list[Episode]] = relationship(
@@ -149,6 +152,7 @@ class Asset(Base):
     __table_args__ = (
         Index("ix_assets_canonical", "canonical"),
         Index("ix_assets_discovered_at", "discovered_at"),
+        Index("ix_assets_is_deleted", "is_deleted"),
     )
 
     def __repr__(self) -> str:
@@ -165,8 +169,8 @@ class EpisodeAsset(Base):
     episode_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("episodes.id", ondelete="CASCADE"), primary_key=True
     )
-    asset_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True
+    asset_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True
     )
 
     def __repr__(self) -> str:
@@ -192,8 +196,8 @@ class ProviderRef(Base):
     episode_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=True
     )
-    asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), nullable=True
+    asset_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=True
     )
 
     # Relationships
@@ -211,8 +215,8 @@ class Marker(Base):
     __tablename__ = "markers"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    asset_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    asset_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
     )
     kind: Mapped[MarkerKind] = mapped_column(SQLEnum(MarkerKind), nullable=False)
     start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -237,8 +241,8 @@ class ReviewQueue(Base):
     __tablename__ = "review_queue"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    asset_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    asset_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
     )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
