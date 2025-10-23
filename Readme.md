@@ -174,6 +174,40 @@ Simulate a realistic broadcast TV station experience:
 - Schema changes will be documented with upgrade scripts
 - Backup your `retrovue.db` file regularly (it's excluded from git via `.gitignore`)
 
+## 🛠️ Development Checklist
+
+**For Developers:**
+
+1. **Setup Environment:**
+   ```bash
+   git clone https://github.com/slbailey/Retrovue.git
+   cd Retrovue
+   python -m venv venv
+   source venv/bin/activate  # or .\venv\Scripts\activate on Windows
+   pip install -r requirements.txt
+   ```
+
+2. **Install Pre-commit Hooks:**
+   ```bash
+   pre-commit install
+   ```
+
+3. **Run Tests:**
+   ```bash
+   pytest -q
+   ```
+
+4. **Start Development Server:**
+   ```bash
+   uvicorn retrovue.api.main:app --reload --port 8000
+   # or use: make dev
+   ```
+
+5. **Verify No Qt References:**
+   ```bash
+   python scripts/check_no_qt.py
+   ```
+
 ## 🤝 Contributing
 
 Retrovue is designed to be a community-driven project. Whether you're a developer, content creator, or just someone who loves retro TV, there are ways to contribute!

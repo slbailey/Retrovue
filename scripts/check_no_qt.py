@@ -35,6 +35,9 @@ EXCLUDE_DIRS = {
 EXCLUDE_FILES = {
     'REPORT.md',  # Our own report file
     'CHANGELOG.md',  # Changelog files
+    'check_no_qt.py',  # This script itself
+    'test_no_qt_left.py',  # Anti-Qt test
+    'test_architecture_guard.py',  # Architecture guard test
 }
 
 def should_scan_file(file_path: Path) -> bool:
@@ -82,7 +85,7 @@ def main():
     repo_root = Path(__file__).parent.parent
     violations = []
     
-    print("🔍 Scanning repository for banned Qt/PySide references...")
+    print("Scanning repository for banned Qt/PySide references...")
     
     # Scan all files in the repository
     for file_path in repo_root.rglob('*'):
@@ -91,7 +94,7 @@ def main():
             violations.extend(file_violations)
     
     if violations:
-        print("\n❌ BANNED Qt/PySide REFERENCES FOUND:")
+        print("\nBANNED Qt/PySide REFERENCES FOUND:")
         print("=" * 60)
         
         for violation in violations:
@@ -101,14 +104,14 @@ def main():
             print(f"Content: {violation['content']}")
             print("-" * 40)
         
-        print(f"\n🚫 Found {len(violations)} violations!")
+        print(f"\nFound {len(violations)} violations!")
         print("\nRetrovue is now web-only. Qt/PySide references are not allowed.")
         print("Please remove these references and use web technologies instead.")
         
         sys.exit(1)
     else:
-        print("✅ No banned Qt/PySide references found!")
-        print("🎉 Repository is clean - Retrovue remains web-only!")
+        print("No banned Qt/PySide references found!")
+        print("Repository is clean - Retrovue remains web-only!")
 
 if __name__ == '__main__':
     main()
