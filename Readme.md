@@ -128,6 +128,7 @@ All documentation has been organized in the `docs/` folder for better structure:
 - **[✅ Review System](docs/REVIEW.md)** - Quality assurance workflow and human review process
 - **[📺 Playout System](docs/PLAYOUT.md)** - HLS-first output contract and testing procedures
 - **[🎛️ Streaming Engine](docs/streaming-engine.md)** - How video streaming works
+- **[🔄 Streaming Pipeline Concepts](docs/STREAMING_PIPELINE_CONCEPTS.md)** - Future streaming architecture (deferred work)
 - **[🎬 Plex Sync CLI](docs/plex-sync-cli.md)** - Legacy command-line interface for Plex integration
 - **[🚦 Development Roadmap](docs/development-roadmap.md)** - Track progress and see what's coming next
 - **[📝 Migration Notes](docs/MIGRATION_NOTES.md)** - Complete history of GUI modularization (Phases 1-8)
