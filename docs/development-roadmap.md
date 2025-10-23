@@ -38,7 +38,7 @@ This roadmap tracks our progress through development and helps keep us focused o
 - [x] **Content Manager** - Media ingestion, validation, metadata storage
 - [x] **Plex Integration** - Import movies/shows from Plex Media Server via API with episode-level granularity
 - [x] **Smart Sync System** - Intelligent sync with conflict resolution and change detection
-- [x] **Content Import UI** - PySide6 interface with real-time progress updates
+- [x] **Content Import UI** - Web interface with real-time progress updates
 
 #### **2.2 Plex Content Ingestion** ✅ **COMPLETED**
 - [x] **Complete Plex Integration** - Full CLI-based Plex server management and content import

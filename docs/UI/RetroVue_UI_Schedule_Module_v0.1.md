@@ -125,7 +125,7 @@
 
 ## 6) Data Access Layer (v0.1)
 
-> Implementation detail: Direct SQLite database access through PySide6 application. Qt signals provide real-time updates between UI components.
+> Implementation detail: Direct SQLite database access through web application. WebSocket connections provide real-time updates between UI components.
 
 **Database Operations:**
 - Template CRUD operations through SQLite ORM/direct queries

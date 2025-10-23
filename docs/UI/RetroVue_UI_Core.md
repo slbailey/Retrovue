@@ -108,8 +108,8 @@ Subdocuments evolve more frequently with detailed UX and implementation notes.
 
 ## 7) Integration Strategy
 
-**PySide6 Desktop Application Architecture:**
-- Each module operates independently but shares common Qt UI patterns and widgets.
+**Web Application Architecture:**
+- Each module operates independently but shares common web UI patterns and components.
 - Cross-module data flows through the embedded SQLite database layer.
 - Qt signals/slots provide event-driven communication between modules and background workers.
 - QThread workers handle long-running operations (ingest, schedule generation) without blocking the UI.
@@ -121,7 +121,7 @@ Subdocuments evolve more frequently with detailed UX and implementation notes.
 
 ## 8) Technology Stack (v0.1)
 
-- **Frontend**: Python with PySide6 (Qt for Python) - Desktop application
+- **Frontend**: Web UI (FastAPI + HTML/JS) - Browser-based application
 - **Packaging**: PyInstaller (one-folder build) for Windows executable (RetroVue.exe)
 - **Database**: SQLite (embedded with application)
 - **Threading**: QThread workers with Qt signals for background operations

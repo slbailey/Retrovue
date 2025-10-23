@@ -44,7 +44,7 @@
 **Hybrid Event + Persistence**
 - Ingest emits **structured events** to a pluggable Reporter.
 - Reporter **persists** to DB for history & polling.
-- Reporter emits **Qt signals** for live UI updates in PySide6 application.
+- Reporter emits **WebSocket events** for live UI updates in web application.
 
 **Non-goals**: UI parsing logs; ingest calling UI directly.
 
@@ -101,7 +101,7 @@ Event {
 
 ## 6) Ingest Service Interface (v0.1)
 
-> Implementation detail: Direct integration with PySide6 application. QThread workers handle ingest operations with Qt signals for progress updates.
+> Implementation detail: Direct integration with web application. Background workers handle ingest operations with WebSocket events for progress updates.
 
 **Service Methods:**
 - `start_ingest_run(server_id, mode, libraries[], kinds[], dry_run, verbose)` — Start new ingest run

@@ -67,3 +67,4 @@ async def health_check(db: Session = Depends(get_db)) -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail=response)
     
     return response
+

@@ -36,9 +36,9 @@ The new modular Qt GUI follows this structure:
 
 ```
 src/retrovue/
-├── gui/                    # PySide6/Qt GUI
-│   ├── app.py             # Main application window
-│   ├── router.py          # Page registry
+├── api/                    # FastAPI Web Interface
+│   ├── main.py            # FastAPI application
+│   ├── routers/           # API route handlers
 │   ├── store.py           # Shared state
 │   ├── threads.py         # Worker threads
 │   └── features/          # Feature-specific pages

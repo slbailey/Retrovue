@@ -105,7 +105,7 @@ See `LIMITATIONS_FIXED.md` for technical details.
    - Entire directory tree removed
    - Files: `app.py`, `router.py`, `store.py`, `features/importers/view.py`, `widgets/progress.py`
    - All `__init__.py` and `__pycache__` files
-   - **Reason**: Created before decision to standardize on PySide6/Qt only
+   - **Reason**: Created before decision to standardize on web-only UI
 
 2. **Stub Tasks Module** (`src/retrovue/core/tasks/`):
    - Entire directory removed

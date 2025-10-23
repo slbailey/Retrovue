@@ -34,3 +34,4 @@ def session() -> Generator[Session, None, None]:
         raise
     finally:
         db.close()
+

@@ -159,27 +159,30 @@ Small glue (copy-paste):
 python
 Copy code
 # ui_bus.py
-from PySide6.QtCore import QObject, Signal
-class UiBus(QObject):
-    sync_started = Signal(int, int)
-    page_progress = Signal(int, int, int, int, int, int)
-    sync_completed = Signal(int, int, dict)
-python
-Copy code
-# main_window.py (wiring)
-self.ui_bus.sync_started.connect(self.onSyncStarted)
-self.ui_bus.page_progress.connect(self.onPageProgress)
-self.ui_bus.sync_completed.connect(self.onSyncCompleted)
+# WebSocket event bus for real-time updates
+class UiBus:
+    def __init__(self):
+        self.websocket_connections = []
+    
+    def sync_started(self, server_id, library_id):
+        # Emit WebSocket event
+    def page_progress(self, server_id, library_id, processed, changed, skipped, errors):
+        # Emit WebSocket event
+        pass
+    
+    def sync_completed(self, server_id, library_id, summary):
+        # Emit WebSocket event
+        pass
 python
 Copy code
 # import_worker.py (bridge the importer -> UiBus)
 def _progress(self, event, payload):
     if event=="library_start":
-        self.ui_bus.sync_started.emit(payload["server_id"], payload["library_id"])
+        self.ui_bus.sync_started(payload["server_id"], payload["library_id"])
     elif event=="page_progress":
-        p=payload; self.ui_bus.page_progress.emit(p["server_id"], p["library_id"], p["processed"], p["changed"], p["skipped"], p["errors"])
+        p=payload; self.ui_bus.page_progress(p["server_id"], p["library_id"], p["processed"], p["changed"], p["skipped"], p["errors"])
     elif event=="library_done":
-        self.ui_bus.sync_completed.emit(payload["server_id"], payload["library_id"], payload["summary"])
+        self.ui_bus.sync_completed(payload["server_id"], payload["library_id"], payload["summary"])
 01 — Plex Endpoints & Coverage
 Endpoints (light → selective expand)
 Shows list: /library/sections/{key}/all?type=2 → ratingKey,title,updatedAt,childCount,leafCount,guid

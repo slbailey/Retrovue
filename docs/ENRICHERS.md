@@ -828,3 +828,4 @@ class StandardizedEnricher:
 ---
 
 _This guide provides comprehensive information for implementing and using enrichers in Retrovue. For more examples, see the source code in `src/retrovue/adapters/enrichers/`._
+

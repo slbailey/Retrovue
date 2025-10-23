@@ -105,3 +105,4 @@ def resolve_review(
         except Exception as e:
             typer.echo(f"Error resolving review: {e}", err=True)
             raise typer.Exit(1)
+

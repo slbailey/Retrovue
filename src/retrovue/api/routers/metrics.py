@@ -40,3 +40,4 @@ async def get_metrics() -> Response:
             media_type=CONTENT_TYPE_LATEST,
             status_code=500
         )
+

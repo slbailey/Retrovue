@@ -30,19 +30,21 @@ Start channel stream and view in VLC or Plex Live TV
 
 ---
 
-## 🖥️ GUI Workflow (Recommended for Beginners)
+## 🌐 Web Interface Workflow (Recommended for Beginners)
 
-**New in 2025**: Retrovue now includes a modern PySide6/Qt GUI that makes setup much easier!
+**New in 2025**: Retrovue now includes a modern Web UI that makes setup much easier!
 
-### **Launch the GUI**
+### **Launch the Web Interface**
 
 ```powershell
 # Windows
-.\venv\Scripts\python.exe run_enhanced_gui.py
+.\venv\Scripts\python.exe run_admin.py
 
 # macOS/Linux
-python run_enhanced_gui.py
+python run_admin.py
 ```
+
+Then open your browser to: http://localhost:8000
 
 ### **Guided 3-Step Setup**
 

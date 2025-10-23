@@ -47,34 +47,34 @@ pip install -r requirements.txt
 python -m cli.plex_sync --help
 ```
 
-### Launch the GUI (Recommended)
+### Launch the Web Interface (Recommended)
 
-**New in 2025**: Retrovue now includes a modern **PySide6/Qt GUI** for easier setup and management!
+**New in 2025**: Retrovue now includes a modern **Web UI** for easier setup and management!
 
 ```powershell
 # Windows
-.\venv\Scripts\python.exe run_enhanced_gui.py
+.\venv\Scripts\python.exe run_admin.py
 
 # macOS/Linux
-python run_enhanced_gui.py
+python run_admin.py
 ```
 
-**GUI Features:**
+**Web Interface Features:**
 
-- 🖥️ **Servers Tab**: Add and manage your Plex servers
-- 📚 **Libraries Tab**: Discover and select libraries to sync
-- 🔄 **Content Sync Tab**: Configure path mappings and sync content
-- 📊 **Visual Progress**: See sync progress in real-time
-- ✨ **User-Friendly**: Tooltips and validation help guide you
+- 🌐 **Modern Web UI**: Access from any browser at http://localhost:8000
+- 🖥️ **Server Management**: Add and manage your Plex servers
+- 📚 **Library Discovery**: Browse and select libraries to sync
+- 🔄 **Content Sync**: Configure path mappings and sync content
+- 📊 **Real-time Progress**: See sync progress with live updates
+- ✨ **Responsive Design**: Works on desktop, tablet, and mobile
 
 **First-Time Setup:**
 
-1. **Servers Tab**: Add your Plex server (name, URL, token)
-2. **Libraries Tab**: Click "Discover Libraries" to find available libraries
-3. **Content Sync Tab**:
-   - Select server and library
-   - Add path mappings (Plex path → Local path)
-   - Click "Dry Run" to preview, then "Sync" to import
+1. **Start the server**: Run `python run_admin.py`
+2. **Open browser**: Navigate to http://localhost:8000
+3. **Add Plex server**: Configure your Plex server (name, URL, token)
+4. **Discover libraries**: Browse available libraries
+5. **Sync content**: Configure path mappings and start sync
 
 ### Test the Stream (Legacy - For Testing Only)
 
@@ -132,13 +132,6 @@ All documentation has been organized in the `docs/` folder for better structure:
 - **[🚦 Development Roadmap](docs/development-roadmap.md)** - Track progress and see what's coming next
 - **[📝 Migration Notes](docs/MIGRATION_NOTES.md)** - Complete history of GUI modularization (Phases 1-8)
 
-### 📁 Archived Documentation
-
-- **[📁 Archive](docs/archive/)** - Historical development phases, fixes, and implementation notes
-  - **[📋 Phases](docs/archive/phases/)** - Development phase completion summaries
-  - **[🔧 Fixes](docs/archive/fixes/)** - Bug fixes and error resolution documentation
-  - **[⚙️ Implementations](docs/archive/implementations/)** - Feature implementation completion notes
-  - **[📋 Plans](docs/archive/plans/)** - Development planning documents
 
 ## 🏗️ Project Goals
 
@@ -154,7 +147,7 @@ Simulate a realistic broadcast TV station experience:
 ## 🛠️ Tech Stack
 
 - **Playback:** ffmpeg, Docker
-- **Management UI:** Python PySide6/Qt (modern modular GUI)
+- **Management UI:** Web UI (FastAPI + HTML/JS)
 - **Core API:** Python with clean separation (GUI ↔ Core API ↔ Managers)
 - **Database:** SQLite with versioned schema migrations
 - **Serving:** Python FastAPI / lightweight HTTP server (planned)
