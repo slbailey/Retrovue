@@ -124,6 +124,7 @@ All documentation has been organized in the `docs/` folder for better structure:
 - **[🔧 Configuration](docs/CONFIGURATION.md)** - Environment variables and deployment settings
 - **[💻 Retrovue CLI](docs/CLI.md)** - Modern CLI for content management and review workflows
 - **[📥 Importers](docs/IMPORTERS.md)** - Content discovery from filesystem, Plex, and custom sources
+- **[🔌 Plex CLI Ingest](docs/ingest/plex-cli.md)** - Single episode ingest from Plex (v0)
 - **[🔍 Enrichers](docs/ENRICHERS.md)** - Metadata enhancement with FFprobe and custom pipelines
 - **[✅ Review System](docs/REVIEW.md)** - Quality assurance workflow and human review process
 - **[📺 Playout System](docs/PLAYOUT.md)** - HLS-first output contract and testing procedures
