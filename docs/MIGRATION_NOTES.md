@@ -22,16 +22,17 @@ The following Tkinter files have been removed:
 
 **Note**: `src/retrovue/core/api.py` is NOT removed - it's the Phase 5 API façade and is actively used by the Qt GUI.
 
-### Monolithic GUI:
+### Legacy GUI Files:
 
-- `enhanced_retrovue_gui.py` - Keep for reference during migration
-- Will be removed after all features are migrated to `gui/`
+- ~~`enhanced_retrovue_gui.py`~~ - REMOVED (was Qt GUI reference)
+- ~~`run_enhanced_gui.py`~~ - REMOVED (was Qt GUI launcher)
 
 ## Current Status:
 
-- ✓ New Qt app launches with Importers tab
-- ✓ Importers page has 3 subtabs: Servers (scaffolded), Libraries (placeholder), Content Sync (placeholder)
-- ✓ Servers tab has basic UI elements (list, form, log) but no business logic yet
+- ✓ Web-only architecture with FastAPI + HTML/JS
+- ✓ API endpoints for Servers, Libraries, and Content Sync
+- ✓ Web interface accessible at http://localhost:8000
+- ✓ All Qt/PySide dependencies removed
 
 ## Phases Complete:
 
@@ -42,6 +43,7 @@ The following Tkinter files have been removed:
 - ✅ **Phase 5**: Unified GUI ↔ Core with API façade
 - ✅ **Phase 6**: Removed Tkinter code and renamed gui_qt to gui
 - ✅ **Phase 7**: Quality & parity checks
+- ✅ **Phase 8**: **Web Migration** - Removed all Qt/PySide dependencies and migrated to web-only architecture
 
 ## Phase 7 Details: Quality & Parity Checks
 
