@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _active_streams: dict[str, dict] = {}
 
 
-def resolve_asset_by_channel_id(channel_id: str, active_streams: dict = None) -> dict:
+def resolve_asset_by_channel_id(channel_id: str, active_streams: dict | None = None) -> dict:
     """
     Resolve an asset by channel ID.
     
@@ -40,7 +40,7 @@ def resolve_asset_by_channel_id(channel_id: str, active_streams: dict = None) ->
     # Fallback to a default asset if no active stream
     logger.warning(f"No active stream found for channel {channel_id}, using fallback")
     return {
-        "path": "R:/Media/TV/The Big Bang Theory/Season 01/The Big Bang Theory (2007) - S01E02 - The Big Bran Hypothesis [WEBDL-720p][AC3 5.1][h265].mkv"
+        "path": "R:\\Media\\TV\\Cheers (1982) {imdb-tt0083399}\\Season 01\\Cheers (1982) - S01E03 - The Tortelli Tort [Bluray-720p][AAC 2.0][x264]-Bordure.mp4"
     }
 
 
@@ -56,7 +56,7 @@ def set_active_stream(channel_id: str, asset_info: dict) -> None:
     _active_streams[channel_id] = asset_info
 
 
-def run_server(port: int = 8000, active_streams: dict = None):
+def run_server(port: int = 8000, active_streams: dict | None = None):
     app = FastAPI(title="Retrovue IPTV Server")
 
     @app.middleware("http")
@@ -78,7 +78,7 @@ def run_server(port: int = 8000, active_streams: dict = None):
         return resp
 
     @app.get("/iptv/channel/{channel_id}.ts")
-    async def stream_channel(channel_id: str):
+    async def stream_channel(channel_id: str, request: Request):
         """
         Streams a continuous MPEG-TS feed for the requested channel.
         """
@@ -94,9 +94,16 @@ def run_server(port: int = 8000, active_streams: dict = None):
             streamer = MPEGTSStreamer(source_path, channel_id)
             print(f"DEBUG: Created streamer, calling start_stream()")
             
+            def gen():
+                try:
+                    for chunk in streamer.start_stream():
+                        yield chunk
+                finally:
+                    streamer.stop_stream()
+            
             # Return streaming response
             return StreamingResponse(
-                streamer.start_stream(),
+                gen(),
                 media_type="video/mp2t",
                 headers={
                     "Cache-Control": "no-cache, no-store, must-revalidate",
