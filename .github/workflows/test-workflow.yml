@@ -1,0 +1,15 @@
+name: Test Workflow Authentication
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Test workflow permissions
+        run: echo "Workflow authentication test successful!"
