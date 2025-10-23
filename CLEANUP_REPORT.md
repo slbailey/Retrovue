@@ -1,6 +1,7 @@
 # Retrovue Cleanup Report
 
 ## Overview
+
 This report documents the cleanup of obsolete docs, temporary scripts, and legacy code from the Retrovue codebase.
 
 ## Files Deleted
@@ -8,11 +9,13 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 ### 1. Legacy / Migrations / Drafts ✅
 
 #### Entire Directories:
+
 - `src/_legacy/` - Legacy code directory (100+ files) ✅
 - `RearchitecturePrompts/` - Planning documents (15 files) ✅
 - `docs/archive/` - Archived documentation (31 files) ✅
 
 #### Individual Files:
+
 - `migrations/001_fix_asset_size_column.py` - Migration script ✅
 - `retrovue.zip` - Archive file ✅
 - `PlexToken.txt` - Token file ✅
@@ -22,6 +25,7 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 ### 2. Temporary/Ad-hoc Tests & Scripts ✅
 
 #### Scripts Deleted:
+
 - `scripts/smoke_test_simple.py` - Temporary test script ✅
 - `scripts/smoke_test.py` - Temporary test script ✅
 - `scripts/smoke_fk_cascade_comprehensive.py` - Temporary test script ✅
@@ -42,17 +46,20 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 - `scripts/type.ps1` - Type checking script ✅
 
 #### Scripts Kept:
+
 - `scripts/test_hls_generation.py` - HLS contract testing (required) ✅
 - `scripts/test_vlc_playback.py` - VLC playback testing (required) ✅
 
 ### 3. Dead Assets and Config ✅
 
 #### Files Deleted:
+
 - `static/` - Empty static directory ✅
 - `__pycache__/` - Python cache directories ✅
 - `src/retrovue.egg-info/` - Package info directory ✅
 
 #### Root Level Test Files:
+
 - `test_app_db_connection.py` ✅
 - `test_config_logging.py` ✅
 - `test_db_connectivity.py` ✅
@@ -64,6 +71,7 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 ### 4. Obsolete Test Files ✅
 
 #### Tests Deleted:
+
 - `tests/test_pathmap.py` - Testing legacy PathMapper ✅
 - `tests/test_validation.py` - Testing legacy validation ✅
 - `tests/integration/test_ingest_idempotent.py` - Testing legacy modules ✅
@@ -71,6 +79,7 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 ## Configuration Updates ✅
 
 ### Files Updated:
+
 1. `pyproject.toml` - Removed `src/_legacy` exclusions ✅
 2. `README.md` - Removed references to `docs/archive/` ✅
 3. `docs/INDEX.md` - Removed references to deleted files ✅
@@ -78,11 +87,13 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 ## Safety Checks ✅
 
 ### References Found and Fixed:
+
 1. `README.md` references `docs/archive/` - ✅ Updated
 2. `pyproject.toml` excludes `src/_legacy` from linting - ✅ Updated
 3. Test files importing from deleted modules - ✅ Deleted obsolete tests
 
 ### Files Kept (Allowlist):
+
 - `docs/ARCHITECTURE.md` ✅
 - `docs/DB_SCHEMA.md` ✅
 - `docs/IMPORTERS.md` ✅
@@ -98,10 +109,12 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 ## Verification Results ✅
 
 ### CLI Testing:
+
 - ✅ `python -m src.retrovue.cli.main --help` works correctly
 - ✅ CLI shows proper help text and command structure
 
 ### Test Results:
+
 - ✅ Tests run without import errors
 - ⚠️ Some tests fail due to outdated test expectations (not related to cleanup)
 - ✅ Core functionality preserved
@@ -110,6 +123,7 @@ This report documents the cleanup of obsolete docs, temporary scripts, and legac
 
 **Total files deleted:** ~200+ files
 **Categories:**
+
 - Legacy code: 100+ files ✅
 - Temporary scripts: 18 files ✅
 - Archived docs: 31 files ✅
