@@ -17,6 +17,7 @@
 ## 2) High-Level UX
 
 ### 2.1 Schedule Console (primary view)
+
 - **Header**: Channel selector; "Create Template" / "Load Template" / "Generate Schedule"; Date picker for daily schedules.
 - **Palette Panel** (left rail): Draggable content tiles organized by categories (Series, Movies, Blocks).
 - **Calendar Grid** (center): 24-hour timeline with 30-minute rows for visual block placement.
@@ -24,11 +25,13 @@
 - **Playlog Preview** (bottom panel): Hybrid view showing grid overview and linear rundown.
 
 ### 2.2 Template Manager (supporting view)
+
 - Browse and manage saved schedule templates.
 - Template versioning and rollback capabilities.
 - Template sharing and import/export functionality.
 
 ### 2.3 Schedule Generator (future)
+
 - Automated schedule generation based on templates and rules.
 - Conflict detection and resolution.
 - Schedule optimization and gap filling.
@@ -38,6 +41,7 @@
 ## 3) Integration Strategy
 
 **Template-Driven Architecture:**
+
 - Templates define reusable schedule patterns with rule-based content blocks.
 - Daily schedules are generated from templates with date-specific overrides.
 - Playlog events are computed from schedules and content metadata.
@@ -49,12 +53,14 @@
 ## 4) UX Design Details
 
 ### 4.1 Palette (Left Rail)
+
 - **Categories**: Series, Movies, Blocks, Promos.
 - **Draggable tiles**: Visual representations of content (e.g., "Cheers", "Cartoons", "Family Movies").
 - **Color-coded by type**: Consistent color scheme across all modules.
 - **Search and filter**: Quick access to specific content items.
 
 ### 4.2 Calendar Grid (Center Pane)
+
 - **Vertical timeline**: 00:00–24:00 in 30-minute rows.
 - **Drag and drop**: Dropping a tile creates a block (30 min default).
 - **Stretch handles**: Visual controls to grow blocks to 1h, 2h, 4h, etc.
@@ -62,6 +68,7 @@
 - **Visual feedback**: Hover states, drop zones, and conflict indicators.
 
 ### 4.3 Block Editor (Right Drawer)
+
 - **Basic fields**: Label, Content Type (series|movie|promo|custom), Duration.
 - **Rule Builder**:
   - **Series**: Select specific show(s) OR tag(s). Episode policy = syndication|serial|circular.
@@ -71,6 +78,7 @@
 - **Preview**: Real-time preview of how the block will be filled (stubbed in v0.1).
 
 ### 4.4 Playlog Preview (Bottom Panel)
+
 - **Grid Overview**: Shows all slots/blocks by time with visual indicators.
 - **Linear Rundown**: On block expand, shows detailed breakdown:
   - Segment 1 (content)
@@ -85,6 +93,7 @@
 ## 5) Data & Persistence Model
 
 ### 5.1 Database Tables
+
 - `channel` — Channel definitions and metadata
 - `template` — Reusable schedule templates
 - `template_block` — Individual blocks within templates
@@ -92,16 +101,19 @@
 - `playlog_event` — Computed playlog entries
 
 ### 5.2 JSON Columns
+
 - `rule_json` — Series/movie/tag rules and constraints
 - `guardrails_json` — Rating and content restrictions
 - `ad_policy_json` — Ad pod configuration and rotation rules
 
 ### 5.3 Ad Breaks Storage
+
 - Stored per media asset (list of times, origin=ingest|generated|manual)
 - Integrated with ingest module's ad break detection
 - Manual override capabilities for fine-tuning
 
 ### 5.4 Example Rule JSON
+
 ```json
 {
   "mode": "series",
@@ -116,7 +128,7 @@
 {
   "mode": "movie",
   "query": "type:movie AND (tag:family OR (tag:disney AND rating<=PG-13))",
-  "tags_any": ["family","disney"],
+  "tags_any": ["family", "disney"],
   "rating_max": "PG-13"
 }
 ```
@@ -128,12 +140,14 @@
 > Implementation detail: Direct SQLite database access through web application. WebSocket connections provide real-time updates between UI components.
 
 **Database Operations:**
+
 - Template CRUD operations through SQLite ORM/direct queries
 - Schedule generation and persistence
 - Playlog computation and caching
 - Real-time UI updates via Qt signals when data changes
 
 **Key Components:**
+
 - `TemplateManager` — Template CRUD operations
 - `ScheduleGenerator` — Generate daily schedules from templates
 - `PlaylogComputer` — Compute playlog events from schedules
@@ -144,17 +158,20 @@
 ## 7) Rule Engine (v0.1)
 
 ### 7.1 Content Selection Rules
+
 - **Series rules**: Specific shows, tag-based selection, episode policies
 - **Movie rules**: Tag combinations, rating filters, genre restrictions
 - **Promo rules**: Ad pod configuration, rotation schedules, category separation
 
 ### 7.2 Constraint System
+
 - **Time constraints**: Block placement restrictions, time-of-day rules
 - **Rating guardrails**: Content appropriateness for time slots
 - **Must-run items**: Required content that must be included
 - **Conflict resolution**: Automatic handling of overlapping requirements
 
 ### 7.3 Episode Policies
+
 - **Syndication**: Random episode selection from available episodes
 - **Serial**: Sequential episode playback (for ongoing series)
 - **Circular**: Repeat cycle through available episodes
@@ -191,18 +208,21 @@
 ## 11) Roadmap
 
 ### v0.2 Features
+
 - Template overrides (holidays, special events)
 - Must-run promos and category separation
 - Advanced rule language with complex expressions
 - Schedule optimization algorithms
 
 ### v0.3 Features
+
 - As-run log integration
 - Compliance warnings and reporting
 - Ad category separation and rotation
 - Multi-channel coordination
 
 ### Future Features
+
 - Advanced rule language with scripting
 - Graphics overlays and branding
 - Emergency alert preemption
@@ -227,11 +247,13 @@
 ## 13) Integration Points
 
 ### 13.1 Ingest Module Integration
+
 - Content metadata from ingest module drives rule-based selection
 - Ad break information from ingest module used in playlog generation
 - Content availability status affects schedule generation
 
 ### 13.2 Future Module Integration
+
 - **Content Browser**: Deep linking to content details from schedule blocks
 - **Metadata Editor**: Override content metadata for scheduling purposes
 - **Playout Log Viewer**: Real-time schedule execution monitoring

@@ -132,7 +132,6 @@ All documentation has been organized in the `docs/` folder for better structure:
 - **[🚦 Development Roadmap](docs/development-roadmap.md)** - Track progress and see what's coming next
 - **[📝 Migration Notes](docs/MIGRATION_NOTES.md)** - Complete history of GUI modularization (Phases 1-8)
 
-
 ## 🏗️ Project Goals
 
 Simulate a realistic broadcast TV station experience:
@@ -179,6 +178,7 @@ Simulate a realistic broadcast TV station experience:
 **For Developers:**
 
 1. **Setup Environment:**
+
    ```bash
    git clone https://github.com/slbailey/Retrovue.git
    cd Retrovue
@@ -188,16 +188,19 @@ Simulate a realistic broadcast TV station experience:
    ```
 
 2. **Install Pre-commit Hooks:**
+
    ```bash
    pre-commit install
    ```
 
 3. **Run Tests:**
+
    ```bash
    pytest -q
    ```
 
 4. **Start Development Server:**
+
    ```bash
    uvicorn retrovue.api.main:app --reload --port 8000
    # or use: make dev

@@ -77,7 +77,6 @@ src/retrovue/
 
 ---
 
-
 ---
 
 ## 📝 Configuration

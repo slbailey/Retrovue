@@ -33,31 +33,37 @@ The vision is to deliver a professional broadcast-operations style interface tha
 The RetroVue UI is structured into modules, each with its own design document. These modules are:
 
 ### 3.1 Ingest & Progress Module
+
 - Ingest media from Plex, TinyMediaManager, filesystem.
 - Convert chapter markers → ad break markers.
 - Provide deterministic, live-only ingest progress.
 - **[See RetroVue_UI_Ingest_Module_v0.1.md]**
 
 ### 3.2 Schedule Editor & Playlog Module
+
 - Calendar-style template editor.
 - Rule-driven content slots (series, movies, tags, rating guardrails).
 - Hybrid Playlog (grid overview + linear rundown with ad pods).
 - **[See RetroVue_UI_Schedule_Module_v0.1.md]**
 
 ### 3.3 Content Browser Module (Future)
+
 - Browse ingested assets.
 - Add/adjust breakpoints via Media Browser.
 - Override metadata if needed.
 
 ### 3.4 Metadata Editor Module (Future)
+
 - Fine-tune runtimes, avail lengths, ad breaks.
 - Override Plex/TMM metadata for broadcast scheduling purposes.
 
 ### 3.5 Playout Log Viewer Module (Future)
+
 - Review what aired, what's airing, and what's next.
 - Show errors, missing content, skipped events.
 
 ### 3.6 Channel Dashboard Module (Future)
+
 - Channel-level health (stream encoding, segment counts, statuses).
 - Emergency system integration.
 
@@ -66,17 +72,21 @@ The RetroVue UI is structured into modules, each with its own design document. T
 ## 4) Cross-Module Governance
 
 ### 4.1 Navigation
+
 - **Left-hand navigation rail** for modules (Ingest, Schedule, Content, Metadata, Logs, Channels).
 - **Consistent layout**: list/grid on left, detail/preview on right.
 
 ### 4.2 Shared Conventions
+
 - **Error Handling**: Always show actionable context (e.g., missing ad break, content too short).
 - **Grid Timekeeping**: All schedules align to 30-minute grids. Blocks may span multiple grids.
 - **Ad Breaks**: Always sourced from DB (ingest or manual override), never raw chapter markers.
 - **Color Coding**: Consistent across modules (e.g., Series=blue, Movies=green, Promos=yellow).
 
 ### 4.3 Persistence Strategy
+
 **Relational Core + JSON Rules:**
+
 - Templates, schedules, playlogs → SQL tables.
 - Rules (tags, episode policies, rating guards) → JSON blobs.
 - Hybrid ensures extensibility without schema churn.
@@ -109,6 +119,7 @@ Subdocuments evolve more frequently with detailed UX and implementation notes.
 ## 7) Integration Strategy
 
 **Web Application Architecture:**
+
 - Each module operates independently but shares common web UI patterns and components.
 - Cross-module data flows through the embedded SQLite database layer.
 - Qt signals/slots provide event-driven communication between modules and background workers.

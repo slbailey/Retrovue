@@ -1,25 +1,29 @@
-# Retrovue – Plex Ingest (00–04)  
+# Retrovue – Plex Ingest (00–04)
+
 ## Sync Design + Minimal UI Contract (GUI, on-demand)
 
 **Scope:** Manual GUI tool; multi-server; per-library ingest; full coverage (shows→seasons→episodes→media parts, movies→media parts); robust adds/changes/deletes; dynamic per-server path mapping (no stored local path); clear item states; minimal UI refresh hooks.
 
 **Files this doc touches**
-- `database.py`  → new columns, state transitions, helpers
+
+- `database.py` → new columns, state transitions, helpers
 - `plex_integration.py` → selective expansion, digests, progress emits
 - `path_mapping.py` → dynamic resolver (no persisted local paths)
 - `main_window.py` → connect minimal UI signals (no new screens)
-- *(optional small new)* `ui_bus.py` → Qt signals hub
+- _(optional small new)_ `ui_bus.py` → Qt signals hub
 
 ---
 
 ## 00 — Change Detection & Minimal-Work Fullness
 
 ### Goals
+
 - Import all levels but **touch only changed items** on normal runs.
 - Detect **adds / changes / deletes** reliably.
 - **Incremental scan** rarely expands episodes unless a show changed.
 
 ### Core idea: digests
+
 - **Episode/Movie digest** = hash of:  
   `ratingKey | updatedAt | duration | file_size | part_count | streams_signature | guid_primary`
 - **Show digest** = hash of:  
@@ -27,14 +31,16 @@
 - **Incremental pass**: list shows (light). If `show.digest` changes **or** children never hydrated → expand that show; otherwise skip episode walk.
 
 ### DB columns (per item) — add
+
 - `digest` (TEXT)
 - `updated_at_plex` (BIGINT)
 - `first_seen_at`, `last_seen_at`, `last_scan_at` (BIGINT)
 - `state` (`ACTIVE|MISSING|UNAVAILABLE|REMOTE_ONLY|DELETED`)
 - `error_count` (INT), `last_error_at` (BIGINT), `last_error` (TEXT)
-- *(for shows, separate table or columns to store `show_digest` and `children_hydrated`)*
+- _(for shows, separate table or columns to store `show_digest` and `children_hydrated`)_
 
 **Portable DDL (adjust names to your schema):**
+
 ```sql
 ALTER TABLE media_items ADD COLUMN IF NOT EXISTS digest TEXT;
 ALTER TABLE media_items ADD COLUMN IF NOT EXISTS updated_at_plex BIGINT;
@@ -163,13 +169,13 @@ Copy code
 class UiBus:
     def __init__(self):
         self.websocket_connections = []
-    
+
     def sync_started(self, server_id, library_id):
         # Emit WebSocket event
     def page_progress(self, server_id, library_id, processed, changed, skipped, errors):
         # Emit WebSocket event
         pass
-    
+
     def sync_completed(self, server_id, library_id, summary):
         # Emit WebSocket event
         pass
@@ -360,3 +366,4 @@ Quick Checklist (to implement now)
  Replace stored local paths with on-demand resolver (03).
 
  Hook minimal UI events; refresh libraries/items on completion (00/01/04).
+```
