@@ -7,12 +7,117 @@ Provides the ability to play episodes as live MPEG-TS streams for IPTV-style pla
 from __future__ import annotations
 import pathlib
 import typer
+import socket
+import subprocess
+import platform
 from typing import Optional
 
 from retrovue.web.server import run_server, set_active_stream
 from .uow import session
 from ..app.library_service import LibraryService
 from ..domain.entities import ProviderRef, EntityType
+
+
+def is_port_in_use(port: int) -> bool:
+    """
+    Check if a port is currently in use.
+    
+    Args:
+        port: Port number to check
+        
+    Returns:
+        True if port is in use, False otherwise
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            result = s.connect_ex(('localhost', port))
+            return result == 0
+    except Exception:
+        return False
+
+
+def kill_processes_on_port(port: int) -> bool:
+    """
+    Kill processes using the specified port.
+    
+    Args:
+        port: Port number to free up
+        
+    Returns:
+        True if processes were killed or no processes found, False if error
+    """
+    try:
+        system = platform.system().lower()
+        
+        if system == "windows":
+            # Windows: Use netstat and taskkill
+            # Find processes using the port
+            result = subprocess.run(
+                ["netstat", "-ano"], 
+                capture_output=True, 
+                text=True, 
+                check=True
+            )
+            
+            pids = []
+            for line in result.stdout.split('\n'):
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        pid = parts[-1]
+                        if pid.isdigit():
+                            pids.append(pid)
+            
+            if pids:
+                typer.echo(f"Found {len(pids)} process(es) using port {port}: {', '.join(pids)}")
+                for pid in pids:
+                    try:
+                        subprocess.run(["taskkill", "/F", "/PID", pid], check=True)
+                        typer.echo(f"Killed process {pid}")
+                    except subprocess.CalledProcessError:
+                        typer.echo(f"Failed to kill process {pid}")
+                return True
+            else:
+                typer.echo(f"No processes found using port {port}")
+                return True
+                
+        else:
+            # Unix/Linux/macOS: Use lsof and kill
+            try:
+                # Find processes using the port
+                result = subprocess.run(
+                    ["lsof", "-ti", f":{port}"], 
+                    capture_output=True, 
+                    text=True, 
+                    check=True
+                )
+                
+                pids = result.stdout.strip().split('\n')
+                pids = [pid for pid in pids if pid.strip()]
+                
+                if pids:
+                    typer.echo(f"Found {len(pids)} process(es) using port {port}: {', '.join(pids)}")
+                    for pid in pids:
+                        try:
+                            subprocess.run(["kill", "-9", pid], check=True)
+                            typer.echo(f"Killed process {pid}")
+                        except subprocess.CalledProcessError:
+                            typer.echo(f"Failed to kill process {pid}")
+                    return True
+                else:
+                    typer.echo(f"No processes found using port {port}")
+                    return True
+                    
+            except subprocess.CalledProcessError:
+                # lsof returns non-zero if no processes found
+                typer.echo(f"No processes found using port {port}")
+                return True
+                
+    except Exception as e:
+        typer.echo(f"Error killing processes on port {port}: {e}", err=True)
+        return False
+
 
 def resolve_asset_by_series_season_episode(series: str, season: int, episode: int) -> dict | None:
     """
@@ -97,6 +202,8 @@ def play(
     channel_id: int = typer.Option(1, "--channel-id", "-c", help="Channel ID for IPTV streaming"),
     port: int = typer.Option(8000, "--port", "-p", help="HTTP port to serve MPEG-TS streams"),
     transcode: bool = typer.Option(False, "--transcode", help="Transcode to H.264/AAC for broader compatibility"),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug mode with verbose FFmpeg logging and input validation"),
+    kill_existing: bool = typer.Option(False, "--kill-existing", help="Kill any existing service on the specified port before starting"),
 ):
     """
     Resolve an episode from the content library and expose it as a live MPEG-TS stream for IPTV playback.
@@ -123,12 +230,26 @@ def play(
     typer.echo(f"Source file: {src_path}")
     typer.echo(f"Stream will be available at: http://localhost:{port}/iptv/channel/{channel_id}.ts")
     
+    if debug:
+        typer.echo("Debug mode enabled - verbose FFmpeg logging and input validation active")
+    
+    # Handle kill-existing option
+    if kill_existing:
+        if is_port_in_use(port):
+            typer.echo(f"Port {port} is in use. Attempting to kill existing processes...")
+            if not kill_processes_on_port(port):
+                typer.echo(f"[error] Failed to kill processes on port {port}", err=True)
+                raise typer.Exit(code=3)
+            typer.echo(f"Successfully freed up port {port}")
+        else:
+            typer.echo(f"Port {port} is available")
+    
     # Create active streams dict for the server
     active_streams = {str(channel_id): {"path": str(src_path)}}
     
     try:
         # Start the IPTV server with the resolved asset
-        run_server(port=port, active_streams=active_streams)
+        run_server(port=port, active_streams=active_streams, debug=debug)
     except KeyboardInterrupt:
         typer.echo("\nShutting down...")
 
@@ -136,6 +257,7 @@ def play(
 def play_channel(
     channel_id: int = typer.Argument(..., help="Channel ID to stream"),
     port: int = typer.Option(8000, "--port", "-p", help="HTTP port to serve MPEG-TS streams"),
+    kill_existing: bool = typer.Option(False, "--kill-existing", help="Kill any existing service on the specified port before starting"),
 ):
     """
     Start a channel stream directly from CLI.
@@ -146,6 +268,17 @@ def play_channel(
     typer.echo(f"Starting IPTV server for channel {channel_id}")
     typer.echo(f"Stream will be available at: http://localhost:{port}/iptv/channel/{channel_id}.ts")
     typer.echo("Press Ctrl+C to stop the server")
+    
+    # Handle kill-existing option
+    if kill_existing:
+        if is_port_in_use(port):
+            typer.echo(f"Port {port} is in use. Attempting to kill existing processes...")
+            if not kill_processes_on_port(port):
+                typer.echo(f"[error] Failed to kill processes on port {port}", err=True)
+                raise typer.Exit(code=3)
+            typer.echo(f"Successfully freed up port {port}")
+        else:
+            typer.echo(f"Port {port} is available")
     
     try:
         # Start the IPTV server

@@ -30,22 +30,24 @@ The system supports mid-roll commercial insertion by:
 
 ## FFmpeg Command Structure
 
-The generated FFmpeg command follows ErsatzTV's proven pattern:
+The generated FFmpeg command (transcode mode) follows this pattern:
 
 ```
-ffmpeg -nostdin -hide_banner -nostats -loglevel error
-       -fflags +genpts+discardcorrupt+igndts -readrate 1.0 -re -stream_loop -1
-       -f concat -safe 0 -protocol_whitelist file,http,tcp,https,tcp,tls -probesize 32
-       -i "concat_file.txt"
-       -map 0:v:0 -map 0:a:0 -sn -dn
-       -c:v libx264 -preset veryfast -tune zerolatency -profile:v main -pix_fmt yuv420p
-       -g 60 -keyint_min 60 -sc_threshold 0
-       -c:a aac -b:a 128k -ac 2 -ar 48000
-       -movflags +faststart -flags cgop -bf 0
-       -muxpreload 0 -muxdelay 0
-       -f mpegts -mpegts_flags +initial_discontinuity
+ffmpeg -nostdin -hide_banner -nostats -loglevel error \
+       -fflags +genpts+discardcorrupt+igndts -re \
+       -f concat -safe 0 -protocol_whitelist file,http,https,tcp,tls \
+       -probesize 10M -analyzeduration 2M \
+       -i concat_file.txt \
+       -map 0:v:0 -sn -dn -map 0:a:0? \
+       -c:v libx264 -preset veryfast -tune zerolatency -profile:v main -pix_fmt yuv420p \
+       -g 60 -keyint_min 60 -sc_threshold 0 -bf 0 -flags cgop \
+       -c:a aac -b:a 128k -ac 2 -ar 48000 \
+       -muxpreload 0 -muxdelay 0 \
+       -f mpegts -mpegts_flags +initial_discontinuity+resend_headers \
        pipe:1
 ```
+
+Copy mode uses `-c:v copy -bsf:v h264_mp4toannexb` and `-c:a copy`.
 
 ## Key Components
 
@@ -116,14 +118,20 @@ def create_segmented_concat_file(episode_path, commercial_paths, break_points):
         return f.name
 ```
 
-## Error Handling
+## Error Handling & Debugging
 
-The system includes comprehensive error handling:
+The system includes comprehensive diagnostics:
 
-- **FFmpeg stderr monitoring**: Captures and logs FFmpeg errors
-- **Process restart**: Automatically restarts FFmpeg if it crashes
-- **Chunk debugging**: Logs first few chunks for debugging
-- **Path validation**: Ensures input files exist before streaming
+- **FFmpeg stderr monitoring**: Captures and classifies FFmpeg stderr output
+- **Debug logging**: `--debug` on `retrovue play` sets FFmpeg `-loglevel debug`
+- **Input validation**: Validates concat file and listed files before start
+- **Health monitoring**: Periodic process status logging
+
+CLI usage with debugging:
+
+```bash
+retrovue play "Cheers" --season 1 --episode 3 --debug
+```
 
 ## Performance Considerations
 
@@ -252,8 +260,23 @@ async def stream_with_commercials(channel_id: str):
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
             "Expires": "0",
+            "Content-Encoding": "identity",
         }
     )
+```
+
+## Developer Notes
+
+- Import the command builder from `retrovue.streaming.ffmpeg_cmd`:
+
+```python
+from retrovue.streaming.ffmpeg_cmd import build_cmd
+```
+
+- Module entry check:
+
+```bash
+python -m retrovue.streaming.ffmpeg_cmd
 ```
 
 ### Error Handling and Monitoring

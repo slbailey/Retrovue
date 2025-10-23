@@ -409,3 +409,80 @@ retrovue ingest --help
 retrovue assets list --help
 retrovue review resolve --help
 ```
+
+### Play Commands (IPTV Streaming)
+
+#### `retrovue play`
+
+Resolve an episode from your content library and expose it as a live MPEG-TS stream for IPTV playback.
+
+```bash
+# Start streaming a specific episode on the default port
+retrovue play "Cheers" --season 1 --episode 3
+
+# Enable verbose debugging (FFmpeg -loglevel debug) and input validation
+retrovue play "Cheers" --season 1 --episode 3 --debug
+
+# Kill any process bound to the chosen port before starting
+retrovue play "Cheers" --season 1 --episode 3 --kill-existing
+
+# Custom HTTP port
+retrovue play "Cheers" --season 1 --episode 3 --port 8080
+
+# Transcode explicitly (H.264/AAC)
+retrovue play "Cheers" --season 1 --episode 3 --transcode
+```
+
+**Arguments:**
+
+- `SERIES` - Series title (e.g., "Cheers")
+
+**Options:**
+
+- `--season, -s INTEGER` - Season number (required)
+- `--episode, -e INTEGER` - Episode number (required)
+- `--channel-id, -c INTEGER` - Channel ID used in the streaming URL (default: 1)
+- `--port, -p INTEGER` - HTTP port to serve MPEG-TS streams (default: 8000)
+- `--transcode` - Force H.264/AAC output for broad compatibility
+- `--debug` - Enable verbose FFmpeg logging and input validation
+- `--kill-existing` - Kill any process already bound to the specified port
+
+The stream will be available at:
+
+```
+http://localhost:<port>/iptv/channel/<channel_id>.ts
+```
+
+#### `retrovue play-channel`
+
+Start the IPTV server and expose a single channel by channel ID.
+
+```bash
+# Start channel 1 on the default port
+retrovue play-channel 1
+
+# Kill existing process on port 8000 before starting
+retrovue play-channel 1 --kill-existing
+
+# Custom port
+retrovue play-channel 1 --port 9000
+```
+
+**Options:**
+
+- `--port, -p INTEGER` - HTTP port (default: 8000)
+- `--kill-existing` - Kill any process already bound to the specified port
+
+### Module Entry Points
+
+The FFmpeg command builder can be imported from the streaming package:
+
+```python
+from retrovue.streaming.ffmpeg_cmd import build_cmd
+```
+
+You can also invoke it as a Python module (for quick availability checks):
+
+```bash
+python -m retrovue.streaming.ffmpeg_cmd
+```
