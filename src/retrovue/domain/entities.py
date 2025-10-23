@@ -1,0 +1,331 @@
+"""
+Domain entities for Retrovue.
+
+This module contains the core business entities that represent the domain model.
+These entities are independent of any external concerns and contain pure business logic.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+
+from ..infra.db import Base
+from ..shared.types import (
+    EntityType,
+    MarkerKind,
+    Provider,
+    ReviewStatus,
+    TitleKind,
+)
+
+
+class Title(Base):
+    """Represents a title (movie or show) in the content library."""
+
+    __tablename__ = "titles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    kind: Mapped[TitleKind] = mapped_column(SQLEnum(TitleKind), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_ids: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    seasons: Mapped[list[Season]] = relationship(
+        "Season", back_populates="title", cascade="all, delete-orphan", passive_deletes=True
+    )
+    episodes: Mapped[list[Episode]] = relationship(
+        "Episode", back_populates="title", cascade="all, delete-orphan", passive_deletes=True
+    )
+    provider_refs: Mapped[list[ProviderRef]] = relationship("ProviderRef", back_populates="title")
+
+    def __repr__(self) -> str:
+        return f"<Title(id={self.id}, kind={self.kind}, name={self.name}, year={self.year})>"
+
+
+class Season(Base):
+    """Represents a season of a show."""
+
+    __tablename__ = "seasons"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("titles.id", ondelete="CASCADE"), nullable=False
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    title: Mapped[Title] = relationship("Title", back_populates="seasons")
+    episodes: Mapped[list[Episode]] = relationship(
+        "Episode", back_populates="season", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<Season(id={self.id}, title_id={self.title_id}, number={self.number})>"
+
+
+class Episode(Base):
+    """Represents an episode of a show or a movie."""
+
+    __tablename__ = "episodes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("titles.id", ondelete="CASCADE"), nullable=False
+    )
+    season_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("seasons.id", ondelete="CASCADE"), nullable=True
+    )
+    number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_ids: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    title: Mapped[Title] = relationship("Title", back_populates="episodes")
+    season: Mapped[Season | None] = relationship("Season", back_populates="episodes")
+    assets: Mapped[list[Asset]] = relationship(
+        "Asset", secondary="episode_assets", back_populates="episodes"
+    )
+    provider_refs: Mapped[list[ProviderRef]] = relationship("ProviderRef", back_populates="episode")
+
+    def __repr__(self) -> str:
+        return f"<Episode(id={self.id}, title_id={self.title_id}, season_id={self.season_id}, number={self.number}, name={self.name})>"
+
+
+class Asset(Base):
+    """Represents a media asset (file) in the system."""
+
+    __tablename__ = "assets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    uri: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    size: Mapped[int] = mapped_column(BigInteger, nullable=False)  # size in bytes
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    video_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    audio_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    container: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    hash_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    discovered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    canonical: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Relationships
+    episodes: Mapped[list[Episode]] = relationship(
+        "Episode", secondary="episode_assets", back_populates="assets"
+    )
+    markers: Mapped[list[Marker]] = relationship(
+        "Marker", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
+    )
+    review_queue: Mapped[list[ReviewQueue]] = relationship(
+        "ReviewQueue", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
+    )
+    provider_refs: Mapped[list[ProviderRef]] = relationship("ProviderRef", back_populates="asset")
+
+    __table_args__ = (
+        Index("ix_assets_canonical", "canonical"),
+        Index("ix_assets_discovered_at", "discovered_at"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Asset(id={self.id}, uri={self.uri}, size={self.size}, canonical={self.canonical})>"
+        )
+
+
+class EpisodeAsset(Base):
+    """Junction table for episodes and assets (many-to-many relationship)."""
+
+    __tablename__ = "episode_assets"
+
+    episode_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("episodes.id", ondelete="CASCADE"), primary_key=True
+    )
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<EpisodeAsset(episode_id={self.episode_id}, asset_id={self.asset_id})>"
+
+
+class ProviderRef(Base):
+    """References to entities in external providers (Plex, Jellyfin, etc.)."""
+
+    __tablename__ = "provider_refs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    provider: Mapped[Provider] = mapped_column(SQLEnum(Provider), nullable=False)
+    provider_key: Mapped[str] = mapped_column(Text, nullable=False)
+    raw: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    # Foreign key relationships (polymorphic)
+    title_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("titles.id", ondelete="CASCADE"), nullable=True
+    )
+    episode_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=True
+    )
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), nullable=True
+    )
+
+    # Relationships
+    title: Mapped[Title | None] = relationship("Title", back_populates="provider_refs")
+    episode: Mapped[Episode | None] = relationship("Episode", back_populates="provider_refs")
+    asset: Mapped[Asset | None] = relationship("Asset", back_populates="provider_refs")
+
+    def __repr__(self) -> str:
+        return f"<ProviderRef(id={self.id}, entity_type={self.entity_type}, provider={self.provider}, provider_key={self.provider_key})>"
+
+
+class Marker(Base):
+    """Markers placed on assets (chapters, availability windows, etc.)."""
+
+    __tablename__ = "markers"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[MarkerKind] = mapped_column(SQLEnum(MarkerKind), nullable=False)
+    start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    # Relationships
+    asset: Mapped[Asset] = relationship("Asset", back_populates="markers", passive_deletes=True)
+
+    __table_args__ = (
+        Index("ix_markers_asset_id", "asset_id"),
+        Index("ix_markers_kind", "kind"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Marker(id={self.id}, asset_id={self.asset_id}, kind={self.kind}, start_ms={self.start_ms}, end_ms={self.end_ms})>"
+
+
+class ReviewQueue(Base):
+    """Items that need human review for quality assurance."""
+
+    __tablename__ = "review_queue"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    status: Mapped[ReviewStatus] = mapped_column(
+        SQLEnum(ReviewStatus), default=ReviewStatus.PENDING, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    asset: Mapped[Asset] = relationship("Asset", back_populates="review_queue", passive_deletes=True)
+
+    __table_args__ = (
+        Index("ix_review_queue_asset_id", "asset_id"),
+        Index("ix_review_queue_status", "status"),
+        Index("ix_review_queue_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ReviewQueue(id={self.id}, asset_id={self.asset_id}, reason={self.reason}, status={self.status})>"
+
+
+class Source(Base):
+    """A content source (e.g., Plex server, filesystem)."""
+
+    __tablename__ = "sources"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # External identifier
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)  # 'plex', 'filesystem', etc.
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)  # Additional configuration
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    collections: Mapped[list["SourceCollection"]] = relationship("SourceCollection", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
+
+    def __repr__(self) -> str:
+        return f"<Source(id={self.id}, name={self.name}, kind={self.kind})>"
+
+
+class SourceCollection(Base):
+    """A collection within a content source (e.g., Plex library)."""
+
+    __tablename__ = "source_collections"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)  # Plex library ID, etc.
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)  # Plex library type, etc.
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    source: Mapped[Source] = relationship("Source", back_populates="collections", passive_deletes=True)
+    path_mappings: Mapped[list["PathMapping"]] = relationship("PathMapping", back_populates="collection", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_source_collections_source_id", "source_id"),
+        Index("ix_source_collections_enabled", "enabled"),
+        UniqueConstraint("source_id", "external_id", name="uq_source_collections_source_external"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SourceCollection(id={self.id}, source_id={self.source_id}, name={self.name}, enabled={self.enabled})>"
+
+
+class PathMapping(Base):
+    """A path mapping for a collection (Plex path -> local path)."""
+
+    __tablename__ = "path_mappings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    collection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="CASCADE"), nullable=False)
+    plex_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    local_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    collection: Mapped[SourceCollection] = relationship("SourceCollection", back_populates="path_mappings", passive_deletes=True)
+
+    __table_args__ = (
+        Index("ix_path_mappings_collection_id", "collection_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<PathMapping(id={self.id}, collection_id={self.collection_id}, plex_path={self.plex_path}, local_path={self.local_path})>"

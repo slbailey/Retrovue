@@ -80,19 +80,20 @@ python run_enhanced_gui.py
 
 > ⚠️ **Note**: The streaming engine is currently being reworked. The legacy streaming server serves a raw MPEG-TS stream for basic testing purposes.
 
-**For VLC Testing:**
+**For VLC Testing (HLS):**
 
 1. Open VLC Media Player
 2. Go to: Media → Open Network Stream
-3. Enter: `http://localhost:8080/channel/1.ts`
+3. Enter: `http://localhost:8080/channel/1/playlist.m3u8`
 4. Click Play
 
-**Planned Streaming Output:**
+**HLS Streaming Features:**
 
-- HLS format with `.m3u8` playlists and `.ts` segments
-- Multi-channel support with independent schedules
-- Industry-standard compatibility with Plex Live TV, smart TVs, and mobile devices
-- See [Streaming Engine Documentation](documentation/streaming-engine.md) for technical details
+- **As-run alignment** via PROGRAM-DATE-TIME headers
+- **Seamless transitions** between content and commercials
+- **Multi-channel support** with independent schedules
+- **Industry-standard compatibility** with Plex Live TV, smart TVs, and mobile devices
+- See [Playout Documentation](docs/PLAYOUT.md) for technical details
 
 ## 🎯 Current Status
 
@@ -112,16 +113,32 @@ python run_enhanced_gui.py
 
 ## 📚 Documentation
 
-All documentation has been moved to the `documentation/` folder for better organization:
+All documentation has been organized in the `docs/` folder for better structure:
 
-- **[📖 Beginner's Guide](documentation/README.md)** - What Retrovue does and how all the pieces fit together
-- **[🚦 Development Roadmap](documentation/development-roadmap.md)** - Track progress and see what's coming next
-- **[🏗️ System Architecture](documentation/architecture.md)** - Technical details about how Retrovue works
-- **[🗄️ Database Schema](documentation/database-schema.md)** - How content and scheduling data is stored
-- **[🎬 Plex Sync CLI](documentation/plex-sync-cli.md)** - Command-line interface for Plex integration
-- **[🎛️ Streaming Engine](documentation/streaming-engine.md)** - How video streaming works
-- **[🚀 Quick Start Guide](documentation/quick-start.md)** - Step-by-step setup instructions
-- **[📝 GUI Migration Notes](MIGRATION_NOTES.md)** - Complete history of GUI modularization (Phases 1-8)
+### 📖 Main Documentation
+
+- **[📖 Beginner's Guide](docs/README.md)** - What Retrovue does and how all the pieces fit together
+- **[🚀 Quick Start Guide](docs/QUICKSTART.md)** - Step-by-step setup instructions for development
+- **[🏗️ System Architecture](docs/ARCHITECTURE.md)** - Clean architecture layers and design patterns
+- **[🗄️ Database Schema](docs/DB_SCHEMA.md)** - Tables, relationships, and data models
+- **[🔧 Configuration](docs/CONFIGURATION.md)** - Environment variables and deployment settings
+- **[💻 Retrovue CLI](docs/CLI.md)** - Modern CLI for content management and review workflows
+- **[📥 Importers](docs/IMPORTERS.md)** - Content discovery from filesystem, Plex, and custom sources
+- **[🔍 Enrichers](docs/ENRICHERS.md)** - Metadata enhancement with FFprobe and custom pipelines
+- **[✅ Review System](docs/REVIEW.md)** - Quality assurance workflow and human review process
+- **[📺 Playout System](docs/PLAYOUT.md)** - HLS-first output contract and testing procedures
+- **[🎛️ Streaming Engine](docs/streaming-engine.md)** - How video streaming works
+- **[🎬 Plex Sync CLI](docs/plex-sync-cli.md)** - Legacy command-line interface for Plex integration
+- **[🚦 Development Roadmap](docs/development-roadmap.md)** - Track progress and see what's coming next
+- **[📝 Migration Notes](docs/MIGRATION_NOTES.md)** - Complete history of GUI modularization (Phases 1-8)
+
+### 📁 Archived Documentation
+
+- **[📁 Archive](docs/archive/)** - Historical development phases, fixes, and implementation notes
+  - **[📋 Phases](docs/archive/phases/)** - Development phase completion summaries
+  - **[🔧 Fixes](docs/archive/fixes/)** - Bug fixes and error resolution documentation
+  - **[⚙️ Implementations](docs/archive/implementations/)** - Feature implementation completion notes
+  - **[📋 Plans](docs/archive/plans/)** - Development planning documents
 
 ## 🏗️ Project Goals
 

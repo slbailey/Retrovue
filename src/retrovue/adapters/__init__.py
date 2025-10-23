@@ -1,13 +1,32 @@
 """
-Adapters layer - external integrations and implementations.
+Adapters module for Retrovue.
 
-This layer contains adapters for external systems like Plex, Jellyfin,
-filesystem, and other providers.
+This module contains adapters for external systems and services,
+including importers, enrichers, and their registry.
 """
 
-# TODO: Implement adapters
-# - Plex importer adapter
-# - Jellyfin importer adapter  
-# - Filesystem importer adapter
-# - Enricher adapters
-# - Storage adapters
+from .registry import (
+    register_importer,
+    get_importer,
+    list_importers,
+    unregister_importer,
+    register_enricher,
+    get_enricher,
+    list_enrichers,
+    unregister_enricher,
+    clear_registries,
+    get_registry_stats,
+)
+
+__all__ = [
+    "register_importer",
+    "get_importer", 
+    "list_importers",
+    "unregister_importer",
+    "register_enricher",
+    "get_enricher",
+    "list_enrichers",
+    "unregister_enricher",
+    "clear_registries",
+    "get_registry_stats",
+]

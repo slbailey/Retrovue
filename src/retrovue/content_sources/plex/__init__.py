@@ -1,3 +1,0 @@
-"""
-Plex content source implementation.
-"""

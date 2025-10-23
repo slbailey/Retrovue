@@ -1,3 +1,0 @@
-"""
-Content Sources management GUI.
-"""

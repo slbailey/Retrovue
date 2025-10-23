@@ -1,159 +1,340 @@
-# Retrovue Architecture
+# Retrovue System Architecture
+
+This document describes the overall architecture of Retrovue, including the layered design, component relationships, and key architectural patterns.
 
 ## Overview
 
-Retrovue follows a layered architecture pattern that separates concerns and provides clear boundaries between different parts of the system. The architecture is designed to be maintainable, testable, and extensible.
+Retrovue follows a **Clean Architecture** pattern with clear separation of concerns across multiple layers. The system is designed to be maintainable, testable, and extensible.
 
 ## Architecture Layers
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        API Layer                            │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   FastAPI       │  │   REST API      │  │   Web UI    │  │
-│  │   Routers       │  │   Endpoints     │  │   (Future)  │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                                │
-┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                        │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   Content       │  │   Import        │  │  Library   │  │
-│  │   Services      │  │   Services      │  │  Services   │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                                │
-┌─────────────────────────────────────────────────────────────┐
-│                      Domain Layer                          │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   Entities      │  │   Value         │  │  Domain    │  │
-│  │   (Title, etc.) │  │   Objects       │  │  Events    │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                                │
-┌─────────────────────────────────────────────────────────────┐
-│                    Adapters Layer                          │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   Plex          │  │   Jellyfin      │  │  File      │  │
-│  │   Importer      │  │   Importer      │  │  System    │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                                │
-┌─────────────────────────────────────────────────────────────┐
-│                Infrastructure Layer                         │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   Database      │  │   Logging       │  │  Settings   │  │
-│  │   (SQLAlchemy)  │  │   (structlog)   │  │  (Pydantic)│  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
+│                    Presentation Layer                      │
+├─────────────────────────────────────────────────────────────┤
+│  API (FastAPI)     │  CLI (Typer)     │  Web (Jinja2)     │
+├─────────────────────────────────────────────────────────────┤
+│                    Application Layer                       │
+├─────────────────────────────────────────────────────────────┤
+│  Services (Business Logic)  │  Use Cases  │  Orchestration │
+├─────────────────────────────────────────────────────────────┤
+│                    Domain Layer                            │
+├─────────────────────────────────────────────────────────────┤
+│  Entities  │  Value Objects  │  Domain Services  │  Rules  │
+├─────────────────────────────────────────────────────────────┤
+│                    Infrastructure Layer                    │
+├─────────────────────────────────────────────────────────────┤
+│  Database  │  External APIs  │  File System  │  Logging   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Layer Descriptions
+## Layer Details
 
-### API Layer (`src/retrovue/api/`)
+### 1. Domain Layer (`src/retrovue/domain/`)
 
-- **Purpose**: Handles HTTP requests and responses
-- **Responsibilities**:
-  - FastAPI routers and endpoints
-  - Request/response serialization
-  - API documentation
-  - Authentication and authorization
-- **Dependencies**: Application layer only
+**Purpose**: Contains the core business logic and entities, independent of external concerns.
 
-### Application Layer (`src/retrovue/app/`)
+**Components**:
 
-- **Purpose**: Orchestrates business use cases
-- **Responsibilities**:
-  - Business logic coordination
-  - Use case implementation
-  - Transaction management
-  - Service orchestration
-- **Dependencies**: Domain layer, Adapters layer
+- **Entities** (`entities.py`): Core business objects (Title, Episode, Asset, etc.)
+- **Value Objects**: Immutable objects representing domain concepts
+- **Domain Services**: Business logic that doesn't belong to a single entity
+- **Domain Rules**: Business rules and constraints
 
-### Domain Layer (`src/retrovue/domain/`)
+**Key Entities**:
 
-- **Purpose**: Contains core business logic
-- **Responsibilities**:
-  - Business entities (Title, Episode, Asset)
-  - Value objects (GUID, Path, etc.)
-  - Domain events
-  - Business rules and invariants
-- **Dependencies**: None (pure business logic)
+```python
+# Core content entities
+Title -> Season -> Episode
+Asset -> Episode (many-to-many via EpisodeAsset)
 
-### Adapters Layer (`src/retrovue/adapters/`)
+# Supporting entities
+ProviderRef -> External provider references
+Marker -> Asset markers (chapters, availability)
+ReviewQueue -> Quality assurance items
+Source -> Content sources (Plex, filesystem)
+```
 
-- **Purpose**: Integrates with external systems
-- **Responsibilities**:
-  - Plex integration
-  - Jellyfin integration
-  - Filesystem integration
-  - External API clients
-  - Data enrichment services
-- **Dependencies**: Domain layer, Infrastructure layer
+### 2. Application Layer (`src/retrovue/app/`)
 
-### Infrastructure Layer (`src/retrovue/infra/`)
+**Purpose**: Orchestrates domain objects and coordinates business workflows.
 
-- **Purpose**: Provides technical infrastructure
-- **Responsibilities**:
-  - Database access (SQLAlchemy)
-  - Logging (structlog)
-  - Configuration (Pydantic)
-  - Metrics (Prometheus)
-  - File system operations
-- **Dependencies**: None (technical concerns only)
+**Components**:
 
-### CLI Layer (`src/retrovue/cli/`)
+- **Services** (`*_service.py`): Business logic coordination
+  - `IngestService`: Content discovery and ingestion
+  - `LibraryService`: Content library management
+  - `SourceService`: Source management
+- **Use Cases**: Specific business operations
+- **Application Services**: Cross-cutting business logic
 
-- **Purpose**: Command-line interface
-- **Responsibilities**:
-  - Typer command definitions
-  - CLI argument parsing
-  - Command orchestration
-- **Dependencies**: Application layer only
+**Service Pattern**:
 
-### Shared Layer (`src/retrovue/shared/`)
+```python
+class IngestService:
+    def __init__(self, db: Session):
+        self.db = db
 
-- **Purpose**: Common utilities and types
-- **Responsibilities**:
-  - Shared types and enums
-  - Utility functions
-  - Common exceptions
-  - Cross-cutting concerns
-- **Dependencies**: None (pure utilities)
+    def run_ingest(self, source: str) -> dict[str, int]:
+        # Orchestrate domain objects and adapters
+        # Return business results
+```
 
-## Key Principles
+### 3. Infrastructure Layer (`src/retrovue/infra/`)
 
-1. **Dependency Inversion**: High-level modules don't depend on low-level modules
-2. **Single Responsibility**: Each layer has a clear, focused responsibility
-3. **Interface Segregation**: Dependencies are on interfaces, not implementations
-4. **Open/Closed**: Open for extension, closed for modification
-5. **Don't Repeat Yourself**: Shared functionality goes in the shared layer
+**Purpose**: Handles external concerns like databases, APIs, and file systems.
+
+**Components**:
+
+- **Database** (`db.py`): SQLAlchemy configuration and session management
+- **Settings** (`settings.py`): Application configuration
+- **Logging** (`logging.py`): Structured logging with secret redaction
+- **External APIs**: Plex, filesystem, etc.
+
+### 4. Adapters Layer (`src/retrovue/adapters/`)
+
+**Purpose**: Implements interfaces between the application and external systems.
+
+**Components**:
+
+- **Importers** (`importers/`): Content discovery from external sources
+  - `PlexImporter`: Plex server integration
+  - `FilesystemImporter`: Local file system scanning
+- **Enrichers** (`enrichers/`): Content metadata enhancement
+  - `FFProbeEnricher`: Media file analysis
+- **Registry**: Adapter registration and discovery
+
+## Unit of Work Pattern
+
+The system uses a **Unit of Work (UoW)** pattern for database transaction management:
+
+### API Layer (`api/deps.py`)
+
+```python
+def get_db() -> Generator:
+    """Provide a Session per-request with unit-of-work:
+    - success => commit once
+    - error => rollback
+    - always close
+    """
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+```
+
+### CLI Layer (`cli/uow.py`)
+
+```python
+@contextlib.contextmanager
+def session() -> Generator[Session, None, None]:
+    """CLI UoW context manager mirroring API semantics."""
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+```
 
 ## Data Flow
 
-1. **API Requests**: HTTP → API Layer → Application Layer → Domain/Adapters
-2. **CLI Commands**: CLI → Application Layer → Domain/Adapters
-3. **Import Process**: Adapters → Domain → Application → Infrastructure
-4. **Business Logic**: Application → Domain → Adapters → Infrastructure
+### 1. Content Ingestion Flow
 
-## Migration Strategy
+```
+External Source → Importer → Enricher → Domain Entities → Database
+     ↓              ↓           ↓            ↓
+  Plex API    FilesystemImporter  FFProbeEnricher  Asset/Episode
+```
 
-The existing codebase will be gradually migrated to this architecture:
+### 2. API Request Flow
 
-1. **Phase 1**: Create new layer structure (✅ Complete)
-2. **Phase 2**: Implement domain models and ORM
-3. **Phase 3**: Create application services facade
-4. **Phase 4**: Implement plugin interfaces for importers
-5. **Phase 5**: Build ingest pipeline and review queue
-6. **Phase 6**: Migrate CLI to use application services
-7. **Phase 7**: Add configuration, logging, and metrics
-8. **Phase 8**: Implement HLS output contract
-9. **Phase 9**: Complete documentation and examples
+```
+HTTP Request → FastAPI Router → Service Layer → Domain Layer → Database
+     ↓              ↓              ↓             ↓
+  JSON Input    Business Logic   Domain Rules   SQLAlchemy
+```
 
-## Benefits
+### 3. CLI Command Flow
 
-- **Maintainability**: Clear separation of concerns
-- **Testability**: Each layer can be tested independently
-- **Extensibility**: New importers and features can be added easily
-- **Flexibility**: Can swap implementations without affecting business logic
-- **Scalability**: Architecture supports future growth and complexity
+```
+CLI Command → Typer Router → Service Layer → Domain Layer → Database
+     ↓            ↓              ↓             ↓
+  Arguments   Business Logic   Domain Rules   SQLAlchemy
+```
+
+## Cross-Cutting Concerns
+
+### 1. Logging (`infra/logging.py`)
+
+- **Structured JSON logging** with `structlog`
+- **Secret redaction** for security
+- **Request correlation IDs** for tracing
+- **Service context** binding
+
+### 2. Configuration (`infra/settings.py`)
+
+- **Environment-based configuration** with Pydantic
+- **Type validation** and defaults
+- **Secret management** for sensitive data
+
+### 3. Database (`infra/db.py`)
+
+- **SQLAlchemy ORM** with PostgreSQL
+- **Connection pooling** and optimization
+- **Migration support** with Alembic
+
+## Component Relationships
+
+### Service Dependencies
+
+```
+IngestService
+├── ImporterRegistry (adapters)
+├── EnricherRegistry (adapters)
+├── Domain Entities (domain)
+└── Database Session (infra)
+
+LibraryService
+├── Domain Entities (domain)
+└── Database Session (infra)
+
+SourceService
+├── Domain Entities (domain)
+└── Database Session (infra)
+```
+
+### API Dependencies
+
+```
+FastAPI App
+├── Routers (api/routers/)
+│   ├── Health Router (health.py)
+│   ├── Metrics Router (metrics.py)
+│   ├── Assets Router (assets.py)
+│   ├── Ingest Router (ingest.py)
+│   └── Review Router (review.py)
+├── Dependencies (api/deps.py)
+│   └── get_db() UoW
+└── Schemas (api/schemas.py)
+    └── Pydantic models
+```
+
+## Design Principles
+
+### 1. Dependency Inversion
+
+- **High-level modules** don't depend on low-level modules
+- **Abstractions** don't depend on details
+- **Details** depend on abstractions
+
+### 2. Single Responsibility
+
+- **Each layer** has a single, well-defined responsibility
+- **Services** handle specific business domains
+- **Adapters** handle specific external integrations
+
+### 3. Open/Closed Principle
+
+- **Open for extension** (new importers, enrichers)
+- **Closed for modification** (core domain logic)
+
+### 4. Interface Segregation
+
+- **Small, focused interfaces** for adapters
+- **Specific contracts** for each integration type
+
+## Extension Points
+
+### 1. Adding New Importers
+
+```python
+# 1. Implement base interface
+class CustomImporter(BaseImporter):
+    def discover_content(self, source: str) -> list[ContentItem]:
+        # Implementation
+        pass
+
+# 2. Register in registry
+registry.register("custom", CustomImporter)
+```
+
+### 2. Adding New Enrichers
+
+```python
+# 1. Implement base interface
+class CustomEnricher(BaseEnricher):
+    def enrich(self, asset: Asset) -> dict[str, Any]:
+        # Implementation
+        pass
+
+# 2. Register in registry
+registry.register("custom", CustomEnricher)
+```
+
+### 3. Adding New API Endpoints
+
+```python
+# 1. Create router
+router = APIRouter()
+
+@router.get("/custom")
+def custom_endpoint(db: Session = Depends(get_db)):
+    # Implementation
+    pass
+
+# 2. Include in main app
+app.include_router(router, prefix="/api")
+```
+
+## Testing Strategy
+
+### 1. Unit Tests
+
+- **Domain entities** and business logic
+- **Service layer** with mocked dependencies
+- **Adapters** with test doubles
+
+### 2. Integration Tests
+
+- **API endpoints** with test database
+- **Service orchestration** with real adapters
+- **Database operations** with test data
+
+### 3. End-to-End Tests
+
+- **Complete workflows** from API to database
+- **CLI commands** with real services
+- **External integrations** with test environments
+
+## Performance Considerations
+
+### 1. Database Optimization
+
+- **Connection pooling** for concurrent requests
+- **Indexed queries** for common operations
+- **Lazy loading** for large relationships
+
+### 2. Caching Strategy
+
+- **Service-level caching** for expensive operations
+- **Database query caching** for repeated queries
+- **External API caching** for provider data
+
+### 3. Scalability
+
+- **Stateless services** for horizontal scaling
+- **Database sharding** for large datasets
+- **Async operations** for I/O-bound tasks
+
+---
+
+_This architecture provides a solid foundation for Retrovue's content management and streaming capabilities while maintaining flexibility for future enhancements._
