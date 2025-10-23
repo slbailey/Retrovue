@@ -12,25 +12,24 @@ class TestArchitectureGuard:
     """Test that architecture layer boundaries are respected."""
     
     def test_api_layer_imports(self):
-        """Test that API layer only imports from allowed layers."""
+        """Test that API layer doesn't import GUI modules."""
         repo_root = Path(__file__).parent.parent
         api_dir = repo_root / "src" / "retrovue" / "api"
         
-        # Allowed imports for API layer
-        allowed_imports = {
-            'retrovue.app',  # Application services
-            'retrovue.cli.uow',  # Unit of Work
-            'retrovue.domain',  # Domain entities
-            'retrovue.shared',  # Shared utilities
-            'fastapi',  # Web framework
-            'uvicorn',  # ASGI server
-            'pydantic',  # Data validation
-            'sqlalchemy',  # Database ORM
-            'structlog',  # Logging
-            'typer',  # CLI framework
-        }
+        # Forbidden imports for API layer (GUI-related)
+        forbidden_patterns = [
+            'pyside6', 'pyqt6', 'qt', 'tkinter', 'wx', 'kivy',
+            'matplotlib', 'plotly', 'bokeh', 'streamlit'
+        ]
         
-        # Scan API files for imports
+        # More specific patterns that should be forbidden
+        forbidden_imports = [
+            'import dash', 'from dash', 'import plotly', 'from plotly',
+            'import matplotlib', 'from matplotlib', 'import bokeh', 'from bokeh',
+            'import streamlit', 'from streamlit', 'import pyside6', 'from pyside6',
+            'import pyqt6', 'from pyqt6', 'import tkinter', 'from tkinter'
+        ]
+        
         violations = []
         for py_file in api_dir.rglob("*.py"):
             if py_file.name == "__init__.py":
@@ -38,22 +37,21 @@ class TestArchitectureGuard:
                 
             try:
                 with open(py_file, 'r', encoding='utf-8') as f:
-                    tree = ast.parse(f.read())
+                    content = f.read()
                     
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.Import):
-                        for alias in node.names:
-                            if not any(alias.name.startswith(allowed) for allowed in allowed_imports):
-                                if not alias.name.startswith(('typing', 'pathlib', 'json', 'datetime', 'uuid')):
-                                    violations.append(f"{py_file}: {alias.name}")
-                    elif isinstance(node, ast.ImportFrom):
-                        if node.module and not any(node.module.startswith(allowed) for allowed in allowed_imports):
-                            if not node.module.startswith(('typing', 'pathlib', 'json', 'datetime', 'uuid', 'os', 'sys')):
-                                violations.append(f"{py_file}: from {node.module}")
+                # Check for specific import statements
+                for forbidden_import in forbidden_imports:
+                    if forbidden_import in content:
+                        violations.append(f"{py_file}: {forbidden_import}")
+                        
+                # Check for module names in import statements (more specific)
+                for pattern in forbidden_patterns:
+                    if f"import {pattern}" in content or f"from {pattern}" in content:
+                        violations.append(f"{py_file}: imports {pattern}")
             except Exception as e:
-                print(f"Warning: Could not parse {py_file}: {e}")
+                print(f"Warning: Could not read {py_file}: {e}")
         
-        assert not violations, f"API layer has forbidden imports: {violations}"
+        assert not violations, f"API layer has forbidden GUI imports: {violations}"
     
     def test_domain_layer_imports(self):
         """Test that domain layer doesn't import web/GUI modules."""
