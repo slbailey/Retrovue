@@ -2,18 +2,19 @@
 """
 Retrovue CLI entry point.
 
-This script provides easy access to the Retrovue CLI commands.
+This script provides the main entry point for the Retrovue CLI,
+avoiding module import conflicts.
 """
 
 import sys
 from pathlib import Path
 
-# Add src to path for imports
-src_path = Path(__file__).parent / "src"
-sys.path.insert(0, str(src_path))
+# Add the src directory to the Python path
+src_dir = Path(__file__).parent / "src"
+sys.path.insert(0, str(src_dir))
 
-from retrovue.cli.main import cli
+# Import and run the CLI
+from retrovue.cli.main import app
 
 if __name__ == "__main__":
-    cli()
-
+    app()

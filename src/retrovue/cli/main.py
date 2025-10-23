@@ -27,6 +27,11 @@ app.add_typer(assets.app, name="assets", help="Asset management operations")
 app.add_typer(review.app, name="review", help="Review queue operations")
 app.add_typer(plex.app, name="plex", help="Plex server operations")
 
+# Add play commands directly
+from .play import play, play_channel
+app.command("play")(play)
+app.command("play-channel")(play_channel)
+
 
 @app.callback()
 def main(
