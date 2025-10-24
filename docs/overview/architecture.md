@@ -49,6 +49,8 @@ RetroVue is composed of several layers working together to maintain, schedule, a
 
 > **Important:** Ingest can be slow. Playback cannot depend on it.
 
+> **See docs/components/content-manager.md for ingestion/library details.**
+
 ### Scheduling Layer
 
 Builds and maintains **two rolling planning horizons** for every channel:
@@ -83,6 +85,8 @@ Every scheduled item has an `absolute_start` and `absolute_end` timestamp in wal
 - **Playlog** fills the leftover time with ad pods, bumpers, and promos to end exactly on the boundary
 
 > **Key Insight:** This dual-horizon model lets RetroVue act like a real network without needing to prebuild byte-accurate schedules for days in advance.
+
+> **See docs/components/schedule-manager.md for horizon generation + timing.**
 
 ### Runtime / Channel Orchestration Layer
 
@@ -264,6 +268,8 @@ Separates "what to play" (scheduling) from "how to render/encode."
 - **Other viewers attach** to this output stream (fanout model)
 
 > **Only one Producer per channel.** Others may view its stream, but not spawn new ones.
+
+> **See docs/components/program-manager.md for runtime coordination and playout.**
 
 ### Overlay / Branding Layer
 

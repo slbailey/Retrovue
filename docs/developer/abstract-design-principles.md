@@ -206,6 +206,9 @@ These patterns govern how internal components behave once data is in the system.
 - Emergency mode activation
 - Schedule horizon management
 - System state transitions
+- **ScheduleOrchestrator** - Orchestrator for generating timelines
+- **ProgramManager** - System-level Orchestrator + policy enforcement
+- **ChannelManager** - Per-channel Orchestrator
 
 **Why it exists:**
 Complex actions require multiple steps that may cross system boundaries. We need a conductor that knows the proper sequence and calls the right services.
@@ -238,6 +241,7 @@ If you have a module that decides policy, executes ffmpeg commands, writes to st
 - Metrics collection and reporting
 - ID generation and validation
 - Configuration management
+- **Producer** - Capability Provider for actual output, forbidden from policy decisions
 
 **Philosophy:** "I do one thing, clearly, on demand, and I do it well."
 
@@ -265,6 +269,11 @@ An Authority is the sole owner and definer of a particular category of truth wit
 
 **Why it exists:**
 Disagreement kills reproducibility. If two parts of the system disagree on "what's true right now," you cannot answer "what happened" later.
+
+**Examples in RetroVue:**
+
+- **ScheduleService** - Authority for future timeline
+- **MasterClock** - Authority for time
 
 **Rules:**
 
