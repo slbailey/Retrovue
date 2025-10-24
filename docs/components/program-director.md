@@ -73,7 +73,7 @@ The Program Director follows RetroVue's architectural patterns:
 - ✅ Coordinates all channel operations
 - ✅ Manages viewer sessions and fanout
 - ✅ Handles emergency overrides and mode changes
-- ✅ Generates broadcast streams and output
+- ✅ Coordinates generation of broadcast streams and output
 - ✅ Enforces system-wide policies
 
 **What Program Director DOES NOT:**
@@ -139,19 +139,23 @@ Producers are swappable. ChannelManager chooses which Producer implementation to
 All Producers must implement the same interface so ChannelManager can control them in a consistent way.
 
 ```python
-class ProducerProtocol:
-    def start(self, playout_plan, start_at_station_time): ...
-    def get_stream_endpoint(self): ...
-    def health(self): ...
-    def stop(self): ...
+class Producer(ABC):
+    def start(self, playout_plan, start_at_station_time) -> bool: ...
+    def stop(self) -> bool: ...
+    def play_content(self, content_segment) -> bool: ...
+    def get_stream_endpoint(self) -> Optional[str]: ...
+    def health(self) -> str: ...
+    def get_state(self) -> ProducerState: ...
+    def get_producer_id(self) -> str: ...
 ```
 
 **Required contract:**
 
-- `start(playout_plan, start_at_station_time)` - Begin output for this channel. `playout_plan` is the resolved segment sequence that should air, and `start_at_station_time` (from MasterClock) allows us to join mid-program instead of always starting at frame 0.
+- `start(playout_plan, start_at_station_time)` - Begin output for this channel. `playout_plan` is the resolved segment sequence that should air, and `start_at_station_time` (from MasterClock) allows us to join mid-program instead of always starting at frame 0. Returns True on successful startup.
 - `get_stream_endpoint()` - Return a handle / URL / socket description that viewers can attach to.
 - `health()` - Report whether the Producer is running, degraded, or stopped.
 - `stop()` - Cleanly terminate output.
+- `get_state()` - Return a structured snapshot (ProducerState) of the current producer: mode, status, started_at, output_url, etc.
 
 A Producer is not allowed to:
 
@@ -164,13 +168,17 @@ It only executes the playout plan it was given.
 
 Producer implementations will live under retrovue/runtime/producer/:
 
-- `ffmpeg_producer.py` – normal programming playout
-- `emergency_producer.py` – emergency crawl / takeover mode
-- `guide_producer.py` – "TV guide channel" / listings output
+base.py – ProducerProtocol / BaseProducer interface + shared types
+
+normal_producer.py – normal programming playout (typically ffmpeg-driven)
+
+emergency_producer.py – emergency crawl / takeover mode
+
+guide_producer.py – "TV guide channel" / listings output
 
 All of them share a common interface in `producer/base.py`.
 
-Example: FfmpegProducer launches and supervises an ffmpeg subprocess using a concat plan provided by ChannelManager.
+Example: NormalProducer (normal_producer.py) will ultimately launch and supervise an ffmpeg pipeline using a concat plan provided by ChannelManager.
 
 ## Major Services
 
@@ -419,7 +427,7 @@ Each component has one clear purpose:
 ```
 src/retrovue/runtime/
   program_director.py       # ProgramDirector (global orchestrator / policy enforcer)
-  channel_manager.py       # ChannelManager (per-channel orchestrator, viewer fanout, Producer lifecycle)
+  channel_manager.py       # ChannelManager (per-channel orchestrator, fanout model, Producer lifecycle)
   clock.py                  # MasterClock (time Authority)
   producer/
     __init__.py             # Clean import surface for Producer Protocol
@@ -467,6 +475,8 @@ The `producer/` package follows a specific architectural pattern that separates 
 - **Future-Proof**: The design accommodates complex producer implementations without cluttering a single file
 
 This package design reflects the architectural principle that **Producers are swappable capability providers behind a common protocol** - the package structure makes this principle concrete and enforceable.
+
+ChannelManager and ProgramDirector must only depend on the public surface exposed by retrovue.runtime.producer (and by producer/base.py). They are not allowed to import or manipulate internal details of specific producer implementations. ChannelManager can construct/select a Producer and tell it what to play, but it cannot reach into that Producer's internals (for example, it cannot manage ffmpeg subprocesses directly).
 
 ## Summary
 
