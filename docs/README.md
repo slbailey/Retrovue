@@ -1,191 +1,199 @@
-# 📺 Retrovue - Retro IPTV Simulation Project
+# 📚 Retrovue Documentation
 
-## 🎬 What is Retrovue?
+Welcome to the Retrovue documentation! This documentation is organized around the core components of the system, making it easy to understand both the business purpose and technical implementation of each component.
 
-Retrovue is a **retro-inspired IPTV simulation system** designed to recreate the authentic experience of scheduled broadcast television. It is built on a **media-first foundation** where everything begins with a physical media file, and rich metadata is layered on top to create a comprehensive broadcast TV experience.
+## 🏗️ Documentation Architecture
 
-### **Media-First Architecture**
-Retrovue's core philosophy centers around the **media-first approach**:
-- **Physical Foundation**: Every piece of content must have an actual playable media file as its foundation
-- **Logical Wrappers**: Content items (movies, episodes, bumpers, commercials, etc.) are logical wrappers around media files
-- **Metadata Layering**: Rich metadata is layered on top of the media file without modifying the original
-- **Playback Guarantee**: Every scheduled item can be played because it has a verified media file
+Our documentation follows a component-based architecture that mirrors the system's design:
 
-### **Plex-First Integration**
-Retrovue is designed with **Plex Media Server integration** as the primary content source:
-- **Seamless Import**: Automatically syncs your existing Plex library with episode-level granularity
-- **Smart Synchronization**: Only updates content that has actually changed for optimal performance
-- **Path Mapping**: Translates Plex internal paths to accessible local file paths
-- **Multi-Server Support**: Manage multiple Plex servers from one Retrovue installation
-
-### **Network-Grade IPTV System**
-Retrovue functions as a **network-grade IPTV system** that simulates a realistic broadcast TV station experience. Think of it as your own personal cable TV network that can serve multiple viewers simultaneously with professional-grade features and reliability.
-
-### The Big Picture
-
-Instead of just watching your media files one at a time, Retrovue creates **24/7 TV channels** that:
-- Play your movies and TV shows on a schedule
-- Insert commercials and station bumpers
-- Run multiple channels simultaneously (like real cable TV)
-- Stream to any device that can play IPTV (VLC, Plex, smart TVs, etc.)
-
-## 🎯 What Makes This Special?
-
-### Real TV Station Experience
-- **Multiple Channels**: Run several TV channels at once, each with its own schedule
-- **Professional Timing**: Proper transitions, commercial breaks, and station IDs
-- **Live Streaming**: Continuous 24/7 operation with HLS streaming
-- **Emergency Overrides**: Break into programming with alerts or announcements
-
-### Smart Content Management
-- **Plex Integration**: Automatically imports your existing Plex library with episode-level granularity
-- **Smart Sync**: Only updates content that has actually changed (super fast!)
-- **Episode-Level Control**: Each TV episode is managed separately for precise scheduling
-- **Metadata Storage**: Tracks everything you need for professional scheduling
-- **Path Mapping**: Translates Plex internal paths to accessible local file paths
-- **Multi-Server Support**: Manage multiple Plex servers from one installation
-
-### Advanced Metadata Management
-- **Editorial Overrides**: Customize metadata without overwriting source data from Plex
-- **Namespaced Tagging**: Organize content with structured tags like `audience:kids`, `holiday:christmas`, `brand:fast_food`
-- **Parental Controls**: MPAA/TV ratings system with daypart restrictions
-- **Content Classification**: Flexible tagging system for audience targeting, seasonal content, and brand management
-
-## 🏗️ How All The Pieces Fit Together
-
-### 1. Content Management (✅ Working Now)
 ```
-Your Plex Library → Plex Sync CLI → Retrovue Database
+┌─────────────────────────────────────────────────────────────┐
+│                    Architectural Guidelines               │
+├─────────────────────────────────────────────────────────────┤
+│  Design Patterns  │  Industry Standards  │  Best Practices │
+├─────────────────────────────────────────────────────────────┤
+│                    Core Components                         │
+├─────────────────────────────────────────────────────────────┤
+│  Content Management  │  Program Manager  │  Channel Manager │
+├─────────────────────────────────────────────────────────────┤
+│                    User Documentation                     │
+├─────────────────────────────────────────────────────────────┤
+│  Getting Started  │  User Guides  │  Configuration  │  FAQ  │
+├─────────────────────────────────────────────────────────────┤
+│                    Technical Documentation                 │
+├─────────────────────────────────────────────────────────────┤
+│  API Reference  │  CLI Reference  │  Database  │  Streaming │
+└─────────────────────────────────────────────────────────────┘
 ```
-- **Import**: Pulls movies and TV shows from your Plex server using the Plex Sync CLI
-- **Organize**: Stores metadata, durations, and scheduling preferences
-- **Manage**: Configure servers, libraries, and path mappings via command line
 
-### 2. Scheduling System (🔄 Coming Next)
+## 🚀 Quick Start
+
+### For Users
+
+- **[Getting Started](user/getting-started.md)** - Set up Retrovue in 6 simple steps
+- **[Web Interface Guide](user/web-interface.md)** - Use the modern web UI
+- **[Configuration Guide](user/configuration.md)** - Configure your system
+
+### For Developers
+
+- **[Architecture Overview](developer/architecture.md)** - Understand the system design
+- **[API Reference](developer/api-reference.md)** - Complete API documentation
+- **[CLI Reference](developer/cli-reference.md)** - Command-line interface guide
+
+## 📖 Documentation Sections
+
+### 🏗️ Architectural Guidelines
+
+Core architectural patterns, design principles, and industry standards:
+
+- **[Architectural Guidelines](components/architectural-guidelines.md)** - Design patterns, UoW, FastAPI, Clean Architecture
+- **[Design Principles](components/architectural-guidelines.md#design-principles)** - Dependency inversion, single responsibility, open/closed
+- **[Industry Standards](components/architectural-guidelines.md#industry-standard-patterns)** - Repository pattern, service layer, factory pattern
+- **[Best Practices](components/architectural-guidelines.md#best-practices)** - Code organization, error handling, performance, security
+
+### 🧩 Core Components
+
+Business-level explanations and technical implementation for each system component:
+
+#### Content Management System
+
+- **[Content Management System](components/content-management-system.md)** - Content discovery, ingestion, and library management
+- **[Review System](components/content-management-system.md#review-system)** - Quality assurance and human review workflow
+- **[CLI Interface](components/content-management-system.md#cli-interface)** - Command-line content management
+- **[Web Interface](components/content-management-system.md#web-interface)** - Web-based content management
+
+#### Program Manager
+
+- **[Program Manager](components/program-manager.md)** - Programming creation, scheduling, and content rotation
+- **[Schedule Generation](components/program-manager.md#schedule-generation)** - Automatic programming schedule creation
+- **[Content Rotation](components/program-manager.md#content-rotation)** - Content distribution and rotation rules
+- **[Programming Patterns](components/program-manager.md#program-types)** - Series, movie, and block programming
+
+#### Channel Manager
+
+- **[Channel Manager](components/channel-manager.md)** - IPTV channel creation, configuration, and management
+- **[Multi-Channel Management](components/channel-manager.md#multi-channel-management)** - Orchestrating multiple channels
+- **[Stream Management](components/channel-manager.md#streaming-infrastructure)** - FFmpeg integration and stream health
+- **[Resource Allocation](components/channel-manager.md#resource-allocation)** - System resource management
+
+### 👥 User Documentation
+
+Everything you need to use Retrovue effectively:
+
+- **[Getting Started](user/getting-started.md)** - Complete setup guide
+- **[Web Interface](user/web-interface.md)** - Modern web UI guide
+- **[Configuration](user/configuration.md)** - System configuration
+- **[Content Management](user/content-management.md)** - Managing your media library
+- **[Streaming](user/streaming.md)** - Setting up and using streams
+- **[Troubleshooting](user/troubleshooting.md)** - Common issues and solutions
+- **[FAQ](user/faq.md)** - Frequently asked questions
+
+### 👨‍💻 Developer Documentation
+
+Technical documentation for developers and contributors:
+
+- **[Architecture](developer/architecture.md)** - System architecture and design patterns
+- **[API Reference](developer/api-reference.md)** - Complete REST API documentation
+- **[CLI Reference](developer/cli-reference.md)** - Command-line interface reference
+- **[Database Schema](developer/database-schema.md)** - Database design and relationships
+- **[Testing](developer/testing.md)** - Testing strategies and guidelines
+- **[Contributing](developer/contributing.md)** - How to contribute to the project
+
+### 🔧 Technical Documentation
+
+Deep technical details for system administrators and advanced users:
+
+- **[Streaming Engine](technical/streaming-engine.md)** - FFmpeg and HLS implementation
+- **[Plex Integration](technical/plex-integration.md)** - Plex server integration details
+- **[Database Management](technical/database-management.md)** - Database operations and maintenance
+- **[Deployment](technical/deployment.md)** - Production deployment guide
+- **[Performance](technical/performance.md)** - Performance tuning and optimization
+- **[Security](technical/security.md)** - Security considerations and best practices
+
+## 🎯 Find What You Need
+
+### I want to...
+
+#### Understand the System
+
+- **Learn the architecture** → [Architectural Guidelines](components/architectural-guidelines.md)
+- **Understand content management** → [Content Management System](components/content-management-system.md)
+- **Learn about programming** → [Program Manager](components/program-manager.md)
+- **Understand channels** → [Channel Manager](components/channel-manager.md)
+
+#### Get Started
+
+- **Set up Retrovue for the first time** → [Getting Started](user/getting-started.md)
+- **Use the web interface** → [Web Interface Guide](user/web-interface.md)
+- **Configure my system** → [Configuration Guide](user/configuration.md)
+
+#### Manage Content
+
+- **Import content from Plex** → [Content Management](user/content-management.md)
+- **Review content quality** → [Review System](components/content-management-system.md#review-system)
+- **Organize my library** → [Content Management System](components/content-management-system.md)
+
+#### Create Programming
+
+- **Build program schedules** → [Program Manager](components/program-manager.md)
+- **Set up content rotation** → [Content Rotation](components/program-manager.md#content-rotation)
+- **Create programming blocks** → [Programming Patterns](components/program-manager.md#program-types)
+
+#### Manage Channels
+
+- **Create IPTV channels** → [Channel Manager](components/channel-manager.md)
+- **Start streaming** → [Streaming Guide](user/streaming.md)
+- **Monitor channel health** → [Stream Management](components/channel-manager.md#streaming-infrastructure)
+
+#### Development
+
+- **Use the API** → [API Reference](developer/api-reference.md)
+- **Use the CLI** → [CLI Reference](developer/cli-reference.md)
+- **Deploy to production** → [Deployment Guide](technical/deployment.md)
+- **Troubleshoot issues** → [Troubleshooting Guide](user/troubleshooting.md)
+
+## 📁 File Organization
+
+The documentation is organized into component-based directories:
+
 ```
-Content Library → Schedule Editor → Timeline Management
+docs/
+├── components/     # Core system components
+│   ├── architectural-guidelines.md
+│   ├── content-management-system.md
+│   ├── program-manager.md
+│   └── channel-manager.md
+├── user/           # User-facing documentation
+├── developer/      # Developer documentation
+├── technical/     # Technical deep-dives
+└── README.md      # This file
 ```
-- **Timeline Editor**: Drag-and-drop interface to create broadcast schedules
-- **Multi-Channel**: Each channel has its own independent schedule
-- **Commercial Integration**: Insert commercials, bumpers, and station IDs
-- **Real-time Monitoring**: See what's currently airing on each channel
 
-### 3. Streaming Engine (🔄 Coming Next)
-```
-Schedules → Program Director → FFmpeg → HLS Streams
-```
-- **Program Director**: Orchestrates all channels and manages playback
-- **FFmpeg Processing**: Converts your media into streaming format
-- **HLS Output**: Creates industry-standard streams that work everywhere
-- **Multi-Channel**: Runs multiple streams simultaneously
+## 🔄 Documentation Status
 
-### 4. Client Access (🔄 Coming Next)
-```
-HLS Streams → Network → VLC/Plex/Smart TV
-```
-- **VLC**: Direct network stream playback
-- **Plex Live TV**: Native integration with Plex
-- **Smart TVs**: Works with any IPTV-capable device
-- **Mobile Apps**: Stream to phones and tablets
+- ✅ **Architectural Guidelines** - Complete with design patterns and best practices
+- ✅ **Core Components** - Complete with business and technical documentation
+- ✅ **User Documentation** - Complete and up-to-date
+- ✅ **Developer Documentation** - Complete with architecture details
+- 🔄 **Technical Documentation** - In progress, some sections need updates
+- ✅ **API Reference** - Complete and comprehensive
+- ✅ **CLI Reference** - Complete with examples
 
-## 🎬 Content Types Supported
+## 🤝 Contributing to Documentation
 
-### TV Network Content
-- **Movies**: Feature films with commercial break planning and chapter marker support
-- **TV Shows**: Episodes with intro/outro timing and episode-level scheduling
-- **Commercials**: 15s, 30s, 60s spots with advanced targeting and brand management
-- **Bumpers**: Station IDs, "We'll be right back" segments with timing control
-- **Intros/Outros**: Show openings and closings with seamless integration
-- **Interstitials**: Filler content between shows with flexible placement
+We welcome contributions to improve our documentation! See our [Contributing Guide](developer/contributing.md) for details on how to:
 
-### Advanced Content Features
-- **Chapter Markers**: Support for commercial break planning and content segmentation
-- **Manual Ad Break Input**: Custom ad break placement and timing control
-- **Media Markers**: Store ad breaks, chapters, and cue points from various sources
-- **Content Validation**: Verify media files are playable and codec-compatible
-- **Path Mapping**: Translate Plex/TMM paths to accessible local file paths
+- Report documentation issues
+- Suggest improvements
+- Submit documentation updates
+- Help translate documentation
 
-### Smart Scheduling Features
-- **Schedule Blocks**: High-level programming templates (e.g., "Sitcoms at 5pm weekdays")
-- **Schedule Instances**: Specific content scheduled for exact date/time combinations
-- **Daypart Targeting**: Morning shows, prime time, late night with automatic content filtering
-- **Seasonal Content**: Holiday specials, summer programming with automatic seasonal scheduling
-- **Demographic Targeting**: Family-friendly, adult content with audience-based scheduling
-- **Content Ratings**: G, PG, PG-13, R, Adult classifications with parental control enforcement
-- **Commercial Spacing Rules**: Control commercial placement and brand separation
-- **Episode Rotation Rules**: Prevent content from repeating too frequently
+## 📞 Getting Help
 
-### Advanced Logging and Analytics
-- **Play Log Tracking**: Records what programs and ads actually aired
-- **Weekly Log Rotation**: Automatic log management to prevent database bloat
-- **Performance Metrics**: Track system performance and resource usage
-- **Error Logging**: Record playback errors, missing files, and technical issues
-- **Compliance Tracking**: Maintain records for regulatory and audit purposes
-
-## 🚀 Getting Started
-
-### What You Need
-- **Python 3.8+** (the programming language Retrovue is built with)
-- **FFmpeg** (handles video processing and streaming)
-- **Plex Media Server** (optional, for importing your existing library)
-- **A computer** that can run 24/7 (like a home server or NAS)
-
-### Quick Start
-1. **Install Retrovue**: Follow the setup instructions in the main README
-2. **Import Content**: Connect to your Plex server and sync your library
-3. **Browse Library**: Use the desktop app to view and organize your content
-4. **Create Schedules**: Build your first TV channel schedule (coming soon!)
-5. **Start Streaming**: Launch your first 24/7 TV channel (coming soon!)
-
-## 🎯 Current Status
-
-### ✅ What's Working Now
-- **Plex Integration**: Complete CLI-based Plex server management and content import
-- **Library Management**: Sync and manage Plex libraries with granular control
-- **Path Mapping**: Translate Plex paths to accessible local file paths
-- **Content Ingestion**: Import movies and TV shows with full metadata
-- **Database System**: Store all metadata and scheduling information
-- **Smart Sync**: Only update content that has actually changed
-
-### 🔄 What's Coming Next
-- **Schedule Editor**: Drag-and-drop timeline management
-- **Multi-Channel Support**: Run multiple TV channels simultaneously
-- **Program Director**: Orchestrate channels and manage playback
-- **Advanced Streaming**: Professional-grade streaming with transitions
-
-### 🎯 End Goal
-A **robust IPTV system** that provides a viewer experience **indistinguishable from real cable TV**:
-- Multi-channel 24/7 operation
-- Realistic transitions and timing
-- Professional scheduling and management
-- Easy-to-use interface for content creators
-
-## 📚 Learn More
-
-- **[Plex Sync CLI Reference](plex-sync-cli.md)** - Complete command-line interface documentation
-- **[Quick Start Guide](quick-start.md)** - Step-by-step setup instructions
-- **[Development Roadmap](development-roadmap.md)** - Track progress and see what's coming next
-- **[System Architecture](architecture.md)** - Technical details about how Retrovue works
-- **[Database Schema](database-schema.md)** - How content and scheduling data is stored
-- **[Streaming Engine](streaming-engine.md)** - How video streaming works
-
-## 🤝 Contributing
-
-Retrovue is designed to be a community-driven project. Whether you're a developer, content creator, or just someone who loves retro TV, there are ways to contribute:
-
-- **Report Issues**: Found a bug? Let us know!
-- **Feature Requests**: Have an idea? We'd love to hear it!
-- **Development**: Help build new features and improvements
-- **Testing**: Try it out and provide feedback
-- **Documentation**: Help improve guides and tutorials
-
-## 📞 Support
-
-- **GitHub Issues**: Report bugs and request features
-- **Discussions**: Ask questions and share ideas
-- **Documentation**: Check the docs folder for detailed guides
+- **Documentation Issues**: [GitHub Issues](https://github.com/slbailey/Retrovue/issues)
+- **Feature Requests**: [GitHub Discussions](https://github.com/slbailey/Retrovue/discussions)
+- **General Questions**: [GitHub Discussions](https://github.com/slbailey/Retrovue/discussions)
 
 ---
 
-*Retrovue: Bringing the magic of retro TV to the modern streaming era* 📺✨
-
+**Need help finding something?** Check our [Quick Links](#-find-what-you-need) above or use the search function in your documentation viewer.
