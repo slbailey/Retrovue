@@ -101,7 +101,7 @@ class TestIngestAPI:
         client = TestClient(app)
         
         # Mock the ingest pipeline to return an error
-        with patch('retrovue.app.ingest_pipeline.run') as mock_run:
+        with patch('retrovue.content_manager.ingest_pipeline.run') as mock_run:
             mock_run.return_value = {
                 "error": "Failed to connect to Plex server"
             }
@@ -185,7 +185,7 @@ class TestIngestPipeline:
     
     def test_translate_path(self):
         """Test path translation functionality."""
-        from retrovue.app.ingest_pipeline import translate_path
+        from retrovue.content_manager.ingest_pipeline import translate_path
         
         mappings = [
             ("/plex/movies", "/local/movies"),
@@ -206,7 +206,7 @@ class TestIngestPipeline:
     
     def test_confidence_score(self):
         """Test confidence score calculation."""
-        from retrovue.app.ingest_pipeline import confidence_score
+        from retrovue.content_manager.ingest_pipeline import confidence_score
         from retrovue.domain.entities import Asset
         
         # Test asset with duration

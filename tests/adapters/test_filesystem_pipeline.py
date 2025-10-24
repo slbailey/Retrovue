@@ -12,8 +12,8 @@ from pathlib import Path
 from unittest.mock import Mock
 
 from retrovue.adapters.importers.filesystem_importer import FilesystemImporter
-from retrovue.app.ingest_service import IngestService
-from retrovue.app.library_service import LibraryService
+from retrovue.content_manager.ingest_service import IngestService
+from retrovue.content_manager.library_service import LibraryService
 
 
 class TestFilesystemPipeline:

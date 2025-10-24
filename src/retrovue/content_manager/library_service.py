@@ -21,7 +21,28 @@ logger = structlog.get_logger(__name__)
 
 
 class LibraryService:
-    """Service for managing the content library."""
+    """
+    Authority for assets in the content library.
+    
+    This service is the single source of truth for all asset-related operations
+    in the content library. It provides the authoritative interface for asset
+    queries and mutations, ensuring data consistency and proper business logic
+    enforcement.
+    
+    **Architectural Role:** Authority + Service/Capability Provider
+    
+    **Responsibilities:**
+    - Register assets from discovery data
+    - Enrich assets with metadata
+    - Mark assets as canonical or non-canonical
+    - Manage review queue operations
+    - Handle asset soft/hard deletion and restoration
+    - Provide asset queries and filtering
+    
+    **Critical Rule:** Do not bypass LibraryService to write Assets directly.
+    All asset state changes must go through this service to maintain data
+    integrity and enforce business rules.
+    """
 
     def __init__(self, db: Session):
         """Initialize the library service with a database session."""
@@ -30,6 +51,14 @@ class LibraryService:
     def register_asset_from_discovery(self, discovered: dict[str, Any]) -> Asset:
         """
         Register a new asset from discovery data.
+        
+        **Critical Safety Boundary:** New assets are registered with canonical=False by default.
+        This ensures that discovered content is NOT immediately available to downstream
+        schedulers and runtime systems. Assets must pass quality assurance and be
+        explicitly approved before they can be used for broadcast.
+        
+        **Business Rule:** All newly discovered assets start in a pending state and
+        must go through the approval process before becoming canonical.
 
         Args:
             discovered: Discovery data with keys:
@@ -41,7 +70,7 @@ class LibraryService:
                 - last_modified: Last modification timestamp
 
         Returns:
-            The registered Asset entity
+            The registered Asset entity (with canonical=False)
         """
         session = self.db
 
@@ -185,13 +214,21 @@ class LibraryService:
 
     def mark_asset_canonical(self, asset_id: int) -> Asset:
         """
-        Mark an asset as canonical.
+        Mark an asset as canonical (approved for downstream schedulers and runtime).
+        
+        **Critical Safety Boundary:** This method marks an asset as approved for use by
+        downstream schedulers and runtime systems. Once canonical=True, the asset is
+        considered good enough for playout without human review.
+        
+        **Business Rule:** Only assets that have passed quality assurance and are
+        deemed suitable for broadcast should be marked canonical. This is a safety
+        boundary that prevents unapproved content from reaching the air.
 
         Args:
             asset_id: ID of the asset to mark as canonical
 
         Returns:
-            The updated Asset entity
+            The updated Asset entity with canonical=True
         """
         session = self.db
 
@@ -216,12 +253,21 @@ class LibraryService:
 
     def enqueue_review(self, asset_id: int, reason: str, confidence: float) -> ReviewQueue:
         """
-        Enqueue an asset for review.
+        Enqueue an asset for human review (moves asset to pending approval state).
+        
+        **Critical Safety Boundary:** This method places an asset in the review queue,
+        indicating it exists in inventory but is NOT yet approved for downstream use.
+        Assets in review_queue are considered pending and should not be used by
+        schedulers or runtime systems until they pass review and are marked canonical.
+        
+        **Business Rule:** Assets that fail automated quality checks, have uncertain
+        metadata, or require human judgment should be enqueued for review before
+        being approved for broadcast.
 
         Args:
             asset_id: ID of the asset to review
-            reason: Reason for review
-            confidence: Confidence score (0.0-1.0)
+            reason: Reason for review (e.g., "low confidence metadata", "quality concerns")
+            confidence: Confidence score (0.0-1.0) - lower scores indicate higher review priority
 
         Returns:
             The ReviewQueue entry
@@ -265,41 +311,6 @@ class LibraryService:
             )
             raise
 
-    def register_asset_from_discovery(self, discovered_item) -> Asset:
-        """
-        Register an asset from a discovered item.
-        
-        Args:
-            discovered_item: DiscoveredItem from an importer
-            
-        Returns:
-            Registered Asset
-        """
-        session = self.db
-        try:
-            # Create new asset from discovered item
-            asset = Asset(
-                uri=discovered_item.path_uri,
-                size=discovered_item.size or 0,
-                hash_sha256=discovered_item.hash_sha256,
-                canonical=False
-            )
-            
-            session.add(asset)
-            
-            # Always flush to realize PKs without committing
-            session.flush()
-            session.refresh(asset)
-            
-            logger.debug("register_asset_from_discovery", asset_id=str(asset.id), uri=discovered_item.path_uri)
-            return asset
-        except Exception as e:
-            # Session rollback handled by get_db() dependency
-            logger.error("register_asset_from_discovery_failed", error=str(e), uri=discovered_item.path_uri)
-            raise
-        finally:
-            # Session cleanup handled by get_db() dependency
-            pass
 
     def mark_asset_canonical_asset(self, asset: Asset) -> Asset:
         """
@@ -325,12 +336,14 @@ class LibraryService:
         review = ReviewQueue(
             asset_id=asset_id,
             reason=reason,
-            score=score,
+            confidence=score,
             status=ReviewStatus.PENDING,
         )
         self.db.add(review)
         self.db.flush()
 
+    # TODO: SCHEDULER WILL CALL HERE. Do not make the scheduler reach into lower layers. 
+    # If scheduler needs different filters, add methods here instead of querying the DB directly.
     def list_assets(self, status: Literal["pending", "canonical"] | None = None, include_deleted: bool = False) -> list[Asset]:
         """
         List assets with optional status filter.
@@ -405,37 +418,6 @@ class LibraryService:
             logger.error("canonical_assets_listing_failed", error=str(e), query=query)
             raise
 
-    def mark_asset_canonical(self, asset_id: int, value: bool) -> Asset:
-        """
-        Mark an asset as canonical or not.
-
-        Args:
-            asset_id: ID of the asset to update
-            value: Whether to mark as canonical (True) or not (False)
-
-        Returns:
-            The updated Asset entity
-        """
-        session = self.db
-
-        try:
-            asset = session.get(Asset, asset_id)
-            if not asset:
-                raise ValueError(f"Asset {asset_id} not found")
-
-            asset.canonical = value
-
-            # Log the canonicalization
-            logger.info("asset_canonical_updated", asset_id=str(asset_id), canonical=value)
-
-            # Always flush to get DB-generated values
-            session.flush()
-            return asset
-
-        except Exception as e:
-            # Session rollback handled by get_db() dependency
-            logger.error("asset_canonical_update_failed", asset_id=str(asset_id), error=str(e))
-            raise
 
     def list_pending_assets(self) -> list[Asset]:
         """

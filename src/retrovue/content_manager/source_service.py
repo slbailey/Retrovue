@@ -25,6 +25,9 @@ class ContentSourceDTO:
     id: str
     """Unique identifier for the source"""
     
+    external_id: str
+    """External identifier for the source"""
+    
     kind: str
     """Type of source (e.g., 'plex', 'filesystem')"""
     
@@ -89,10 +92,23 @@ class SourceCollectionDTO:
 
 class SourceService:
     """
-    Service for managing content sources and collections.
+    Authority for external sources, source collections, and path mappings.
     
-    This service provides methods to list and manage collections
-    for different content sources.
+    This service is the single source of truth for all external content sources,
+    their collections, and path mapping configurations. It provides the
+    authoritative interface for source management and path translation.
+    
+    **Architectural Role:** Authority + Service/Capability Provider
+    
+    **Responsibilities:**
+    - Manage external content sources (Plex, filesystem, etc.)
+    - Handle source collection configuration
+    - Provide path mapping services
+    - Discover and configure collections from external sources
+    
+    **Critical Rule:** Other code must not guess path mappings itself.
+    All path translation and source configuration must go through this
+    service to maintain consistency and avoid duplication of mapping logic.
     """
     
     def __init__(self, db: Session):
@@ -102,6 +118,27 @@ class SourceService:
     def get_source_by_external_id(self, external_id: str) -> Source | None:
         """Get a content source by its external ID."""
         return self.db.query(Source).filter(Source.external_id == external_id).first()
+    
+    def list_sources(self) -> list["ContentSourceDTO"]:
+        """
+        List all content sources.
+        
+        Returns:
+            List of all content sources as DTOs
+        """
+        sources = self.db.query(Source).all()
+        return [
+            ContentSourceDTO(
+                id=str(source.id),
+                external_id=source.external_id,
+                kind=source.kind,
+                name=source.name,
+                status="connected",  # TODO: Implement actual status checking
+                base_url=source.config.get("base_url") if source.config else None,
+                config=source.config
+            )
+            for source in sources
+        ]
     
     def list_enabled_collections(self, source_id: str) -> list[SourceCollectionDTO]:
         """

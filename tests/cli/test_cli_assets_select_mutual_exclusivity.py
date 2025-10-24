@@ -51,7 +51,7 @@ class TestCLIAssetsSelectMutualExclusivity:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service to return empty list (will cause error, but that's expected)
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = []
                 
                 result = runner.invoke(app, [
@@ -71,7 +71,7 @@ class TestCLIAssetsSelectMutualExclusivity:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service to return empty list (will cause error, but that's expected)
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = []
                 
                 result = runner.invoke(app, [

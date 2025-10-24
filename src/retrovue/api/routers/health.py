@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from ..deps import get_db
+from ...infra.uow import get_db
 from ...infra.settings import settings
 from ...infra.logging import get_logger
 

@@ -1,7 +1,8 @@
 """
 Review command group.
 
-Handles review queue operations.
+Surfaces review queue management capabilities including listing, approval, and rejection.
+Calls LibraryService under the hood for all review operations.
 """
 
 from __future__ import annotations
@@ -10,11 +11,11 @@ import typer
 from typing import Optional
 from uuid import UUID
 
-from ..uow import session
+from ...infra.uow import session
 from ...api.schemas import ReviewQueueListResponse, ReviewQueueSummary
-from ...app.library_service import LibraryService
+from ...content_manager.library_service import LibraryService
 
-app = typer.Typer(name="review", help="Review queue operations")
+app = typer.Typer(name="review", help="Review queue operations using LibraryService")
 
 
 @app.command("list")

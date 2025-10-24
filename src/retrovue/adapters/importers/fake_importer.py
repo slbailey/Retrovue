@@ -9,7 +9,11 @@ from typing import Any
 
 
 class FakeImporter:
-    """Fake importer that returns mock discovery data for testing."""
+    """
+    Importer = Adapter. Talks to external system. Discovers content. Does not persist.
+    
+    Fake importer that returns mock discovery data for testing.
+    """
 
     def discover(self) -> list[dict[str, Any]]:
         """

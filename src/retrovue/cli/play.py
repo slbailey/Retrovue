@@ -13,8 +13,8 @@ import platform
 from typing import Optional
 
 from retrovue.web.server import run_server, set_active_stream
-from .uow import session
-from ..app.library_service import LibraryService
+from ..infra.uow import session
+from ..content_manager.library_service import LibraryService
 from ..domain.entities import ProviderRef, EntityType
 
 

@@ -130,7 +130,7 @@ class TestCLIAssetDelete:
             mock_session.return_value.__enter__.return_value = db_session
             
             # Mock the reference check to return True
-            with patch('retrovue.app.library_service.LibraryService.is_asset_referenced_by_episodes') as mock_ref:
+            with patch('retrovue.content_manager.library_service.LibraryService.is_asset_referenced_by_episodes') as mock_ref:
                 mock_ref.return_value = True
                 
                 result = runner.invoke(app, [

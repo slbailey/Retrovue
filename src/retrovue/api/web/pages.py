@@ -15,10 +15,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from ...app.ingest_pipeline import run
-from ...app.library_service import LibraryService
-from ...app.source_service import SourceService, SourceCollectionDTO
-from ...api.deps import get_db
+from ...content_manager.ingest_orchestrator import IngestOrchestrator
+from ...content_manager.library_service import LibraryService
+from ...content_manager.source_service import SourceService, SourceCollectionDTO
+from ...infra.uow import get_db
 from ...domain.entities import ReviewQueue, ReviewStatus
 
 # Setup templates
@@ -230,13 +230,10 @@ async def run_ingest(
     except json.JSONDecodeError:
         library_ids_list = []
     
-    # Run ingest pipeline with database session
-    result = run(
-        source=source,
-        source_id=source_id,
-        library_ids=library_ids_list if library_ids_list else None,
-        db=db
-    )
+    # Run ingest using the new orchestrator
+    orchestrator = IngestOrchestrator(db)
+    report = orchestrator.run_full_ingest(source_id=source_id)
+    result = report.to_dict()
     
     return templates.TemplateResponse("ingest_summary.html", {
         "request": request,

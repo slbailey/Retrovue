@@ -7,7 +7,7 @@ to verify the complete ingest pipeline works correctly.
 
 import pytest
 
-from retrovue.app.ingest_service import IngestService
+from retrovue.content_manager.ingest_service import IngestService
 
 
 class TestFakeImporterIngest:

@@ -18,7 +18,7 @@ from .base import Enricher, EnricherError
 
 class FFprobeEnricher:
     """
-    Enricher that uses FFprobe to extract media metadata.
+    Enricher. Adds structured metadata and technical meaning. Does not persist, does not mark canonical.
     
     This enricher analyzes media files using FFprobe and extracts technical
     metadata including duration, codecs, container format, and chapter markers.

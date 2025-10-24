@@ -531,7 +531,7 @@ class PlexClient:
 
 class PlexImporter:
     """
-    Importer for discovering content from Plex Media Server.
+    Importer = Adapter. Talks to external system. Discovers content. Does not persist.
     
     This importer connects to Plex servers and discovers content from their
     libraries, extracting metadata and file paths.

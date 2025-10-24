@@ -50,7 +50,7 @@ class DiscoveredItem:
 
 class Importer(Protocol):
     """
-    Protocol for content importers.
+    Importer = Adapter. Talks to external system. Discovers content. Does not persist.
     
     Importers are responsible for discovering content from various sources.
     They should be stateless and operate on simple data structures.

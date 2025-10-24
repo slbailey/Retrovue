@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ...app.ingest_pipeline import run
-from ...api.deps import get_db
+from ...content_manager.ingest_orchestrator import IngestOrchestrator
+from ...infra.uow import get_db
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -70,35 +70,18 @@ async def run_ingest(
             library_ids = request.library_ids
             enrichers = request.enrichers
         
-        # Run the ingest pipeline
-        result = run(
-            source=source,
-            enrichers=enrichers,
-            source_id=source_id,
-            library_ids=library_ids,
-            db=db
-        )
-        
-        # Check if there was an error
-        if "error" in result:
-            return IngestResponse(
-                success=False,
-                discovered=0,
-                registered=0,
-                enriched=0,
-                canonicalized=0,
-                queued_for_review=0,
-                error=result["error"]
-            )
+        # Run the ingest using the new orchestrator
+        orchestrator = IngestOrchestrator(db)
+        report = orchestrator.run_full_ingest(source_id=source_id)
         
         # Return success response
         return IngestResponse(
             success=True,
-            discovered=result.get("discovered", 0),
-            registered=result.get("registered", 0),
-            enriched=result.get("enriched", 0),
-            canonicalized=result.get("canonicalized", 0),
-            queued_for_review=result.get("queued_for_review", 0)
+            discovered=report.discovered,
+            registered=report.registered,
+            enriched=report.enriched,
+            canonicalized=report.canonicalized,
+            queued_for_review=report.queued_for_review
         )
         
     except Exception as e:
@@ -120,7 +103,7 @@ async def get_source_collections(source_id: str) -> dict[str, Any]:
         Dictionary with collections and mapping configuration
     """
     try:
-        from ...app.source_service import SourceService
+        from ...content_manager.source_service import SourceService
         
         source_service = SourceService(db=db)
         collections = source_service.list_enabled_collections(source_id)
@@ -167,7 +150,7 @@ async def update_source_collection(
         Success status
     """
     try:
-        from ...app.source_service import SourceService
+        from ...content_manager.source_service import SourceService
         
         source_service = SourceService(db=db)
         

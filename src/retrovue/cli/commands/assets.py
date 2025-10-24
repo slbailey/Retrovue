@@ -1,13 +1,8 @@
 """
 Assets command group.
 
-Handles asset management operations.
-Reuses existing LibraryService, UoW session management, and API schemas.
-
-Repository/Service functions reused:
-- LibraryService.list_episodes_by_series() for series-based selection
-- LibraryService.list_assets_advanced() for genre-based filtering (TODO: implement genre filtering)
-- LibraryService.get_asset_by_uuid() for asset retrieval
+Surfaces asset management capabilities including listing, selection, and deletion.
+Calls LibraryService under the hood for all asset operations.
 """
 
 from __future__ import annotations
@@ -19,12 +14,12 @@ from typing import Optional
 from enum import Enum
 from uuid import UUID
 
-from ..uow import session
+from ...infra.uow import session
 from ...api.schemas import AssetListResponse, AssetSummary
-from ...app.library_service import LibraryService
+from ...content_manager.library_service import LibraryService
 from ...domain.entities import ProviderRef, EntityType
 
-app = typer.Typer(name="assets", help="Asset management operations")
+app = typer.Typer(name="assets", help="Asset management operations using LibraryService")
 
 
 class AssetStatus(str, Enum):
@@ -43,22 +38,39 @@ class SelectionMode(str, Enum):
 @app.command("list")
 def list_assets(
     status: AssetStatus = typer.Option(AssetStatus.ALL, "--status", help="Filter by asset status"),
+    canonical_only: bool = typer.Option(False, "--canonical-only", help="Show only canonical (approved) assets"),
+    include_pending: bool = typer.Option(False, "--include-pending", help="Include pending (non-canonical) assets"),
     json: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
     List assets with optional status filtering.
     
+    **Canonical Status:**
+    - canonical=True: Asset is approved for use by downstream schedulers and runtime
+    - canonical=False: Asset exists in inventory but is not yet approved; may be in review_queue
+    
     Examples:
         retrovue assets list
         retrovue assets list --status pending
         retrovue assets list --status canonical --json
+        retrovue assets list --canonical-only
+        retrovue assets list --include-pending
     """
     with session() as db:
         library_service = LibraryService(db)
         
         try:
-            # Get assets based on status filter
-            if status == AssetStatus.ALL:
+            # Handle flag conflicts
+            if canonical_only and include_pending:
+                typer.echo("Error: --canonical-only and --include-pending are mutually exclusive", err=True)
+                raise typer.Exit(1)
+            
+            # Get assets based on status filter and flags
+            if canonical_only:
+                assets = library_service.list_canonical_assets()
+            elif include_pending:
+                assets = library_service.list_pending_assets()
+            elif status == AssetStatus.ALL:
                 assets = library_service.list_assets()
             elif status == AssetStatus.PENDING:
                 assets = library_service.list_pending_assets()
@@ -78,9 +90,16 @@ def list_assets(
             if json:
                 typer.echo(response.model_dump_json(indent=2))
             else:
+                canonical_count = sum(1 for asset in asset_summaries if asset.canonical)
+                pending_count = len(asset_summaries) - canonical_count
+                
                 typer.echo(f"Found {len(asset_summaries)} assets")
+                typer.echo(f"  Canonical (approved): {canonical_count}")
+                typer.echo(f"  Pending (not approved): {pending_count}")
+                typer.echo()
+                
                 for asset in asset_summaries:
-                    status_str = "CANONICAL" if asset.canonical else "PENDING"
+                    status_str = "✅ CANONICAL" if asset.canonical else "⏳ PENDING"
                     typer.echo(f"  {asset.id} - {asset.uri} ({status_str})")
                     
         except Exception as e:
@@ -94,6 +113,8 @@ def list_assets_advanced(
     series: Optional[str] = typer.Option(None, "--series", help="Filter by series title"),
     season: Optional[int] = typer.Option(None, "--season", help="Filter by season number"),
     q: Optional[str] = typer.Option(None, "--q", help="Search query for title or series"),
+    canonical_only: bool = typer.Option(False, "--canonical-only", help="Show only canonical (approved) assets"),
+    include_pending: bool = typer.Option(False, "--include-pending", help="Include pending (non-canonical) assets"),
     limit: int = typer.Option(50, "--limit", help="Maximum number of results"),
     offset: int = typer.Option(0, "--offset", help="Number of results to skip"),
     json: bool = typer.Option(False, "--json", help="Output in JSON format"),
@@ -101,18 +122,35 @@ def list_assets_advanced(
     """
     List assets with advanced filtering options.
     
+    **Canonical Status:**
+    - canonical=True: Asset is approved for use by downstream schedulers and runtime
+    - canonical=False: Asset exists in inventory but is not yet approved; may be in review_queue
+    
     Examples:
         retrovue assets list-advanced --kind episode --series "Batman TAS"
         retrovue assets list-advanced --season 1 --limit 10
         retrovue assets list-advanced --q "pilot" --json
+        retrovue assets list-advanced --canonical-only --series "Batman TAS"
+        retrovue assets list-advanced --include-pending --kind episode
     """
     with session() as db:
         library_service = LibraryService(db)
         
         try:
+            # Handle flag conflicts
+            if canonical_only and include_pending:
+                typer.echo("Error: --canonical-only and --include-pending are mutually exclusive", err=True)
+                raise typer.Exit(1)
+            
             assets = library_service.list_assets_advanced(
                 kind=kind, series=series, season=season, q=q, limit=limit, offset=offset
             )
+            
+            # Apply canonical filtering if requested
+            if canonical_only:
+                assets = [asset for asset in assets if asset.canonical]
+            elif include_pending:
+                assets = [asset for asset in assets if not asset.canonical]
             
             if json:
                 # Convert to response format
@@ -123,10 +161,16 @@ def list_assets_advanced(
                 )
                 typer.echo(response.model_dump_json(indent=2))
             else:
-                # Print table format
+                # Print table format with canonical status
+                canonical_count = sum(1 for asset in assets if asset.canonical)
+                pending_count = len(assets) - canonical_count
+                
                 typer.echo(f"Found {len(assets)} assets")
-                typer.echo("UUID\t\tKIND\tDURATION\tSERIES\tS\tE\tTITLE")
-                typer.echo("-" * 90)
+                typer.echo(f"  Canonical (approved): {canonical_count}")
+                typer.echo(f"  Pending (not approved): {pending_count}")
+                typer.echo()
+                typer.echo("UUID\t\tSTATUS\tKIND\tDURATION\tSERIES\tS\tE\tTITLE")
+                typer.echo("-" * 100)
                 
                 for asset in assets:
                     # Get series info from ProviderRef
@@ -153,7 +197,8 @@ def list_assets_advanced(
                     
                     # Truncate UUID to first 8 characters for readability
                     uuid_short = str(asset.uuid)[:8]
-                    typer.echo(f"{uuid_short}\t\t{kind}\t{duration}\t{series_title}\t{season_num}\t{episode_num}\t{title}")
+                    status_icon = "✅" if asset.canonical else "⏳"
+                    typer.echo(f"{uuid_short}\t\t{status_icon}\t{kind}\t{duration}\t{series_title}\t{season_num}\t{episode_num}\t{title}")
                     
         except Exception as e:
             typer.echo(f"Error listing assets: {e}", err=True)
@@ -212,7 +257,8 @@ def get_asset(
                 typer.echo(f"  Audio Codec: {asset.audio_codec or 'Unknown'}")
                 typer.echo(f"  Container: {asset.container or 'Unknown'}")
                 typer.echo(f"  Hash: {asset.hash_sha256[:16]}..." if asset.hash_sha256 else "  Hash: Not computed")
-                typer.echo(f"  Canonical: {asset.canonical}")
+                canonical_status = "✅ CANONICAL (approved for broadcast)" if asset.canonical else "⏳ PENDING (not yet approved)"
+                typer.echo(f"  Status: {canonical_status}")
                 typer.echo(f"  Discovered: {asset.discovered_at}")
                 
         except ValueError as e:
@@ -348,127 +394,6 @@ def select_asset(
                     
         except Exception as e:
             typer.echo(f"Error selecting asset: {e}", err=True)
-            raise typer.Exit(1)
-
-
-@app.command("series")
-def list_series(
-    series_arg: Optional[str] = typer.Argument(None, help="Series name (positional)"),
-    series_opt: Optional[str] = typer.Option(None, "--series", help="Series name (flag)"),
-    json: bool = typer.Option(False, "--json", help="Output in JSON format"),
-):
-    """
-    List series or episodes for a specific series.
-    
-    DEPRECATED: When a series is provided, use 'assets select' to choose an episode.
-    
-    You can provide the series name either as a positional argument or using the --series flag.
-    
-    Examples:
-        retrovue assets series
-        retrovue assets series "Batman TAS"  # DEPRECATED: Use 'assets select "Batman TAS"'
-        retrovue assets series --series "Batman TAS"  # DEPRECATED: Use 'assets select --series "Batman TAS"'
-    """
-    # Validate that exactly one series is provided
-    if series_arg and series_opt:
-        typer.echo("Error: Provide either positional SERIES or --series, not both.", err=True)
-        raise typer.Exit(1)
-    
-    # Normalize to a single variable
-    series = series_arg or series_opt
-    with session() as db:
-        library_service = LibraryService(db)
-        
-        try:
-            if series:
-                # DEPRECATION WARNING: Print to stderr
-                typer.echo("DEPRECATION: 'assets series <name>' is deprecated. Use 'assets select <name>' to choose an episode, or 'assets get <uuid>' to fetch details.", err=True)
-                
-                # Delegate to assets select with random mode
-                # Get episodes for the series
-                assets = library_service.list_episodes_by_series(series)
-                
-                if not assets:
-                    typer.echo(f"No episodes found for series '{series}'", err=True)
-                    raise typer.Exit(1)
-                
-                # Random selection (default mode for assets select)
-                selected_asset = random.choice(assets)
-                
-                # Get provider reference for metadata
-                provider_ref = db.query(ProviderRef).filter(
-                    ProviderRef.asset_id == selected_asset.id,
-                    ProviderRef.entity_type == EntityType.ASSET
-                ).first()
-                
-                if json:
-                    # Return the same JSON format as assets select
-                    if provider_ref and provider_ref.raw:
-                        raw = provider_ref.raw
-                        result = {
-                            "uuid": str(selected_asset.uuid),
-                            "id": selected_asset.id,
-                            "title": raw.get('title', ''),
-                            "series_title": raw.get('grandparentTitle', ''),
-                            "season_number": int(raw.get('parentIndex', 0)),
-                            "episode_number": int(raw.get('index', 0)),
-                            "kind": raw.get('kind', 'episode'),
-                            "selection": {
-                                "mode": "random",
-                                "criteria": {
-                                    "series": series
-                                }
-                            }
-                        }
-                    else:
-                        result = {
-                            "uuid": str(selected_asset.uuid),
-                            "id": selected_asset.id,
-                            "title": "",
-                            "series_title": "",
-                            "season_number": 0,
-                            "episode_number": 0,
-                            "kind": "episode",
-                            "selection": {
-                                "mode": "random",
-                                "criteria": {
-                                    "series": series
-                                }
-                            }
-                        }
-                    
-                    import json as json_module
-                    typer.echo(json_module.dumps(result, indent=2))
-                else:
-                    # Human-readable output (same format as assets select)
-                    if provider_ref and provider_ref.raw:
-                        raw = provider_ref.raw
-                        series_title = raw.get('grandparentTitle', '')
-                        season_num = int(raw.get('parentIndex', 0))
-                        episode_num = int(raw.get('index', 0))
-                        title = raw.get('title', '')
-                        
-                        typer.echo(f"{series_title} S{season_num:02d}E{episode_num:02d} \"{title}\"  {selected_asset.uuid}")
-                    else:
-                        typer.echo(f"Asset {selected_asset.uuid}")
-            else:
-                # List all series (keep this behavior)
-                series_list = library_service.list_series()
-                
-                if not series_list:
-                    typer.echo("No series found", err=True)
-                    raise typer.Exit(1)
-                
-                if json:
-                    import json as json_module
-                    typer.echo(json_module.dumps({"series": series_list}, indent=2))
-                else:
-                    typer.echo("Available series:")
-                    for series_name in series_list:
-                        typer.echo(f"  {series_name}")
-                        
-        except Exception as e:
-            typer.echo(f"Error listing series: {e}", err=True)
             raise typer.Exit(1)
 
 

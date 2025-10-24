@@ -1,7 +1,8 @@
 """
 Plugin registry for importers and enrichers.
 
-This module maintains global registries for all available importers and enrichers.
+This module is the plug-in registry for Importers and Enrichers, not business logic.
+It maintains global registries for all available importers and enrichers.
 Plugins self-register when imported, allowing for a modular architecture.
 """
 

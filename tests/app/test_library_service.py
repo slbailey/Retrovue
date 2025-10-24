@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from retrovue.app.library_service import LibraryService
+from retrovue.content_manager.library_service import LibraryService
 from retrovue.domain.entities import Episode
 from retrovue.shared.types import ReviewStatus
 

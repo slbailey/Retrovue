@@ -273,6 +273,10 @@ Disagreement kills reproducibility. If two parts of the system disagree on "what
 - **Architectural Significance:** Introducing a new Authority is a major architectural decision and must be reflected in this document
 - **No Duplication:** No shadow authorities, cached versions, or local recomputations
 
+**The Service/Authority Firewall:**
+
+A Service is allowed to answer questions or perform work. An Authority is allowed to define truth. Do not silently let a Service become an Authority "because everything already calls it." If something is promoted to Authority, that promotion must be written into this document.
+
 **Violation Smell:**
 If you see multiple places guessing "current time," "current mode," or "current plan," you've destroyed system determinism and created unreconcilable state conflicts.
 

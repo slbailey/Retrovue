@@ -10,8 +10,8 @@ from __future__ import annotations
 import typer
 from typing import Optional
 
-from .uow import session
-from .commands import ingest, assets, review, plex
+from ..infra.uow import session
+from .commands import ingest, assets, review, plex, source
 # Ensure registry is populated
 import retrovue.adapters.importers  # noqa: F401
 
@@ -22,10 +22,11 @@ app = typer.Typer(
 )
 
 # Add command groups
-app.add_typer(ingest.app, name="ingest", help="Content ingestion operations")
-app.add_typer(assets.app, name="assets", help="Asset management operations") 
-app.add_typer(review.app, name="review", help="Review queue operations")
-app.add_typer(plex.app, name="plex", help="Plex server operations")
+app.add_typer(ingest.app, name="ingest", help="Content discovery and ingestion operations using IngestOrchestrator")
+app.add_typer(assets.app, name="assets", help="Asset management operations using LibraryService") 
+app.add_typer(review.app, name="review", help="Review queue operations using LibraryService")
+app.add_typer(plex.app, name="plex", help="Plex server operations using SourceService, LibraryService, and IngestOrchestrator")
+app.add_typer(source.app, name="source", help="Source and collection management operations using SourceService")
 
 # Add play commands directly
 from .play import play, play_channel

@@ -98,7 +98,7 @@ class TestFilenameParser:
         )
 
         # Import the ingest service to test confidence calculation
-        from retrovue.app.ingest_service import IngestService
+        from retrovue.content_manager.ingest_service import IngestService
         service = IngestService(None)  # No DB needed for this test
         
         confidence = service._calculate_confidence(discovered)
@@ -125,7 +125,7 @@ class TestFilenameParser:
             path_uri='file:///path/to/The.Matrix.1999.H265.1080p.mkv'
         )
 
-        from retrovue.app.ingest_service import IngestService
+        from retrovue.content_manager.ingest_service import IngestService
         service = IngestService(None)
         
         confidence = service._calculate_confidence(discovered)
@@ -148,7 +148,7 @@ class TestFilenameParser:
             path_uri='file:///path/to/random_file.mp4'
         )
 
-        from retrovue.app.ingest_service import IngestService
+        from retrovue.content_manager.ingest_service import IngestService
         service = IngestService(None)
         
         confidence = service._calculate_confidence(discovered)

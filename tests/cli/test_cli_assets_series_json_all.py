@@ -24,7 +24,7 @@ class TestCLIAssetsSeriesJsonAll:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service to return a list of series
-            with patch('retrovue.app.library_service.LibraryService.list_series') as mock_list_series:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_series') as mock_list_series:
                 mock_list_series.return_value = ["Series A", "Series B", "Series C"]
                 
                 result = runner.invoke(app, [
@@ -49,7 +49,7 @@ class TestCLIAssetsSeriesJsonAll:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service to return an empty list
-            with patch('retrovue.app.library_service.LibraryService.list_series') as mock_list_series:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_series') as mock_list_series:
                 mock_list_series.return_value = []
                 
                 result = runner.invoke(app, [
@@ -67,7 +67,7 @@ class TestCLIAssetsSeriesJsonAll:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service to return a single series
-            with patch('retrovue.app.library_service.LibraryService.list_series') as mock_list_series:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_series') as mock_list_series:
                 mock_list_series.return_value = ["Single Series"]
                 
                 result = runner.invoke(app, [

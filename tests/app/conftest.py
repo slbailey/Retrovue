@@ -12,8 +12,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from retrovue.app.ingest_service import IngestService
-from retrovue.app.library_service import LibraryService
+from retrovue.content_manager.ingest_service import IngestService
+from retrovue.content_manager.library_service import LibraryService
 from retrovue.domain.entities import Base
 
 

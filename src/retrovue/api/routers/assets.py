@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from ...api.deps import get_db
+from ...infra.uow import get_db
 from ...api.schemas import (
     AssetDetailResponse,
     AssetListResponse,
@@ -24,7 +24,7 @@ from ...api.schemas import (
     EpisodeSummary,
     EpisodesBySeriesResponse,
 )
-from ...app.library_service import LibraryService
+from ...content_manager.library_service import LibraryService
 from ...domain.entities import Asset, ReviewQueue
 
 router = APIRouter(prefix="/api/v1", tags=["assets"])
@@ -344,13 +344,13 @@ async def list_episodes_by_series(
             total=len(episodes)
         )
         
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list episodes for series: {str(e)}"
-            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list episodes for series: {str(e)}"
+        )
 
 
 @router.delete("/assets/{asset_uuid}")

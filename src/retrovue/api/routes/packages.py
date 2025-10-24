@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ...domain.package import Package, PackageItem
-from ...api.deps import get_db
+from ...infra.uow import get_db
 from ...shared.schemas import (
     PackageCreate,
     PackageItemCreate,

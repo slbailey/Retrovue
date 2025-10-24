@@ -8,7 +8,7 @@ to prevent deletion of assets that are referenced by episodes.
 import pytest
 from uuid import uuid4
 
-from retrovue.app.library_service import LibraryService
+from retrovue.content_manager.library_service import LibraryService
 from retrovue.domain.entities import Asset, Episode, EpisodeAsset, Title, Season
 
 

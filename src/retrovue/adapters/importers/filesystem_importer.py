@@ -19,7 +19,7 @@ from .base import DiscoveredItem, Importer, ImporterError
 
 class FilesystemImporter:
     """
-    Importer for discovering content from local file systems.
+    Importer = Adapter. Talks to external system. Discovers content. Does not persist.
     
     This importer scans specified directories for media files and returns them
     as discovered items with file:// URIs and basic metadata.

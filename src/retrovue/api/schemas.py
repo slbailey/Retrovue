@@ -29,7 +29,12 @@ class AssetSummary(BaseModel):
     container: str | None = Field(None, description="Container format")
     hash_sha256: str | None = Field(None, description="SHA-256 hash")
     discovered_at: datetime = Field(..., description="When the asset was discovered")
-    canonical: bool = Field(..., description="Whether this is the canonical version")
+    canonical: bool = Field(
+        ..., 
+        description="Asset approval status for downstream schedulers and runtime. "
+                   "True = approved for playout without human review. "
+                   "False = exists in inventory but not yet approved; may be in review_queue."
+    )
     
     @classmethod
     def from_orm(cls, asset: Any) -> AssetSummary:

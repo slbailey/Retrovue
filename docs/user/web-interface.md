@@ -8,10 +8,10 @@ Retrovue's modern web interface makes setup and management much easier than usin
 
 ```powershell
 # Windows
-.\venv\Scripts\python.exe run_admin.py
+uvicorn retrovue.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload
 
 # macOS/Linux
-python run_admin.py
+uvicorn retrovue.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload
 ```
 
 Then open your browser to: **http://localhost:8000**

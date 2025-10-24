@@ -53,7 +53,7 @@ class TestCLIAssetsSeriesDeprecationAlias:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = [asset]
                 
                 result = runner.invoke(app, [
@@ -143,7 +143,7 @@ class TestCLIAssetsSeriesDeprecationAlias:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = [asset]
                 
                 result = runner.invoke(app, [
@@ -198,7 +198,7 @@ class TestCLIAssetsSeriesDeprecationAlias:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service to return series list
-            with patch('retrovue.app.library_service.LibraryService.list_series') as mock_list_series:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_series') as mock_list_series:
                 mock_list_series.return_value = ["Series A", "Series B"]
                 
                 result = runner.invoke(app, [
@@ -254,7 +254,7 @@ class TestCLIAssetsSeriesDeprecationAlias:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = [asset]
                 
                 result = runner.invoke(app, [

@@ -133,7 +133,14 @@ class Asset(Base):
     discovered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    canonical: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    canonical: Mapped[bool] = mapped_column(
+        Boolean, 
+        default=False, 
+        nullable=False,
+        comment="Asset approval status for downstream schedulers and runtime. "
+                "True = approved for playout without human review. "
+                "False = exists in inventory but not yet approved; may be in review_queue."
+    )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

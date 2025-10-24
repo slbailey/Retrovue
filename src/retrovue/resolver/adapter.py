@@ -6,8 +6,8 @@ This adapter isolates the *existing* content library lookup functionality.
 
 from __future__ import annotations
 from typing import Optional
-from ..cli.uow import session
-from ..app.library_service import LibraryService
+from ..infra.uow import session
+from ..content_manager.library_service import LibraryService
 from ..domain.entities import ProviderRef, EntityType
 
 def resolve_asset_by_series_season_episode(series: str, season: int, episode: int) -> dict | None:

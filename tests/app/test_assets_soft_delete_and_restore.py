@@ -10,7 +10,7 @@ import pytest
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from retrovue.app.library_service import LibraryService
+from retrovue.content_manager.library_service import LibraryService
 from retrovue.domain.entities import Asset, Episode, EpisodeAsset
 
 

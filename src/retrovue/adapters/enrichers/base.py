@@ -14,7 +14,7 @@ from ..importers.base import DiscoveredItem
 
 class Enricher(Protocol):
     """
-    Protocol for content enrichers.
+    Enricher. Adds structured metadata and technical meaning. Does not persist, does not mark canonical.
     
     Enrichers are responsible for adding metadata to discovered content.
     They should be stateless and operate on simple data structures.

@@ -57,7 +57,7 @@ class TestCLIAssetsSelectSeriesSequentialJson:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = assets
                 
                 result = runner.invoke(app, [
@@ -128,7 +128,7 @@ class TestCLIAssetsSelectSeriesSequentialJson:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = [asset]
                 
                 result = runner.invoke(app, [
@@ -194,7 +194,7 @@ class TestCLIAssetsSelectSeriesSequentialJson:
             mock_session.return_value.__enter__.return_value = temp_db_session
             
             # Mock the library service
-            with patch('retrovue.app.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
+            with patch('retrovue.content_manager.library_service.LibraryService.list_episodes_by_series') as mock_list_episodes:
                 mock_list_episodes.return_value = assets
                 
                 result = runner.invoke(app, [

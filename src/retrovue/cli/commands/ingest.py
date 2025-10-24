@@ -1,7 +1,8 @@
 """
 Ingest command group.
 
-Handles content discovery and ingestion operations.
+Surfaces content discovery and ingestion capabilities.
+Calls IngestOrchestrator under the hood for all ingest operations.
 """
 
 from __future__ import annotations
@@ -9,11 +10,11 @@ from __future__ import annotations
 import typer
 from typing import Optional, List
 
-from ..uow import session
-from ...app.ingest_service import IngestService
+from ...infra.uow import session
+from ...content_manager.ingest_orchestrator import IngestOrchestrator
 from ...api.schemas import IngestResponse
 
-app = typer.Typer(name="ingest", help="Content ingestion operations")
+app = typer.Typer(name="ingest", help="Content discovery and ingestion operations using IngestOrchestrator")
 
 
 @app.command("run")
@@ -36,11 +37,11 @@ def run_ingest(
         enricher_list = [e.strip() for e in enrichers.split(",") if e.strip()]
     
     with session() as db:
-        ingest_service = IngestService(db)
+        orchestrator = IngestOrchestrator(db)
         
         try:
-            # Run the ingest
-            counts = ingest_service.run_ingest(source)
+            # Run the ingest using the new orchestrator
+            report = orchestrator.run_full_ingest(source_id=source)
             
             if json:
                 import json
@@ -48,16 +49,18 @@ def run_ingest(
                     source=source,
                     library_id=library_id,
                     enrichers=enricher_list,
-                    counts=counts
+                    counts=report.to_dict()
                 )
                 typer.echo(json.dumps(response.model_dump(), indent=2))
             else:
                 typer.echo(f"Ingest completed for source: {source}")
-                typer.echo(f"Discovered: {counts['discovered']}")
-                typer.echo(f"Registered: {counts['registered']}")
-                typer.echo(f"Enriched: {counts['enriched']}")
-                typer.echo(f"Canonicalized: {counts['canonicalized']}")
-                typer.echo(f"Queued for review: {counts['queued_for_review']}")
+                typer.echo(f"Discovered: {report.discovered}")
+                typer.echo(f"Registered: {report.registered}")
+                typer.echo(f"Enriched: {report.enriched}")
+                typer.echo(f"Canonicalized: {report.canonicalized}")
+                typer.echo(f"Queued for review: {report.queued_for_review}")
+                if report.errors > 0:
+                    typer.echo(f"Errors: {report.errors}")
                 
         except Exception as e:
             typer.echo(f"Error running ingest: {e}", err=True)
