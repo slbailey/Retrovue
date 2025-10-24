@@ -1,38 +1,46 @@
-# Schedule Service
+# RetroVue Runtime — ScheduleService
 
-The ScheduleService is the single source of truth for all schedule state in RetroVue. It owns the EPG Horizon and Playlog Horizon data, and is the only interface allowed to create or modify schedule entries.
+> Station's programming authority for "what should air, and when."
 
-## Key Responsibilities
+**Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
 
-- Maintain EPG Horizon (≥ 2 days ahead)
-- Maintain Playlog Horizon (≥ 2 hours ahead)
-- Enforce block rules and content policies
-- Provide read methods for current and future programming
-- Ensure time alignment across all channels
-- **Manage broadcast day logic and rollover handling**
+## Purpose
 
-## Authority Rule
+ScheduleService is the station's programming authority for "what should air, and when."
 
-ScheduleService is the single authority over EPGEntry, PlaylogEvent, and schedule state. No other part of the system may write or mutate these records directly. All schedule generation, updates, corrections, and horizon management must go through ScheduleService. The rest of the system must not write schedule data directly or silently patch horizons. All modifications go through ScheduleService inside a Unit of Work.
+All other runtime components (ChannelManager, ProgramDirector, AsRunLogger, the future guide, etc.) rely on it for schedule interpretation.
 
-## Design Principles
+ScheduleService owns broadcast day logic and channel timing policy. No other component may redefine or guess these rules.
 
-- All operations are atomic (Unit of Work)
-- EPG entries are snapped to :00/:30 boundaries
-- Playlog events have precise absolute_start/absolute_end timestamps
-- Schedule state is always consistent and valid
-- **Broadcast day boundaries are accounting/reporting boundaries, NOT playback boundaries**
+## Content Authority Constraint
 
-## Broadcast Day Model (06:00 → 06:00)
+**ScheduleService may only schedule assets that Content Manager has marked as canonical/approved for broadcast.**
 
-RetroVue uses a broadcast day model that runs from 06:00 → 06:00 local channel time instead of midnight → midnight. This is the standard model used by broadcast television and ensures proper handling of programs that span the 06:00 rollover.
+ScheduleService is forbidden from:
 
-### Key Concepts
+- Fetching raw content directly from Plex, filesystem, or unreviewed sources
+- Scheduling unapproved or non-canonical content
+- Bypassing Content Manager for content decisions
 
-- **Broadcast day starts at 06:00:00 local channel time**
-- **Broadcast day ends just before 06:00:00 the next local day**
-- Example: 2025-10-24 23:59 local and 2025-10-25 02:00 local are the SAME broadcast day
-- Example: 2025-10-25 05:30 local still belongs to 2025-10-24 broadcast day
+If no approved content exists for a slot, this is a scheduling failure. ChannelManager must not improvise replacement content.
+
+## Broadcast Day Model (6:00 → 6:00 local)
+
+Each channel has a broadcast day that does not run midnight→midnight.
+
+The broadcast day starts at a channel-specific rollover minute after local midnight (default: 6:00am local, i.e. 360 minutes).
+
+The broadcast day ends just before the next day's rollover.
+
+At 2:00am local, you may still be in "yesterday's" broadcast day.
+
+At 5:30am local, you're still in the previous broadcast day.
+
+At 6:15am local, you're in the new broadcast day.
+
+**Broadcast day is an accounting/reporting construct for station operations.**
+
+**It is NOT a hard playout cut point.**
 
 ### ScheduleService Methods
 
@@ -79,6 +87,12 @@ A broadcast day schedule may legally include an item whose end is AFTER the 06:0
 - Movie ends at 07:00 local (Day B)
 - Day B's schedule must account for 06:00–07:00 being occupied by carryover
 
+**When building the next broadcast day, ScheduleService must honor rollover carryover. If the previous day's programming continues past rollover, the new broadcast day does not start scheduling fresh content until that carryover ends.**
+
+**Example: If rollover is 06:00 but a movie runs to 07:00, the first schedulable slot for the new day is 07:00, not 06:00.**
+
+This maintains broadcast discipline and prevents double-scheduling conflicts.
+
 ## Critical Rules
 
 **ChannelManager never snaps playback at 06:00.**
@@ -93,6 +107,111 @@ A broadcast day schedule may legally include an item whose end is AFTER the 06:0
 - No direct datetime.now() or manual tz math is allowed
 - Use the already-implemented MasterClock.to_channel_time()
 
+### Channel Timing Policy
+
+Each channel carries its own timing policy configuration:
+
+- **timezone**: IANA timezone string (e.g. "America/New_York"). Used with MasterClock for all conversions.
+- **grid_slot_size_minutes**: Natural planning granularity.
+  - Examples:
+    - 30 for traditional half-hour grids
+    - 15 for movie channels that align promos around film starts/ends
+    - 60 for pure longform channels
+- **grid_slot_offset_minutes**: Offset from the top of the hour that this channel uses for "starts."
+  - Examples:
+    - 0 means :00/:30
+    - 5 means :05/:35 (classic TBS-style)
+- **broadcast_day_rollover_minutes_local**: Minute after local midnight when a new broadcast day begins for that channel.
+  - Default: 360 (6:00am).
+  - Could be 365 (6:05am), 300 (5:00am), etc.
+
+ScheduleService is responsible for honoring these policies when generating future schedule blocks and playout segments.
+
+No other component should assume "programs always start on :00/:30" or "broadcast day always rolls at 6:00am."
+
+In v0.1, most channels will likely use:
+
+- grid_slot_size_minutes = 30
+- grid_slot_offset_minutes = 0
+- broadcast_day_rollover_minutes_local = 360
+
+But the design and interfaces assume per-channel flexibility so we don't have to redesign later.
+
+## Horizon Generation (Scheduler Daemon)
+
+RetroVue maintains a forward "horizon" of scheduled segments for continuous broadcast operations.
+
+- **Near-term horizon** (for ChannelManager playout): precise, second-accurate playout plan for the next ~1–2 hours.
+- **Longer horizon** (for preview / guide / UI): higher-level programming blocks for the next several hours or next day(s).
+
+A background loop (scheduler_daemon / horizon builder) keeps these horizons generated.
+
+### Loop Contract
+
+1. Ask MasterClock.now_utc() for the current authoritative time.
+2. For each channel, ask ScheduleService:
+   - "Based on this channel's timing policy and broadcast day rollover rules, what's supposed to air next?"
+   - "Do we already have scheduled segments covering from now out to the target horizon window?"
+   - "If not, generate more future segments."
+3. Persist/emit those segments for runtime.
+
+**MasterClock remains passive. It does not fire callbacks or timers. The scheduler_daemon polls MasterClock for time instead of registering 'wake me at 06:00' listeners.**
+
+**ScheduleService never calls datetime.now() directly. It always works from explicit timestamps provided by the daemon, which come from MasterClock.**
+
+## ScheduledSegment Model
+
+ScheduledSegment represents what ScheduleService emits for downstream consumers:
+
+```python
+ScheduledSegment:
+    channel_id: str
+    program_id: str
+    title: str
+
+    start_utc: datetime (tz-aware UTC)
+    end_utc: datetime (tz-aware UTC)
+
+    start_local: datetime (tz-aware, channel-local)
+    end_local: datetime (tz-aware, channel-local)
+
+    broadcast_day_label: date
+        - Result of broadcast_day_for(channel_id, start_utc)
+        - Used by reporting, compliance, "what aired on Thursday"
+
+    is_continuation: bool
+        - True if this segment began before the current planning window or
+          continues across a broadcast day rollover
+```
+
+- ChannelManager consumes these ScheduledSegments to know what to play now and how far into it we are.
+- AsRunLogger uses them for logging actual air events (including splitting at broadcast day boundaries for reporting).
+- The future Prevue-style guide channel will consume them to render "what's on now / next," but its visual 30-minute buckets are just presentation. Those 30-minute buckets are NOT written back into the schedule model.
+
+**There is no stored "30-minute grid row" in the authoritative schedule. The 30-minute row is a presentation trick for the guide UI, not a scheduling primitive.**
+
+## Responsibilities
+
+| Component            | Responsibilities                                                                                                                                                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ScheduleService**  | • Owns broadcast day math<br>• Owns per-channel timing policy<br>• Owns horizon layout and knows where the "next schedulable slot" begins after rollover<br>• Provides ScheduledSegments for downstream consumers                            |
+| **scheduler_daemon** | • Polls MasterClock for "now"<br>• Asks ScheduleService to extend horizons<br>• Never invents timing rules on its own                                                                                                                        |
+| **ChannelManager**   | • Plays what ScheduleService/horizon gave it<br>• Never snaps content at broadcast day rollover<br>• Never tries to reschedule mid-flight                                                                                                    |
+| **ProgramDirector**  | • Coordinates channels and emergency overrides<br>• May ask "what's airing now?" and "which broadcast day are we in?" but cannot reschedule or cut at rollover                                                                               |
+| **AsRunLogger**      | • Uses ScheduledSegments and ScheduleService.broadcast_day_for() to log what aired<br>• Is allowed to break a single continuous airing into multiple reporting rows when it crosses broadcast day<br>• This split is intentional and correct |
+| **MasterClock**      | • Provides UTC and channel-local "now"<br>• Does not know what a broadcast day is<br>• Does not accept timers, listeners, alarms, or scheduling callbacks<br>• Is the only valid source of current time for the system                       |
+
 ## Testing
 
 Use the `retrovue test broadcast-day-alignment` command to validate broadcast day logic and rollover handling. This test validates the HBO-style 05:00–07:00 scenario and ensures proper broadcast day classification.
+
+## Cross-References
+
+| Component                                  | Relationship                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| **[MasterClock](clock.md)**                | Provides authoritative station time for all scheduling operations |
+| **[ChannelManager](channel_manager.md)**   | Consumes ScheduledSegments for playout execution                  |
+| **[AsRunLogger](asrun_logger.md)**         | Uses broadcast_day_for() for compliance reporting                 |
+| **[ProgramDirector](program_director.md)** | Queries ScheduleService for current airing status                 |
+
+_Document version: v0.1 · Last updated: 2025-10-24_

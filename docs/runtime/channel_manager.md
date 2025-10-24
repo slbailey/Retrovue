@@ -1,23 +1,28 @@
-# Channel Manager
+# RetroVue Runtime — ChannelManager
 
-## Overview
+> Per-channel board operator that executes scheduled content playback on the air.
 
-The **ChannelManager** is RetroVue's per-channel runtime controller. It's responsible for managing live playback on ONE channel at a time, ensuring that the correct content is playing at the right time with the proper timing offset.
+**Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
 
-ChannelManager is subordinate to ProgramDirector and must obey global mode (normal / emergency / guide). It never invents content, never fixes schedule gaps, and never talks to the ingest pipeline.
+## Purpose
 
-ChannelManager is where "the channel goes on the air" — it is the board operator for that channel.
+ChannelManager is responsible for executing scheduled content playback on the air. It receives ScheduledSegments from ScheduleService and plays them according to the precise timing specified.
 
-## What This Document Is
+## Time and Rollover Behavior
 
-This document describes the **architecture and behavior** of ChannelManager. It explains:
+ChannelManager receives ScheduledSegments and executes them.
 
-- What ChannelManager does and doesn't do
-- How it coordinates with other components
-- How it manages the fanout model and Producer lifecycle
-- How it fits into RetroVue's overall architecture
+**ChannelManager does not cut playback at broadcast day rollover.**
 
-This is **not** a code-level API reference—it's about runtime responsibilities and boundaries.
+If a segment started at 05:00 and ends at 07:00, ChannelManager plays it straight through 06:00.
+
+ChannelManager does not compute broadcast day, slot offsets, or rollover. It trusts ScheduleService.
+
+ChannelManager uses MasterClock to determine "where are we right now in this segment?" but it never uses datetime.now() directly.
+
+**If ScheduleService says "this movie started at 05:00 and ends at 07:00," ChannelManager must honor that whole window without interruption, even if broadcast day rolled at 06:00.**
+
+**ChannelManager is forbidden from fetching content or changing schedule.**
 
 ## Core Responsibilities
 
@@ -132,24 +137,26 @@ ChannelManager must keep these in sync with reality and report them to ProgramDi
 
 ChannelManager can query a Producer for ProducerState via get_state(), but does not own Producer's internals.
 
-## Hard Boundaries
+## Responsibilities
 
-**ChannelManager IS allowed to:**
+| Action                        | Description                                |
+| ----------------------------- | ------------------------------------------ |
+| **Read schedule data**        | "What should be airing right now + offset" |
+| **Select and start Producer** | Based on viewer demand and global mode     |
+| **Stop Producer**             | When viewer_count drops to 0               |
+| **Surface stream endpoint**   | To viewers for attachment                  |
+| **Report health/status**      | Up to ProgramDirector                      |
 
-- Read schedule data ("what should be airing right now + offset")
-- Select and start a Producer
-- Stop a Producer when viewer_count drops to 0
-- Surface the Producer's stream endpoint to viewers
-- Report health/status up to ProgramDirector
+## Forbidden Actions
 
-**ChannelManager IS NOT allowed to:**
-
-- Invent or substitute content when the schedule is wrong
-- Edit or write schedule data
-- Directly access Content Manager or ingest
-- Spawn its own "emergency content" without ProgramDirector policy
-- Reach inside Producer implementation details (e.g. directly control ffmpeg)
-- Compute wall clock time on its own (it must ask MasterClock)
+| Action                              | Reason                          |
+| ----------------------------------- | ------------------------------- |
+| **Invent or substitute content**    | When the schedule is wrong      |
+| **Edit or write schedule data**     | ScheduleService owns scheduling |
+| **Directly access Content Manager** | Or ingest systems               |
+| **Spawn emergency content**         | Without ProgramDirector policy  |
+| **Reach inside Producer internals** | E.g. directly control ffmpeg    |
+| **Compute wall clock time**         | Must ask MasterClock            |
 
 ## Failure and Recovery Model
 
@@ -197,3 +204,16 @@ When a program spans the 06:00 rollover boundary (e.g., a movie airing 05:00–0
 ChannelManager is the per-channel board operator. It runs the fanout model. It is the only component that actually starts/stops Producers. It obeys ProgramDirector's global mode. It consumes the schedule but does not write it. It never chooses content; it only plays what it is told.
 
 ChannelManager is how a RetroVue channel actually goes on-air.
+
+**First viewer starts Producer, last viewer stops Producer** - this fanout rule is enforced by ChannelManager.
+
+## Cross-References
+
+| Component                                  | Relationship                                                |
+| ------------------------------------------ | ----------------------------------------------------------- |
+| **[ScheduleService](schedule_service.md)** | Provides ScheduledSegments for playout execution            |
+| **[MasterClock](clock.md)**                | Provides authoritative station time for offset calculations |
+| **[ProgramDirector](program_director.md)** | Sets global mode and emergency overrides                    |
+| **[AsRunLogger](asrun_logger.md)**         | Receives playback events for compliance logging             |
+
+_Document version: v0.1 · Last updated: 2025-10-24_

@@ -1,4 +1,4 @@
-# Broadcast Day Testing
+# Broadcast Day Alignment Testing
 
 This document describes the `retrovue test broadcast-day-alignment` command, which validates ScheduleService's broadcast-day logic and rollover handling.
 
@@ -131,24 +131,104 @@ The test ensures that:
 - Each broadcast day gets accurate reporting
 - No data loss occurs at rollover boundaries
 
+## JSON Output Fields
+
+The test provides structured JSON output with the following key fields:
+
+### Core Fields
+
+- `test_passed`: Boolean indicating if the test passed
+- `carryover_exists`: Whether content spans the rollover boundary
+- `day_a_label`: Broadcast day label for Day A (e.g., "2025-10-24")
+- `day_b_label`: Broadcast day label for Day B (e.g., "2025-10-25")
+- `rollover_local_start`: Local time when rollover begins
+- `rollover_local_end`: Local time when rollover ends
+- `errors`: Array of error messages if the test failed
+
+### Channel Information
+
+- `channel_id`: Channel being tested
+- `channel_timezone`: Timezone of the test channel
+- `duration_seconds`: Time taken to run the test
+- `timestamp`: When the test was run
+
+### Validation Results
+
+- `broadcast_day_classification_ok`: Whether day labels are correct
+- `rollover_detection_ok`: Whether carryover is properly detected
+- `schedule_conflict_ok`: Whether no double-scheduling occurs
+- `playback_continuity_ok`: Whether playback is seamless
+
+## Example JSON Output
+
+```json
+{
+  "test_passed": true,
+  "carryover_exists": true,
+  "day_a_label": "2025-10-24",
+  "day_b_label": "2025-10-25",
+  "rollover_local_start": "2025-10-24T06:00:00",
+  "rollover_local_end": "2025-10-24T07:00:00",
+  "channel_id": "test_channel_1",
+  "channel_timezone": "America/New_York",
+  "duration_seconds": 1.23,
+  "timestamp": "2025-10-24T17:30:45.123456+00:00",
+  "broadcast_day_classification_ok": true,
+  "rollover_detection_ok": true,
+  "schedule_conflict_ok": true,
+  "playback_continuity_ok": true,
+  "errors": []
+}
+```
+
+## Failure Scenarios
+
+### Common Failures
+
+**Incorrect broadcast day classification:**
+
+```json
+{
+  "test_passed": false,
+  "day_a_label": "2025-10-25",
+  "day_b_label": "2025-10-26",
+  "errors": ["Day A label incorrect: expected '2025-10-24', got '2025-10-25'"]
+}
+```
+
+**Rollover detection failure:**
+
+```json
+{
+  "test_passed": false,
+  "carryover_exists": false,
+  "errors": ["Carryover detection failed: expected carryover, got None"]
+}
+```
+
+**Schedule conflict:**
+
+```json
+{
+  "test_passed": false,
+  "schedule_conflict_ok": false,
+  "errors": ["Schedule conflict detected at rollover boundary"]
+}
+```
+
+**Playback discontinuity:**
+
+```json
+{
+  "test_passed": false,
+  "playback_continuity_ok": false,
+  "errors": ["Playback interrupted at rollover boundary"]
+}
+```
+
 ## CI Integration
 
 This test is designed for CI integration to guarantee that RetroVue never regresses and starts "cutting" programs at 06:00 or double-scheduling 06:00. The test should be run as part of the continuous integration pipeline to ensure broadcast day logic remains correct.
-
-## Error Handling
-
-The test will fail if:
-
-- Broadcast day classification is incorrect
-- Rollover detection fails
-- Schedule conflicts are detected
-- Timezone handling is incorrect
-
-Common error messages:
-
-- `Day A label incorrect: expected '2025-10-24', got '2025-10-25'`
-- `Day B window incorrect: expected (start, end), got (actual_start, actual_end)`
-- `Carryover detection failed: expected carryover, got None`
 
 ## Implementation Notes
 
@@ -159,5 +239,35 @@ The test uses stub implementations of ScheduleService methods for validation. In
 - Return real carryover information
 
 The test framework provides a foundation for validating broadcast day logic before full implementation.
+
+## Best Practices
+
+### Regular Testing
+
+```bash
+# Daily broadcast day check
+retrovue test broadcast-day-alignment
+
+# Weekly comprehensive test
+retrovue test broadcast-day-alignment --channel "hbo_east" --timezone "America/New_York"
+```
+
+### Performance Monitoring
+
+```bash
+# Baseline test
+retrovue test broadcast-day-alignment --json > baseline.json
+
+# Compare with current behavior
+retrovue test broadcast-day-alignment --json > current.json
+```
+
+### Integration Verification
+
+```bash
+# Test with different timezones
+retrovue test broadcast-day-alignment --timezone "Europe/London"
+retrovue test broadcast-day-alignment --timezone "Asia/Tokyo"
+```
 
 _Document version: v0.1 · Last updated: 2025-10-24_

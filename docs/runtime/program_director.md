@@ -1,29 +1,30 @@
-# Program Director
+# RetroVue Runtime — ProgramDirector
 
-## Overview
+> Global coordinator and emergency controller for system-wide broadcast operations.
 
-The **Program Director** is RetroVue's runtime and playback coordination system. It's responsible for managing live channels, coordinating content playback, and ensuring seamless viewer experiences across all broadcast channels.
+**Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
 
-**Terminology Note:** In RetroVue, 'Program Director' does not mean schedule planning. Program Director is the runtime / master control layer. It does not decide what should air — it ensures that what should air is actually on air.
+## Purpose
 
-Think of it as the "system director" of RetroVue—it knows what's playing on every channel, manages viewer sessions, and coordinates the entire broadcast operation in real-time. It functions like a TV network's Master Control — monitoring, switching, and keeping channels on the air in real time based on the approved schedule.
+ProgramDirector coordinates channels and can trigger emergency overrides. It provides system-wide coordination and monitoring capabilities without being involved in scheduling decisions.
 
-Program Director consumes scheduling decisions (what should be airing) and asset decisions (what is approved to air); it does not make those decisions itself.
+**ProgramDirector cannot redefine schedule or override 06:00 rollover.**
 
-## What This Document Is
+## Coordination, Not Scheduling
 
-This document describes the **architecture and behavior** of the Program Director layer. It explains:
+ProgramDirector coordinates channels and can trigger emergency overrides.
 
-- What the Program Director does and doesn't do
-- How its components work together
-- How it fits into RetroVue's overall architecture
-- How other parts of the system should interact with it
+ProgramDirector may ask ScheduleService "what's airing right now?" and "what broadcast day are we in?" for dashboards/UX.
 
-This is **not** a code-level API reference—it's about understanding the system's design and responsibilities.
+ProgramDirector is not allowed to redefine slot alignment, force a new day at rollover, or schedule future blocks itself.
+
+ProgramDirector never assumes 6:00am is "free." It must consult ScheduleService, which may say "the previous day's carryover still runs until 07:00."
+
+**ProgramDirector is not a scheduler. It cannot force a content reset at broadcast day rollover.**
+
+**ProgramDirector coordinates but does not schedule.**
 
 ## Core Responsibilities
-
-The Program Director has four main jobs:
 
 ### 1. **Global Coordination & Policy**
 
@@ -75,20 +76,24 @@ The Program Director follows RetroVue's architectural patterns:
 
 ## System Boundaries
 
-**What Program Director DOES:**
+## Responsibilities
 
-- ✅ Coordinates all channel operations
-- ✅ Manages viewer sessions and fanout
-- ✅ Handles emergency overrides and mode changes
-- ✅ Coordinates generation of broadcast streams and output
-- ✅ Enforces system-wide policies
+| Action                                | Description                                     |
+| ------------------------------------- | ----------------------------------------------- |
+| **Coordinate all channel operations** | System-wide broadcast coordination              |
+| **Manage viewer sessions and fanout** | First viewer starts Producer, last viewer stops |
+| **Handle emergency overrides**        | System-wide mode changes                        |
+| **Coordinate broadcast streams**      | Output generation across channels               |
+| **Enforce system-wide policies**      | Global operational rules                        |
 
-**What Program Director DOES NOT:**
+## Forbidden Actions
 
-- ❌ Generate schedules or programming
-- ❌ Ingest content or manage library
-- ❌ Handle content discovery or metadata
-- ❌ Manage external content sources
+| Action                                | Reason                                |
+| ------------------------------------- | ------------------------------------- |
+| **Generate schedules or programming** | ScheduleService owns scheduling       |
+| **Ingest content or manage library**  | Content Manager owns content          |
+| **Handle content discovery**          | Or metadata extraction                |
+| **Manage external content sources**   | Outside scope of runtime coordination |
 
 > **Key Principle:** Program Director is the **runtime coordinator** for broadcast operations. It consumes schedule data from Schedule Manager and content data from Content Manager—it doesn't generate or discover content itself.
 
@@ -537,3 +542,14 @@ It follows RetroVue's architectural patterns and provides the runtime foundation
 **Remember:** Program Director is about **runtime coordination and playback**—not scheduling, content discovery, or library management. It consumes data from other systems and coordinates real-time broadcast operations.
 
 In broadcast terms: Program Director is master control. It doesn't decide what's on the log — it makes sure the log actually goes to air, on time, synchronized, and recoverable.
+
+## Cross-References
+
+| Component                                  | Relationship                                                  |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| **[ChannelManager](channel_manager.md)**   | Per-channel runtime controller and Producer lifecycle manager |
+| **[ScheduleService](schedule_service.md)** | Provides current airing status and broadcast day information  |
+| **[MasterClock](clock.md)**                | Provides authoritative station time for all operations        |
+| **[AsRunLogger](asrun_logger.md)**         | Coordinates with emergency response logging                   |
+
+_Document version: v0.1 · Last updated: 2025-10-24_

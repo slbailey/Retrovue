@@ -1,6 +1,10 @@
-# MasterClock Architecture
+# RetroVue Runtime — MasterClock
 
-_MasterClock is RetroVue's authoritative time source for all runtime components._
+> Authoritative station time source for all runtime components.
+
+**Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
+
+_MasterClock is RetroVue's authoritative station time source for all runtime components._
 
 ## Overview
 
@@ -158,6 +162,17 @@ The MasterClock implementation is validated through comprehensive testing that e
 - ScheduleService does the broadcast-day classification. MasterClock does NOT know about broadcast days; it only knows "what time is it (UTC + channel local)."
 - This keeps boundaries clear between time authority and scheduling logic.
 
+### Passive Design
+
+MasterClock is intentionally passive and read-only:
+
+- It does not accept timers or listeners.
+- It does not wake other components.
+- It does not know broadcast day rules.
+- The scheduler_daemon (horizon builder) will poll MasterClock for now_utc() and then ask ScheduleService what needs to be generated.
+
+**MasterClock is read-only, authoritative, and never event-driven.**
+
 ### Boundary Conditions
 
 - Schedule slot boundaries work correctly
@@ -177,6 +192,72 @@ The MasterClock implementation is validated through comprehensive testing that e
 - Round-trip accuracy is maintained
 - Timezone information is preserved
 
+## CLI Testing Commands
+
+The following CLI commands are available for testing MasterClock functionality:
+
+### Basic Testing
+
+```bash
+# Basic functionality test
+retrovue test masterclock
+
+# Test with specific precision and timezone
+retrovue test masterclock --precision microsecond --timezone "Europe/London"
+
+# Get JSON output for programmatic use
+retrovue test masterclock --json
+```
+
+### Production Validation Tests
+
+```bash
+# Test time monotonicity
+retrovue test masterclock-monotonic
+
+# Test timezone resolution
+retrovue test masterclock-timezone-resolution
+
+# Test logging timestamps
+retrovue test masterclock-logging
+
+# Test scheduler alignment
+retrovue test masterclock-scheduler-alignment
+
+# Test stability
+retrovue test masterclock-stability
+
+# Test consistency
+retrovue test masterclock-consistency
+
+# Test serialization
+retrovue test masterclock-serialization
+```
+
+### Performance Testing
+
+```bash
+# Basic performance test
+retrovue test masterclock-performance
+
+# High-load performance test
+retrovue test masterclock-performance --iterations 50000 --timezones 20
+
+# Get JSON output for benchmarking
+retrovue test masterclock-performance --json
+```
+
+## JSON Output Fields
+
+The test commands provide structured JSON output with the following key fields:
+
+- `uses_masterclock_only`: Confirms no direct datetime.now() usage
+- `naive_timestamp_rejected`: Confirms naive timestamps are properly rejected
+- `max_skew_seconds`: Maximum time skew between components
+- `peak_calls_per_second`: Performance metrics for timezone operations
+- `tzinfo_ok`: Timezone information preservation
+- `roundtrip_ok`: Serialization round-trip accuracy
+
 ## Version History
 
 - **v0.1**: Initial implementation with core time operations
@@ -194,5 +275,14 @@ The MasterClock implementation is validated through comprehensive testing that e
 - No external time sources in v0.1 (reduces attack surface)
 - Timezone data comes from system zoneinfo database
 - No authentication required for time operations
+
+## Cross-References
+
+| Component                                  | Relationship                                      |
+| ------------------------------------------ | ------------------------------------------------- |
+| **[ScheduleService](schedule_service.md)** | Uses MasterClock for all scheduling operations    |
+| **[ChannelManager](channel_manager.md)**   | Uses MasterClock for playout offset calculations  |
+| **[ProgramDirector](program_director.md)** | Uses MasterClock for system-wide coordination     |
+| **[AsRunLogger](asrun_logger.md)**         | Uses MasterClock for consistent timestamp logging |
 
 _Document version: v0.1 · Last updated: 2025-10-24_
