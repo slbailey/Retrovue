@@ -28,6 +28,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 from enum import Enum
+import zoneinfo
 
 
 class TimePrecision(Enum):
@@ -87,9 +88,104 @@ class MasterClock:
         """
         self.precision = precision
         self.is_synchronized = True
-        self.timezone_cache: Dict[str, timezone] = {}
+        self.timezone_cache: Dict[str, zoneinfo.ZoneInfo] = {}
         self.scheduled_events: Dict[str, TimeEvent] = {}
-        # TODO: Initialize time synchronization, timezone handling
+    
+    def now_utc(self) -> datetime:
+        """
+        Get current UTC time as the system's master reference.
+        
+        Returns:
+            Current UTC time with specified precision
+        """
+        now = datetime.now(timezone.utc)
+        
+        # Apply precision based on settings
+        if self.precision == TimePrecision.SECOND:
+            return now.replace(microsecond=0)
+        elif self.precision == TimePrecision.MILLISECOND:
+            return now.replace(microsecond=(now.microsecond // 1000) * 1000)
+        else:  # MICROSECOND
+            return now
+    
+    def now_local(self, channel_tz: str | None = None) -> datetime:
+        """
+        Return current time for the given channel timezone as an aware datetime.
+        - If channel_tz is None, default to system/station timezone (we can keep a default in the class).
+        - If the timezone string is invalid, fall back to UTC but mark that in a warning/flag.
+        - Uses Python's zoneinfo for tz conversion.
+        
+        Args:
+            channel_tz: Channel timezone (e.g., "America/New_York"). If None, uses system local time.
+            
+        Returns:
+            Current local time in the specified timezone
+        """
+        utc_now = self.now_utc()
+        
+        if channel_tz is None:
+            # Use system local timezone
+            return utc_now.astimezone()
+        
+        try:
+            # Get timezone info (with caching)
+            tz_info = self._get_timezone_info(channel_tz)
+            return utc_now.astimezone(tz_info)
+        except Exception:
+            # If timezone is invalid, fall back to UTC
+            # TODO: Add warning/flag mechanism for invalid timezone
+            return utc_now
+    
+    def seconds_since(self, dt: datetime) -> float:
+        """
+        Return max(0, now_utc() - dt_in_utc).total_seconds()
+        - Accept both aware UTC datetimes and aware local datetimes.
+        - If dt is naive, raise ValueError.
+        - If dt is in the future, return 0.0 instead of a negative number.
+        This gives ChannelManager a sane non-negative playout offset.
+        
+        Args:
+            dt: Reference datetime
+            
+        Returns:
+            Seconds elapsed since the reference datetime (clamped to 0.0 minimum)
+        """
+        if dt.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware")
+        
+        now = self.now_utc()
+        
+        # Convert dt to UTC if it's not already
+        if dt.tzinfo != timezone.utc:
+            dt_utc = dt.astimezone(timezone.utc)
+        else:
+            dt_utc = dt
+        
+        delta = now - dt_utc
+        return max(0.0, delta.total_seconds())
+    
+    def to_channel_time(self, dt: datetime, channel_tz: str) -> datetime:
+        """
+        Convert an aware UTC datetime to an aware datetime in that channel's timezone.
+        - If channel_tz is invalid, fall back to UTC.
+        - If dt is naive, raise ValueError.
+        
+        Args:
+            dt: UTC datetime to convert
+            channel_tz: Target channel timezone
+            
+        Returns:
+            Datetime in channel's timezone
+        """
+        if dt.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware")
+        
+        try:
+            tz_info = self._get_timezone_info(channel_tz)
+            return dt.astimezone(tz_info)
+        except Exception:
+            # If timezone is invalid, fall back to UTC
+            return dt
     
     def get_current_time(self) -> datetime:
         """
@@ -98,11 +194,7 @@ class MasterClock:
         Returns:
             Current UTC time with specified precision
         """
-        # TODO: Implement current time retrieval
-        # - Get high-precision UTC time
-        # - Apply precision settings
-        # - Return current time
-        pass
+        return self.now_utc()
     
     def get_time_info(self) -> TimeInfo:
         """
@@ -111,12 +203,16 @@ class MasterClock:
         Returns:
             TimeInfo with current time details
         """
-        # TODO: Implement time info retrieval
-        # - Get current UTC time
-        # - Get local time
-        # - Check synchronization status
-        # - Return comprehensive time info
-        pass
+        utc_time = self.now_utc()
+        local_time = self.now_local()
+        
+        return TimeInfo(
+            utc_time=utc_time,
+            local_time=local_time,
+            timezone=str(local_time.tzinfo),
+            precision=self.precision,
+            is_synchronized=self.is_synchronized
+        )
     
     def convert_timezone(self, dt: datetime, from_tz: str, to_tz: str) -> datetime:
         """
@@ -130,27 +226,31 @@ class MasterClock:
         Returns:
             Converted datetime
         """
-        # TODO: Implement timezone conversion
-        # - Handle timezone conversion
-        # - Cache timezone objects
-        # - Return converted datetime
-        pass
+        # Get timezone info
+        from_tz_info = self._get_timezone_info(from_tz)
+        to_tz_info = self._get_timezone_info(to_tz)
+        
+        # Ensure input datetime is timezone-aware
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=from_tz_info)
+        elif dt.tzinfo != from_tz_info:
+            dt = dt.astimezone(from_tz_info)
+        
+        # Convert to target timezone
+        return dt.astimezone(to_tz_info)
     
-    def get_channel_time(self, channel_id: str) -> datetime:
+    def get_channel_time(self, channel_id: str, channel_tz: str) -> datetime:
         """
         Get current time for a specific channel's timezone.
         
         Args:
-            channel_id: Channel to get time for
+            channel_id: Channel identifier (for logging/debugging)
+            channel_tz: Channel's timezone
             
         Returns:
             Current time in channel's timezone
         """
-        # TODO: Implement channel time retrieval
-        # - Get channel timezone
-        # - Convert current time to channel timezone
-        # - Return channel time
-        pass
+        return self.now_local(channel_tz)
     
     def synchronize_time(self) -> bool:
         """
@@ -159,11 +259,10 @@ class MasterClock:
         Returns:
             True if synchronization successful
         """
-        # TODO: Implement time synchronization
-        # - Sync with external time source
-        # - Update synchronization status
-        # - Return success status
-        pass
+        # In v0.1, we use system time as authoritative
+        # Future versions may add NTP/PTP synchronization
+        self.is_synchronized = True
+        return True
     
     def schedule_event(self, event_id: str, trigger_time: datetime, 
                       event_type: str, payload: Dict[str, Any]) -> bool:
@@ -179,11 +278,19 @@ class MasterClock:
         Returns:
             True if event scheduled successfully
         """
-        # TODO: Implement event scheduling
-        # - Create time event
-        # - Add to scheduled events
-        # - Return success status
-        pass
+        # Ensure trigger_time is timezone-aware
+        if trigger_time.tzinfo is None:
+            trigger_time = trigger_time.replace(tzinfo=timezone.utc)
+        
+        event = TimeEvent(
+            event_id=event_id,
+            trigger_time=trigger_time,
+            event_type=event_type,
+            payload=payload
+        )
+        
+        self.scheduled_events[event_id] = event
+        return True
     
     def cancel_event(self, event_id: str) -> bool:
         """
@@ -195,12 +302,12 @@ class MasterClock:
         Returns:
             True if event cancelled successfully
         """
-        # TODO: Implement event cancellation
-        # - Remove event from scheduled events
-        # - Return success status
-        pass
+        if event_id in self.scheduled_events:
+            del self.scheduled_events[event_id]
+            return True
+        return False
     
-    def get_scheduled_events(self, start_time: datetime, end_time: datetime) -> List[TimeEvent]:
+    def get_scheduled_events(self, start_time: datetime, end_time: datetime) -> list[TimeEvent]:
         """
         Get scheduled events in a time range.
         
@@ -211,23 +318,28 @@ class MasterClock:
         Returns:
             List of scheduled events in range
         """
-        # TODO: Implement scheduled events retrieval
-        # - Filter events in time range
-        # - Return list of events
-        pass
+        events = []
+        for event in self.scheduled_events.values():
+            if start_time <= event.trigger_time <= end_time:
+                events.append(event)
+        return events
     
-    def trigger_scheduled_events(self) -> List[TimeEvent]:
+    def trigger_scheduled_events(self) -> list[TimeEvent]:
         """
         Trigger all events that are due.
         
         Returns:
             List of triggered events
         """
-        # TODO: Implement event triggering
-        # - Check for due events
-        # - Trigger events
-        # - Return list of triggered events
-        pass
+        now = self.now_utc()
+        triggered = []
+        
+        for event_id, event in list(self.scheduled_events.items()):
+            if event.trigger_time <= now:
+                triggered.append(event)
+                del self.scheduled_events[event_id]
+        
+        return triggered
     
     def get_time_precision(self) -> TimePrecision:
         """
@@ -248,10 +360,8 @@ class MasterClock:
         Returns:
             True if precision set successfully
         """
-        # TODO: Implement precision setting
-        # - Update precision level
-        # - Return success status
-        pass
+        self.precision = precision
+        return True
     
     def validate_time_consistency(self) -> bool:
         """
@@ -260,11 +370,9 @@ class MasterClock:
         Returns:
             True if time is consistent across system
         """
-        # TODO: Implement time consistency validation
-        # - Check all components for time consistency
-        # - Validate synchronization
-        # - Return validation result
-        pass
+        # In v0.1, we assume consistency since we use system time
+        # Future versions may validate against external sources
+        return True
     
     def get_timezone_info(self, timezone_name: str) -> Dict[str, Any]:
         """
@@ -276,20 +384,39 @@ class MasterClock:
         Returns:
             Dictionary with timezone information
         """
-        # TODO: Implement timezone info retrieval
-        # - Get timezone information
-        # - Return timezone details
-        pass
+        try:
+            tz_info = self._get_timezone_info(timezone_name)
+            return {
+                'name': timezone_name,
+                'offset': tz_info.utcoffset(datetime.now()),
+                'dst': tz_info.dst(datetime.now()),
+                'zone': str(tz_info)
+            }
+        except Exception:
+            return {'name': timezone_name, 'error': 'Invalid timezone'}
     
-    def handle_timezone_changes(self) -> List[str]:
+    def handle_timezone_changes(self) -> list[str]:
         """
         Handle timezone changes and updates.
         
         Returns:
             List of timezone changes processed
         """
-        # TODO: Implement timezone change handling
-        # - Process timezone changes
-        # - Update timezone cache
-        # - Return list of changes
-        pass
+        # Clear cache to force refresh of timezone data
+        self.timezone_cache.clear()
+        return ['timezone_cache_cleared']
+    
+    def _get_timezone_info(self, timezone_name: str) -> zoneinfo.ZoneInfo:
+        """
+        Get timezone info with caching.
+        
+        Args:
+            timezone_name: Name of timezone
+            
+        Returns:
+            ZoneInfo object for the timezone
+        """
+        if timezone_name not in self.timezone_cache:
+            self.timezone_cache[timezone_name] = zoneinfo.ZoneInfo(timezone_name)
+        
+        return self.timezone_cache[timezone_name]

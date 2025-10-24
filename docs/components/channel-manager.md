@@ -51,6 +51,13 @@ This is **not** a code-level API reference—it's about runtime responsibilities
 - Expose observability hooks (for dashboards / director console / analytics)
 - ChannelManager is the authoritative status reporter for its channel; ProgramDirector and any operator UI should treat ChannelManager as the source of truth for on-air state and health
 
+### 5. **Broadcast Day Support**
+
+- **Seamless playback across 06:00 rollover** - Never interrupts ongoing content at broadcast day boundaries
+- **Source-driven approach** - Continues playing content that spans the 06:00 boundary without interruption
+- **No broadcast day computation** - Asks ScheduleService for current content rather than computing broadcast day labels
+- **Rollover handling** - Properly manages programs that start before 06:00 and continue after 06:00
+
 ## Design Principles Alignment
 
 ChannelManager is an Orchestrator (per-channel). Producers are Capability Providers that ChannelManager selects and controls. MasterClock is the only authority for "now" and ChannelManager is not allowed to compute time directly.
@@ -154,6 +161,36 @@ If a Producer crashes or reports degraded health:
 ProgramDirector defines policy for what should happen on failure (e.g. go to emergency crawl), but ChannelManager actually performs the swap.
 
 If ChannelManager cannot bring up any Producer for a channel, that channel is considered failed (not 'partially on').
+
+## Broadcast Day Support
+
+RetroVue uses a broadcast day model that runs from 06:00 → 06:00 local channel time instead of midnight → midnight. This is the standard model used by broadcast television and ensures proper handling of programs that span the 06:00 rollover.
+
+### Key Principles
+
+**ChannelManager NEVER snaps playout to the 06:00 broadcast day boundary.**
+
+**ChannelManager is source-driven.** If a program started at 05:00 and runs until 07:00, ChannelManager continues it seamlessly past 06:00.
+
+**ChannelManager does not attempt to "start the new broadcast day" at 06:00 in the middle of ongoing content.**
+
+**ChannelManager does NOT compute broadcast day labels.** It asks ScheduleService what's playing "right now" given MasterClock.now_utc(), and uses that for playout offset only.
+
+### Rollover Handling
+
+When a program spans the 06:00 rollover boundary (e.g., a movie airing 05:00–07:00):
+
+1. **Continuous Playback** - ChannelManager continues the program seamlessly across the boundary
+2. **No Interruption** - No restart or cut occurs at 06:00
+3. **Proper Offset Calculation** - Uses MasterClock to calculate the correct offset into the ongoing program
+4. **Schedule Coordination** - ScheduleService handles broadcast day classification and rollover detection
+
+### Implementation Notes
+
+- ChannelManager relies on ScheduleService for broadcast day logic
+- MasterClock provides consistent time references across rollover
+- AsRunLogger may split continuous assets across broadcast days for reporting
+- This approach prevents the "cut at 6am" bug common in broadcast systems
 
 ## Summary
 

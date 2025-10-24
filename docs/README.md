@@ -68,6 +68,7 @@ Business-level explanations and technical implementation for each system compone
 - **[Schedule Generation](components/program-manager.md#schedule-generation)** - Automatic programming schedule creation
 - **[Content Rotation](components/program-manager.md#content-rotation)** - Content distribution and rotation rules
 - **[Programming Patterns](components/program-manager.md#program-types)** - Series, movie, and block programming
+- **[Broadcast Day Scheduling](components/program-manager.md#broadcast-day-scheduling)** - 06:00→06:00 scheduling model
 
 #### Channel Manager
 
@@ -75,6 +76,7 @@ Business-level explanations and technical implementation for each system compone
 - **[Multi-Channel Management](components/channel-manager.md#multi-channel-management)** - Orchestrating multiple channels
 - **[Stream Management](components/channel-manager.md#streaming-infrastructure)** - FFmpeg integration and stream health
 - **[Resource Allocation](components/channel-manager.md#resource-allocation)** - System resource management
+- **[Broadcast Day Support](components/channel-manager.md#broadcast-day-support)** - 06:00→06:00 broadcast day model
 
 ### 👥 User Documentation
 
@@ -172,12 +174,12 @@ docs/
 ## 🔄 Documentation Status
 
 - ✅ **Architectural Guidelines** - Complete with design patterns and best practices
-- ✅ **Core Components** - Complete with business and technical documentation
+- ✅ **Core Components** - Complete with business and technical documentation, including broadcast day support
 - ✅ **User Documentation** - Complete and up-to-date
 - ✅ **Developer Documentation** - Complete with architecture details
 - 🔄 **Technical Documentation** - In progress, some sections need updates
 - ✅ **API Reference** - Complete and comprehensive
-- ✅ **CLI Reference** - Complete with examples
+- ✅ **CLI Reference** - Complete with examples, including broadcast day testing
 
 ## 🤝 Contributing to Documentation
 

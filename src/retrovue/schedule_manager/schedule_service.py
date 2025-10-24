@@ -27,8 +27,8 @@ Design Principles:
 - Schedule state is always consistent and valid
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime, timedelta, date
 from dataclasses import dataclass
 
 
@@ -266,3 +266,160 @@ class ScheduleService:
         # - Apply rotation rules
         # - Return filtered content list
         pass
+    
+    def broadcast_day_for(self, channel_id: str, when_utc: datetime) -> date:
+        """
+        Given a UTC timestamp, return the broadcast day label (a date) for that channel.
+
+        Broadcast day definition:
+        - Broadcast day starts at 06:00:00 local channel time.
+        - Broadcast day ends just before 06:00:00 the next local day.
+        - Example: 2025-10-24 23:59 local and 2025-10-25 02:00 local are the SAME broadcast day.
+        - Example: 2025-10-25 05:30 local still belongs to 2025-10-24 broadcast day.
+
+        Steps:
+        1. Convert when_utc (aware datetime in UTC) to channel-local using MasterClock.to_channel_time().
+        2. If local_time.time() >= 06:00, broadcast day label is local_time.date().
+        3. Else, broadcast day label is (local_time.date() - 1 day).
+        4. Return that label as a date object.
+
+        Args:
+            channel_id: The channel to check
+            when_utc: UTC timestamp (must be timezone-aware)
+            
+        Returns:
+            The broadcast day label as a date object
+            
+        Raises:
+            ValueError if when_utc is naive.
+        """
+        if when_utc.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware")
+        
+        # TODO: Get MasterClock instance and channel timezone
+        # For now, this is a stub implementation
+        # In real implementation:
+        # 1. Get MasterClock instance (dependency injection)
+        # 2. Get channel timezone via _channel_timezone()
+        # 3. Convert when_utc to channel local time using MasterClock.to_channel_time()
+        # 4. Apply broadcast day logic
+        
+        # Stub implementation - will be replaced with real logic
+        local_time = when_utc  # Placeholder
+        if local_time.time() >= local_time.time().replace(hour=6, minute=0, second=0, microsecond=0):
+            return local_time.date()
+        else:
+            return (local_time.date() - timedelta(days=1))
+    
+    def broadcast_day_window(self, channel_id: str, when_utc: datetime) -> Tuple[datetime, datetime]:
+        """
+        Return (start_local, end_local) for the broadcast day that contains when_utc,
+        in channel-local tz, tz-aware datetimes.
+
+        start_local = YYYY-MM-DD 06:00:00
+        end_local   = (YYYY-MM-DD+1) 05:59:59.999999
+
+        Constraints:
+        - Both returned datetimes MUST be tz-aware in channel-local time.
+        - Use MasterClock.to_channel_time() internally to compute channel tz.
+
+        Args:
+            channel_id: The channel to check
+            when_utc: UTC timestamp (must be timezone-aware)
+            
+        Returns:
+            Tuple of (start_local, end_local) in channel timezone
+            
+        Raises:
+            ValueError if when_utc is naive.
+        """
+        if when_utc.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware")
+        
+        # TODO: Get MasterClock instance and channel timezone
+        # For now, this is a stub implementation
+        # In real implementation:
+        # 1. Get MasterClock instance (dependency injection)
+        # 2. Get channel timezone via _channel_timezone()
+        # 3. Convert when_utc to channel local time using MasterClock.to_channel_time()
+        # 4. Calculate broadcast day window
+        
+        # Stub implementation - will be replaced with real logic
+        local_time = when_utc  # Placeholder
+        broadcast_day = self.broadcast_day_for(channel_id, when_utc)
+        
+        # Calculate start and end of broadcast day
+        start_local = datetime.combine(broadcast_day, datetime.min.time().replace(hour=6))
+        end_local = datetime.combine(broadcast_day + timedelta(days=1), datetime.min.time().replace(hour=5, minute=59, second=59, microsecond=999999))
+        
+        return (start_local, end_local)
+    
+    def active_segment_spanning_rollover(self, channel_id: str, rollover_start_utc: datetime) -> Optional[Dict[str, Any]]:
+        """
+        Given the UTC timestamp for rollover boundary (which is local 06:00:00),
+        return info about any scheduled content that STARTED BEFORE rollover
+        and CONTINUES AFTER rollover.
+
+        Returns:
+            None if nothing is carrying over.
+
+            Otherwise return a dict with:
+            {
+                "program_id": <identifier / title / asset ref>,
+                "absolute_start_utc": <aware UTC datetime>,
+                "absolute_end_utc": <aware UTC datetime>,
+                "carryover_start_local": <tz-aware local datetime at rollover start>,
+                "carryover_end_local": <tz-aware local datetime when the asset actually ends>,
+            }
+
+        Notes:
+        - This is how we represent "movie started at 05:00, ends at 07:00".
+        - That movie crosses broadcast day A → B.
+        - ChannelManager MUST continue airing it across rollover.
+        - ScheduleService MUST tell Day B that 06:00–07:00 is already occupied
+          by continuation, so Day B cannot schedule fresh content at 06:00.
+
+        Args:
+            channel_id: The channel to check
+            rollover_start_utc: UTC timestamp for rollover boundary (local 06:00:00)
+            
+        Returns:
+            Dict with carryover info or None if no carryover
+            
+        Raises:
+            ValueError if rollover_start_utc is naive.
+        """
+        if rollover_start_utc.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware")
+        
+        # TODO: Implement active segment spanning rollover detection
+        # For now, this is a stub implementation
+        # In real implementation:
+        # 1. Get MasterClock instance (dependency injection)
+        # 2. Get channel timezone via _channel_timezone()
+        # 3. Convert rollover_start_utc to channel local time
+        # 4. Query schedule for content that started before 06:00 and ends after 06:00
+        # 5. Return carryover info if found
+        
+        # Stub implementation - will be replaced with real logic
+        return None
+    
+    def _channel_timezone(self, channel_id: str) -> str:
+        """
+        Return that channel's IANA timezone string (e.g. 'America/New_York').
+        
+        Args:
+            channel_id: The channel to get timezone for
+            
+        Returns:
+            IANA timezone string for the channel
+        """
+        # TODO: Implement channel timezone lookup
+        # For now, this is a stub implementation
+        # In real implementation:
+        # 1. Query channel configuration from database
+        # 2. Return the channel's configured timezone
+        # 3. Default to 'America/New_York' if not configured
+        
+        # Stub implementation - will be replaced with real logic
+        return 'America/New_York'

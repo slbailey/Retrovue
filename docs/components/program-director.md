@@ -55,6 +55,13 @@ ChannelManager is responsible for actually starting and stopping Producers for i
 - **Manage Producer lifecycle** based on viewer demand
 - **Handle graceful scaling** up and down
 
+### 5. **Broadcast Day Coordination**
+
+- **Coordinate channels** but does NOT redefine broadcast day logic
+- **Ask ScheduleService** for current broadcast day or rollover information
+- **Respect in-progress longform content** (e.g. movies spanning 05:00–07:00)
+- **Treat broadcast day as reporting/scheduling grouping** rather than playout cut point
+
 ## Design Principles Alignment
 
 The Program Director follows RetroVue's architectural patterns:
@@ -478,6 +485,36 @@ This package design reflects the architectural principle that **Producers are sw
 
 ChannelManager and ProgramDirector must only depend on the public surface exposed by retrovue.runtime.producer (and by producer/base.py). They are not allowed to import or manipulate internal details of specific producer implementations. ChannelManager can construct/select a Producer and tell it what to play, but it cannot reach into that Producer's internals (for example, it cannot manage ffmpeg subprocesses directly).
 
+## Broadcast Day Behavior
+
+RetroVue uses a broadcast day model that runs from 06:00 → 06:00 local channel time instead of midnight → midnight. Program Director coordinates channels but does NOT redefine broadcast day logic.
+
+### Key Principles
+
+**ProgramDirector coordinates channels, but does NOT redefine broadcast day logic.**
+
+**ProgramDirector can ask ScheduleService for the current broadcast day or what's rolling over, but it does not slice content or reschedule content at day boundaries.**
+
+**Emergency / override logic should respect in-progress longform content (e.g. a movie spanning 05:00–07:00) unless an emergency explicitly overrides normal playout.**
+
+**Goal: ProgramDirector should treat broadcast day mostly as a reporting/scheduling grouping, not as a playout cut point.**
+
+### Rollover Handling
+
+When coordinating channels during broadcast day rollover:
+
+1. **Respect Ongoing Content** - Never interrupt programs that span the 06:00 boundary
+2. **Coordinate with ScheduleService** - Ask for broadcast day information and rollover status
+3. **Maintain Continuous Operation** - Ensure seamless playback across rollover
+4. **Emergency Override Considerations** - Emergency mode should respect ongoing longform content unless explicitly overriding
+
+### Implementation Notes
+
+- ProgramDirector relies on ScheduleService for broadcast day logic
+- MasterClock provides consistent time references across rollover
+- ChannelManager handles actual playback continuity
+- AsRunLogger may split continuous assets across broadcast days for reporting
+
 ## Summary
 
 The Program Director is RetroVue's runtime and playback coordination system. It:
@@ -487,6 +524,7 @@ The Program Director is RetroVue's runtime and playback coordination system. It:
 - **Enforces** system-wide policies and emergency procedures
 - **Provides** seamless viewer experiences across all channels
 - **Ensures** efficient resource usage and graceful scaling
+- **Manages** broadcast day coordination without redefining broadcast day logic
 
 It follows RetroVue's architectural patterns and provides the runtime foundation that enables live broadcast operations. The system maintains strict boundaries between scheduling, content management, and runtime operations.
 

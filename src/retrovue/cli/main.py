@@ -11,7 +11,7 @@ import typer
 from typing import Optional
 
 from ..infra.uow import session
-from .commands import ingest, assets, review, plex, source
+from .commands import ingest, assets, review, plex, source, test
 # Ensure registry is populated
 import retrovue.adapters.importers  # noqa: F401
 
@@ -27,6 +27,7 @@ app.add_typer(assets.app, name="assets", help="Asset management operations using
 app.add_typer(review.app, name="review", help="Review queue operations using LibraryService")
 app.add_typer(plex.app, name="plex", help="Plex server operations using SourceService, LibraryService, and IngestOrchestrator")
 app.add_typer(source.app, name="source", help="Source and collection management operations using SourceService")
+app.add_typer(test.app, name="test", help="Testing operations for runtime components")
 
 # Add play commands directly
 from .play import play, play_channel

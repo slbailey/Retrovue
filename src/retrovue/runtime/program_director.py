@@ -87,6 +87,16 @@ class ProgramDirector:
     Boundaries:
     - IS allowed to: Coordinate channels, enforce policies, manage emergencies
     - IS NOT allowed to: Generate schedules, ingest content, pick content, manage individual viewers, spawn Producer instances directly
+    
+    BROADCAST DAY BEHAVIOR (06:00 → 06:00):
+    - ProgramDirector coordinates channels, but does NOT redefine broadcast day logic.
+    - ProgramDirector can ask ScheduleService for the current broadcast day or what's 
+      rolling over, but it does not slice content or reschedule content at day boundaries.
+    - Emergency / override logic should respect in-progress longform content 
+      (e.g. a movie spanning 05:00–07:00) unless an emergency explicitly overrides 
+      normal playout.
+    - Goal: ProgramDirector should treat broadcast day mostly as a reporting/scheduling 
+      grouping, not as a playout cut point.
     """
     
     def __init__(self):

@@ -21,6 +21,7 @@ The CLI is organized into command groups:
 - `retrovue ingest` - Content ingestion operations
 - `retrovue assets` - Asset management operations
 - `retrovue review` - Review queue operations
+- `retrovue test` - Testing operations for runtime components
 
 ## Global Options
 
@@ -30,6 +31,53 @@ All commands support these global options:
 - `--help` - Show help for the command
 
 ## Commands
+
+### Test Commands
+
+#### `retrovue test broadcast-day-alignment`
+
+Test broadcast day alignment for HBO-style 05:00–07:00 scenario.
+
+```bash
+# Basic test with default settings
+retrovue test broadcast-day-alignment
+
+# Test with specific channel and timezone
+retrovue test broadcast-day-alignment --channel "hbo_east" --timezone "America/New_York"
+
+# JSON output for programmatic use
+retrovue test broadcast-day-alignment --json
+```
+
+**Options:**
+
+- `--channel, -c` - Test channel ID (default: "test_channel_1")
+- `--timezone, -t` - Channel timezone (default: "America/New_York")
+- `--json` - Output results in JSON format
+
+**Purpose:**
+Validates ScheduleService's broadcast-day logic and rollover handling. Tests the HBO-style 05:00–07:00 scenario to ensure proper broadcast day classification and seamless playback across the 06:00 rollover boundary.
+
+#### `retrovue test masterclock`
+
+Test MasterClock functionality with live examples.
+
+```bash
+# Basic MasterClock test
+retrovue test masterclock
+
+# Test with specific precision and timezone
+retrovue test masterclock --precision millisecond --timezone "America/New_York"
+
+# JSON output
+retrovue test masterclock --json
+```
+
+**Options:**
+
+- `--precision, -p` - Time precision: second, millisecond, microsecond (default: millisecond)
+- `--timezone, -t` - Test timezone (default: "America/New_York")
+- `--json` - Output results in JSON format
 
 ### Ingest Commands
 

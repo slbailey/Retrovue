@@ -49,6 +49,14 @@ The Schedule Manager has four main jobs:
 - **Maintain precise timing** for live events and scheduled programming
 - **Handle time zone consistency** across the system
 
+### 5. **Broadcast Day Management**
+
+- **06:00 → 06:00 broadcast day model** - Standard broadcast television scheduling
+- **Rollover handling** - Manage programs that span the 06:00 boundary
+- **Broadcast day classification** - Determine which broadcast day a timestamp belongs to
+- **Carryover detection** - Identify content that continues across rollover
+- **Schedule conflict prevention** - Ensure new broadcast day doesn't double-schedule carryover time
+
 ### Content Source Constraint
 
 Schedule Manager may only schedule assets that are already marked canonical=True in Content Manager.
@@ -228,6 +236,11 @@ ScheduleService is the single authority over EPGEntry, PlaylogEvent, and schedul
 No other part of the system (CLI, API, playback systems, runtime) may write or mutate these records directly.
 All schedule generation, updates, corrections, and horizon management must go through ScheduleService.
 The rest of the system must not write schedule data directly or silently patch horizons. All modifications go through ScheduleService inside a Unit of Work.
+
+**Broadcast Day Authority:**
+ScheduleService is the single authority over broadcast day logic and rollover handling.
+No other component may compute broadcast day labels or handle rollover scenarios.
+All broadcast day operations must go through ScheduleService methods.
 
 ### ScheduleOrchestrator
 
@@ -415,6 +428,68 @@ All scheduling follows consistent time boundaries:
 - **Automatic extension** when horizons become insufficient
 - **Graceful degradation** if content unavailable
 
+## Broadcast Day Model
+
+RetroVue uses a broadcast day model that runs from 06:00 → 06:00 local channel time instead of midnight → midnight. This is the standard model used by broadcast television and ensures proper handling of programs that span the 06:00 rollover.
+
+### Key Concepts
+
+- **Broadcast day starts at 06:00:00 local channel time**
+- **Broadcast day ends just before 06:00:00 the next local day**
+- **Example:** 2025-10-24 23:59 local and 2025-10-25 02:00 local are the SAME broadcast day
+- **Example:** 2025-10-25 05:30 local still belongs to 2025-10-24 broadcast day
+
+### ScheduleService Broadcast Day Methods
+
+#### `broadcast_day_for(channel_id, when_utc) -> date`
+
+Given a UTC timestamp, return the broadcast day label (a date) for that channel.
+
+**Steps:**
+
+1. Convert when_utc (aware datetime in UTC) to channel-local using MasterClock.to_channel_time()
+2. If local_time.time() >= 06:00, broadcast day label is local_time.date()
+3. Else, broadcast day label is (local_time.date() - 1 day)
+4. Return that label as a date object
+
+#### `broadcast_day_window(channel_id, when_utc) -> tuple[datetime, datetime]`
+
+Return (start_local, end_local) for the broadcast day that contains when_utc, in channel-local tz, tz-aware datetimes.
+
+- start_local = YYYY-MM-DD 06:00:00
+- end_local = (YYYY-MM-DD+1) 05:59:59.999999
+
+#### `active_segment_spanning_rollover(channel_id, rollover_start_utc)`
+
+Given the UTC timestamp for rollover boundary (which is local 06:00:00), return info about any scheduled content that STARTED BEFORE rollover and CONTINUES AFTER rollover.
+
+**Returns:**
+
+- None if nothing is carrying over
+- Otherwise return a dict with:
+  - program_id: identifier/title/asset ref
+  - absolute_start_utc: aware UTC datetime
+  - absolute_end_utc: aware UTC datetime
+  - carryover_start_local: tz-aware local datetime at rollover start
+  - carryover_end_local: tz-aware local datetime when the asset actually ends
+
+### Rollover Handling
+
+A broadcast day schedule may legally include an item whose end is AFTER the 06:00 turnover, if it began before 06:00. The next broadcast day must treat that carried segment as already in progress; it cannot schedule new content under it until it finishes.
+
+**Example: HBO Movie 05:00–07:00**
+
+- Movie starts at 05:00 local (Day A)
+- Movie continues past 06:00 rollover
+- Movie ends at 07:00 local (Day B)
+- Day B's schedule must account for 06:00–07:00 being occupied by carryover
+
+### Critical Rules
+
+**ChannelManager never snaps playback at 06:00.**
+
+**AsRunLogger may split one continuous asset across two broadcast days in reporting. That's expected, not an error.**
+
 ## Summary
 
 The Schedule Manager is RetroVue's programming and scheduling system. It:
@@ -424,6 +499,7 @@ The Schedule Manager is RetroVue's programming and scheduling system. It:
 - **Enforces** content rules and policies for appropriate programming
 - **Provides** schedule data to playback systems
 - **Ensures** seamless transitions and precise timing
+- **Manages** broadcast day logic and rollover handling
 
 It follows RetroVue's architectural patterns and provides the scheduling foundation that playback systems depend on. The system maintains strict time boundaries and content rules while providing flexible interfaces for different types of programming.
 

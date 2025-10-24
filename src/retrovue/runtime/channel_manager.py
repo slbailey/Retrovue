@@ -132,6 +132,17 @@ class ChannelManager:
     - ChannelManager does NOT modify schedule
     - ChannelManager does NOT call ffmpeg or manage OS processes directly
     - ChannelManager does NOT "fill gaps" if schedule is missing
+
+    BROADCAST DAY INVARIANTS (06:00 → 06:00):
+    - ChannelManager NEVER snaps playout to the 06:00 broadcast day boundary.
+    - ChannelManager is source-driven. If a program started at 05:00 and runs until 07:00, 
+      ChannelManager continues it seamlessly past 06:00.
+    - ChannelManager does not attempt to "start the new broadcast day" at 06:00 in the middle 
+      of ongoing content.
+    - ChannelManager does NOT compute broadcast day labels. It asks ScheduleService what's 
+      playing "right now" given MasterClock.now_utc(), and uses that for playout offset only.
+    - This must be expressed in code comments so future maintainers do not reintroduce 
+      the "cut at 6am" bug.
     """
 
     def __init__(
@@ -194,6 +205,13 @@ class ChannelManager:
         - Must call MasterClock for authoritative 'now' (station time), not system time.
         - Must NOT mutate schedules or request "new" content.
         - Must get the correct offset into the currently airing segment so we can join mid-program.
+
+        BROADCAST DAY INVARIANT:
+        - This method does NOT check for broadcast day boundaries or 06:00 rollover.
+        - It simply asks "what's playing right now" and gets the correct offset.
+        - If a movie started at 05:00 and runs until 07:00, this method will return
+          the correct offset into that movie, regardless of whether it's 05:30 or 06:30.
+        - ChannelManager continues seamless playback across the 06:00 boundary.
 
         Returns:
             List of segment dicts for current playout plan.
