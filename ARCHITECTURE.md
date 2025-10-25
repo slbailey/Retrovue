@@ -367,22 +367,25 @@ Ingest assets sourced from Plex use Plex's virtual path structure (e.g., `/libra
 A future **Path Mapping Service** will translate these paths to RetroVue's local playout paths during promotion.
 
 **Design intent:**
+
 - Each Plex library defines a mapping pair (`root_path` → `local_path`).
 - When `retrovue assets promote` runs, it must resolve the ingest asset's Plex path through this mapping to produce the local playout path.
 - The resolved path is stored in `catalog_asset.file_path`.
 - Validation must confirm that the resolved file exists before allowing promotion.
 
 **Sync considerations:**
+
 - Plex libraries marked `sync_enabled` are scanned nightly.
 - When a Plex asset is deleted or moved:
   - The Library Domain marks it `soft_deleted=true`.
   - The Broadcast Catalog must be notified (via webhook or nightly reconciliation) to mark related `catalog_asset` records `available=false` and `canonical=false`.
 
 **Deferred tasks:**
-1. Introduce a `path_mapping` table or configuration per library.  
-2. Implement `PathResolver.resolve()` helper.  
-3. Add `available` boolean to `catalog_asset`.  
-4. Create ingest→catalog invalidation job or webhook listener.  
+
+1. Introduce a `path_mapping` table or configuration per library.
+2. Implement `PathResolver.resolve()` helper.
+3. Add `available` boolean to `catalog_asset`.
+4. Create ingest→catalog invalidation job or webhook listener.
 5. Add unit test: promotion fails if resolved path does not exist.
 
 ---

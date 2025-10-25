@@ -64,7 +64,7 @@ The RetroVue UI is structured into modules, each with its own design document. T
 
 ### 3.6 Channel Dashboard Module (Future)
 
-- Channel-level health (stream encoding, segment counts, statuses).
+- Channel-level health (stream encoding, transport stream monitoring, statuses).
 - Emergency system integration.
 
 ---
@@ -121,7 +121,7 @@ Subdocuments evolve more frequently with detailed UX and implementation notes.
 **Web Application Architecture:**
 
 - Each module operates independently but shares common web UI patterns and components.
-- Cross-module data flows through the embedded SQLite database layer.
+- Cross-module data flows through the centralized Postgres database layer.
 - Qt signals/slots provide event-driven communication between modules and background workers.
 - QThread workers handle long-running operations (ingest, schedule generation) without blocking the UI.
 - Direct database access eliminates need for REST API layer.
@@ -134,7 +134,7 @@ Subdocuments evolve more frequently with detailed UX and implementation notes.
 
 - **Frontend**: Web UI (FastAPI + HTML/JS) - Browser-based application
 - **Packaging**: PyInstaller (one-folder build) for Windows executable (RetroVue.exe)
-- **Database**: SQLite (embedded with application)
+- **Database**: PostgreSQL (centralized database managed via Alembic migrations)
 - **Threading**: QThread workers with Qt signals for background operations
 - **Authentication**: Local admin access for v0.1 (no external authentication required)
 
@@ -172,7 +172,7 @@ Subdocuments evolve more frequently with detailed UX and implementation notes.
 
 - All modules accessible through consistent Qt-based navigation
 - Shared Qt UI patterns (error handling, progress indicators, data grids) work across modules
-- Cross-module data flows work correctly through embedded SQLite database (e.g., ingested content appears in schedule editor)
+- Cross-module data flows work correctly through centralized Postgres database (e.g., ingested content appears in schedule editor)
 - Native Windows desktop application runs without external dependencies
 - PyInstaller packaging creates single executable (RetroVue.exe)
 - No breaking changes to existing ingest pipeline

@@ -86,7 +86,7 @@
   - Segment 2
   - Ad Pod 2 …
 - **Timeline details**: Each line shows timestamp, duration, asset ID/title, pool.
-- **Padding handling**: Black/padding segments handled at block end (ensures grid alignment).
+- **Padding handling**: Black/padding content handled at block end (ensures grid alignment).
 
 ---
 
@@ -137,11 +137,11 @@
 
 ## 6) Data Access Layer (v0.1)
 
-> Implementation detail: Direct SQLite database access through web application. WebSocket connections provide real-time updates between UI components.
+> Implementation detail: Direct PostgreSQL database access through web application. WebSocket connections provide real-time updates between UI components.
 
 **Database Operations:**
 
-- Template CRUD operations through SQLite ORM/direct queries
+- Template CRUD operations through PostgreSQL ORM/direct queries
 - Schedule generation and persistence
 - Playlog computation and caching
 - Real-time UI updates via Qt signals when data changes
@@ -232,7 +232,7 @@
 
 ## 12) Acceptance Criteria (v0.1)
 
-- Drag "Cheers" to any 30-min slot; save/load template persists correctly in SQLite
+- Drag "Cheers" to any 30-min slot; save/load template persists correctly in PostgreSQL
 - Stretch block from 30 → 120 minutes; DB reflects duration
 - Open block editor; switch episode_policy to serial; persists
 - Create movie rule with tags+rating; persists

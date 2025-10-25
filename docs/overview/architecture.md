@@ -67,13 +67,13 @@ Builds and maintains **two rolling planning horizons** for every channel:
 
 #### Playlog Horizon
 
-| Property      | Value                                                         |
-| ------------- | ------------------------------------------------------------- |
-| **Purpose**   | Fine, machine-facing playout plan                             |
-| **Structure** | Fully resolved segments — episodes, ad pods, bumpers, padding |
-| **Range**     | 2–3 hours into the future                                     |
-| **Use**       | Drives actual playout and as-run logs                         |
-| **Update**    | Continuously rolled forward                                   |
+| Property      | Value                                                        |
+| ------------- | ------------------------------------------------------------ |
+| **Purpose**   | Fine, machine-facing playout plan                            |
+| **Structure** | Fully resolved content — episodes, ad pods, bumpers, padding |
+| **Range**     | 2–3 hours into the future                                    |
+| **Use**       | Drives actual playout and as-run logs                        |
+| **Update**    | Continuously rolled forward                                  |
 
 #### Timing Model
 
@@ -262,7 +262,7 @@ Separates "what to play" (scheduling) from "how to render/encode."
 
 #### **HOW**
 
-- **Reads plan:** program segments, ad pods, bumpers, padding
+- **Reads plan:** program content, ad pods, bumpers, padding
 - **Runs FFmpeg** or equivalent to produce continuous MPEG-TS output
 - **Supports mid-program start**, overlays, and clean stop
 - **Other viewers attach** to this output stream (fanout model)
@@ -358,22 +358,22 @@ Planning happens in two scopes:
 
 ## Glossary
 
-| Term                   | Definition                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Channel**            | A virtual broadcast stream with its own schedule and identity                                                                  |
-| **Block / Block Rule** | Time segment (e.g., "Weeknights 8–10PM = Classic Sitcoms"). Defines allowed content and tone                                   |
-| **EPG Horizon**        | Coarse, grid-aligned programming schedule, 2–3 days ahead. Rolled forward daily                                                |
-| **Playlog Horizon**    | Fine-grained, fully resolved playout plan, 2–3 hours ahead. Continuously extended                                              |
-| **Playlog Event**      | One scheduled segment with `absolute_start` / `absolute_end` timestamps (e.g., "Commercial Pod #2 from 09:14:30–09:15:00")     |
-| **Viewer Fanout**      | Model where the first viewer triggers Producer startup, additional viewers share the same output, and last viewer shutdowns it |
-| **ProgramManager**     | Oversees all channels; handles global policies and emergencies                                                                 |
-| **ChannelManager**     | Controls runtime state of one channel; handles viewer count and Producer lifecycle                                             |
-| **Producer**           | Generates the audiovisual output for a channel. Different types handle normal, guide, or emergency modes                       |
-| **Overlay**            | Visual branding or crawl applied over the video feed                                                                           |
-| **MasterClock**        | Single authoritative notion of "now." All timing derives from it; direct system time calls are prohibited                      |
-| **Ad Pod**             | Cluster of commercials played together during a break                                                                          |
-| **Bumper**             | Short station ID or transition clip between programs                                                                           |
-| **As-Run Log**         | A record of what actually aired versus what was scheduled, using MasterClock timestamps. Planned feature                       |
+| Term                   | Definition                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Channel**            | A virtual broadcast stream with its own schedule and identity                                                                   |
+| **Block / Block Rule** | Time period (e.g., "Weeknights 8–10PM = Classic Sitcoms"). Defines allowed content and tone                                     |
+| **EPG Horizon**        | Coarse, grid-aligned programming schedule, 2–3 days ahead. Rolled forward daily                                                 |
+| **Playlog Horizon**    | Fine-grained, fully resolved playout plan, 2–3 hours ahead. Continuously extended                                               |
+| **Playlog Event**      | One scheduled content item with `absolute_start` / `absolute_end` timestamps (e.g., "Commercial Pod #2 from 09:14:30–09:15:00") |
+| **Viewer Fanout**      | Model where the first viewer triggers Producer startup, additional viewers share the same output, and last viewer shutdowns it  |
+| **ProgramManager**     | Oversees all channels; handles global policies and emergencies                                                                  |
+| **ChannelManager**     | Controls runtime state of one channel; handles viewer count and Producer lifecycle                                              |
+| **Producer**           | Generates the audiovisual output for a channel. Different types handle normal, guide, or emergency modes                        |
+| **Overlay**            | Visual branding or crawl applied over the video feed                                                                            |
+| **MasterClock**        | Single authoritative notion of "now." All timing derives from it; direct system time calls are prohibited                       |
+| **Ad Pod**             | Cluster of commercials played together during a break                                                                           |
+| **Bumper**             | Short station ID or transition clip between programs                                                                            |
+| **As-Run Log**         | A record of what actually aired versus what was scheduled, using MasterClock timestamps. Planned feature                        |
 
 ---
 

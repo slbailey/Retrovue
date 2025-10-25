@@ -405,7 +405,7 @@ python main.py --mode concat --loops 10 --port 8081
 #### **Loop Mode (Basic)**
 
 - **Use Case**: Simple content looping for testing and basic operation
-- **Features**: Basic HLS streaming with content looping
+- **Features**: Basic MPEG-TS streaming with content looping
 - **Limitations**: Single channel, no scheduling, simple transitions
 - **Best For**: Initial setup and testing
 
@@ -430,7 +430,7 @@ python main.py --mode concat --loops 10 --port 8081
 3. **Enter**: `http://localhost:8080/channel/1.ts`
 4. **Click Play**
 
-You should see your content streaming continuously with proper HLS segment handling!
+You should see your content streaming continuously with proper MPEG-TS transport stream handling!
 
 ### **Advanced Streaming Features**
 

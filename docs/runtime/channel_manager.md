@@ -14,11 +14,11 @@ ChannelManager receives ScheduledSegments and executes them.
 
 **ChannelManager does not cut playback at broadcast day rollover.**
 
-If a segment started at 05:00 and ends at 07:00, ChannelManager plays it straight through 06:00.
+If content started at 05:00 and ends at 07:00, ChannelManager plays it straight through 06:00.
 
 ChannelManager does not compute broadcast day, slot offsets, or rollover. It trusts ScheduleService.
 
-ChannelManager uses MasterClock to determine "where are we right now in this segment?" but it never uses datetime.now() directly.
+ChannelManager uses MasterClock to determine "where are we right now in this content?" but it never uses datetime.now() directly.
 
 **If ScheduleService says "this movie started at 05:00 and ends at 07:00," ChannelManager must honor that whole window without interruption, even if broadcast day rolled at 06:00.**
 
@@ -30,7 +30,7 @@ ChannelManager uses MasterClock to determine "where are we right now in this seg
 
 - Ask ScheduleService (Schedule Manager) what should be airing "right now" for this channel
 - Use MasterClock to compute the correct offset into the current program (e.g. if a viewer shows up mid-episode at 21:05:33, don't restart from frame 0)
-- Resolve the playout plan (segment sequence, timing, etc.) and hand it to a Producer
+- Resolve the playout plan (content sequence, timing, etc.) and hand it to a Producer
 - Ensure the correct Producer is active for the current mode (normal, emergency, guide)
 
 ### 2. **Producer Lifecycle & Fanout Model**

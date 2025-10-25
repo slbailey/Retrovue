@@ -105,7 +105,7 @@ Technical documentation for developers and contributors:
 
 Deep technical details for system administrators and advanced users:
 
-- **[Streaming Engine](technical/streaming-engine.md)** - FFmpeg and HLS implementation
+- **[Streaming Engine](technical/streaming-engine.md)** - FFmpeg and MPEG-TS implementation
 - **[Plex Integration](technical/plex-integration.md)** - Plex server integration details
 - **[Database Management](technical/database-management.md)** - Database operations and maintenance
 - **[Deployment](technical/deployment.md)** - Production deployment guide
