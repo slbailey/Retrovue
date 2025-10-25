@@ -3,6 +3,8 @@ SQLAlchemy models for RetroVue broadcast scheduling domain.
 """
 import sqlalchemy as sa
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
 from retrovue.infra.db import Base
 
 
@@ -11,6 +13,7 @@ class BroadcastChannel(Base):
     __tablename__ = "broadcast_channel"
     
     id = sa.Column(sa.Integer, primary_key=True)
+    uuid = sa.Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
     name = sa.Column(sa.Text, nullable=False, unique=True)
     timezone = sa.Column(sa.Text, nullable=False)  # IANA tz string
     grid_size_minutes = sa.Column(sa.Integer, nullable=False)
@@ -82,17 +85,19 @@ class CatalogAsset(Base):
     __tablename__ = "catalog_asset"
     
     id = sa.Column(sa.Integer, primary_key=True)
+    uuid = sa.Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
     title = sa.Column(sa.Text, nullable=False)
     duration_ms = sa.Column(sa.Integer, nullable=False)
     tags = sa.Column(sa.Text, nullable=True)  # comma-separated tags like "sitcom,retro"
     file_path = sa.Column(sa.Text, nullable=False)
     canonical = sa.Column(sa.Boolean, nullable=False, server_default=sa.text("false"))
-    source_ingest_asset_id = sa.Column(sa.Integer, nullable=True)  # Reference to Library Domain asset.id for traceability
+    source_ingest_asset_id = sa.Column(sa.Integer, sa.ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)  # Reference to Library Domain asset.id for traceability
     created_at = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()"))
 
     __table_args__ = (
         sa.Index("ix_catalog_asset_canonical", "canonical"),
         sa.Index("ix_catalog_asset_tags", "tags"),
+        sa.Index("ix_catalog_asset_source_ingest_asset_id", "source_ingest_asset_id"),
     )
     
     def __repr__(self):
@@ -104,6 +109,7 @@ class BroadcastPlaylogEvent(Base):
     __tablename__ = "broadcast_playlog_event"
     
     id = sa.Column(sa.Integer, primary_key=True)
+    uuid = sa.Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
     channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channel.id", ondelete="CASCADE"), nullable=False, index=True)
     asset_id = sa.Column(sa.Integer, sa.ForeignKey("catalog_asset.id", ondelete="RESTRICT"), nullable=False)
     start_utc = sa.Column(sa.DateTime(timezone=True), nullable=False)
