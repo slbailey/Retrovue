@@ -241,13 +241,13 @@ retrovue assets list --canonical --format json
 
 ```bash
 # Run ingestion from source
-retrovue ingest run <source_name>
+retrovue assets run <source_name>
 
 # List available sources
-retrovue ingest sources
+retrovue assets sources
 
 # Check ingest status
-retrovue ingest status
+retrovue assets status
 ```
 
 #### Review Commands

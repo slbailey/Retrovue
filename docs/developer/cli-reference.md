@@ -18,8 +18,8 @@ retrovue --help
 
 The CLI is organized into command groups:
 
-- `retrovue ingest` - Content ingestion operations
-- `retrovue assets` - Asset management operations
+- `retrovue assets` - Ingest world (content discovery, metadata, library operations)
+- `retrovue catalog` - Broadcast world (airable, canonical-approved assets for scheduling)
 - `retrovue review` - Review queue operations
 - `retrovue test` - Testing operations for runtime components
 
@@ -79,21 +79,21 @@ retrovue test masterclock --json
 - `--timezone, -t` - Test timezone (default: "America/New_York")
 - `--json` - Output results in JSON format
 
-### Ingest Commands
+### Assets Commands (Ingest World)
 
-#### `retrovue ingest run`
+#### `retrovue assets run`
 
 Run content ingestion from a source.
 
 ```bash
 # Ingest from filesystem
-retrovue ingest run filesystem:/path/to/media
+retrovue assets run filesystem:/path/to/media
 
 # Ingest with specific library and enrichers
-retrovue ingest run plex --library-id 1 --enrichers ffprobe
+retrovue assets run plex --library-id 1 --enrichers ffprobe
 
 # Output in JSON format
-retrovue ingest run filesystem:/media --json
+retrovue assets run filesystem:/media --json
 ```
 
 **Arguments:**
@@ -106,7 +106,76 @@ retrovue ingest run filesystem:/media --json
 - `--enrichers TEXT` - Comma-separated list of enrichers (e.g., 'ffprobe')
 - `--json` - Output in JSON format
 
-### Assets Commands
+### Catalog Commands (Broadcast World)
+
+#### `retrovue catalog add`
+
+Add a new catalog entry (airable, canonical-approved asset).
+
+```bash
+# Add a canonical asset to the broadcast catalog
+retrovue catalog add --title "Cheers S01E01" --duration 1440 --tags "sitcom" --path "/media/cheers01.mkv" --canonical true
+
+# Add without canonical approval (not yet airable)
+retrovue catalog add --title "New Episode" --duration 1800 --tags "drama" --path "/media/new.mkv" --canonical false
+```
+
+**Options:**
+
+- `--title` - Asset title as it should appear on-air
+- `--duration` - Duration in seconds
+- `--tags` - Comma-separated tags used by scheduling rules
+- `--path` - Playable file path
+- `--canonical` - Mark as approved-for-air
+- `--json` - Output as JSON
+
+#### `retrovue catalog update`
+
+Update an existing catalog entry.
+
+```bash
+# Approve an asset for broadcast
+retrovue catalog update --id 12 --canonical true
+
+# Update metadata
+retrovue catalog update --id 12 --title "Updated Title" --tags "sitcom,comedy"
+```
+
+**Options:**
+
+- `--id` - Catalog ID
+- `--title` - Updated title
+- `--duration` - Updated duration in seconds
+- `--tags` - Updated comma-separated tags
+- `--path` - Updated file path
+- `--canonical` - Updated canonical status
+- `--json` - Output as JSON
+
+#### `retrovue catalog list`
+
+List catalog entries (airable assets).
+
+```bash
+# List all catalog entries
+retrovue catalog list
+
+# List only canonical (approved) assets
+retrovue catalog list --canonical-only
+
+# Filter by tag
+retrovue catalog list --tag sitcom
+
+# JSON output
+retrovue catalog list --json
+```
+
+**Options:**
+
+- `--canonical-only` - Show only assets approved for scheduling
+- `--tag` - Filter by tag (e.g. sitcom)
+- `--json` - Output in JSON format
+
+### Assets Commands (Ingest World)
 
 #### `retrovue assets list`
 
@@ -379,10 +448,10 @@ The CLI provides clear error messages and appropriate exit codes:
 ### Complete Workflow
 
 ```bash
-# 1. Ingest content from filesystem
-retrovue ingest run filesystem:/media/movies --enrichers ffprobe
+# 1. Ingest content from filesystem (ingest world)
+retrovue assets run filesystem:/media/movies --enrichers ffprobe
 
-# 2. List discovered assets
+# 2. List discovered assets (ingest world)
 retrovue assets list --status pending
 
 # 3. Check review queue
@@ -391,8 +460,11 @@ retrovue review list
 # 4. Resolve a review item
 retrovue review resolve 123e4567-e89b-12d3-a456-426614174000 987fcdeb-51a2-43d1-b456-426614174000
 
-# 5. List canonical assets
-retrovue assets list --status canonical
+# 5. Add approved content to broadcast catalog (broadcast world)
+retrovue catalog add --title "Approved Movie" --duration 7200 --tags "action" --path "/media/movie.mkv" --canonical true
+
+# 6. List airable assets (broadcast world)
+retrovue catalog list --canonical-only
 ```
 
 ### Automation Script
@@ -402,7 +474,7 @@ retrovue assets list --status canonical
 # Automated content processing
 
 echo "Starting content ingestion..."
-retrovue ingest run filesystem:/media --json > ingest_results.json
+retrovue assets run filesystem:/media --json > ingest_results.json
 
 echo "Processing review queue..."
 retrovue review list --json > review_queue.json
@@ -453,8 +525,10 @@ pip install -e .
 ```bash
 # Get help for any command
 retrovue --help
-retrovue ingest --help
+retrovue assets --help
+retrovue catalog --help
 retrovue assets list --help
+retrovue catalog list --help
 retrovue review resolve --help
 ```
 

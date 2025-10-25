@@ -179,7 +179,7 @@ erDiagram
 - One schedule_day → one template
 - One template → many template_blocks
 - Template blocks define `rule_json` for content selection
-- Assets with `canonical=true` are eligible for scheduling when rules match
+- Catalog entries with `canonical=true` are eligible for scheduling when rules match
 
 ## 6. CLI Design — The `retrovue` Command
 
@@ -188,6 +188,14 @@ erDiagram
 ```bash
 retrovue <entity> <action> [parameters]
 ```
+
+**Available Command Groups:**
+
+- `retrovue channel ...` - Channel configuration and management
+- `retrovue template ...` - Template and block management
+- `retrovue schedule ...` - Schedule assignment and management
+- `retrovue catalog ...` - Broadcast catalog management (schedulable assets)
+- `retrovue assets ...` - Ingest library management (raw inventory)
 
 ### 6.2 Channel Management
 
@@ -265,14 +273,16 @@ retrovue schedule assign --channel "RetroVue-1" \
 - `--template` - Template name or ID (required)
 - `--day` - Broadcast date in YYYY-MM-DD format (required)
 
-### 6.5 Asset Management (Expanded)
+### 6.5 Broadcast Catalog Management
 
-#### `retrovue asset add`
+The broadcast catalog is the set of airable, station-approved assets that ScheduleService is allowed to schedule. This catalog is not the raw ingest library. Adding something to the catalog is the approval act that makes it eligible for broadcast.
 
-Register a new asset as airable content.
+#### `retrovue catalog add`
+
+Register a new asset as airable content in the broadcast catalog.
 
 ```bash
-retrovue asset add --title "Cheers S01E01" \
+retrovue catalog add --title "Cheers S01E01" \
   --duration 1440 \
   --tags "sitcom,comedy" \
   --path "/media/cheers01.mkv" \
@@ -287,42 +297,67 @@ retrovue asset add --title "Cheers S01E01" \
 - `--path` - Local file path (required)
 - `--canonical` - Approval status: true/false (required)
 
-#### `retrovue asset update`
+#### `retrovue catalog update`
 
-Modify existing asset metadata.
+Modify existing catalog entry metadata.
 
 ```bash
-retrovue asset update --id 1 \
+retrovue catalog update --id 1 \
   --title "Cheers S01E01 - Updated" \
   --canonical false
 ```
 
 **Options:**
 
-- `--id` - Asset ID (required)
+- `--id` - Catalog entry ID (required)
 - `--title` - New title (optional)
 - `--duration` - New duration in seconds (optional)
 - `--tags` - New tags (optional)
 - `--path` - New file path (optional)
 - `--canonical` - New approval status (optional)
 
-#### `retrovue asset list`
+#### `retrovue catalog list`
 
-List assets with optional filtering.
+List catalog entries with optional filtering.
 
 ```bash
-retrovue asset list --canonical-only
-retrovue asset list --tag "sitcom"
-retrovue asset list --json
+retrovue catalog list --canonical-only
+retrovue catalog list --tag "sitcom"
+retrovue catalog list --json
 ```
 
 **Options:**
 
-- `--canonical-only` - Show only approved assets
+- `--canonical-only` - Show only approved catalog entries
 - `--tag` - Filter by specific tag
 - `--json` - Output in JSON format
 
-> **Operator Note:** The `asset` command family forms the _approval gate_ between raw media and broadcast. Only assets marked `canonical=true` are eligible for scheduling. ScheduleService never schedules media that wasn't approved via this CLI.
+> **Operator Note:** The `catalog` command family forms the _approval gate_ between raw media and broadcast. Only catalog entries marked `canonical=true` are eligible for scheduling. ScheduleService never schedules media that wasn't approved via this CLI.
+
+### 6.6 Ingest Library Management (retrovue assets ...)
+
+The `retrovue assets` command group manages the ingest library, which contains all content discovered or imported from sources like Plex. This is the raw inventory of what the system has found, including pending review and potentially unsafe material.
+
+**Key Capabilities:**
+
+- List and inspect assets using UUIDs and full technical metadata
+- Soft delete and restore assets
+- Manage provider metadata, codecs, and technical details
+- Reflect everything the system has discovered from external sources
+- Handle pending, unreviewed, and potentially unsafe material
+
+> **Critical Distinction:** Adding something to the ingest library does NOT make it schedulable. The operator must still promote it into the broadcast catalog using `retrovue catalog add`.
+
+**Available Commands:**
+
+- `retrovue assets list` - List all assets in the ingest library
+- `retrovue assets list-advanced` - Advanced filtering and search options
+- `retrovue assets get <uuid>` - Get detailed information about a specific asset
+- `retrovue assets select <uuid>` - Select an asset for detailed inspection
+- `retrovue assets delete <uuid>` - Soft delete an asset from the library
+- `retrovue assets restore <uuid>` - Restore a soft-deleted asset
+
+This command group is editorial/ingest-facing, not scheduling-facing. It represents "what exists in inventory" rather than "what is approved for broadcast."
 
 ## 7. Example Initialization Workflow
 
@@ -347,14 +382,14 @@ retrovue template block add --template-id 1 \
   --tags "sitcom" \
   --episode-policy "syndication"
 
-# 4. Register canonical assets
-retrovue asset add --title "Cheers S01E01" \
+# 4. Register canonical assets in broadcast catalog
+retrovue catalog add --title "Cheers S01E01" \
   --duration 1440 \
   --tags "sitcom" \
   --path "/media/cheers01.mkv" \
   --canonical true
 
-retrovue asset add --title "I Love Lucy S01E02" \
+retrovue catalog add --title "I Love Lucy S01E02" \
   --duration 1440 \
   --tags "sitcom" \
   --path "/media/lucy02.mkv" \
@@ -380,14 +415,24 @@ retrovue schedule assign --channel "RetroVue-1" \
 | **ChannelManager**  | ❌ Read-only | ❌ Read-only | ❌ Read-only | ❌ Read-only | ❌ Read-only |
 | **ProgramDirector** | ❌ Read-only | ❌ Read-only | ❌ Read-only | ❌ Read-only | ❌ Read-only |
 
-### 8.2 Canonical Gating
+### 8.2 Data Domain Separation
 
-- Only assets with `canonical=true` may appear in any playlog or schedule
+**Ingest Library vs Broadcast Catalog:**
+
+- The ingest library is managed by `retrovue assets` and lives in the ingest/content domain
+- The broadcast catalog is managed by `retrovue catalog` and lives in the scheduling/broadcast domain
+- Only `catalog` entries where canonical=true are eligible for scheduling
+- ScheduleService is forbidden from directly reaching into ingest data when selecting something to air
+
+### 8.3 Canonical Gating
+
+- Only catalog entries with `canonical=true` are eligible to be scheduled
 - ScheduleService is forbidden from scheduling non-canonical content
 - ChannelManager must not play unapproved media
-- The CLI is the sole authority for asset approval
+- The CLI is the sole authority for catalog entry approval
+- The only way for content to become schedulable is for an operator to explicitly add it to the broadcast catalog (or update it there) using `retrovue catalog`. The ingest library alone is not sufficient.
 
-### 8.3 Runtime Constraints
+### 8.4 Runtime Constraints
 
 - ScheduleService is forbidden from mutating infrastructure tables
 - ChannelManager and ProgramDirector are read-only consumers
@@ -431,12 +476,14 @@ retrovue schedule assign --channel "RetroVue-1" \
 
 - [ ] Running `ScheduleService.build_playout_horizon()` succeeds with generated playlog entries
 - [ ] All runtime services treat infrastructure tables as read-only
-- [ ] `retrovue asset` correctly governs canonical gating
+- [ ] `retrovue catalog` correctly governs canonical gating
+- [ ] ScheduleService.build_playout_horizon() must source candidates only from the broadcast catalog (canonical=true), never directly from the ingest library
 - [ ] ChannelManager can execute scheduled content without errors
 
 ### 10.4 Data Integrity
 
 - [ ] Canonical gating prevents unapproved content from airing
+- [ ] Only catalog entries with canonical=true are eligible for scheduling
 - [ ] ScheduleService cannot modify infrastructure tables
 - [ ] Template rules correctly select eligible assets
 - [ ] Broadcast day logic works across rollover boundaries

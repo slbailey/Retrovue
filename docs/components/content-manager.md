@@ -318,7 +318,7 @@ The ingest system is designed to be pluggable through adapters.
 
 **Key Command Groups:**
 
-#### `retrovue ingest`
+#### `retrovue assets`
 
 - Runs content discovery and registration
 - Outputs counts (discovered, registered, enriched, canonicalized, queued)
