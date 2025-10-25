@@ -6,7 +6,7 @@
 
 ## 1. Introduction
 
-ScheduleService cannot function until channels, templates, and assets exist in the Broadcast Domain database. The `retrovue` CLI is the operator's tool for creating and approving these foundational entities.
+ScheduleService cannot function until channels, templates, and assets exist in the Broadcast Domain database. The database schema is managed exclusively through Alembic migrations, with the `retrovue` CLI providing the interface for creating and approving foundational entities.
 
 **Critical Separation:**
 
@@ -16,7 +16,7 @@ ScheduleService cannot function until channels, templates, and assets exist in t
 ## 2. Goals
 
 - Define a minimal, relational schema to describe channels, templates, blocks, schedules, and assets in the Broadcast Domain
-- Enable initialization of a complete, schedulable station using only CLI commands
+- Enable initialization of a complete, schedulable station using Alembic migrations and CLI commands
 - Ensure ScheduleService has a clean, read-only data contract
 - Establish canonical asset gating as the approval mechanism between Library Domain and Broadcast Domain
 - Enforce physical separation between Library Domain and Broadcast Domain tables
@@ -365,30 +365,71 @@ The `retrovue assets` command group manages the Library Domain, which contains a
 
 This command group is editorial/library-facing, not scheduling-facing. It represents "what exists in inventory" rather than "what is approved for broadcast."
 
-## 7. Example Initialization Workflow
+## 7. Database Initialization Process
 
-Walk through creating a station from scratch:
+### 7.1 Alembic Migration Setup
+
+The database schema is managed exclusively through Alembic migrations. Initialization requires running the migration sequence to create all necessary tables:
 
 ```bash
-# 1. Create channel with broadcast policy
+# Run all pending migrations to create the schema
+alembic upgrade head
+```
+
+This creates the complete Broadcast Domain schema including:
+
+- `broadcast_channel` - Channel configuration and timing policy
+- `broadcast_template` - Reusable daypart templates
+- `broadcast_template_block` - Time blocks within templates with content rules
+- `broadcast_schedule_day` - Template assignments to channels for specific dates
+- `catalog_asset` - Broadcast-approved catalog entries
+- `broadcast_playlog_event` - Generated playout events
+
+### 7.2 Preset Configuration
+
+The `presets/` directory contains default configuration templates for seeding common broadcast scenarios. These presets provide:
+
+- **Default Template Blocks**: Pre-configured `broadcast_template_block` entries for common programming patterns
+- **Channel Templates**: Standard channel configurations for different time zones and grid sizes
+- **Rule Sets**: Common content selection rules for various programming types
+
+Preset files are applied after schema creation to establish a working baseline configuration:
+
+```bash
+# Apply default presets after migration
+retrovue preset apply --preset sitcom-24x7
+```
+
+### 7.3 Example Initialization Workflow
+
+Complete station setup from database creation to operational state:
+
+```bash
+# 1. Initialize database schema via Alembic
+-alembic upgrade head
+
+# 2. Apply default presets for common scenarios
+retrovue preset apply --preset sitcom-24x7
+
+# 3. Create channel with broadcast policy
 retrovue channel add --name "RetroVue-1" \
   --timezone "America/New_York" \
   --grid-size 30 \
   --offset 0 \
   --rollover 360
 
-# 2. Create daypart template
+# 4. Create daypart template
 retrovue template add --name "All Sitcoms 24x7" \
   --description "24-hour sitcom programming"
 
-# 3. Add content block to template
+# 5. Add content block to template
 retrovue template block add --template-id 1 \
   --start "00:00" \
   --end "24:00" \
   --tags "sitcom" \
   --episode-policy "syndication"
 
-# 4. Register canonical assets in broadcast catalog
+# 6. Register canonical assets in broadcast catalog
 retrovue catalog add --title "Cheers S01E01" \
   --duration 1440 \
   --tags "sitcom" \
@@ -401,7 +442,7 @@ retrovue catalog add --title "I Love Lucy S01E02" \
   --path "/media/lucy02.mkv" \
   --canonical true
 
-# 5. Assign template to channel for specific date
+# 7. Assign template to channel for specific date
 retrovue schedule assign --channel "RetroVue-1" \
   --template "All Sitcoms 24x7" \
   --day "2025-01-24"
@@ -467,10 +508,11 @@ retrovue schedule assign --channel "RetroVue-1" \
 
 ### 10.1 Database Initialization
 
-- [ ] A new database can be initialized completely via `retrovue` commands
-- [ ] All required tables exist with proper relationships
-- [ ] Foreign key constraints are enforced
-- [ ] Indexes are created for performance
+- [ ] Alembic migrations create all required tables with proper relationships
+- [ ] Foreign key constraints are enforced through migration definitions
+- [ ] Indexes are created for performance via migration scripts
+- [ ] Preset configurations can be applied to seed default template blocks
+- [ ] Database schema matches the model definitions exactly
 
 ### 10.2 CLI Functionality
 
@@ -478,6 +520,7 @@ retrovue schedule assign --channel "RetroVue-1" \
 - [ ] Asset approval workflow functions correctly
 - [ ] Template and channel creation works as expected
 - [ ] Schedule assignment produces valid results
+- [ ] Preset application creates valid default configurations
 
 ### 10.3 Runtime Integration
 
@@ -486,6 +529,7 @@ retrovue schedule assign --channel "RetroVue-1" \
 - [ ] `retrovue assets promote` correctly governs canonical gating
 - [ ] ScheduleService.build_playout_horizon() must source candidates only from the broadcast catalog (canonical=true), never directly from the Library Domain
 - [ ] ChannelManager can execute scheduled content without errors
+- [ ] Alembic-managed schema provides consistent data structure for all services
 
 ### 10.4 Data Integrity
 

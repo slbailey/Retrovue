@@ -1,5 +1,7 @@
 # RetroVue UI Design — Schedule Module (Draft v0.1)
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 > Living document for the Retro IPTV Simulation Project UI. Scope for this draft: schedule template editor, block rule system, and playlog preview. This module provides the core scheduling functionality for creating and managing broadcast schedules.
 
 ---

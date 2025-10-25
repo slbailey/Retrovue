@@ -1,5 +1,7 @@
 # Content Browser - Enhancement TODO
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 ## Current Status (v0.1)
 
 The Content Browser currently supports:

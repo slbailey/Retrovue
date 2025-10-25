@@ -15,6 +15,8 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.engine import Engine
+from alembic import command
+from alembic.config import Config
 
 from retrovue.infra.db import Base
 from retrovue.infra.settings import settings
@@ -33,7 +35,18 @@ def test_db_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def test_db_engine(test_db_url: str) -> Generator[Engine, None, None]:
+def migrated_db(test_db_url: str) -> None:
+    """
+    Run Alembic migrations before test execution.
+    
+    This ensures the database schema matches the current migration state.
+    """
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
+
+@pytest.fixture(scope="session")
+def test_db_engine(test_db_url: str, migrated_db: None) -> Generator[Engine, None, None]:
     """
     Create a test database engine using the main database.
     

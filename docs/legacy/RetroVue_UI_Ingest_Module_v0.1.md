@@ -1,5 +1,7 @@
 # RetroVue UI Design — Ingest & Progress (Draft v0.1)
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 > Living document for the Retro IPTV Simulation Project UI. Scope for this draft: ingestion UX, progress visualization, and integration contracts with the existing Plex ingest pipeline. This doc will evolve into a full product spec.
 
 ---

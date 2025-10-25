@@ -1,5 +1,7 @@
 # GUI Migration Notes
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 ## Phase 1 Complete ✓
 
 The new modular Qt application has been scaffolded under `src/retrovue/gui/`.

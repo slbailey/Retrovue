@@ -1,5 +1,7 @@
 # Retrovue – Plex Ingest (00–04)
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 ## Sync Design + Minimal UI Contract (GUI, on-demand)
 
 **Scope:** Manual GUI tool; multi-server; per-library ingest; full coverage (shows→seasons→episodes→media parts, movies→media parts); robust adds/changes/deletes; dynamic per-server path mapping (no stored local path); clear item states; minimal UI refresh hooks.

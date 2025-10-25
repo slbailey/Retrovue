@@ -1,16 +1,21 @@
 # ErsatzTV Plex Synchronization Process - Comprehensive Roadmap
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 ## Overview
+
 ErsatzTV implements a sophisticated multi-layered architecture for synchronizing with Plex media servers. This document provides a detailed roadmap of the entire synchronization process, from initial discovery to ongoing maintenance.
 
 ## Architecture Components
 
 ### 1. Core Services
+
 - **PlexService**: Background service managing Plex connections and authentication
 - **ScannerService**: Background service orchestrating library scanning operations
 - **SchedulerService**: Manages scheduled synchronization tasks
 
 ### 2. Scanner Components
+
 - **PlexMovieLibraryScanner**: Handles movie library synchronization
 - **PlexTelevisionLibraryScanner**: Handles TV show library synchronization
 - **PlexOtherVideoLibraryScanner**: Handles other video content synchronization
@@ -18,6 +23,7 @@ ErsatzTV implements a sophisticated multi-layered architecture for synchronizing
 - **PlexNetworkScanner**: Handles TV network synchronization
 
 ### 3. Infrastructure Components
+
 - **PlexServerApiClient**: Low-level Plex API communication
 - **PlexSecretStore**: Manages authentication tokens and secrets
 - **PlexPathReplacementService**: Handles path mapping between Plex and local filesystems
@@ -27,6 +33,7 @@ ErsatzTV implements a sophisticated multi-layered architecture for synchronizing
 ### Phase 1: System Initialization
 
 #### 1.1 Service Startup
+
 ```
 PlexService.StartAsync()
 ├── Wait for database initialization
@@ -36,6 +43,7 @@ PlexService.StartAsync()
 ```
 
 #### 1.2 Initial Source Discovery
+
 ```
 SynchronizePlexMediaSources
 ├── Discover Plex servers via network discovery
@@ -46,6 +54,7 @@ SynchronizePlexMediaSources
 ```
 
 #### 1.3 Library Registration
+
 - Each Plex library is registered with:
   - Library ID and name
   - Media type (Movies, Shows, Other Videos)
@@ -56,6 +65,7 @@ SynchronizePlexMediaSources
 ### Phase 2: Authentication & Connection Management
 
 #### 2.1 Authentication Flow
+
 ```
 Plex Authentication
 ├── PIN-based authentication for initial setup
@@ -65,6 +75,7 @@ Plex Authentication
 ```
 
 #### 2.2 Connection Parameters
+
 - **PlexConnection**: Server URI, port, SSL settings
 - **PlexServerAuthToken**: Authentication token with client identifier
 - **PlexConnectionParameters**: Combined connection and token data
@@ -72,12 +83,14 @@ Plex Authentication
 ### Phase 3: Library Synchronization Trigger
 
 #### 3.1 Synchronization Triggers
+
 1. **Scheduled Sync**: Based on configurable refresh interval
 2. **Manual Sync**: User-initiated force scan
 3. **Deep Scan**: Full metadata refresh regardless of ETags
 4. **Incremental Scan**: ETag-based change detection
 
 #### 3.2 Scan Decision Logic
+
 ```
 Should Scan Library?
 ├── Check last scan timestamp
@@ -89,6 +102,7 @@ Should Scan Library?
 ### Phase 4: Library Content Discovery
 
 #### 4.1 API Communication
+
 ```
 PlexServerApiClient
 ├── GetLibraries() - Enumerate available libraries
@@ -100,6 +114,7 @@ PlexServerApiClient
 ```
 
 #### 4.2 Pagination Strategy
+
 - Large libraries are processed in pages
 - Progress tracking for UI updates
 - Memory-efficient streaming of results
@@ -107,6 +122,7 @@ PlexServerApiClient
 ### Phase 5: Change Detection & ETag Management
 
 #### 5.1 ETag-Based Change Detection
+
 ```
 ETag Comparison Process
 ├── Retrieve existing ETags from database
@@ -117,6 +133,7 @@ ETag Comparison Process
 ```
 
 #### 5.2 Item State Management
+
 - **Normal**: File exists locally and is accessible
 - **RemoteOnly**: File only available via Plex streaming
 - **Unavailable**: File not accessible locally or remotely
@@ -125,6 +142,7 @@ ETag Comparison Process
 ### Phase 6: Metadata Synchronization
 
 #### 6.1 Metadata Types Synchronized
+
 ```
 Movie Metadata
 ├── Basic Info: Title, Plot, Year, Content Rating
@@ -147,6 +165,7 @@ TV Show Metadata
 ```
 
 #### 6.2 Metadata Update Process
+
 ```
 UpdateMetadata()
 ├── Compare existing vs incoming metadata
@@ -161,6 +180,7 @@ UpdateMetadata()
 ### Phase 7: File System Integration
 
 #### 7.1 Path Replacement System
+
 ```
 Path Mapping Process
 ├── Retrieve Plex internal file paths
@@ -171,6 +191,7 @@ Path Mapping Process
 ```
 
 #### 7.2 File State Determination
+
 ```
 File State Logic
 ├── Check if local file exists
@@ -183,6 +204,7 @@ File State Logic
 ### Phase 8: Database Operations
 
 #### 8.1 Repository Pattern
+
 - **PlexMovieRepository**: Movie-specific database operations
 - **PlexTelevisionRepository**: TV show-specific database operations
 - **PlexOtherVideoRepository**: Other video database operations
@@ -190,6 +212,7 @@ File State Logic
 - **MetadataRepository**: Metadata CRUD operations
 
 #### 8.2 Database Transactions
+
 ```
 Database Operations
 ├── Begin transaction
@@ -204,6 +227,7 @@ Database Operations
 ### Phase 9: Progress Reporting & UI Updates
 
 #### 9.1 Progress Tracking
+
 ```
 ScannerProgressUpdate Events
 ├── Library-level progress (percentage complete)
@@ -213,6 +237,7 @@ ScannerProgressUpdate Events
 ```
 
 #### 9.2 Real-time Updates
+
 - Progress updates sent via MediatR events
 - UI receives real-time scanning progress
 - Error notifications for failed items
@@ -221,12 +246,14 @@ ScannerProgressUpdate Events
 ### Phase 10: Error Handling & Recovery
 
 #### 10.1 Error Categories
+
 - **Network Errors**: Connection timeouts, server unavailable
 - **Authentication Errors**: Token expiration, invalid credentials
 - **Data Errors**: Malformed metadata, missing required fields
 - **File System Errors**: Path mapping failures, permission issues
 
 #### 10.2 Recovery Strategies
+
 ```
 Error Recovery
 ├── Retry failed operations with exponential backoff
@@ -239,6 +266,7 @@ Error Recovery
 ### Phase 11: Cleanup & Maintenance
 
 #### 11.1 Orphaned Item Cleanup
+
 ```
 Cleanup Process
 ├── Identify items no longer in Plex
@@ -249,6 +277,7 @@ Cleanup Process
 ```
 
 #### 11.2 Performance Optimization
+
 - **Incremental Scanning**: Only process changed items
 - **Batch Operations**: Group database updates
 - **Memory Management**: Stream large datasets
@@ -257,7 +286,7 @@ Cleanup Process
 ## Data Flow Diagram
 
 ```
-[Plex Server] 
+[Plex Server]
     ↓ (API Calls)
 [PlexServerApiClient]
     ↓ (Raw Data)
@@ -273,12 +302,14 @@ Cleanup Process
 ## Configuration Options
 
 ### Library Refresh Settings
+
 - **Refresh Interval**: How often to scan libraries (hours)
 - **Deep Scan**: Force full metadata refresh
 - **Path Replacements**: Custom path mapping rules
 - **Remote Streaming**: Enable/disable remote access
 
 ### Performance Tuning
+
 - **Concurrent Scans**: Number of simultaneous library scans
 - **Batch Size**: Items processed per batch
 - **Timeout Settings**: API call timeouts
@@ -287,12 +318,14 @@ Cleanup Process
 ## Monitoring & Logging
 
 ### Logging Levels
+
 - **Debug**: Detailed operation tracing
 - **Info**: General operation status
 - **Warning**: Non-fatal errors and issues
 - **Error**: Fatal errors requiring attention
 
 ### Key Metrics
+
 - **Scan Duration**: Time to complete library scans
 - **Items Processed**: Number of items synchronized
 - **Error Rate**: Percentage of failed operations
@@ -301,11 +334,13 @@ Cleanup Process
 ## Security Considerations
 
 ### Authentication
+
 - **Token Management**: Secure storage and rotation
 - **Connection Security**: SSL/TLS for API communication
 - **Access Control**: User permission validation
 
 ### Data Privacy
+
 - **Local Storage**: Sensitive data encryption
 - **Network Security**: Secure API communication
 - **Audit Logging**: Track access and modifications
@@ -313,12 +348,14 @@ Cleanup Process
 ## Troubleshooting Guide
 
 ### Common Issues
+
 1. **Authentication Failures**: Check token validity and server connectivity
 2. **Path Mapping Errors**: Verify path replacement rules
 3. **Metadata Inconsistencies**: Check for Plex server issues
 4. **Performance Problems**: Review scan intervals and batch sizes
 
 ### Diagnostic Tools
+
 - **Connection Testing**: Ping Plex servers
 - **Token Validation**: Verify authentication status
 - **Path Verification**: Test file system access
@@ -327,12 +364,14 @@ Cleanup Process
 ## Future Enhancements
 
 ### Planned Features
+
 - **Real-time Sync**: WebSocket-based live updates
 - **Selective Sync**: Choose specific libraries/content
 - **Advanced Filtering**: Content-based sync rules
 - **Performance Analytics**: Detailed scan metrics
 
 ### Scalability Improvements
+
 - **Distributed Scanning**: Multi-instance coordination
 - **Caching Layer**: Reduce API calls
 - **Incremental Metadata**: Delta-based updates

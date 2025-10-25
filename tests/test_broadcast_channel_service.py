@@ -21,7 +21,7 @@ class TestBroadcastChannelService:
     def test_list_channels_empty(self, db_session: Session):
         """Test listing channels when none exist."""
         # Clear existing data first
-        db_session.execute(text("DELETE FROM channel"))
+        db_session.execute(text("DELETE FROM broadcast_channel"))
         db_session.commit()
         
         with patch('retrovue.schedule_manager.broadcast_channel_service.session') as mock_session:
@@ -269,7 +269,7 @@ class TestBroadcastChannelService:
     def test_update_channel_validation_errors(self, db_session: Session):
         """Test update validation errors."""
         # Clear existing data first
-        db_session.execute(text("DELETE FROM channel"))
+        db_session.execute(text("DELETE FROM broadcast_channel"))
         db_session.commit()
         
         channel = BroadcastChannel(
@@ -306,7 +306,7 @@ class TestBroadcastChannelService:
     def test_update_channel_duplicate_name(self, db_session: Session):
         """Test updating a channel to a duplicate name."""
         # Clear existing data first
-        db_session.execute(text("DELETE FROM channel"))
+        db_session.execute(text("DELETE FROM broadcast_channel"))
         db_session.commit()
         
         # Create two channels

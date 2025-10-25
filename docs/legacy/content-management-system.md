@@ -1,5 +1,7 @@
 # 📚 Content Management System
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 The Content Management System (CMS) is the core component responsible for discovering, ingesting, organizing, and managing media content in Retrovue. It provides both CLI and web interfaces for content operations and includes a sophisticated review system for quality assurance.
 
 ## 🎯 Business Purpose

@@ -1,5 +1,7 @@
 # RetroVue UI Design — Core Mission (Living Document)
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 > Living document for the Retro IPTV Simulation Project UI. This is the umbrella document that establishes the overall mission, guiding principles, module structure, and how this UI fits into the Retro IPTV Simulation Project. Each functional area (Ingest, Schedule, Metadata, etc.) has its own subdocument, referenced here.
 
 ---

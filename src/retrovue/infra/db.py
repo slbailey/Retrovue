@@ -53,29 +53,15 @@ def get_engine(db_url: str = None) -> Engine:
     return engine
 
 
-def get_session() -> sessionmaker:
+def get_sessionmaker() -> sessionmaker:
     """Get or create the session factory."""
     return SessionLocal
 
 
-def get_db_session() -> Generator[Session, None, None]:
+def get_session() -> Generator[Session, None, None]:
     """Get a database session for dependency injection."""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-
-def init_db(db_url: str = None) -> None:
-    """Initialize the database by creating all tables."""
-    target_engine = get_engine(db_url)
-    # Import here to avoid circular imports
-    from ..schedule_manager.models import create_all_tables
-    create_all_tables(target_engine)
-    print(f"Database initialized at: {target_engine.url}")
-
-
-def close_db() -> None:
-    """Close database connections."""
-    engine.dispose()

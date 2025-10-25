@@ -8,7 +8,7 @@ from retrovue.infra.db import Base
 
 class BroadcastChannel(Base):
     """Broadcast channel model for scheduling."""
-    __tablename__ = "channel"
+    __tablename__ = "broadcast_channel"
     
     id = sa.Column(sa.Integer, primary_key=True)
     name = sa.Column(sa.Text, nullable=False, unique=True)
@@ -25,7 +25,7 @@ class BroadcastChannel(Base):
 
 class BroadcastTemplate(Base):
     """Broadcast template model for scheduling."""
-    __tablename__ = "template"
+    __tablename__ = "broadcast_template"
     
     id = sa.Column(sa.Integer, primary_key=True)
     name = sa.Column(sa.Text, nullable=False, unique=True)
@@ -41,10 +41,10 @@ class BroadcastTemplate(Base):
 
 class BroadcastTemplateBlock(Base):
     """Broadcast template block model for time blocks within templates."""
-    __tablename__ = "template_block"
+    __tablename__ = "broadcast_template_block"
     
     id = sa.Column(sa.Integer, primary_key=True)
-    template_id = sa.Column(sa.Integer, sa.ForeignKey("template.id", ondelete="CASCADE"), nullable=False, index=True)
+    template_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_template.id", ondelete="CASCADE"), nullable=False, index=True)
     start_time = sa.Column(sa.Text, nullable=False)  # "HH:MM" local wallclock
     end_time = sa.Column(sa.Text, nullable=False)    # "HH:MM"
     rule_json = sa.Column(sa.Text, nullable=False)   # e.g. {"tags":["sitcom"], "episode_policy":"syndication"}
@@ -58,16 +58,16 @@ class BroadcastTemplateBlock(Base):
 
 class BroadcastScheduleDay(Base):
     """Broadcast schedule day model for assigning templates to channels on specific days."""
-    __tablename__ = "schedule_day"
+    __tablename__ = "broadcast_schedule_day"
     
     id = sa.Column(sa.Integer, primary_key=True)
-    channel_id = sa.Column(sa.Integer, sa.ForeignKey("channel.id", ondelete="CASCADE"), nullable=False, index=True)
-    template_id = sa.Column(sa.Integer, sa.ForeignKey("template.id", ondelete="RESTRICT"), nullable=False)
+    channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channel.id", ondelete="CASCADE"), nullable=False, index=True)
+    template_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_template.id", ondelete="RESTRICT"), nullable=False)
     schedule_date = sa.Column(sa.Text, nullable=False)  # "YYYY-MM-DD" broadcast-day label, 06:00→06:00 policy
     created_at = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()"))
 
     __table_args__ = (
-        sa.UniqueConstraint("channel_id", "schedule_date", name="uq_schedule_day_channel_date"),
+        sa.UniqueConstraint("channel_id", "schedule_date", name="uq_broadcast_schedule_day_channel_date"),
     )
 
     channel = sa.orm.relationship("BroadcastChannel")
@@ -101,10 +101,10 @@ class CatalogAsset(Base):
 
 class BroadcastPlaylogEvent(Base):
     """Broadcast playlog event model for tracking what was actually played."""
-    __tablename__ = "playlog_event"
+    __tablename__ = "broadcast_playlog_event"
     
     id = sa.Column(sa.Integer, primary_key=True)
-    channel_id = sa.Column(sa.Integer, sa.ForeignKey("channel.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channel.id", ondelete="CASCADE"), nullable=False, index=True)
     asset_id = sa.Column(sa.Integer, sa.ForeignKey("catalog_asset.id", ondelete="RESTRICT"), nullable=False)
     start_utc = sa.Column(sa.DateTime(timezone=True), nullable=False)
     end_utc = sa.Column(sa.DateTime(timezone=True), nullable=False)
@@ -112,8 +112,8 @@ class BroadcastPlaylogEvent(Base):
     created_at = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()"))
 
     __table_args__ = (
-        sa.Index("ix_playlog_event_channel_start", "channel_id", "start_utc"),
-        sa.Index("ix_playlog_event_broadcast_day", "broadcast_day"),
+        sa.Index("ix_broadcast_playlog_event_channel_start", "channel_id", "start_utc"),
+        sa.Index("ix_broadcast_playlog_event_broadcast_day", "broadcast_day"),
     )
 
     channel = sa.orm.relationship("BroadcastChannel")

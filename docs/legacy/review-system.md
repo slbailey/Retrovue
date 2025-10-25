@@ -1,5 +1,7 @@
 # Retrovue Review System
 
+> **Legacy Document** — Pre-Alembic version, retained for reference only.
+
 This document describes the review workflow and quality assurance system in Retrovue, including endpoints, data models, and operational procedures.
 
 ## Overview
@@ -540,4 +542,3 @@ def check_resolution_errors():
 ---
 
 _This review system ensures content quality and proper metadata association through human oversight and automated quality checks._
-
