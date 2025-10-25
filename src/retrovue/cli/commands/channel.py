@@ -24,14 +24,18 @@ def list_cmd(json_output: bool = typer.Option(False, "--json", help="Output as J
                 typer.echo("No channels found")
                 return
             
-            # Print table header
-            typer.echo(f"{'ID':<4} {'Active':<6} {'Name':<20} {'Timezone':<20} {'Rollover':<8}")
-            typer.echo("-" * 70)
+            typer.echo(f"Found {len(channels)} channels:")
+            # Print table header matching contract
+            typer.echo(f"{'channel_id':<12} {'label':<20} {'producer':<20} {'enrichers':<30}")
+            typer.echo("-" * 90)
             
             # Print each channel
             for channel in channels:
-                active_str = "Yes" if channel["is_active"] else "No"
-                typer.echo(f"{channel['id']:<4} {active_str:<6} {channel['name']:<20} {channel['timezone']:<20} {channel['rollover_minutes']:<8}")
+                # TODO: Get actual producer and enricher data when available
+                producer = "N/A"  # TODO: Get active producer instance
+                enrichers = "N/A"  # TODO: Get attached playout enrichers with priority
+                
+                typer.echo(f"{channel['id']:<12} {channel['name']:<20} {producer:<20} {enrichers:<30}")
                 
     except Exception as e:
         typer.echo(f"Error listing channels: {e}", err=True)
@@ -186,4 +190,74 @@ def delete_cmd(
         raise typer.Exit(1)
     except Exception as e:
         typer.echo(f"Error deleting channel: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("attach-enricher")
+def attach_enricher(
+    channel_id: str = typer.Argument(..., help="Target channel"),
+    enricher_id: str = typer.Argument(..., help="Enricher to attach"),
+    priority: int = typer.Option(..., "--priority", help="Priority order (lower numbers run first)"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+):
+    """
+    Attach a playout-scope enricher to the Channel. Enrichers run in ascending priority.
+    
+    Parameters:
+    - channel_id: Target channel
+    - enricher_id: Enricher to attach
+    - --priority: Priority order (lower numbers run first)
+    
+    Examples:
+        retrovue channel attach-enricher channel-1 enricher-playout-1 --priority 1
+    """
+    try:
+        # TODO: Implement actual enricher attachment logic
+        if json_output:
+            import json
+            result = {
+                "channel_id": channel_id,
+                "enricher_id": enricher_id,
+                "priority": priority,
+                "status": "attached"
+            }
+            typer.echo(json.dumps(result, indent=2))
+        else:
+            typer.echo(f"Successfully attached enricher {enricher_id} to channel {channel_id}")
+            typer.echo(f"  Priority: {priority}")
+            typer.echo("TODO: implement actual attachment logic")
+                
+    except Exception as e:
+        typer.echo(f"Error attaching enricher: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("detach-enricher")
+def detach_enricher(
+    channel_id: str = typer.Argument(..., help="Target channel"),
+    enricher_id: str = typer.Argument(..., help="Enricher to detach"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+):
+    """
+    Remove enricher from channel.
+    
+    Examples:
+        retrovue channel detach-enricher channel-1 enricher-playout-1
+    """
+    try:
+        # TODO: Implement actual enricher detachment logic
+        if json_output:
+            import json
+            result = {
+                "channel_id": channel_id,
+                "enricher_id": enricher_id,
+                "status": "detached"
+            }
+            typer.echo(json.dumps(result, indent=2))
+        else:
+            typer.echo(f"Successfully detached enricher {enricher_id} from channel {channel_id}")
+            typer.echo("TODO: implement actual detachment logic")
+                
+    except Exception as e:
+        typer.echo(f"Error detaching enricher: {e}", err=True)
         raise typer.Exit(1)

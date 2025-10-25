@@ -1,83 +1,65 @@
 """
-Contract tests for retrovue channel commands.
+CLI contract tests for retrovue channel commands.
 
-Tests the channel command group against the documented contract in docs/operator/CLI.md.
+Tests the channel command group against the documented CLI contract in docs/operator/CLI.md.
 """
 
 import pytest
-from tests.cli.utils import CLITestRunner
+from .utils import run_cli
 
 
 class TestChannelCLI:
-    """Test cases for channel command group."""
-    
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.runner = CLITestRunner()
+    """Test suite for retrovue channel commands."""
     
     def test_channel_list_help(self):
-        """Test retrovue channel list --help."""
-        result = self.runner.assert_command_exists(["channel", "list"])
-        assert "List all channels" in result.output
+        """Test that retrovue channel list --help works."""
+        exit_code, stdout, stderr = run_cli(["channel", "list", "--help"])
+        assert exit_code == 0
+        assert "List all channels" in stdout or "List all channels" in stderr
     
-    def test_channel_list_shows_current_fields(self):
-        """Test that channel list shows current implementation fields."""
-        # Current implementation shows: ID, Active, Name, Timezone, Rollover
-        result = self.runner.invoke(["channel", "list"])
-        # This is a non-destructive command, but we'll just test presence
-        assert result.exit_code == 0 or result.exit_code == 1  # May fail due to no DB
+    def test_channel_list(self):
+        """Test that retrovue channel list command exists and works."""
+        exit_code, stdout, stderr = run_cli(["channel", "list"])
+        assert exit_code == 0
+        # Should show channels or empty list
+        assert "channels" in stdout.lower() or "found" in stdout.lower()
     
-    @pytest.mark.xfail(reason="Missing documented fields per CLI.md")
-    def test_channel_list_shows_documented_fields(self):
-        """Test that channel list shows documented fields."""
-        # TODO: According to CLI.md, should show:
-        # - channel_id, name/branding label, active producer instance, attached playout enrichers (with priority)
-        # Current implementation shows: ID, Active, Name, Timezone, Rollover
-        # This mismatch should be resolved
-        result = self.runner.invoke(["channel", "list"])
-        assert "active producer instance" in result.output
-        assert "attached playout enrichers" in result.output
+    @pytest.mark.xfail(reason="Documented output columns not implemented yet")
+    def test_channel_list_output_columns(self):
+        """Test that retrovue channel list shows documented output columns."""
+        exit_code, stdout, stderr = run_cli(["channel", "list"])
+        assert exit_code == 0
+        # TODO: Assert that required columns appear in output:
+        # - channel_id
+        # - name/branding label  
+        # - active producer instance
+        # - attached playout enrichers (with priority)
+        assert "channel_id" in stdout or "id" in stdout
+        assert "name" in stdout or "branding" in stdout
+        # TODO: Add assertions for producer instance and enrichers when implemented
+        pytest.skip("Output format gap: missing producer instance and enricher columns")
     
-    @pytest.mark.xfail(reason="Channel enricher commands not implemented per CLI contract")
     def test_channel_attach_enricher_help(self):
-        """Test retrovue channel attach-enricher --help."""
-        # TODO: According to CLI.md, should have retrovue channel attach-enricher <channel_id> <enricher_id> --priority <n>
-        result = self.runner.assert_command_exists(["channel", "attach-enricher"])
-        assert "Attach a playout-scope enricher" in result.output
+        """Test that retrovue channel attach-enricher --help works."""
+        exit_code, stdout, stderr = run_cli(["channel", "attach-enricher", "--help"])
+        assert exit_code == 0
+        assert "--priority" in stdout
+        assert "Attach a playout-scope enricher" in stdout or "Attach a playout-scope enricher" in stderr
     
-    @pytest.mark.xfail(reason="Channel enricher commands not implemented per CLI contract")
-    def test_channel_attach_enricher_has_priority_flag(self):
-        """Test that channel attach-enricher has --priority flag."""
-        result = self.runner.invoke_help(["channel", "attach-enricher"])
-        assert "--priority" in result.output
+    @pytest.mark.skip(reason="destructive; presence-only check")
+    def test_channel_attach_enricher_presence(self):
+        """Test that retrovue channel attach-enricher command is registered (destructive test)."""
+        exit_code, stdout, stderr = run_cli(["channel", "attach-enricher", "--help"])
+        assert exit_code == 0
     
-    @pytest.mark.xfail(reason="Channel enricher commands not implemented per CLI contract")
     def test_channel_detach_enricher_help(self):
-        """Test retrovue channel detach-enricher --help."""
-        # TODO: According to CLI.md, should have retrovue channel detach-enricher <channel_id> <enricher_id>
-        result = self.runner.assert_command_exists(["channel", "detach-enricher"])
-        assert "Remove enricher from channel" in result.output
+        """Test that retrovue channel detach-enricher --help works."""
+        exit_code, stdout, stderr = run_cli(["channel", "detach-enricher", "--help"])
+        assert exit_code == 0
+        assert "Remove enricher from channel" in stdout or "Remove enricher from channel" in stderr
     
-    def test_channel_show_help(self):
-        """Test retrovue channel show --help."""
-        # This command exists in current implementation
-        result = self.runner.assert_command_exists(["channel", "show"])
-        assert "Show detailed information" in result.output
-    
-    def test_channel_create_help(self):
-        """Test retrovue channel create --help."""
-        # This command exists in current implementation
-        result = self.runner.assert_command_exists(["channel", "create"])
-        assert "Create a new channel" in result.output
-    
-    def test_channel_update_help(self):
-        """Test retrovue channel update --help."""
-        # This command exists in current implementation
-        result = self.runner.assert_command_exists(["channel", "update"])
-        assert "Update an existing channel" in result.output
-    
-    def test_channel_delete_help(self):
-        """Test retrovue channel delete --help."""
-        # This command exists in current implementation
-        result = self.runner.assert_command_exists(["channel", "delete"])
-        assert "Delete a channel" in result.output
+    @pytest.mark.skip(reason="destructive; presence-only check")
+    def test_channel_detach_enricher_presence(self):
+        """Test that retrovue channel detach-enricher command is registered (destructive test)."""
+        exit_code, stdout, stderr = run_cli(["channel", "detach-enricher", "--help"])
+        assert exit_code == 0

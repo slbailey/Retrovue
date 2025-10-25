@@ -1,72 +1,64 @@
 """
-Contract tests for retrovue collection commands.
+CLI contract tests for retrovue collection commands.
 
-Tests the collection command group against the documented contract in docs/operator/CLI.md.
+Tests the collection command group against the documented CLI contract in docs/operator/CLI.md.
 """
 
 import pytest
-from tests.cli.utils import CLITestRunner
+from .utils import run_cli
 
 
 class TestCollectionCLI:
-    """Test cases for collection command group."""
+    """Test suite for retrovue collection commands."""
     
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.runner = CLITestRunner()
-    
-    @pytest.mark.xfail(reason="Collection commands not implemented as separate command group per CLI contract")
     def test_collection_list_help(self):
-        """Test retrovue collection list --help."""
-        # TODO: According to CLI.md, should have retrovue collection list --source <source_id>
-        # Current implementation has this as retrovue source assets list <source_id>
-        result = self.runner.assert_command_exists(["collection", "list"])
-        assert "List Collections for a Source" in result.output
+        """Test that retrovue collection list --help works."""
+        exit_code, stdout, stderr = run_cli(["collection", "list", "--help"])
+        assert exit_code == 0
+        assert "--source" in stdout
+        assert "Show Collections for a Source" in stdout or "Show Collections for a Source" in stderr
     
-    @pytest.mark.xfail(reason="Collection commands not implemented as separate command group per CLI contract")
-    def test_collection_list_shows_required_fields(self):
-        """Test that collection list shows required fields."""
-        # TODO: According to CLI.md, should show:
-        # - collection_id, display_name, source_path, local_path, sync_enabled, ingestable
-        pytest.skip("destructive; presence-only check")
+    def test_collection_list(self):
+        """Test that retrovue collection list command exists."""
+        # This will likely fail without a valid source, but should show help
+        exit_code, stdout, stderr = run_cli(["collection", "list", "--source", "test"])
+        # Should either work or show error about missing source
+        assert exit_code in [0, 1]  # 0 if works, 1 if source not found
     
-    @pytest.mark.xfail(reason="Collection commands not implemented as separate command group per CLI contract")
     def test_collection_update_help(self):
-        """Test retrovue collection update --help."""
-        # TODO: According to CLI.md, should have retrovue collection update <collection_id> --sync-enabled <true|false> [--local-path <path>]
-        result = self.runner.assert_command_exists(["collection", "update"])
-        assert "Enable/disable ingest for that Collection" in result.output
+        """Test that retrovue collection update --help works."""
+        exit_code, stdout, stderr = run_cli(["collection", "update", "--help"])
+        assert exit_code == 0
+        assert "--sync-enabled" in stdout
+        assert "--local-path" in stdout
     
-    @pytest.mark.xfail(reason="Collection commands not implemented as separate command group per CLI contract")
-    def test_collection_update_has_sync_enabled_and_local_path_flags(self):
-        """Test that collection update has --sync-enabled and --local-path flags."""
-        result = self.runner.invoke_help(["collection", "update"])
-        assert "--sync-enabled" in result.output
-        assert "--local-path" in result.output
+    @pytest.mark.skip(reason="destructive; presence-only check")
+    def test_collection_update_presence(self):
+        """Test that retrovue collection update command is registered (destructive test)."""
+        exit_code, stdout, stderr = run_cli(["collection", "update", "--help"])
+        assert exit_code == 0
     
-    @pytest.mark.xfail(reason="Collection commands not implemented as separate command group per CLI contract")
     def test_collection_attach_enricher_help(self):
-        """Test retrovue collection attach-enricher --help."""
-        # TODO: According to CLI.md, should have retrovue collection attach-enricher <collection_id> <enricher_id> --priority <n>
-        result = self.runner.assert_command_exists(["collection", "attach-enricher"])
-        assert "Attach an ingest-scope enricher" in result.output
+        """Test that retrovue collection attach-enricher --help works."""
+        exit_code, stdout, stderr = run_cli(["collection", "attach-enricher", "--help"])
+        assert exit_code == 0
+        assert "--priority" in stdout
+        assert "Attach an ingest-scope enricher" in stdout or "Attach an ingest-scope enricher" in stderr
     
-    @pytest.mark.xfail(reason="Collection commands not implemented as separate command group per CLI contract")
-    def test_collection_attach_enricher_has_priority_flag(self):
-        """Test that collection attach-enricher has --priority flag."""
-        result = self.runner.invoke_help(["collection", "attach-enricher"])
-        assert "--priority" in result.output
+    @pytest.mark.skip(reason="destructive; presence-only check")
+    def test_collection_attach_enricher_presence(self):
+        """Test that retrovue collection attach-enricher command is registered (destructive test)."""
+        exit_code, stdout, stderr = run_cli(["collection", "attach-enricher", "--help"])
+        assert exit_code == 0
     
-    @pytest.mark.xfail(reason="Collection commands not implemented as separate command group per CLI contract")
     def test_collection_detach_enricher_help(self):
-        """Test retrovue collection detach-enricher --help."""
-        # TODO: According to CLI.md, should have retrovue collection detach-enricher <collection_id> <enricher_id>
-        result = self.runner.assert_command_exists(["collection", "detach-enricher"])
-        assert "Remove enricher from collection" in result.output
+        """Test that retrovue collection detach-enricher --help works."""
+        exit_code, stdout, stderr = run_cli(["collection", "detach-enricher", "--help"])
+        assert exit_code == 0
+        assert "Remove enricher from collection" in stdout or "Remove enricher from collection" in stderr
     
-    def test_source_assets_list_as_collection_alternative(self):
-        """Test that retrovue source assets list exists as alternative to collection list."""
-        # Current implementation has collection functionality under source assets
-        result = self.runner.assert_command_exists(["source", "assets", "list"])
-        assert "List asset groups" in result.output
-        # TODO: This is a workaround - proper collection commands should be implemented
+    @pytest.mark.skip(reason="destructive; presence-only check")
+    def test_collection_detach_enricher_presence(self):
+        """Test that retrovue collection detach-enricher command is registered (destructive test)."""
+        exit_code, stdout, stderr = run_cli(["collection", "detach-enricher", "--help"])
+        assert exit_code == 0

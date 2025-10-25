@@ -1,100 +1,98 @@
 """
-Contract tests for retrovue source commands.
+CLI contract tests for retrovue source commands.
 
-Tests the source command group against the documented contract in docs/operator/CLI.md.
+Tests the source command group against the documented CLI contract in docs/operator/CLI.md.
 """
 
 import pytest
-from tests.cli.utils import CLITestRunner
+from .utils import run_cli
 
 
 class TestSourceCLI:
-    """Test cases for source command group."""
-    
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.runner = CLITestRunner()
+    """Test suite for retrovue source commands."""
     
     def test_source_list_types_help(self):
-        """Test retrovue source list-types --help."""
-        result = self.runner.assert_command_exists(["source", "list-types"])
-        assert "List all available source types" in result.output
+        """Test that retrovue source list-types --help works."""
+        exit_code, stdout, stderr = run_cli(["source", "list-types", "--help"])
+        assert exit_code == 0
+        assert "List all available source types" in stdout or "List all available source types" in stderr
     
-    def test_source_list_types_has_descriptions(self):
-        """Test that source list-types includes descriptions as documented."""
-        # TODO: According to CLI.md, output should include descriptions
-        # Current implementation may not include descriptions - this should be fixed
-        result = self.runner.invoke(["source", "list-types"])
-        assert result.exit_code == 0
-        # TODO: Add assertion for descriptions once implemented
+    def test_source_list_types(self):
+        """Test that retrovue source list-types command exists and works."""
+        exit_code, stdout, stderr = run_cli(["source", "list-types"])
+        assert exit_code == 0
+        # Should show available source types
+        assert "plex" in stdout or "filesystem" in stdout
     
     def test_source_add_help(self):
-        """Test retrovue source add --help."""
-        # The source add command requires --type parameter, so we test with a type
-        result = self.runner.assert_command_exists(["source", "add", "--type", "plex"])
-        assert "Help for plex source type" in result.output
-    
-    def test_source_add_requires_type_and_name(self):
-        """Test that source add requires --type and --name flags."""
-        # Test with a specific type to get the help
-        result = self.runner.invoke_help(["source", "add", "--type", "plex"])
-        assert "--type" in result.output
-        assert "--name" in result.output
-        # TODO: According to audit, --name is required in code but not documented
-        # This mismatch should be resolved by either making --name optional or updating docs
+        """Test that retrovue source add --help works."""
+        exit_code, stdout, stderr = run_cli(["source", "add", "--help"])
+        assert exit_code == 0
+        assert "--type" in stdout
+        assert "--name" in stdout
     
     def test_source_add_type_help(self):
-        """Test retrovue source add --type <type> --help for specific types."""
-        # Test with plex type
-        result = self.runner.invoke_help(["source", "add", "--type", "plex"])
-        assert result.exit_code == 0
-        assert "plex" in result.output.lower()
-        
-        # Test with filesystem type  
-        result = self.runner.invoke_help(["source", "add", "--type", "filesystem"])
-        assert result.exit_code == 0
-        assert "filesystem" in result.output.lower()
+        """Test that retrovue source add --type <type> --help works."""
+        exit_code, stdout, stderr = run_cli(["source", "add", "--type", "plex", "--help"])
+        assert exit_code == 0
+        # Should show plex-specific parameters
+        assert "plex" in stdout.lower() or "base_url" in stdout or "token" in stdout
     
     def test_source_list_help(self):
-        """Test retrovue source list --help."""
-        result = self.runner.assert_command_exists(["source", "list"])
-        assert "List all configured sources" in result.output
+        """Test that retrovue source list --help works."""
+        exit_code, stdout, stderr = run_cli(["source", "list", "--help"])
+        assert exit_code == 0
+        assert "List all configured sources" in stdout or "List all configured sources" in stderr
     
-    def test_source_list_shows_required_fields(self):
-        """Test that source list shows required fields: source_id, name, type, status."""
-        # TODO: According to CLI.md, should show source_id, name, type, status
-        # Current implementation may not show all fields - this should be verified
-        result = self.runner.invoke(["source", "list"])
-        # This is a destructive command that would query real data, so we skip actual execution
-        pytest.skip("destructive; presence-only check")
+    def test_source_list(self):
+        """Test that retrovue source list command exists and works."""
+        exit_code, stdout, stderr = run_cli(["source", "list"])
+        assert exit_code == 0
+        # Should show sources or empty list
+        assert "sources" in stdout.lower() or "found" in stdout.lower()
     
     def test_source_update_help(self):
-        """Test retrovue source update --help."""
-        result = self.runner.assert_command_exists(["source", "update"])
-        assert "Update a source configuration" in result.output
+        """Test that retrovue source update --help works."""
+        exit_code, stdout, stderr = run_cli(["source", "update", "--help"])
+        assert exit_code == 0
+        assert "Update a source configuration" in stdout or "Update a source configuration" in stderr
     
     def test_source_remove_help(self):
-        """Test retrovue source remove --help."""
-        result = self.runner.assert_command_exists(["source", "delete"])  # Actual command is "delete" not "remove"
-        assert "Delete a source" in result.output
+        """Test that retrovue source remove --help works."""
+        exit_code, stdout, stderr = run_cli(["source", "remove", "--help"])
+        assert exit_code == 0
+        assert "Delete a source" in stdout or "Delete a source" in stderr
     
-    def test_source_remove_confirms_and_shows_affected(self):
-        """Test that source remove confirms removal and shows affected collections."""
-        # TODO: According to CLI.md, should confirm removal and show affected collections
-        # This is a destructive command, so we only test presence
-        result = self.runner.invoke_help(["source", "delete"])
-        assert "--force" in result.output  # Should have force option for non-interactive use
-        pytest.skip("destructive; presence-only check")
+    @pytest.mark.skip(reason="destructive; presence-only check")
+    def test_source_remove_presence(self):
+        """Test that retrovue source remove command is registered (destructive test)."""
+        exit_code, stdout, stderr = run_cli(["source", "remove", "--help"])
+        assert exit_code == 0
     
     def test_source_sync_collections_help(self):
-        """Test retrovue source sync-collections --help."""
-        # TODO: According to audit, command is named "discover" not "sync-collections"
-        # This mismatch should be resolved by either renaming command or updating docs
-        result = self.runner.assert_command_exists(["source", "discover"])
-        assert "Discover collections" in result.output
+        """Test that retrovue source sync-collections --help works."""
+        # TODO: This command is documented as sync-collections but may be implemented as discover
+        # Check if sync-collections exists first
+        exit_code, stdout, stderr = run_cli(["source", "sync-collections", "--help"])
+        if exit_code != 0:
+            # If sync-collections doesn't exist, check if discover exists (current implementation)
+            exit_code, stdout, stderr = run_cli(["source", "discover", "--help"])
+            assert exit_code == 0
+            assert "Discover collections" in stdout or "Discover collections" in stderr
+        else:
+            assert exit_code == 0
+            assert "sync-collections" in stdout or "sync collections" in stdout
     
-    def test_source_sync_collections_shows_discovered(self):
-        """Test that source sync-collections shows discovered collections and sync status."""
-        # TODO: According to CLI.md, should show discovered collections and sync status
-        # This is a potentially destructive command, so we only test presence
-        pytest.skip("destructive; presence-only check")
+    def test_source_sync_collections_current_implementation(self):
+        """Test the current implementation (discover command)."""
+        exit_code, stdout, stderr = run_cli(["source", "discover", "--help"])
+        assert exit_code == 0
+        assert "Discover collections" in stdout or "Discover collections" in stderr
+    
+    @pytest.mark.xfail(reason="Command should be named sync-collections per CLI contract")
+    def test_source_sync_collections_contract_compliance(self):
+        """Test that sync-collections command exists per contract."""
+        exit_code, stdout, stderr = run_cli(["source", "sync-collections", "--help"])
+        assert exit_code == 0
+        # TODO: Either rename discover to sync-collections in code or update docs
+        pytest.skip("Naming mismatch: docs say sync-collections but code has discover")

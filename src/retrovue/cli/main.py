@@ -11,7 +11,7 @@ import typer
 from typing import Optional
 
 from ..infra.uow import session
-from .commands import assets, catalog, review, plex, source, test, channel, template, schedule, asset
+from .commands import assets, catalog, review, plex, source, test, channel, template, schedule, asset, enricher, producer, collection
 # Ensure registry is populated
 import retrovue.adapters.importers  # noqa: F401
 
@@ -33,6 +33,11 @@ app.add_typer(template.app, name="template", help="Template management operation
 app.add_typer(schedule.app, name="schedule", help="Schedule management operations for infrastructure bootstrap")
 app.add_typer(asset.app, name="asset", help="Asset management operations for infrastructure bootstrap")
 
+# Add new command groups per CLI contract
+app.add_typer(enricher.app, name="enricher", help="Enricher management operations")
+app.add_typer(producer.app, name="producer", help="Producer management operations")
+app.add_typer(collection.app, name="collection", help="Collection management operations")
+
 # Add play commands directly
 from .play import play, play_channel
 app.command("play")(play)
@@ -44,7 +49,7 @@ def main(
     ctx: typer.Context,
     json: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
-    """Retrovue CLI - Retro IPTV Simulation Project."""
+    """Retrovue - Retro IPTV Simulation Project."""
     # Store JSON flag in context for subcommands to use
     ctx.ensure_object(dict)
     ctx.obj["json"] = json

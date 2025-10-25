@@ -633,6 +633,26 @@ def discover_collections(
             raise typer.Exit(1)
 
 
+@app.command("sync-collections")
+def sync_collections(
+    source_id: str = typer.Argument(..., help="Source ID, external ID, or name to sync collections from"),
+    persist: bool = typer.Option(False, "--persist", help="Persist discovered collections to database"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+):
+    """
+    Ask the importer to enumerate that Source's Collections (libraries). Create or update Collection rows in RetroVue.
+    
+    Output: Shows discovered collections and sync status.
+    
+    Examples:
+        retrovue source sync-collections "My Plex"
+        retrovue source sync-collections plex-5063d926 --persist
+        retrovue source sync-collections "My Plex" --persist --json
+    """
+    # This is an alias for the discover command - call the same underlying function
+    return discover_collections(source_id, persist, json_output)
+
+
 @asset_groups_app.command("enable")
 def enable_asset_group(
     source_id: str = typer.Argument(..., help="Source ID, name, or external ID"),
