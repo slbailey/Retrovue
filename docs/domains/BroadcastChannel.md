@@ -2,26 +2,14 @@
 
 ## Purpose
 
-BroadcastChannel represents a persistent broadcast entity in the RetroVue system. It defines channel identity, configuration, and operational parameters for channels such as "RetroToons" or "MidnightMovies".
-
-BroadcastChannel is stored in Postgres using SQLAlchemy. It is configuration and identity, not a runtime encoder instance. Operators reference BroadcastChannel when scheduling content, managing programming, and monitoring on-air status.
-
-BroadcastChannel defines:
-
-- Channel identity and human-facing name
-- IANA timezone for all scheduling logic
-- Broadcast day rollover rules (e.g., 6:00 AM for overnight blocks)
-- Clock/grid alignment for scheduling
-- Active status for on-air availability
-
-The canonical name is BroadcastChannel throughout code, documentation, and database schema.
+BroadcastChannel defines a persistent broadcast entity with channel identity, configuration, and operational parameters for channels such as "RetroToons" or "MidnightMovies".
 
 ## Persistence model and fields
 
 BroadcastChannel is managed by SQLAlchemy with the following fields:
 
-- **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
-- **uuid** (UUID, required, unique): Stable external identifier used for audit, cross-domain tracing, and as-run logs
+- **id** (Integer, primary key): Internal identifier for relational joins and foreign key references
+- **uuid** (UUID, required, unique): External stable identifier exposed to API, runtime, and logs
 - **name** (Text, required, unique): Human-facing channel label used in UI and operator tooling
 - **timezone** (Text, required): IANA timezone string for all schedule generation and "what's on now" logic
 - **grid_size_minutes** (Integer, required): Base grid slot size for scheduling (e.g., 30-minute blocks)
@@ -40,22 +28,9 @@ ScheduleService consumes BroadcastChannel records to determine current programmi
 
 The timezone field defines how "local time" is interpreted for that channel's day, including overnight rollover. ScheduleService is authoritative for what to play. BroadcastChannel provides the identity and context.
 
-## Runtime relationship
+## Runtime behavior
 
-BroadcastChannel becomes an active stream through runtime components:
-
-**ChannelManager** is the per-channel runtime orchestrator responsible for putting the channel on-air. It asks ScheduleService what to play but does not generate schedules or make programming decisions.
-
-**Producer** (NormalProducer, EmergencyProducer, GuideProducer) is the output generator that produces continuous MPEG-TS transport stream to stdout. It plays content as instructed without content selection.
-
-**Fan-out**: ChannelManager distributes the stdout stream from the active Producer to multiple viewers/clients using the IPTV one-producer-many-consumers model.
-
-**ChannelRuntimeState** is an in-memory snapshot maintained by ChannelManager. It tracks viewer count, current mode, Producer status, and health for operator dashboards.
-
-Runtime hierarchy:
-BroadcastChannel (persistent, Postgres) → ScheduleService → ChannelManager → Producer → viewers
-
-BroadcastChannel is persisted configuration. ChannelManager, Producer, and ChannelRuntimeState are runtime/ephemeral.
+ChannelManager uses BroadcastChannel to know how to interpret 'now' and how to cut the day (rollover).
 
 ## Operator workflows
 
@@ -69,16 +44,12 @@ BroadcastChannel is persisted configuration. ChannelManager, Producer, and Chann
 
 **Retire channel**: Set is_active false to remove from routing and scheduling.
 
-Future operator tooling will include maintenance CLI/admin UI for BroadcastChannel records and Channel Dashboard UI for ChannelRuntimeState display.
+Operators and external integrations should always refer to objects by uuid, not by integer id.
 
-## Naming and consistency rules
+## Naming rules
 
 The canonical name for this concept in code and documentation is BroadcastChannel.
 
-We do NOT maintain a separate "Channel" model alongside BroadcastChannel. There is no parallel "ChannelConfig" entity unless one is explicitly introduced later.
+API surfaces and logs must surface the UUID, not the integer id.
 
-All scheduling logic, runtime orchestration, and operator tooling MUST refer to BroadcastChannel as the persisted channel definition.
-
-ChannelManager, Producer, and ChannelRuntimeState are runtime components that operate on a BroadcastChannel. They are not alternate channel definitions.
-
-**Important**: broadcast_channel is the ONLY canonical persisted channel table. The old UUID-based channels table is deprecated. BroadcastChannel.uuid is exposed externally (guide, logs, analytics).
+BroadcastChannel is always capitalized in internal docs. schedule_date uses YYYY-MM-DD format. broadcast_day is derived from rollover policy and is not wall-clock midnight.

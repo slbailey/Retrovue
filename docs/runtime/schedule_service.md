@@ -14,7 +14,7 @@ ScheduleService owns broadcast day logic and channel timing policy. No other com
 
 ## Content Authority Constraint
 
-**ScheduleService may only schedule assets that Content Manager has marked as canonical/approved for broadcast.**
+**ScheduleService may only schedule CatalogAsset entries that are marked as canonical/approved for broadcast.**
 
 ScheduleService is forbidden from:
 
@@ -149,7 +149,7 @@ A background loop (scheduler_daemon / horizon builder) keeps these horizons gene
 ### Loop Contract
 
 1. Ask MasterClock.now_utc() for the current authoritative time.
-2. For each channel, ask ScheduleService:
+2. For each BroadcastChannel, ask ScheduleService:
    - "Based on this channel's timing policy and broadcast day rollover rules, what's supposed to air next?"
    - "Do we already have scheduled segments covering from now out to the target horizon window?"
    - "If not, generate more future segments."
@@ -204,6 +204,8 @@ ScheduledSegment:
 ## Testing
 
 Use the `retrovue test broadcast-day-alignment` command to validate broadcast day logic and rollover handling. This test validates the HBO-style 05:00–07:00 scenario and ensures proper broadcast day classification.
+
+ScheduleService operates on BroadcastChannel entities using UUID identifiers for external operations and logs.
 
 ## Cross-References
 

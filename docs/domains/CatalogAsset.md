@@ -4,21 +4,12 @@
 
 CatalogAsset represents a broadcast-approved catalog entry that is eligible for scheduling and playout. This is the "airable" content that ScheduleService can select and schedule for broadcast.
 
-CatalogAsset enables:
-
-- Broadcast-approved content catalog
-- Content metadata for scheduling decisions
-- Approval workflow between Library Domain and Broadcast Domain
-- Content selection based on tags, duration, and other criteria
-
-The canonical name is CatalogAsset throughout code, documentation, and database schema.
-
 ## Persistence model and fields
 
 CatalogAsset is managed by SQLAlchemy with the following fields:
 
-- **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
-- **uuid** (UUID, required, unique): Stable external identifier used for audit, cross-domain tracing, and as-run logs
+- **id** (Integer, primary key): Internal identifier for relational joins and foreign key references
+- **uuid** (UUID, required, unique): External stable identifier exposed to API, runtime, and logs
 - **title** (Text, required): Human-readable asset title
 - **duration_ms** (Integer, required): Asset duration in milliseconds
 - **tags** (Text, optional): Comma-separated content tags for categorization
@@ -35,6 +26,8 @@ CatalogAsset has indexes on canonical, tags, and source_ingest_asset_id fields f
 
 ## Scheduling and interaction rules
 
+CatalogAsset is only created from approved ingest content, and only canonical CatalogAsset entries are eligible for scheduling.
+
 ScheduleService consumes CatalogAsset records to select content for scheduling. Only assets with canonical=true are eligible for selection. ScheduleService uses:
 
 - Tags to match content selection rules from BroadcastTemplateBlock
@@ -44,18 +37,9 @@ ScheduleService consumes CatalogAsset records to select content for scheduling. 
 
 Catalog assets are the source of all scheduled content - no content can be scheduled that is not in the catalog with canonical=true.
 
-## Runtime relationship
+## Runtime behavior
 
-CatalogAsset operates through the content selection and playout pipeline:
-
-**ScheduleService** reads catalog assets to select content based on template block rules. It uses tags, duration, and approval status to make selection decisions.
-
-**ChannelManager** receives playout instructions that reference catalog asset file paths for content playback.
-
-**Producer** plays the actual content files referenced by catalog assets.
-
-Runtime hierarchy:
-CatalogAsset (persistent) → ScheduleService (content selection) → BroadcastPlaylogEvent (generated) → ChannelManager (playout) → Producer (file playback)
+CatalogAsset is what actually airs; runtime never directly plays ingest Asset.
 
 ## Operator workflows
 
@@ -69,12 +53,12 @@ CatalogAsset (persistent) → ScheduleService (content selection) → BroadcastP
 
 **Content Discovery**: Search and filter catalog assets by tags, duration, and approval status.
 
-## Naming and consistency rules
+Operators and external integrations should always refer to objects by uuid, not by integer id.
+
+## Naming rules
 
 The canonical name for this concept in code and documentation is CatalogAsset.
 
-Catalog assets are broadcast-approved content, not runtime components. They define "what content is available" but do not execute content playback.
-
-All scheduling logic, operator tooling, and documentation MUST refer to CatalogAsset as the persisted catalog entry definition.
+API surfaces and logs must surface the UUID, not the integer id.
 
 CatalogAsset represents the broadcast-approved catalog entries (airable content) that are eligible for scheduling and playout, with full traceability back to the ingest domain through shared UUID values and foreign key relationships.

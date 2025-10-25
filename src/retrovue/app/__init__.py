@@ -6,6 +6,7 @@ and orchestrate domain objects and adapters. CLI and API layers must use these
 services instead of accessing the database directly.
 """
 
-from .library_service import LibraryService
+from .asset_service import AssetService
+from .catalog_asset_service import CatalogAssetService
 
-__all__ = ["LibraryService"]
+__all__ = ["AssetService", "CatalogAssetService"]

@@ -99,20 +99,19 @@ The Program Director follows RetroVue's architectural patterns:
 
 ## Core Data Model
 
-All runtime information is stored in SQLAlchemy models in `src/retrovue/domain/entities.py`. These represent the "source of truth" for what's currently playing and how the system is operating.
+All runtime information is stored in SQLAlchemy models. These represent the "source of truth" for what's currently playing and how the system is operating.
 
-### Channel
+### BroadcastChannel
 
 Represents a broadcast channel with its runtime state and configuration.
 
 **Key Properties:**
 
-- `id` - Database primary key
-- `uuid` - Stable external identifier
+- `id` - Internal database primary key
+- `uuid` - External stable identifier exposed to API, runtime, and logs
 - `name` - Human-readable channel name
-- `number` - Channel number for display
-- `enabled` - Whether channel is active
 - `timezone` - Channel's time zone for scheduling
+- `is_active` - Whether channel is active
 - `current_mode` - Current operational mode (normal, emergency, guide)
 - `viewer_count` - Number of active viewers
 - `producer_status` - Status of the Producer (stopped, starting, running, stopping) (runtime field; reflects current Producer state and is not long-term schedule state)
@@ -129,7 +128,7 @@ Represents an active viewer connection to a channel.
 
 **Key Properties:**
 
-- `id` - Database primary key
+- `id` - Internal database primary key
 - `channel_id` - Which channel the viewer is watching
 - `session_id` - Unique session identifier
 - `started_at` - When the session began
@@ -139,7 +138,7 @@ Represents an active viewer connection to a channel.
 
 **Relationships:**
 
-- Belongs to Channel
+- Belongs to BroadcastChannel
 - Links to Producer (through channel)
 
 ViewerSession is observational. It exists to track active viewers and drive fanout rules. It never influences scheduling and it cannot request content.
@@ -542,6 +541,8 @@ It follows RetroVue's architectural patterns and provides the runtime foundation
 **Remember:** Program Director is about **runtime coordination and playback**—not scheduling, content discovery, or library management. It consumes data from other systems and coordinates real-time broadcast operations.
 
 In broadcast terms: Program Director is master control. It doesn't decide what's on the log — it makes sure the log actually goes to air, on time, synchronized, and recoverable.
+
+ProgramDirector operates on BroadcastChannel entities using UUID identifiers for external operations and logs.
 
 ## Cross-References
 
