@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document captures key architectural concepts for Retrovue's streaming pipeline. These ideas represent the intended design direction but are **not to be implemented yet**. They are documented here for future reference once the foundation (Content Library, domain model, and FastAPI integration) is solidified.
+This document captures key architectural concepts for RetroVue's streaming pipeline. These ideas represent the intended design direction but are **not to be implemented yet**. They are documented here for future reference once the foundation (Content Library, domain model, and FastAPI integration) is solidified.
 
 ## Continuous Playback (Perpetual Live Channel)
 
@@ -11,7 +11,7 @@ This document captures key architectural concepts for Retrovue's streaming pipel
 The ultimate objective is to create a true 24x7 live channel with **no defined start or end**. This differs fundamentally from traditional video streaming approaches:
 
 - **Traditional approach:** `concat.txt`-style playlists with beginning and end points
-- **Retrovue approach:** Continuously assembled stream that runs indefinitely
+- **RetroVue approach:** Continuously assembled stream that runs indefinitely
 - **Challenge:** The system must continuously assemble a stream on the fly, alternating between program segments and ad breaks, without ever "running out" of content
 
 ### Key Requirements

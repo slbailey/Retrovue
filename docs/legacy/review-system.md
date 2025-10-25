@@ -1,8 +1,8 @@
-# Retrovue Review System
+# RetroVue Review System
 
 > **Legacy Document** — Pre-Alembic version, retained for reference only.
 
-This document describes the review workflow and quality assurance system in Retrovue, including endpoints, data models, and operational procedures.
+This document describes the review workflow and quality assurance system in RetroVue, including endpoints, data models, and operational procedures.
 
 ## Overview
 

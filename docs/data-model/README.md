@@ -1,3 +1,5 @@
+_Related: [Infrastructure bootstrap](../infra/bootstrap.md) • [Broadcast schema](broadcast-schema.md) • [Architecture overview](../architecture/ArchitectureOverview.md)_
+
 # RetroVue Data Model
 
 This directory contains documentation for RetroVue's data model, organized by domain.

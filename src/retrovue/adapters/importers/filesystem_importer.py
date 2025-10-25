@@ -29,6 +29,7 @@ class FilesystemImporter:
     
     def __init__(
         self,
+        source_name: str,
         root_paths: list[str] | None = None,
         glob_patterns: list[str] | None = None,
         include_hidden: bool = False,
@@ -38,11 +39,13 @@ class FilesystemImporter:
         Initialize the filesystem importer.
         
         Args:
+            source_name: Human-readable name for this filesystem source
             root_paths: List of root directories to scan (default: current directory)
             glob_patterns: List of glob patterns to match (default: common video extensions)
             include_hidden: Whether to include hidden files and directories
             calculate_hash: Whether to calculate SHA-256 hash of files
         """
+        self.source_name = source_name
         self.root_paths = root_paths or ["."]
         self.glob_patterns = glob_patterns or [
             "**/*.mp4", "**/*.mkv", "**/*.avi", "**/*.mov", "**/*.wmv",
@@ -254,6 +257,132 @@ class FilesystemImporter:
             labels['title_guess'] = title_part.replace('.', ' ').replace('_', ' ').strip()
         
         return labels
+    
+    def list_asset_groups(self) -> list[dict[str, any]]:
+        """
+        List the asset groups (directories) available from this filesystem source.
+        
+        Returns:
+            List of dictionaries containing directory information
+        """
+        try:
+            asset_groups = []
+            
+            for root_path in self.root_paths:
+                root = Path(root_path).resolve()
+                
+                if not root.exists() or not root.is_dir():
+                    continue
+                
+                # For filesystem, each root path is an asset group
+                # Count files in this directory
+                file_count = 0
+                for pattern in self.glob_patterns:
+                    try:
+                        file_count += len([f for f in root.glob(pattern) if self._should_include_file(f)])
+                    except Exception:
+                        continue
+                
+                asset_groups.append({
+                    "id": str(root),
+                    "name": root.name,
+                    "path": str(root),
+                    "enabled": True,  # Default to enabled, actual state managed by database
+                    "asset_count": file_count,
+                    "type": "directory"
+                })
+            
+            return asset_groups
+            
+        except Exception as e:
+            raise ImporterError(f"Failed to list asset groups: {str(e)}") from e
+    
+    def enable_asset_group(self, group_id: str) -> bool:
+        """
+        Enable an asset group (directory) for content discovery.
+        
+        Args:
+            group_id: Directory path
+            
+        Returns:
+            True if successfully enabled, False otherwise
+        """
+        try:
+            # For filesystem, we just verify the directory exists
+            path = Path(group_id)
+            return path.exists() and path.is_dir()
+            
+        except Exception as e:
+            print(f"Failed to enable asset group {group_id}: {e}")
+            return False
+    
+    def disable_asset_group(self, group_id: str) -> bool:
+        """
+        Disable an asset group (directory) from content discovery.
+        
+        Args:
+            group_id: Directory path
+            
+        Returns:
+            True if successfully disabled, False otherwise
+        """
+        # For filesystem, disabling is handled at the database level
+        # This method just confirms the operation
+        return True
+
+    def get_help(self) -> dict[str, any]:
+        """
+        Get help information for the filesystem importer.
+        
+        Returns:
+            Dictionary containing help information
+        """
+        return {
+            "description": "Scan local filesystem directories for media files and discover content",
+            "required_params": [
+                {
+                    "name": "source_name",
+                    "type": "str",
+                    "description": "Human-readable name for this filesystem source",
+                    "example": '"My Media Library"'
+                },
+                {
+                    "name": "root_paths",
+                    "type": "list[str]",
+                    "description": "List of root directories to scan",
+                    "example": '["/media/movies", "/media/tv"]'
+                }
+            ],
+            "optional_params": [
+                {
+                    "name": "glob_patterns",
+                    "type": "list[str]",
+                    "default": "Common video extensions",
+                    "description": "List of glob patterns to match files"
+                },
+                {
+                    "name": "include_hidden",
+                    "type": "bool",
+                    "default": False,
+                    "description": "Whether to include hidden files and directories"
+                },
+                {
+                    "name": "calculate_hash",
+                    "type": "bool",
+                    "default": True,
+                    "description": "Whether to calculate SHA-256 hash of files"
+                }
+            ],
+            "examples": [
+                'retrovue source add --type filesystem --name "My Media Library" --base-path "/media/movies"',
+                'retrovue source add --type filesystem --name "Commercials" --base-path "T:\\Commercials"',
+                'retrovue source add --type filesystem --name "Media Library" --base-path "/media" --enrichers "ffprobe"'
+            ],
+            "cli_params": {
+                "name": "Friendly name for the filesystem source",
+                "base_path": "Base filesystem path to scan"
+            }
+        }
 
 
 # Note: FilesystemImporter should be registered manually when needed

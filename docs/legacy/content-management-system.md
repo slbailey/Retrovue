@@ -2,11 +2,11 @@
 
 > **Legacy Document** — Pre-Alembic version, retained for reference only.
 
-The Content Management System (CMS) is the core component responsible for discovering, ingesting, organizing, and managing media content in Retrovue. It provides both CLI and web interfaces for content operations and includes a sophisticated review system for quality assurance.
+The Content Management System (CMS) is the core component responsible for discovering, ingesting, organizing, and managing media content in RetroVue. It provides both CLI and web interfaces for content operations and includes a sophisticated review system for quality assurance.
 
 ## 🎯 Business Purpose
 
-The CMS serves as the foundation for all content operations in Retrovue:
+The CMS serves as the foundation for all content operations in RetroVue:
 
 - **Content Discovery**: Automatically find and catalog media files from various sources
 - **Metadata Management**: Enrich content with technical and descriptive metadata
@@ -538,4 +538,4 @@ def check_cms_health():
 
 ---
 
-_The Content Management System provides the foundation for all content operations in Retrovue, ensuring quality, organization, and accessibility of media content._
+_The Content Management System provides the foundation for all content operations in RetroVue, ensuring quality, organization, and accessibility of media content._

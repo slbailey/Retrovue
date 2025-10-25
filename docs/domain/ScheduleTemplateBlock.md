@@ -1,8 +1,12 @@
-# Domain — BroadcastTemplateBlock
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+
+# Domain — Schedule template block
 
 ## Purpose
 
-BroadcastTemplateBlock represents a time block within a BroadcastTemplate that defines when content should be played and what rules should be used to select that content. Blocks are the core mechanism for automated content selection and scheduling.
+BroadcastTemplateBlock represents a single slot inside a schedule template. It can point to a series, a movie block, a themed block ("Action Hour"), or another rule. This is planning-time logic that defines when content should be played and what rules should be used to select that content.
+
+## Core model / scope
 
 BroadcastTemplateBlock enables:
 
@@ -11,9 +15,7 @@ BroadcastTemplateBlock enables:
 - Flexible programming patterns within templates
 - Rule-based content matching from the catalog
 
-The canonical name is BroadcastTemplateBlock throughout code, documentation, and database schema.
-
-## Persistence model and fields
+## Contract / interface
 
 BroadcastTemplateBlock is managed by SQLAlchemy with the following fields:
 
@@ -24,11 +26,9 @@ BroadcastTemplateBlock is managed by SQLAlchemy with the following fields:
 - **rule_json** (Text, required): JSON configuration defining content selection rules
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 
-Schema migration is handled through Alembic. Postgres is the authoritative backing store.
-
 BroadcastTemplateBlock has a many-to-one relationship with BroadcastTemplate. Multiple blocks can exist within a single template to define complex programming patterns.
 
-## Scheduling and interaction rules
+## Execution model
 
 ScheduleService consumes BroadcastTemplateBlock records to determine content selection rules for specific time periods. When generating schedules, ScheduleService:
 
@@ -40,18 +40,15 @@ ScheduleService consumes BroadcastTemplateBlock records to determine content sel
 
 Template blocks provide the "how to select content" logic that drives automated scheduling decisions.
 
-## Runtime relationship
+## Failure / fallback behavior
 
-BroadcastTemplateBlock operates through the content selection pipeline:
+If template blocks are missing or invalid, the system falls back to default programming or the most recent valid block configuration.
 
-**ScheduleService** reads template blocks and applies their rules to select content from the catalog. It uses the rule_json to match content tags, duration constraints, and other criteria.
+## Naming rules
 
-**ProgramDirector** may reference template blocks for cross-channel programming coordination and content conflict resolution.
+The canonical name for this concept in code and documentation is BroadcastTemplateBlock.
 
-**ChannelManager** receives the final playout schedule but does not directly interact with template blocks - it executes the generated BroadcastPlaylogEvent entries.
-
-Runtime hierarchy:
-BroadcastTemplateBlock (persistent) → ScheduleService (content selection) → BroadcastPlaylogEvent (generated) → ChannelManager (execution)
+Template blocks are content selection rules, not runtime components. They define "how to choose content" but do not execute content selection.
 
 ## Operator workflows
 
@@ -65,12 +62,12 @@ BroadcastTemplateBlock (persistent) → ScheduleService (content selection) → 
 
 **Template Block Maintenance**: Update rules, modify timing, or remove blocks as programming needs change.
 
-## Naming and consistency rules
+## See also
 
-The canonical name for this concept in code and documentation is BroadcastTemplateBlock.
-
-Template blocks are content selection rules, not runtime components. They define "how to choose content" but do not execute content selection.
-
-All scheduling logic, operator tooling, and documentation MUST refer to BroadcastTemplateBlock as the persisted block definition.
-
-Template blocks define programming periods (kids block, sitcom block, movie block, etc.) with specific content selection rules that ScheduleService uses to automatically choose appropriate content from the catalog.
+- [Scheduling](Scheduling.md) - High-level scheduling system
+- [Schedule template](ScheduleTemplate.md) - Reusable programming templates
+- [Schedule day](ScheduleDay.md) - Template assignments
+- [Catalog asset](CatalogAsset.md) - Approved content
+- [Playlog event](PlaylogEvent.md) - Generated playout events
+- [Channel manager](../runtime/ChannelManager.md) - Stream execution
+- [Operator CLI](../operator/CLI.md) - Operational procedures

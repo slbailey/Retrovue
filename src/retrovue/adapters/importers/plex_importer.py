@@ -851,6 +851,153 @@ class PlexImporter:
         except Exception as e:
             logger.warning(f"Failed to create discovered item: {e}")
             return None
+    
+    def list_asset_groups(self) -> list[dict[str, any]]:
+        """
+        List the asset groups (libraries) available from this Plex source.
+        
+        Returns:
+            List of dictionaries containing library information
+        """
+        try:
+            all_libraries = []
+            
+            for server_config in self.servers:
+                try:
+                    base_url = server_config.get("base_url")
+                    token = server_config.get("token")
+                    
+                    if not base_url or not token:
+                        continue
+                    
+                    # Create Plex client
+                    plex_client = PlexClient(base_url, token)
+                    
+                    # Get libraries from this server
+                    libraries = plex_client.get_libraries()
+                    
+                    for library in libraries:
+                        # Get item count for this library
+                        try:
+                            items = plex_client.get_library_items(library.get("key", ""))
+                            asset_count = len(items)
+                        except Exception:
+                            asset_count = None
+                        
+                        all_libraries.append({
+                            "id": library.get("key"),
+                            "name": library.get("title"),
+                            "path": f"plex://{library.get('key')}",
+                            "enabled": True,  # Default to enabled, actual state managed by database
+                            "asset_count": asset_count,
+                            "type": library.get("type"),
+                            "server": base_url
+                        })
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to list libraries from server {server_config.get('base_url', 'unknown')}: {e}")
+                    continue
+            
+            return all_libraries
+            
+        except Exception as e:
+            raise ImporterError(f"Failed to list asset groups: {str(e)}") from e
+    
+    def enable_asset_group(self, group_id: str) -> bool:
+        """
+        Enable an asset group (library) for content discovery.
+        
+        Args:
+            group_id: Plex library key or plex:// URI
+            
+        Returns:
+            True if successfully enabled, False otherwise
+        """
+        try:
+            # Extract library key from group_id if it's a plex:// URI
+            if group_id.startswith("plex://"):
+                library_key = group_id.replace("plex://", "")
+            else:
+                library_key = group_id
+            
+            # For Plex, we just verify the library exists
+            for server_config in self.servers:
+                try:
+                    base_url = server_config.get("base_url")
+                    token = server_config.get("token")
+                    
+                    if not base_url or not token:
+                        continue
+                    
+                    # Create Plex client
+                    plex_client = PlexClient(base_url, token)
+                    
+                    # Get libraries to verify the library_key exists
+                    libraries = plex_client.get_libraries()
+                    library_keys = [lib.get("key") for lib in libraries]
+                    
+                    if library_key in library_keys:
+                        return True
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to verify library {library_key} on server {server_config.get('base_url', 'unknown')}: {e}")
+                    continue
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Failed to enable asset group {group_id}: {e}")
+            return False
+    
+    def disable_asset_group(self, group_id: str) -> bool:
+        """
+        Disable an asset group (library) from content discovery.
+        
+        Args:
+            group_id: Plex library key
+            
+        Returns:
+            True if successfully disabled, False otherwise
+        """
+        # For Plex, disabling is handled at the database level
+        # This method just confirms the operation
+        return True
+
+    def get_help(self) -> dict[str, any]:
+        """
+        Get help information for the Plex importer.
+        
+        Returns:
+            Dictionary containing help information
+        """
+        return {
+            "description": "Connect to Plex Media Server instances and discover content from their libraries",
+            "required_params": [
+                {
+                    "name": "servers",
+                    "type": "list[dict]",
+                    "description": "List of server configurations",
+                    "example": '[{"base_url": "http://192.168.1.100:32400", "token": "your-token"}]'
+                }
+            ],
+            "optional_params": [
+                {
+                    "name": "include_metadata",
+                    "type": "bool",
+                    "default": True,
+                    "description": "Whether to include Plex metadata in discovered items"
+                }
+            ],
+            "examples": [
+                'retrovue source add --type plex --name "My Plex Server" --base-url "http://192.168.1.100:32400" --token "your-plex-token"',
+                'retrovue source add --type plex --name "Plex Server" --base-url "http://plex:32400" --token "token" --enrichers "ffprobe"'
+            ],
+            "cli_params": {
+                "name": "Friendly name for the Plex server",
+                "base_url": "Base URL for the Plex server (e.g., http://192.168.1.100:32400)",
+                "token": "Plex authentication token"
+            }
+        }
 
 
 # Note: PlexImporter requires server configuration, so it should be registered

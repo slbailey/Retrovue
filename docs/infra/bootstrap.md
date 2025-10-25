@@ -1,3 +1,5 @@
+_Related: [Architecture overview](../architecture/ArchitectureOverview.md) • [Data model: Broadcast schema](../data-model/broadcast-schema.md) • [Operator CLI](../operator/CLI.md)_
+
 # RetroVue Infrastructure — Broadcast Domain Bootstrap
 
 > Foundational database and CLI layers that must exist before ScheduleService can generate horizons or playout plans.
@@ -53,16 +55,17 @@ graph TD
 
 ### 4.1 Channel Configuration
 
-| Column                | Type    | Description                                  | Example                  |
-| --------------------- | ------- | -------------------------------------------- | ------------------------ |
-| `id`                  | INTEGER | Primary key                                  | `1`                      |
-| `name`                | TEXT    | Channel identifier                           | `"RetroVue-1"`           |
-| `timezone`            | TEXT    | IANA timezone string                         | `"America/New_York"`     |
-| `grid_size_minutes`   | INTEGER | Planning granularity                         | `30`                     |
-| `grid_offset_minutes` | INTEGER | Offset from top of hour                      | `0`                      |
-| `rollover_minutes`    | INTEGER | Broadcast day start (minutes after midnight) | `360`                    |
-| `is_active`           | INTEGER | Channel operational status                   | `1`                      |
-| `created_at`          | TEXT    | Creation timestamp                           | `"2025-01-15T10:30:00Z"` |
+| Column                | Type                     | Description                                  | Example                  |
+| --------------------- | ------------------------ | -------------------------------------------- | ------------------------ |
+| `id`                  | INTEGER                  | Primary key                                  | `1`                      |
+| `name`                | VARCHAR(255)             | Channel identifier (unique)                  | `"RetroVue-1"`           |
+| `timezone`            | VARCHAR(255)             | IANA timezone string                         | `"America/New_York"`     |
+| `grid_size_minutes`   | INTEGER                  | Planning granularity                         | `30`                     |
+| `grid_offset_minutes` | INTEGER                  | Offset from top of hour                      | `0`                      |
+| `rollover_minutes`    | INTEGER                  | Broadcast day start (minutes after midnight) | `360`                    |
+| `is_active`           | BOOLEAN                  | Channel operational status (default: true)   | `true`                   |
+| `created_at`          | TIMESTAMP WITH TIME ZONE | Creation timestamp                           | `"2025-01-15T10:30:00Z"` |
+| `updated_at`          | TIMESTAMP WITH TIME ZONE | Last modification timestamp                  | `"2025-01-15T10:30:00Z"` |
 
 ### 4.2 Template Management
 
@@ -203,25 +206,62 @@ retrovue <entity> <action> [parameters]
 
 ### 6.2 Channel Management
 
-#### `retrovue channel add`
+#### `retrovue channel create`
 
 Create a new channel definition with broadcast policy.
 
 ```bash
-retrovue channel add --name "RetroVue-1" \
+retrovue channel create --name "RetroVue-1" \
   --timezone "America/New_York" \
-  --grid-size 30 \
-  --offset 0 \
-  --rollover 360
+  --grid-size-minutes 30 \
+  --grid-offset-minutes 0 \
+  --rollover-minutes 360 \
+  --active
 ```
 
 **Options:**
 
 - `--name` - Channel identifier (required)
 - `--timezone` - IANA timezone string (required)
-- `--grid-size` - Planning granularity in minutes (default: 30)
-- `--offset` - Offset from top of hour in minutes (default: 0)
-- `--rollover` - Broadcast day start in minutes after midnight (default: 360)
+- `--grid-size-minutes` - Planning granularity in minutes (required)
+- `--grid-offset-minutes` - Offset from top of hour in minutes (required)
+- `--rollover-minutes` - Broadcast day start in minutes after midnight (required)
+- `--active` / `--inactive` - Channel status (default: active if neither specified)
+
+#### `retrovue channel list`
+
+List all channels in table format or JSON.
+
+```bash
+retrovue channel list
+retrovue channel list --json
+```
+
+#### `retrovue channel show`
+
+Show detailed information for a specific channel.
+
+```bash
+retrovue channel show --id 1
+retrovue channel show --id 1 --json
+```
+
+#### `retrovue channel update`
+
+Update an existing channel with partial field updates.
+
+```bash
+retrovue channel update --id 1 --name "NewName" --inactive
+retrovue channel update --id 1 --timezone "America/Los_Angeles"
+```
+
+#### `retrovue channel delete`
+
+Permanently delete a channel.
+
+```bash
+retrovue channel delete --id 1
+```
 
 ### 6.3 Template Management
 
@@ -338,7 +378,45 @@ retrovue catalog list --json
 
 > **Operator Note:** The `catalog` command family forms the _approval gate_ between raw media and broadcast. Only catalog entries marked `canonical=true` are eligible for scheduling. ScheduleService never schedules media that wasn't approved via this CLI.
 
-### 6.6 Library Domain Management (retrovue assets ...)
+### 6.6 Source Management (retrovue source ...)
+
+The `retrovue source` command group manages content sources and their collections. Sources connect to external media systems (Plex, filesystem) and provide the foundation for content discovery and ingestion workflows.
+
+**Key Capabilities:**
+
+- Add and configure content sources (Plex servers, filesystem directories)
+- Automatic collection discovery for Plex sources
+- Enable/disable individual collections for content discovery
+- Update enrichers on existing sources without recreation
+- Manage source lifecycle with cascade deletion
+
+**Available Commands:**
+
+- `retrovue source add --type <type>` - Add a new content source
+- `retrovue source list` - List all configured sources
+- `retrovue source show <source>` - Show detailed source information
+- `retrovue source update <source>` - Update source configuration
+- `retrovue source delete <source>` - Delete source and all related data
+- `retrovue source collections` - List all collections with enabled status
+- `retrovue source enable <collection>` - Enable collection for content discovery
+- `retrovue source disable <collection>` - Disable collection from content discovery
+- `retrovue source enrichers <source> <enrichers>` - Update enrichers for a source
+
+**Plex Source Workflow:**
+
+1. **Add Plex source**: `retrovue source add --type plex --name "My Plex" --base-url "https://plex.example.com" --token "token"`
+2. **Automatic discovery**: Collections are automatically discovered and persisted (all disabled by default)
+3. **Enable collections**: `retrovue source enable "Movies"` to activate specific libraries
+4. **Update enrichers**: `retrovue source enrichers "My Plex" "ffprobe"` to add metadata enrichment
+
+**Filesystem Source Workflow:**
+
+1. **Add filesystem source**: `retrovue source add --type filesystem --name "Media Library" --base-path "/media/movies"`
+2. **Configure as needed**: Filesystem sources don't have collections but can use enrichers
+
+> **Operator Note:** Sources provide the foundation for content discovery. Only enabled collections participate in content discovery workflows. Enrichers can be updated on existing sources without recreating them.
+
+### 6.7 Library Domain Management (retrovue assets ...)
 
 The `retrovue assets` command group manages the Library Domain, which contains all content discovered or imported from sources like Plex. This is the raw inventory of what the system has found, including pending review and potentially unsafe material.
 
@@ -378,7 +456,7 @@ alembic upgrade head
 
 This creates the complete Broadcast Domain schema including:
 
-- `broadcast_channel` - Channel configuration and timing policy
+- `broadcast_channels` - Channel configuration and timing policy
 - `broadcast_template` - Reusable daypart templates
 - `broadcast_template_block` - Time blocks within templates with content rules
 - `broadcast_schedule_day` - Template assignments to channels for specific dates
@@ -412,11 +490,12 @@ Complete station setup from database creation to operational state:
 retrovue preset apply --preset sitcom-24x7
 
 # 3. Create channel with broadcast policy
-retrovue channel add --name "RetroVue-1" \
+retrovue channel create --name "RetroVue-1" \
   --timezone "America/New_York" \
-  --grid-size 30 \
-  --offset 0 \
-  --rollover 360
+  --grid-size-minutes 30 \
+  --grid-offset-minutes 0 \
+  --rollover-minutes 360 \
+  --active
 
 # 4. Create daypart template
 retrovue template add --name "All Sitcoms 24x7" \
@@ -541,12 +620,12 @@ retrovue schedule assign --channel "RetroVue-1" \
 
 ## 11. Cross-References
 
-| Component                                  | Relationship                                            |
-| ------------------------------------------ | ------------------------------------------------------- |
-| **[ScheduleService](schedule_service.md)** | Consumes infrastructure data to generate playout plans  |
-| **[ChannelManager](channel_manager.md)**   | Executes scheduled content from infrastructure          |
-| **[ProgramDirector](program_director.md)** | Coordinates channels using infrastructure configuration |
-| **[CLI Reference](cli-reference.md)**      | Documents the `retrovue` command interface              |
+| Component                                             | Relationship                                            |
+| ----------------------------------------------------- | ------------------------------------------------------- |
+| **[ScheduleService](../runtime/schedule_service.md)** | Consumes infrastructure data to generate playout plans  |
+| **[ChannelManager](../runtime/ChannelManager.md)**    | Executes scheduled content from infrastructure          |
+| **[ProgramDirector](../runtime/program_director.md)** | Coordinates channels using infrastructure configuration |
+| **[CLI Reference](../developer/cli-reference.md)**    | Documents the `retrovue` command interface              |
 
 ---
 

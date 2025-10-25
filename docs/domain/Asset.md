@@ -1,10 +1,12 @@
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+
 # Domain — Asset
 
 ## Purpose
 
 Asset represents a media file discovered during content ingestion from external sources like Plex, Jellyfin, or filesystem scanning.
 
-## Persistence model and fields
+## Core model / scope
 
 Asset is managed by SQLAlchemy with the following fields:
 
@@ -26,7 +28,7 @@ Schema migration is handled through Alembic. Postgres is the authoritative backi
 
 Asset has relationships with Episode through EpisodeAsset junction table, and with ProviderRef for external system traceability.
 
-## Scheduling and interaction rules
+## Contract / interface
 
 Asset represents raw ingested content that requires approval before becoming eligible for broadcast. Only assets with canonical=true can be promoted to CatalogAsset entries in the Broadcast Domain.
 
@@ -37,9 +39,13 @@ Asset approval workflow:
 3. Asset marked canonical=true when approved
 4. Approved assets can be promoted to CatalogAsset for scheduling
 
-## Runtime behavior
+## Execution model
 
 Asset is what actually airs; runtime never directly plays ingest Asset. Only CatalogAsset entries are eligible for scheduling and playout.
+
+## Failure / fallback behavior
+
+If assets fail to be discovered or processed, the system logs errors and continues with available assets. Invalid assets are marked as not canonical.
 
 ## Operator workflows
 
@@ -62,3 +68,10 @@ The canonical name for this concept in code and documentation is Asset.
 API surfaces and logs must surface the UUID, not the integer id.
 
 Asset represents raw ingested content that requires approval before becoming eligible for broadcast scheduling.
+
+## See also
+
+- [Catalog asset](CatalogAsset.md) - Approved content for scheduling
+- [Source](Source.md) - Content sources
+- [Ingest pipeline](IngestPipeline.md) - Content discovery workflow
+- [Operator CLI](../operator/CLI.md) - Operational procedures

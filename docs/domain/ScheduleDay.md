@@ -1,8 +1,12 @@
-# Domain — BroadcastScheduleDay
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+
+# Domain — Schedule day
 
 ## Purpose
 
-BroadcastScheduleDay represents the assignment of a BroadcastTemplate to a BroadcastChannel for a specific broadcast date. This creates the link between programming structure (templates) and actual scheduling execution.
+BroadcastScheduleDay represents the assignment of a BroadcastTemplate to a BroadcastChannel for a specific broadcast date. This is planning-time logic that creates the link between programming structure (templates) and actual scheduling execution.
+
+## Core model / scope
 
 BroadcastScheduleDay enables:
 
@@ -11,9 +15,7 @@ BroadcastScheduleDay enables:
 - Multi-channel programming with different templates per channel
 - Date-specific programming overrides
 
-The canonical name is BroadcastScheduleDay throughout code, documentation, and database schema.
-
-## Persistence model and fields
+## Contract / interface
 
 BroadcastScheduleDay is managed by SQLAlchemy with the following fields:
 
@@ -23,11 +25,9 @@ BroadcastScheduleDay is managed by SQLAlchemy with the following fields:
 - **schedule_date** (Text, required): Broadcast date in "YYYY-MM-DD" format
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 
-Schema migration is handled through Alembic. Postgres is the authoritative backing store.
-
 BroadcastScheduleDay has a unique constraint on (channel_id, schedule_date) ensuring only one template per channel per date.
 
-## Scheduling and interaction rules
+## Execution model
 
 ScheduleService consumes BroadcastScheduleDay records to determine which template to use for a given channel and date. This is the primary mechanism for:
 
@@ -38,18 +38,15 @@ ScheduleService consumes BroadcastScheduleDay records to determine which templat
 
 Schedule assignments are the bridge between programming structure (templates) and execution (playout events).
 
-## Runtime relationship
+## Failure / fallback behavior
 
-BroadcastScheduleDay operates through the scheduling pipeline:
+If schedule assignments are missing or invalid, the system falls back to default programming or the most recent valid schedule.
 
-**ScheduleService** reads schedule assignments to determine which template to use for schedule generation. It uses the template_id to retrieve BroadcastTemplateBlock entries and apply their rules.
+## Naming rules
 
-**ProgramDirector** may reference schedule assignments for cross-channel coordination and programming conflict resolution.
+The canonical name for this concept in code and documentation is BroadcastScheduleDay.
 
-**ChannelManager** receives the final playout schedule but does not directly interact with schedule assignments - it executes the generated BroadcastPlaylogEvent entries.
-
-Runtime hierarchy:
-BroadcastScheduleDay (persistent) → ScheduleService (template resolution) → BroadcastTemplateBlock (content selection) → BroadcastPlaylogEvent (generated) → ChannelManager (execution)
+Schedule assignments are programming decisions, not runtime components. They define "what template to use when" but do not execute scheduling.
 
 ## Operator workflows
 
@@ -63,12 +60,10 @@ BroadcastScheduleDay (persistent) → ScheduleService (template resolution) → 
 
 **Schedule Planning**: Plan template assignments in advance for consistent programming patterns.
 
-## Naming and consistency rules
+## See also
 
-The canonical name for this concept in code and documentation is BroadcastScheduleDay.
-
-Schedule assignments are programming decisions, not runtime components. They define "what template to use when" but do not execute scheduling.
-
-All scheduling logic, operator tooling, and documentation MUST refer to BroadcastScheduleDay as the persisted schedule assignment definition.
-
-BroadcastScheduleDay binds a template to a specific channel on a specific broadcast date. This feeds ScheduleService to generate the Playlog horizon.
+- [Scheduling](Scheduling.md) - High-level scheduling system
+- [Schedule template](ScheduleTemplate.md) - Reusable programming templates
+- [Playlog event](PlaylogEvent.md) - Generated playout events
+- [Channel manager](../runtime/ChannelManager.md) - Stream execution
+- [Operator CLI](../operator/CLI.md) - Operational procedures

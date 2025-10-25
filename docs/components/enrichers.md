@@ -1,14 +1,16 @@
-# Retrovue Enrichers
+_Related: [Domain: Enricher](../domain/Enricher.md) • [Domain: Ingest pipeline](../domain/IngestPipeline.md) • [Developer: Plugin authoring](../developer/PluginAuthoring.md)_
 
-This document describes how to implement and use content enrichers in Retrovue. Enrichers are responsible for adding metadata to discovered content items, such as technical details, duration, codecs, and chapter markers.
+# RetroVue enrichers
+
+This document describes how to implement and use content enrichers in RetroVue. Enrichers are responsible for adding metadata to discovered content items, such as technical details, duration, codecs, and chapter markers.
 
 ## Overview
 
-Enrichers follow the **Enrichment Pattern** and implement a common interface for metadata enhancement. They are stateless and operate on `DiscoveredItem` objects, returning enriched versions with additional metadata.
+Enrichers follow the **enrichment pattern** and implement a common interface for metadata enhancement. They are stateless and operate on `DiscoveredItem` objects, returning enriched versions with additional metadata.
 
-## Enricher Interface
+## Enricher interface
 
-### Base Protocol
+### Base protocol
 
 ```python
 from typing import Protocol
@@ -23,16 +25,16 @@ class Enricher(Protocol):
         ...
 ```
 
-### Key Requirements
+### Key requirements
 
 1. **Stateless**: Enrichers should not maintain internal state
 2. **Idempotent**: Multiple enrichments should be safe
-3. **Error Handling**: Graceful handling of enrichment failures
+3. **Error handling**: Graceful handling of enrichment failures
 4. **Non-destructive**: Should not modify original items in place
 
-## Built-in Enrichers
+## Built-in enrichers
 
-### 1. FFprobe Enricher
+### FFprobe enricher
 
 **Purpose**: Extracts technical metadata from media files using FFprobe.
 
@@ -57,11 +59,11 @@ enricher = FFprobeEnricher(ffprobe_path="ffprobe")
 enriched_item = enricher.enrich(discovered_item)
 ```
 
-**Configuration Options**:
+**Configuration options**:
 
 - `ffprobe_path`: Path to FFprobe executable (default: "ffprobe")
 
-**Example Output**:
+**Example output**:
 
 ```python
 # Input
@@ -85,13 +87,13 @@ DiscoveredItem(
 )
 ```
 
-**FFprobe Command**:
+**FFprobe command**:
 
 ```bash
 ffprobe -v quiet -print_format json -show_format -show_streams -show_chapters movie.mp4
 ```
 
-**Sample FFprobe Output**:
+**Sample FFprobe output**:
 
 ```json
 {
@@ -122,9 +124,9 @@ ffprobe -v quiet -print_format json -show_format -show_streams -show_chapters mo
 }
 ```
 
-## Creating Custom Enrichers
+## Creating custom enrichers
 
-### 1. Basic Enricher Structure
+### Basic enricher structure
 
 ```python
 from typing import Any
@@ -185,7 +187,7 @@ class CustomEnricher:
         return labels
 ```
 
-### 2. MediaInfo Enricher Example
+### MediaInfo enricher example
 
 ```python
 import subprocess
@@ -291,7 +293,7 @@ class MediaInfoEnricher:
         return metadata
 ```
 
-### 3. ExifTool Enricher Example
+### ExifTool enricher example
 
 ```python
 import subprocess
@@ -363,7 +365,7 @@ class ExifToolEnricher:
         return data[0]
 ```
 
-### 4. Database Enricher Example
+### Database enricher example
 
 ```python
 import sqlite3
@@ -424,9 +426,9 @@ class DatabaseEnricher:
             return dict(zip(columns, row))
 ```
 
-## Enricher Pipeline Contract
+## Enricher pipeline contract
 
-### 1. Pipeline Execution
+### Pipeline execution
 
 ```python
 class EnrichmentPipeline:
@@ -450,7 +452,7 @@ class EnrichmentPipeline:
         return current_item
 ```
 
-### 2. Conditional Enrichment
+### Conditional enrichment
 
 ```python
 class ConditionalEnricher:
@@ -474,7 +476,7 @@ conditional_ffprobe = ConditionalEnricher(
 )
 ```
 
-### 3. Parallel Enrichment
+### Parallel enrichment
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
@@ -524,9 +526,9 @@ class ParallelEnrichmentPipeline:
         )
 ```
 
-## Enricher Registration
+## Enricher registration
 
-### 1. Registry Pattern
+### Registry pattern
 
 ```python
 from typing import Dict, Type
@@ -564,7 +566,7 @@ registry = EnricherRegistry()
 registry.register("ffprobe", FFprobeEnricher)
 ```
 
-### 2. Dynamic Registration
+### Dynamic registration
 
 ```python
 # Register custom enrichers at runtime
@@ -575,9 +577,9 @@ registry.register("mediainfo", MediaInfoEnricher)
 registry.register("exiftool", ExifToolEnricher)
 ```
 
-## Error Handling
+## Error handling
 
-### 1. Enricher-Specific Errors
+### Enricher-specific errors
 
 ```python
 class EnricherError(Exception):
@@ -597,7 +599,7 @@ class EnricherTimeoutError(EnricherError):
     pass
 ```
 
-### 2. Graceful Error Handling
+### Graceful error handling
 
 ```python
 def enrich_with_fallback(enricher: Enricher, item: DiscoveredItem) -> DiscoveredItem:
@@ -613,9 +615,9 @@ def enrich_with_fallback(enricher: Enricher, item: DiscoveredItem) -> Discovered
         return item
 ```
 
-## Testing Enrichers
+## Testing enrichers
 
-### 1. Unit Tests
+### Unit tests
 
 ```python
 import pytest
@@ -662,7 +664,7 @@ class TestFFprobeEnricher:
         assert enriched == item  # Should be unchanged
 ```
 
-### 2. Integration Tests
+### Integration tests
 
 ```python
 def test_ffprobe_enricher_integration():
@@ -685,9 +687,9 @@ def test_ffprobe_enricher_integration():
     assert any("video_codec:" in label for label in enriched.raw_labels)
 ```
 
-## Performance Considerations
+## Performance considerations
 
-### 1. Caching
+### Caching
 
 ```python
 from functools import lru_cache
@@ -701,7 +703,7 @@ class CachedEnricher:
         return self._extract_metadata(file_path)
 ```
 
-### 2. Timeout Handling
+### Timeout handling
 
 ```python
 import signal
@@ -733,7 +735,7 @@ class TimeoutEnricher:
             raise EnricherTimeoutError("Enrichment timed out")
 ```
 
-### 3. Resource Management
+### Resource management
 
 ```python
 class ResourceEnricher:
@@ -757,9 +759,9 @@ class ResourceEnricher:
             self.session.close()
 ```
 
-## Best Practices
+## Best practices
 
-### 1. Configuration Validation
+### Configuration validation
 
 ```python
 def validate_enricher_config(config: dict) -> None:
@@ -774,7 +776,7 @@ def validate_enricher_config(config: dict) -> None:
         raise EnricherConfigurationError(f"Tool not found: {config['tool_path']}")
 ```
 
-### 2. Logging and Monitoring
+### Logging and monitoring
 
 ```python
 import logging
@@ -803,7 +805,7 @@ class LoggingEnricher:
             raise
 ```
 
-### 3. Label Formatting
+### Label formatting
 
 ```python
 class StandardizedEnricher:
@@ -827,5 +829,4 @@ class StandardizedEnricher:
 
 ---
 
-_This guide provides comprehensive information for implementing and using enrichers in Retrovue. For more examples, see the source code in `src/retrovue/adapters/enrichers/`._
-
+_This guide provides comprehensive information for implementing and using enrichers in RetroVue. For more examples, see the source code in `src/retrovue/adapters/enrichers/`._

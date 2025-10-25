@@ -1,10 +1,12 @@
-# Retrovue CLI
+# RetroVue CLI
 
-The Retrovue CLI provides a command-line interface for managing your media library, content ingestion, and review workflows.
+_Related: [Operator CLI](../operator/CLI.md) • [Developer: Plugin authoring](PluginAuthoring.md) • [Domain: Source](../domain/Source.md)_
+
+The RetroVue CLI provides a command-line interface for managing your media library, content ingestion, and review workflows.
 
 ## Installation
 
-After installing Retrovue, the CLI is available as the `retrovue` command:
+After installing RetroVue, the CLI is available as the `retrovue` command:
 
 ```bash
 # Install in development mode
@@ -634,7 +636,7 @@ done
 
 ## Integration
 
-The CLI is designed to integrate seamlessly with the Retrovue service layer:
+The CLI is designed to integrate seamlessly with the RetroVue service layer:
 
 - **Service-oriented**: All commands call application services, never direct database access
 - **Consistent responses**: Uses the same Pydantic models as the API

@@ -1,10 +1,12 @@
-# 🚀 Getting Started with Retrovue
+_Related: [Quick start](quick-start.md) • [Web interface](web-interface.md) • [Configuration](configuration.md)_
 
-Welcome to Retrovue! This guide will get you up and running with your own retro IPTV system in just 6 simple steps.
+# 🚀 Getting Started with RetroVue
 
-## 🎯 What is Retrovue?
+Welcome to RetroVue! This guide will get you up and running with your own retro IPTV system in just 6 simple steps.
 
-Retrovue is a **media-first IPTV system** that simulates a professional broadcast television station. It creates 24/7 TV channels with realistic programming, commercial breaks, and a viewer experience indistinguishable from real cable TV.
+## 🎯 What is RetroVue?
+
+RetroVue is a **media-first IPTV system** that simulates a professional broadcast television station. It creates 24/7 TV channels with realistic programming, commercial breaks, and a viewer experience indistinguishable from real cable TV.
 
 ## 🎬 The 6-Step Process
 
@@ -22,7 +24,7 @@ Sync libraries from Plex and configure path mappings
 
 ### **Step 4: Ingest Content**
 
-Import movies and TV shows into the Retrovue database
+Import movies and TV shows into the RetroVue database
 
 ### **Step 5: Schedule** (Coming Soon)
 
@@ -36,7 +38,7 @@ Start channel stream and view in VLC or Plex Live TV
 
 ## 🌐 Web Interface (Recommended for Beginners)
 
-**New in 2025**: Retrovue includes a modern Web UI that makes setup much easier!
+**New in 2025**: RetroVue includes a modern Web UI that makes setup much easier!
 
 ### **Launch the Web Interface**
 
@@ -96,7 +98,7 @@ Then open your browser to: **http://localhost:8000**
 
 ### **Required Software**
 
-- **Python 3.8+** - The programming language Retrovue is built with
+- **Python 3.8+** - The programming language RetroVue is built with
 - **FFmpeg** - Handles video processing and streaming (must be in PATH)
 - **Git** - For cloning the repository (optional)
 
@@ -336,8 +338,8 @@ python --version  # Should be 3.8+
 
 - **[Web Interface Guide](web-interface.md)** - Using the modern web UI
 - **[Configuration Guide](configuration.md)** - System configuration
-- **[Content Management](content-management.md)** - Managing your media library
-- **[Streaming Guide](streaming.md)** - Setting up streams
+- **[CLI reference](CLI.md)** - Command-line interface reference
+- **[Configuration](configuration.md)** - System configuration guide
 
 ### **Try Advanced Features**
 
@@ -357,7 +359,7 @@ python --version  # Should be 3.8+
 
 ## 🎉 Congratulations!
 
-You've successfully set up Retrovue! You now have:
+You've successfully set up RetroVue! You now have:
 
 - ✅ A working content management system
 - ✅ Basic streaming capabilities

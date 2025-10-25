@@ -1,5 +1,7 @@
 # Identity and Referencing
 
+_Related: [Data model: Broadcast schema](broadcast-schema.md) • [Data model README](README.md) • [Infrastructure bootstrap](../infra/bootstrap.md)_
+
 ## Domain — Identity and referencing
 
 ### Purpose

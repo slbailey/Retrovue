@@ -1,4 +1,4 @@
-# Retrovue – Plex Ingest (00–04)
+# RetroVue – Plex Ingest (00–04)
 
 > **Legacy Document** — Pre-Alembic version, retained for reference only.
 

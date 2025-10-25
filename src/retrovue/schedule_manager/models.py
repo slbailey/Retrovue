@@ -8,22 +8,7 @@ import uuid
 from retrovue.infra.db import Base
 
 
-class BroadcastChannel(Base):
-    """Broadcast channel model for scheduling."""
-    __tablename__ = "broadcast_channel"
-    
-    id = sa.Column(sa.Integer, primary_key=True)
-    uuid = sa.Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
-    name = sa.Column(sa.Text, nullable=False, unique=True)
-    timezone = sa.Column(sa.Text, nullable=False)  # IANA tz string
-    grid_size_minutes = sa.Column(sa.Integer, nullable=False)
-    grid_offset_minutes = sa.Column(sa.Integer, nullable=False)
-    rollover_minutes = sa.Column(sa.Integer, nullable=False)  # minutes after local midnight, e.g. 360 for 06:00
-    is_active = sa.Column(sa.Boolean, nullable=False, server_default=sa.text("true"))
-    created_at = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()"))
-    
-    def __repr__(self):
-        return f"<BroadcastChannel(id={self.id}, name='{self.name}', timezone='{self.timezone}')>"
+# BroadcastChannel model moved to domain/entities.py
 
 
 class BroadcastTemplate(Base):
@@ -64,7 +49,7 @@ class BroadcastScheduleDay(Base):
     __tablename__ = "broadcast_schedule_day"
     
     id = sa.Column(sa.Integer, primary_key=True)
-    channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channel.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channels.id", ondelete="CASCADE"), nullable=False, index=True)
     template_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_template.id", ondelete="RESTRICT"), nullable=False)
     schedule_date = sa.Column(sa.Text, nullable=False)  # "YYYY-MM-DD" broadcast-day label, 06:00→06:00 policy
     created_at = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()"))
@@ -110,7 +95,7 @@ class BroadcastPlaylogEvent(Base):
     
     id = sa.Column(sa.Integer, primary_key=True)
     uuid = sa.Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
-    channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channel.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channels.id", ondelete="CASCADE"), nullable=False, index=True)
     asset_id = sa.Column(sa.Integer, sa.ForeignKey("catalog_asset.id", ondelete="RESTRICT"), nullable=False)
     start_utc = sa.Column(sa.DateTime(timezone=True), nullable=False)
     end_utc = sa.Column(sa.DateTime(timezone=True), nullable=False)

@@ -2,11 +2,11 @@
 
 ## Overview
 
-This document describes the Plex CLI ingest functionality for Retrovue. The goal is to fetch one episode from Plex and upsert it into the content library with full metadata preservation and path mapping support.
+This document describes the Plex CLI ingest functionality for RetroVue. The goal is to fetch one episode from Plex and upsert it into the content library with full metadata preservation and path mapping support.
 
 ## Goal
 
-Fetch a single episode from Plex Media Server and upsert it into the Retrovue content library with full metadata preservation and path mapping support.
+Fetch a single episode from Plex Media Server and upsert it into the RetroVue content library with full metadata preservation and path mapping support.
 
 ## Configuration
 
@@ -181,7 +181,7 @@ retrovue plex ingest-episode 12345 --dry-run
 
 ### Purpose
 
-Plex stores file paths as seen by the Plex server, but Retrovue needs local file paths for playback. Path mapping converts Plex paths to local paths using database-stored mappings.
+Plex stores file paths as seen by the Plex server, but RetroVue needs local file paths for playback. Path mapping converts Plex paths to local paths using database-stored mappings.
 
 ### Database Configuration
 
@@ -288,7 +288,7 @@ retrovue plex ingest-episode 12345
 
 ## Database Schema
 
-The Plex CLI commands use the existing Retrovue database schema with the following key tables:
+The Plex CLI commands use the existing RetroVue database schema with the following key tables:
 
 ### Assets Table
 

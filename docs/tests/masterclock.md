@@ -1,5 +1,7 @@
 # MasterClock Testing
 
+_Related: [Runtime: Master clock](../runtime/MasterClock.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Contributing: Runtime](../contributing/CONTRIBUTING_RUNTIME.md)_
+
 This document describes the MasterClock validation tests, including what fields they emit in --json output and what failures mean.
 
 ## Overview
@@ -298,5 +300,13 @@ retrovue test masterclock-integration
 # Test with different timezones
 retrovue test masterclock-integration --timezone "Europe/London"
 ```
+
+## See also
+
+- [Runtime: Master clock](../runtime/MasterClock.md) - MasterClock implementation
+- [Runtime: Schedule service](../runtime/schedule_service.md) - Uses MasterClock for scheduling
+- [Runtime: Channel manager](../runtime/ChannelManager.md) - Uses MasterClock for playout
+- [Contributing: Runtime](../contributing/CONTRIBUTING_RUNTIME.md) - Runtime development process
+- [Tests: Broadcast day alignment](broadcast_day_alignment.md) - Broadcast day testing
 
 _Document version: v0.1 · Last updated: 2025-10-24_

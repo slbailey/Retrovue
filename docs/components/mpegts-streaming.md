@@ -1,4 +1,4 @@
-# MPEG-TS Streaming for Retrovue
+# MPEG-TS Streaming for RetroVue
 
 Provides continuous MPEG-TS streaming for IPTV-style live playback with support for
 segment-based commercial insertion. This module uses FFmpeg concat input format to

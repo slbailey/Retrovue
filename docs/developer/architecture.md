@@ -1,10 +1,10 @@
-# 🏗️ Retrovue System Architecture
+# 🏗️ RetroVue System Architecture
 
-This document describes the current architecture of Retrovue, including the layered design, component relationships, and key architectural patterns.
+This document describes the current architecture of RetroVue, including the layered design, component relationships, and key architectural patterns.
 
 ## Overview
 
-Retrovue follows a **Clean Architecture** pattern with clear separation of concerns across multiple layers. The system is designed to be maintainable, testable, and extensible. The current implementation focuses on **MPEG-TS streaming** for IPTV-style content delivery, **FastAPI web interface** for content management, and **Plex integration** for content discovery.
+RetroVue follows a **Clean Architecture** pattern with clear separation of concerns across multiple layers. The system is designed to be maintainable, testable, and extensible. The current implementation focuses on **MPEG-TS streaming** for IPTV-style content delivery, **FastAPI web interface** for content management, and **Plex integration** for content discovery.
 
 ## Architecture Layers
 
@@ -337,4 +337,4 @@ app.include_router(router, prefix="/api")
 
 ---
 
-_This architecture provides a solid foundation for Retrovue's content management and streaming capabilities while maintaining flexibility for future enhancements._
+_This architecture provides a solid foundation for RetroVue's content management and streaming capabilities while maintaining flexibility for future enhancements._

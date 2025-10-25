@@ -1,14 +1,16 @@
-# Retrovue Importers
+_Related: [Domain: Source](../domain/Source.md) • [Domain: Ingest pipeline](../domain/IngestPipeline.md) • [Developer: Plugin authoring](../developer/PluginAuthoring.md)_
 
-This document describes how to implement and use content importers in Retrovue. Importers are responsible for discovering content from various sources like Plex servers, filesystems, and other media libraries.
+# RetroVue importers
+
+This document describes how to implement and use content importers in RetroVue. Importers are responsible for discovering content from various sources like Plex servers, filesystems, and other media libraries.
 
 ## Overview
 
-Importers follow the **Adapter Pattern** and implement a common interface for content discovery. They are stateless and return standardized `DiscoveredItem` objects that can be processed by the ingestion pipeline.
+Importers follow the **adapter pattern** and implement a common interface for content discovery. They are stateless and return standardized `DiscoveredItem` objects that can be processed by the ingestion pipeline.
 
-## Importer Interface
+## Importer interface
 
-### Base Protocol
+### Base protocol
 
 ```python
 from typing import Protocol
@@ -34,16 +36,16 @@ class Importer(Protocol):
         ...
 ```
 
-### Key Requirements
+### Key requirements
 
 1. **Stateless**: Importers should not maintain internal state
 2. **Idempotent**: Multiple calls should return consistent results
-3. **Error Handling**: Graceful handling of discovery failures
-4. **Standardized Output**: All importers return `DiscoveredItem` objects
+3. **Error handling**: Graceful handling of discovery failures
+4. **Standardized output**: All importers return `DiscoveredItem` objects
 
-## Built-in Importers
+## Built-in importers
 
-### 1. Filesystem Importer
+### Filesystem importer
 
 **Purpose**: Discovers media files from local filesystem directories.
 
@@ -616,5 +618,4 @@ class LoggingImporter:
 
 ---
 
-_This guide provides comprehensive information for implementing and using importers in Retrovue. For more examples, see the source code in `src/retrovue/adapters/importers/`._
-
+_This guide provides comprehensive information for implementing and using importers in RetroVue. For more examples, see the source code in `src/retrovue/adapters/importers/`._

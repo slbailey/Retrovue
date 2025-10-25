@@ -70,6 +70,57 @@ class Importer(Protocol):
             ImporterError: If discovery fails
         """
         ...
+    
+    def get_help(self) -> dict[str, any]:
+        """
+        Get help information for this importer.
+        
+        Returns:
+            Dictionary containing help information with keys:
+            - description: Brief description of the importer
+            - required_params: List of required parameter names
+            - optional_params: List of optional parameter names with defaults
+            - examples: List of example usage strings
+        """
+        ...
+    
+    def list_asset_groups(self) -> list[dict[str, any]]:
+        """
+        List the asset groups (collections, directories, etc.) available from this source.
+        
+        Returns:
+            List of dictionaries containing:
+            - id: Unique identifier for the asset group
+            - name: Human-readable name
+            - path: Source path/URI
+            - enabled: Whether this group is currently enabled
+            - asset_count: Number of assets in this group (if available)
+        """
+        ...
+    
+    def enable_asset_group(self, group_id: str) -> bool:
+        """
+        Enable an asset group for content discovery.
+        
+        Args:
+            group_id: Unique identifier for the asset group
+            
+        Returns:
+            True if successfully enabled, False otherwise
+        """
+        ...
+    
+    def disable_asset_group(self, group_id: str) -> bool:
+        """
+        Disable an asset group from content discovery.
+        
+        Args:
+            group_id: Unique identifier for the asset group
+            
+        Returns:
+            True if successfully disabled, False otherwise
+        """
+        ...
 
 
 class ImporterError(Exception):

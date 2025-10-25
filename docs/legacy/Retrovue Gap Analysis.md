@@ -1,4 +1,4 @@
-# Retrovue Plex Integration Enhancement Roadmap
+# RetroVue Plex Integration Enhancement Roadmap
 
 > **Legacy Document** — Pre-Alembic version, retained for reference only.
 
@@ -6,11 +6,11 @@
 
 ## Executive Summary
 
-After analyzing both Retrovue's current Plex integration and ErsatzTV's sophisticated implementation, this roadmap outlines the path to transform Retrovue into a production-ready, enterprise-grade Plex synchronization system. The enhancements will provide **10-50x performance improvements**, **robust error handling**, and **professional-grade reliability**.
+After analyzing both RetroVue's current Plex integration and ErsatzTV's sophisticated implementation, this roadmap outlines the path to transform RetroVue into a production-ready, enterprise-grade Plex synchronization system. The enhancements will provide **10-50x performance improvements**, **robust error handling**, and **professional-grade reliability**.
 
 ## Current State Analysis
 
-### ✅ Retrovue Strengths
+### ✅ RetroVue Strengths
 
 - **Incremental Sync Foundation**: Already implements `updatedAt`-based change detection
 - **Multi-level Optimization**: Show-level and episode-level skipping
@@ -578,7 +578,7 @@ ALTER TABLE movies ADD COLUMN duration INTEGER;
 
 ## Conclusion
 
-This roadmap transforms Retrovue from a basic Plex integration into a production-ready, enterprise-grade synchronization system that rivals ErsatzTV's sophistication. The phased approach ensures manageable implementation while delivering immediate value at each stage.
+This roadmap transforms RetroVue from a basic Plex integration into a production-ready, enterprise-grade synchronization system that rivals ErsatzTV's sophistication. The phased approach ensures manageable implementation while delivering immediate value at each stage.
 
 The key differentiators that will be achieved:
 
@@ -588,4 +588,4 @@ The key differentiators that will be achieved:
 - **Operational Excellence**: Automated scheduling and maintenance
 - **User Experience**: Real-time progress and error handling
 
-This enhancement positions Retrovue as a serious competitor to established media server solutions while maintaining its unique value proposition and user-friendly approach.
+This enhancement positions RetroVue as a serious competitor to established media server solutions while maintaining its unique value proposition and user-friendly approach.

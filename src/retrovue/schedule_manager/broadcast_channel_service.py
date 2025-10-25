@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 
 from ..infra.uow import session
-from .models import BroadcastChannel
+from ..domain.entities import BroadcastChannel
 
 
 class BroadcastChannelService:
@@ -57,7 +57,8 @@ class BroadcastChannelService:
                     "grid_size_minutes": channel.grid_size_minutes,
                     "grid_offset_minutes": channel.grid_offset_minutes,
                     "rollover_minutes": channel.rollover_minutes,
-                    "created_at": channel.created_at.isoformat()
+                    "created_at": channel.created_at.isoformat(),
+                    "updated_at": channel.updated_at.isoformat() if channel.updated_at else None
                 })
             
             return result
@@ -89,7 +90,8 @@ class BroadcastChannelService:
                 "grid_offset_minutes": channel.grid_offset_minutes,
                 "rollover_minutes": channel.rollover_minutes,
                 "is_active": channel.is_active,
-                "created_at": channel.created_at.isoformat()
+                "created_at": channel.created_at.isoformat(),
+                "updated_at": channel.updated_at.isoformat() if channel.updated_at else None
             }
     
     @staticmethod
@@ -160,7 +162,8 @@ class BroadcastChannelService:
                     "grid_offset_minutes": channel.grid_offset_minutes,
                     "rollover_minutes": channel.rollover_minutes,
                     "is_active": channel.is_active,
-                    "created_at": channel.created_at.isoformat()
+                    "created_at": channel.created_at.isoformat(),
+                    "updated_at": channel.updated_at.isoformat() if channel.updated_at else None
                 }
                 
             except IntegrityError:
@@ -239,7 +242,8 @@ class BroadcastChannelService:
                     "grid_offset_minutes": channel.grid_offset_minutes,
                     "rollover_minutes": channel.rollover_minutes,
                     "is_active": channel.is_active,
-                    "created_at": channel.created_at.isoformat()
+                    "created_at": channel.created_at.isoformat(),
+                    "updated_at": channel.updated_at.isoformat() if channel.updated_at else None
                 }
                 
             except IntegrityError:
@@ -268,59 +272,3 @@ class BroadcastChannelService:
             db.delete(channel)
             db.commit()
     
-    @staticmethod
-    def get_channel_by_uuid(channel_uuid: uuid.UUID) -> Optional[Dict[str, Any]]:
-        """
-        Return full details for one BroadcastChannel by UUID.
-        
-        Args:
-            channel_uuid: The UUID of the channel to retrieve
-            
-        Returns:
-            Dict with all channel fields using UUID as external identity, or None if not found
-        """
-        with session() as db:
-            channel = db.execute(
-                select(BroadcastChannel).where(BroadcastChannel.uuid == channel_uuid)
-            ).scalar_one_or_none()
-            
-            if not channel:
-                return None
-                
-            return {
-                "uuid": str(channel.uuid),
-                "name": channel.name,
-                "timezone": channel.timezone,
-                "grid_size_minutes": channel.grid_size_minutes,
-                "grid_offset_minutes": channel.grid_offset_minutes,
-                "rollover_minutes": channel.rollover_minutes,
-                "is_active": channel.is_active,
-                "created_at": channel.created_at.isoformat()
-            }
-    
-    @staticmethod
-    def list_channels_public() -> List[Dict[str, Any]]:
-        """
-        Return a list of all BroadcastChannels with UUID as external identity.
-        
-        Returns:
-            List of dicts with: uuid, name, timezone, is_active, grid_size_minutes, 
-            grid_offset_minutes, rollover_minutes, created_at
-        """
-        with session() as db:
-            channels = db.execute(select(BroadcastChannel)).scalars().all()
-            
-            result = []
-            for channel in channels:
-                result.append({
-                    "uuid": str(channel.uuid),
-                    "name": channel.name,
-                    "timezone": channel.timezone,
-                    "is_active": channel.is_active,
-                    "grid_size_minutes": channel.grid_size_minutes,
-                    "grid_offset_minutes": channel.grid_offset_minutes,
-                    "rollover_minutes": channel.rollover_minutes,
-                    "created_at": channel.created_at.isoformat()
-                })
-            
-            return result

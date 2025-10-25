@@ -1,3 +1,5 @@
+_Related: [Development roadmap](development-roadmap.md) • [Architecture overview](../architecture/ArchitectureOverview.md) • [Plugin authoring](PluginAuthoring.md)_
+
 # RetroVue Engineering Design Principles
 
 ## Overview

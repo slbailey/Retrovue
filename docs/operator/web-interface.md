@@ -1,6 +1,8 @@
+_Related: [Getting started](getting-started.md) • [Quick start](quick-start.md) • [Configuration](configuration.md)_
+
 # 🌐 Web Interface Guide
 
-Retrovue's modern web interface makes setup and management much easier than using the command line. This guide covers all the features and workflows available in the web UI.
+RetroVue's modern web interface makes setup and management much easier than using the command line. This guide covers all the features and workflows available in the web UI.
 
 ## 🚀 Getting Started
 
@@ -255,10 +257,10 @@ The web interface provides real-time updates for all operations:
 After successfully setting up your content:
 
 1. **Explore the Content Browser** to see your imported media
-2. **Check the [Streaming Guide](streaming.md)** for streaming setup
+2. **Check the [Streaming engine](../components/streaming-engine.md)** for streaming setup
 3. **Review [Configuration Guide](configuration.md)** for advanced settings
-4. **Read [Troubleshooting Guide](troubleshooting.md)** for common issues
+4. **Check the [Configuration guide](configuration.md)** for setup issues
 
 ---
 
-The web interface makes Retrovue much more accessible and user-friendly. Enjoy your retro IPTV system! 📺✨
+The web interface makes RetroVue much more accessible and user-friendly. Enjoy your retro IPTV system! 📺✨

@@ -4,7 +4,7 @@
 
 ## 📋 Getting Your Plex Token
 
-Your Plex token is like a password that allows Retrovue to access your Plex server:
+Your Plex token is like a password that allows RetroVue to access your Plex server:
 
 ### **Step 1: Open Plex Web Interface**
 
@@ -22,18 +22,18 @@ Your Plex token is like a password that allows Retrovue to access your Plex serv
 
 ### **Step 3: Use the Token**
 
-- Paste this token into Retrovue when adding your Plex server
+- Paste this token into RetroVue when adding your Plex server
 - Keep this token secure - it provides access to your Plex server
 
 ## 🔄 Smart Synchronization System
 
 ### **Incremental Sync Strategy**
 
-Retrovue implements a sophisticated incremental synchronization system that dramatically improves performance by only processing content that has actually changed in Plex since the last sync.
+RetroVue implements a sophisticated incremental synchronization system that dramatically improves performance by only processing content that has actually changed in Plex since the last sync.
 
 #### **Plex `updatedAt` Field Integration**
 
-Every piece of content from Plex includes an `updatedAt` timestamp that indicates when the content was last modified. Retrovue leverages this field to implement intelligent incremental sync:
+Every piece of content from Plex includes an `updatedAt` timestamp that indicates when the content was last modified. RetroVue leverages this field to implement intelligent incremental sync:
 
 ```python
 # Database schema includes updated_at_plex field for all content types
@@ -138,7 +138,7 @@ Many TV series have been remade or rebooted with the same title but different ye
 
 ### **The Solution**
 
-Retrovue uses a **multi-layered disambiguation strategy**:
+RetroVue uses a **multi-layered disambiguation strategy**:
 
 #### **1. Year-Based Disambiguation**
 
@@ -238,14 +238,14 @@ python -m retrovue sync --title "Battlestar Galactica" --year 2003 --dry-run
 
 ### **The Problem**
 
-Plex stores media files using internal paths that may not be directly accessible to Retrovue's streaming engine. For example:
+Plex stores media files using internal paths that may not be directly accessible to RetroVue's streaming engine. For example:
 
 - **Plex Path**: `/media/movies/Action Movie (2023).mp4`
 - **Local Path**: `R:\movies\Action Movie (2023).mp4`
 
 ### **The Solution**
 
-Retrovue implements a comprehensive path mapping system that translates between Plex internal paths and accessible local paths.
+RetroVue implements a comprehensive path mapping system that translates between Plex internal paths and accessible local paths.
 
 #### **Database Schema**
 

@@ -1,3 +1,5 @@
+_Related: [Abstract design principles](abstract-design-principles.md) • [Plugin authoring](PluginAuthoring.md) • [Architecture overview](../architecture/ArchitectureOverview.md)_
+
 # 🚦 Development Roadmap
 
 This roadmap tracks our progress through development and helps keep us focused on bite-sized work chunks that move us towards the end goal of a robust IPTV system.
@@ -222,4 +224,4 @@ Content Library → Channel Manager → Multiple FFmpeg Processes → MPEG-TS St
 
 ---
 
-_This roadmap reflects the current state of Retrovue as a content management and streaming system, with a clear path toward professional IPTV operation._
+_This roadmap reflects the current state of RetroVue as a content management and streaming system, with a clear path toward professional IPTV operation._

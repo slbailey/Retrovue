@@ -30,7 +30,7 @@ python -m venv venv
 pip install -r requirements.txt
 
 # Launch the CLI tools
-python -m cli.plex_sync --help
+python -m retrovue.cli.main --help
 ```
 
 **macOS/Linux (bash):**
@@ -44,7 +44,85 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Launch the CLI tools
-python -m cli.plex_sync --help
+python -m retrovue.cli.main --help
+```
+
+### Channel Management CLI
+
+**New in 2025**: Retrovue now includes a comprehensive CLI for channel management!
+
+```bash
+# List all channels
+retrovue channel list
+
+# Create a new channel
+retrovue channel create --name "RetroToons" --timezone "America/New_York" \
+  --grid-size-minutes 30 --grid-offset-minutes 0 --rollover-minutes 360 --active
+
+# Show channel details
+retrovue channel show --id 1
+
+# Update a channel
+retrovue channel update --id 1 --name "NewName" --inactive
+
+# Delete a channel
+retrovue channel delete --id 1
+```
+
+### Source Management CLI
+
+**New in 2025**: Retrovue now includes modular source management for content discovery!
+
+```bash
+# List all sources
+retrovue source list
+
+# List available source types and enrichers
+retrovue source list-types
+
+# Get help for the add command (shows available types)
+retrovue source add --help
+
+# Get help for specific source types
+retrovue source add --type plex --help
+retrovue source add --type filesystem --help
+
+# Add a Plex source (automatically discovers collections)
+retrovue source add --type plex --name "My Plex Server" --base-url "http://192.168.1.100:32400" --token "your-plex-token"
+
+# Add a filesystem source
+retrovue source add --type filesystem --name "My Media Library" --base-path "/media/movies"
+
+# Add a source with enrichers
+retrovue source add --type plex --name "Plex Server" --base-url "http://plex:32400" --token "token" --enrichers "ffprobe"
+
+# Show source details (by name, UUID, or external ID)
+retrovue source show "My Plex Server"
+retrovue source show filesystem-4807c63e
+retrovue source show 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
+
+# Update a source (by name, UUID, or external ID)
+retrovue source update "My Plex Server" --name "Updated Plex Server"
+retrovue source update filesystem-4807c63e --name "Updated Media Library"
+retrovue source update plex-346d2265 --base-url "http://new-plex:32400" --token "new-token"
+
+# Delete a source (by name, UUID, or external ID)
+# This will cascade delete all related collections and path mappings
+retrovue source delete "My Plex Server" --force
+retrovue source delete filesystem-4807c63e --force
+retrovue source delete 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
+
+# List collections from sources
+retrovue source collections
+
+# Enable/disable collections for content discovery
+retrovue source enable "Movies"
+retrovue source enable "TV Shows"
+retrovue source disable "Horror"
+
+# Update enrichers on existing sources
+retrovue source enrichers "My Plex Server" "ffprobe"
+retrovue source enrichers "My Plex Server" "ffprobe,metadata"
 ```
 
 ### Launch the Web Interface (Recommended)

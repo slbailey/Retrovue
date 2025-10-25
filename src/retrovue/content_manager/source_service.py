@@ -119,6 +119,10 @@ class SourceService:
         """Get a content source by its external ID."""
         return self.db.query(Source).filter(Source.external_id == external_id).first()
     
+    def get_source_by_name(self, name: str) -> Source | None:
+        """Get a content source by its name."""
+        return self.db.query(Source).filter(Source.name == name).first()
+    
     def list_sources(self) -> list["ContentSourceDTO"]:
         """
         List all content sources.
@@ -139,6 +143,177 @@ class SourceService:
             )
             for source in sources
         ]
+    
+    def get_source_by_id(self, source_id: str) -> "ContentSourceDTO | None":
+        """
+        Get a content source by its ID.
+        
+        Args:
+            source_id: The source ID (can be internal ID, external ID, or name)
+            
+        Returns:
+            ContentSourceDTO or None if not found
+        """
+        import uuid
+        
+        # Try to find by internal ID first (if it's a valid UUID)
+        try:
+            if len(source_id) == 36 and source_id.count('-') == 4:  # Basic UUID format check
+                source_uuid = uuid.UUID(source_id)
+                source = self.db.query(Source).filter(Source.id == source_uuid).first()
+                if source:
+                    return ContentSourceDTO(
+                        id=str(source.id),
+                        external_id=source.external_id,
+                        kind=source.kind,
+                        name=source.name,
+                        status="connected",
+                        base_url=source.config.get("base_url") if source.config else None,
+                        config=source.config
+                    )
+        except (ValueError, TypeError):
+            pass
+        
+        # Try to find by external ID
+        source = self.get_source_by_external_id(source_id)
+        if source:
+            return ContentSourceDTO(
+                id=str(source.id),
+                external_id=source.external_id,
+                kind=source.kind,
+                name=source.name,
+                status="connected",
+                base_url=source.config.get("base_url") if source.config else None,
+                config=source.config
+            )
+        
+        # Try to find by name
+        source = self.get_source_by_name(source_id)
+        if source:
+            return ContentSourceDTO(
+                id=str(source.id),
+                external_id=source.external_id,
+                kind=source.kind,
+                name=source.name,
+                status="connected",
+                base_url=source.config.get("base_url") if source.config else None,
+                config=source.config
+            )
+        
+        return None
+    
+    def update_source(self, source_id: str, **updates) -> "ContentSourceDTO | None":
+        """
+        Update a content source.
+        
+        Args:
+            source_id: The source ID to update (can be internal ID, external ID, or name)
+            **updates: Fields to update (name, config, etc.)
+            
+        Returns:
+            Updated ContentSourceDTO or None if not found
+        """
+        import uuid
+        
+        # Try to find by internal ID first (if it's a valid UUID)
+        source = None
+        try:
+            if len(source_id) == 36 and source_id.count('-') == 4:  # Basic UUID format check
+                source_uuid = uuid.UUID(source_id)
+                source = self.db.query(Source).filter(Source.id == source_uuid).first()
+        except (ValueError, TypeError):
+            pass
+        
+        if not source:
+            # Try to find by external ID
+            source = self.get_source_by_external_id(source_id)
+        
+        if not source:
+            # Try to find by name
+            source = self.get_source_by_name(source_id)
+        
+        if not source:
+            return None
+        
+        # Update fields
+        if "name" in updates:
+            source.name = updates["name"]
+        if "config" in updates:
+            source.config = updates["config"]
+        
+        self.db.commit()
+        self.db.refresh(source)
+        
+        return ContentSourceDTO(
+            id=str(source.id),
+            external_id=source.external_id,
+            kind=source.kind,
+            name=source.name,
+            status="connected",
+            base_url=source.config.get("base_url") if source.config else None,
+            config=source.config
+        )
+    
+    def delete_source(self, source_id: str) -> bool:
+        """
+        Delete a content source and all related data.
+        
+        This will cascade delete:
+        - SourceCollections (and their path mappings)
+        - PathMappings
+        - Any other related data through foreign key constraints
+        
+        Args:
+            source_id: The source ID to delete (can be internal ID, external ID, or name)
+            
+        Returns:
+            True if deleted, False if not found
+        """
+        import uuid
+        
+        # Try to find by internal ID first (if it's a valid UUID)
+        source = None
+        try:
+            if len(source_id) == 36 and source_id.count('-') == 4:  # Basic UUID format check
+                source_uuid = uuid.UUID(source_id)
+                source = self.db.query(Source).filter(Source.id == source_uuid).first()
+        except (ValueError, TypeError):
+            pass
+        
+        if not source:
+            # Try to find by external ID
+            source = self.get_source_by_external_id(source_id)
+        
+        if not source:
+            # Try to find by name
+            source = self.get_source_by_name(source_id)
+        
+        if not source:
+            return False
+        
+        # Count related data before deletion for logging
+        collections_count = self.db.query(SourceCollection).filter(SourceCollection.source_id == source.id).count()
+        path_mappings_count = 0
+        for collection in self.db.query(SourceCollection).filter(SourceCollection.source_id == source.id).all():
+            path_mappings_count += self.db.query(PathMapping).filter(PathMapping.collection_id == collection.id).count()
+        
+        # Delete the source (cascade will handle related data)
+        self.db.delete(source)
+        self.db.commit()
+        
+        # Log what was deleted (for debugging/auditing)
+        import structlog
+        logger = structlog.get_logger(__name__)
+        logger.info(
+            "source_deleted",
+            source_id=str(source.id),
+            source_name=source.name,
+            source_kind=source.kind,
+            collections_deleted=collections_count,
+            path_mappings_deleted=path_mappings_count
+        )
+        
+        return True
     
     def list_enabled_collections(self, source_id: str) -> list[SourceCollectionDTO]:
         """
@@ -180,6 +355,78 @@ class SourceService:
         
         return result
     
+    def list_all_collections(self, source_id: str = None) -> list[SourceCollectionDTO]:
+        """
+        List all collections, optionally filtered by source.
+        
+        Args:
+            source_id: Optional source ID to filter by
+            
+        Returns:
+            List of all collections
+        """
+        query = self.db.query(SourceCollection)
+        
+        if source_id:
+            # Find source by external ID, name, or UUID
+            source = self.get_source_by_id(source_id)
+            if not source:
+                return []
+            query = query.filter(SourceCollection.source_id == source.id)
+        
+        collections = query.all()
+        
+        result = []
+        for collection in collections:
+            # Get path mappings
+            mappings = self.db.query(PathMapping).filter(
+                PathMapping.collection_id == collection.id
+            ).all()
+            
+            mapping_pairs = [(m.plex_path, m.local_path) for m in mappings]
+            
+            result.append(SourceCollectionDTO(
+                external_id=collection.external_id,
+                name=collection.name,
+                enabled=collection.enabled,
+                mapping_pairs=mapping_pairs,
+                source_type=collection.source.kind,
+                config=collection.config or {}
+            ))
+        
+        return result
+    
+    def update_collection_enabled(self, source_type: str, external_id: str, enabled: bool) -> bool:
+        """
+        Update the enabled status of a collection.
+        
+        Args:
+            source_type: The source type (e.g., 'plex')
+            external_id: The collection external ID
+            enabled: Whether to enable or disable the collection
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Find the collection by external_id across all sources of this type
+            collection = self.db.query(SourceCollection).join(Source).filter(
+                Source.kind == source_type,
+                SourceCollection.external_id == external_id
+            ).first()
+            
+            if not collection:
+                return False
+            
+            collection.enabled = enabled
+            self.db.commit()
+            return True
+            
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error updating collection enabled status: {e}")
+            return False
+    
     def get_collection(self, source_id: str, external_id: str) -> SourceCollectionDTO | None:
         """
         Get a specific collection by source and external ID.
@@ -196,6 +443,43 @@ class SourceService:
             if collection.external_id == external_id:
                 return collection
         return None
+    
+    def update_source_enrichers(self, source_id: str, enrichers: list[str]) -> bool:
+        """
+        Update the enrichers for a source.
+        
+        Args:
+            source_id: The source ID (UUID, external ID, or name)
+            enrichers: List of enricher names to use
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Find the source
+            source = self.get_source_by_id(source_id)
+            if not source:
+                return False
+            
+            # Update the enrichers in the source config
+            if not source.config:
+                source.config = {}
+            
+            source.config["enrichers"] = enrichers
+            
+            # Update the source in the database
+            db_source = self.db.query(Source).filter(Source.id == source.id).first()
+            if db_source:
+                db_source.config = source.config
+                self.db.commit()
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error updating source enrichers: {e}")
+            return False
     
     def update_collection_mapping(
         self, 
@@ -247,43 +531,6 @@ class SourceService:
             self.db.rollback()
             return False
     
-    def update_collection_enabled(
-        self, 
-        source_id: str, 
-        external_id: str, 
-        enabled: bool
-    ) -> bool:
-        """
-        Update the enabled status of a collection.
-        
-        Args:
-            source_id: Identifier for the content source
-            external_id: External identifier for the collection
-            enabled: New enabled status
-            
-        Returns:
-            True if updated successfully, False otherwise
-        """
-        try:
-            # Find the source and collection
-            source = self.db.query(Source).filter(Source.external_id == source_id).first()
-            if not source:
-                return False
-                
-            collection = self.db.query(SourceCollection).filter(
-                SourceCollection.source_id == source.id,
-                SourceCollection.external_id == external_id
-            ).first()
-            if not collection:
-                return False
-            
-            # Update enabled status
-            collection.enabled = enabled
-            self.db.flush()
-            return True
-        except Exception:
-            self.db.rollback()
-            return False
     
     def create_plex_source(self, name: str, base_url: str, token: str) -> "ContentSourceDTO":
         """
@@ -316,10 +563,57 @@ class SourceService:
         
         return ContentSourceDTO(
             id=source.external_id,
+            external_id=source.external_id,
             kind=source.kind,
             name=source.name,
             status="connected",
             base_url=base_url,
+            config=source.config
+        )
+    
+    def create_filesystem_source(self, name: str, base_path: str) -> "ContentSourceDTO":
+        """
+        Create a new filesystem source.
+        
+        Args:
+            name: Friendly name for the source
+            base_path: Base filesystem path to scan
+            
+        Returns:
+            ContentSourceDTO for the created source
+        """
+        import uuid
+        import os
+        
+        # Create external ID
+        external_id = f"filesystem-{uuid.uuid4().hex[:8]}"
+        
+        # Validate the path exists
+        if not os.path.exists(base_path):
+            raise ValueError(f"Path does not exist: {base_path}")
+        
+        if not os.path.isdir(base_path):
+            raise ValueError(f"Path is not a directory: {base_path}")
+        
+        # Create the source entity
+        source = Source(
+            external_id=external_id,
+            kind="filesystem",
+            name=name,
+            config={"base_path": base_path}
+        )
+        
+        self.db.add(source)
+        self.db.flush()
+        self.db.refresh(source)
+        
+        return ContentSourceDTO(
+            id=source.external_id,
+            external_id=source.external_id,
+            kind=source.kind,
+            name=source.name,
+            status="connected",
+            base_url=base_path,
             config=source.config
         )
     
@@ -337,28 +631,30 @@ class SourceService:
             # Get the source from database
             source = self.db.query(Source).filter(Source.external_id == source_id).first()
             if not source:
-                print(f"DEBUG: Source {source_id} not found in database")
                 return []
-            
-            print(f"DEBUG: Found source {source.name} with config: {source.config}")
             
             # Import Plex importer
             from ..adapters.importers.plex_importer import PlexImporter
             
             # Create importer with source config
-            importer = PlexImporter(
-                servers=[{
+            # Handle both old and new config formats
+            if "servers" in source.config:
+                # New format with servers array
+                servers = source.config["servers"]
+            else:
+                # Old format with direct base_url and token
+                servers = [{
                     "base_url": source.config.get("base_url"),
                     "token": source.config.get("token")
-                }],
+                }]
+            
+            importer = PlexImporter(
+                servers=servers,
                 include_metadata=True
             )
             
-            print(f"DEBUG: Created importer with servers: {importer.servers}")
-            
             # Discover libraries
             libraries = importer.discover_libraries()
-            print(f"DEBUG: Discovered {len(libraries)} libraries: {libraries}")
             
             # Convert to DTOs
             collections = []
@@ -374,16 +670,59 @@ class SourceService:
                         "type": lib.get("type", "movie")
                     }
                 ))
-            
-            print(f"DEBUG: Returning {len(collections)} collections")
             return collections
             
         except Exception as e:
-            print(f"DEBUG: Error in discover_collections: {e}")
-            import traceback
-            traceback.print_exc()
-            # Return empty list on error
+            print(f"Error in discover_collections: {e}")
             return []
+    
+    def persist_collections(self, source_id: str, collections: list[SourceCollectionDTO]) -> bool:
+        """
+        Persist discovered collections to the database.
+        
+        Args:
+            source_id: The source external ID
+            collections: List of collections to persist
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get the source
+            source = self.db.query(Source).filter(Source.external_id == source_id).first()
+            if not source:
+                return False
+            
+            # Persist each collection
+            for collection_dto in collections:
+                # Check if collection already exists
+                existing = self.db.query(SourceCollection).filter(
+                    SourceCollection.source_id == source.id,
+                    SourceCollection.external_id == collection_dto.external_id
+                ).first()
+                
+                if existing:
+                    # Update existing collection
+                    existing.name = collection_dto.name
+                    existing.config = collection_dto.config
+                else:
+                    # Create new collection
+                    new_collection = SourceCollection(
+                        source_id=source.id,
+                        external_id=collection_dto.external_id,
+                        name=collection_dto.name,
+                        enabled=collection_dto.enabled,
+                        config=collection_dto.config
+                    )
+                    self.db.add(new_collection)
+            
+            self.db.commit()
+            return True
+            
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error persisting collections: {e}")
+            return False
     
     def save_collections(self, source_id: str, updates: list["CollectionUpdateDTO"]) -> bool:
         """

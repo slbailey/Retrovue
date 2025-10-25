@@ -1,10 +1,12 @@
-# Retrovue Playout System
+_Related: [Domain: Playout pipeline](../domain/PlayoutPipeline.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Runtime: Producer lifecycle](../runtime/ProducerLifecycle.md)_
 
-This document describes the MPEG-TS output contract for Retrovue's playout system, including technical specifications, testing procedures, and implementation details.
+# RetroVue Playout System
+
+This document describes the MPEG-TS output contract for RetroVue's playout system, including technical specifications, testing procedures, and implementation details.
 
 ## Overview
 
-Retrovue generates MPEG-TS transport streams for broadcast-style TV channels. The system is designed to provide:
+RetroVue generates MPEG-TS transport streams for broadcast-style TV channels. The system is designed to provide:
 
 - **As-run alignment** via precise timing synchronization
 - **Seamless transitions** between content and commercials
@@ -54,7 +56,7 @@ This allows clients to:
 
 ### Marker Integration
 
-Retrovue's Marker system maps to MPEG-TS content as follows:
+RetroVue's Marker system maps to MPEG-TS content as follows:
 
 #### Bumpers and Commercials
 
@@ -108,7 +110,7 @@ MPEG-TS Transport Stream:
 
 ### VLC Test Recipe
 
-1. **Start Retrovue server:**
+1. **Start RetroVue server:**
 
    ```bash
    python run_server.py
@@ -307,4 +309,4 @@ def check_mpegts_health(channel_id: int) -> dict:
 
 ---
 
-_This document serves as the technical specification for Retrovue's MPEG-TS playout system. For implementation details, see the source code in `src/retrovue/core/streaming.py`._
+_This document serves as the technical specification for RetroVue's MPEG-TS playout system. For implementation details, see the source code in `src/retrovue/core/streaming.py`._

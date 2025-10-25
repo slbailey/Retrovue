@@ -1,8 +1,10 @@
+_Related: [Getting started](getting-started.md) • [Web interface](web-interface.md) • [Configuration](configuration.md)_
+
 # 🚀 Quick Start Guide
 
-## 🎯 The Retrovue 6-Step Process
+## 🎯 The RetroVue 6-Step Process
 
-Retrovue follows a **media-first approach** with a streamlined 6-step process to get your retro IPTV system up and running:
+RetroVue follows a **media-first approach** with a streamlined 6-step process to get your retro IPTV system up and running:
 
 ### **Step 1: Install Requirements**
 
@@ -18,7 +20,7 @@ Sync libraries from Plex and configure path mappings
 
 ### **Step 4: Ingest Content**
 
-Import movies and TV shows into the Retrovue database
+Import movies and TV shows into the RetroVue database
 
 ### **Step 5: Schedule** (Coming Soon)
 
@@ -32,7 +34,7 @@ Start channel stream and view in VLC or Plex Live TV
 
 ## 🌐 Web Interface Workflow (Recommended for Beginners)
 
-**New in 2025**: Retrovue now includes a modern Web UI that makes setup much easier!
+**New in 2025**: RetroVue now includes a modern Web UI that makes setup much easier!
 
 ### **Launch the Web Interface**
 
@@ -94,7 +96,7 @@ Then open your browser to: http://localhost:8000
 
 ### **Required Software**
 
-- **Python 3.8+** - The programming language Retrovue is built with
+- **Python 3.8+** - The programming language RetroVue is built with
 - **FFmpeg** - Handles video processing and streaming (must be in PATH)
 - **Git** - For cloning the repository (optional)
 
@@ -276,7 +278,7 @@ The streaming engine is currently in development. Once available, you'll be able
 
 ### **Apply Namespaced Tags**
 
-Retrovue uses a powerful **namespaced tagging system** for flexible content organization:
+RetroVue uses a powerful **namespaced tagging system** for flexible content organization:
 
 #### **Audience Targeting Tags**
 
@@ -521,10 +523,10 @@ python --version  # Should be 3.8+
 
 ### **Explore the Documentation**
 
-- **[System Architecture](architecture.md)** - How Retrovue works
-- **[Database Schema](database-schema.md)** - How data is stored
-- **[Plex Integration](plex-integration.md)** - Connecting to Plex
-- **[Streaming Engine](streaming-engine.md)** - How streaming works
+- **[System architecture](../architecture/ArchitectureOverview.md)** - How RetroVue works
+- **[Database schema](../developer/database-schema.md)** - How data is stored
+- **[CLI reference](CLI.md)** - Command-line interface
+- **[Streaming engine](../components/streaming-engine.md)** - How streaming works
 
 ### **Try Advanced Features**
 
@@ -542,13 +544,13 @@ python --version  # Should be 3.8+
 
 ## 🎉 Congratulations!
 
-You've successfully set up Retrovue! You now have:
+You've successfully set up RetroVue! You now have:
 
 - ✅ A working content management system
 - ✅ Basic streaming capabilities
 - ✅ A foundation for building your own TV network
 
-**What's Next?** Check out the [Development Roadmap](development-roadmap.md) to see what features are coming next and how you can contribute to the project.
+**What's Next?** Check out the [Development roadmap](../developer/development-roadmap.md) to see what features are coming next and how you can contribute to the project.
 
 ---
 

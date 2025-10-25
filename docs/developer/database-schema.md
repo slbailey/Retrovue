@@ -1,10 +1,12 @@
 # 🗄️ Database Schema Design
 
+_Related: [Data model: Broadcast schema](../data-model/broadcast-schema.md) • [Data model: Identity and referencing](../data-model/IdentityAndReferencing.md) • [Infrastructure bootstrap](../infra/bootstrap.md)_
+
 ## 🎯 Schema Version 1.2 - Media-First Architecture
 
 ### **Core Design Philosophy**
 
-The Retrovue database schema is built on a **media-first foundation** where every record begins with a physical media file. This approach ensures that:
+The RetroVue database schema is built on a **media-first foundation** where every record begins with a physical media file. This approach ensures that:
 
 - **Physical Reality**: All content must have an actual playable media file as its foundation
 - **Logical Wrappers**: Content items are logical wrappers around media files
@@ -13,7 +15,7 @@ The Retrovue database schema is built on a **media-first foundation** where ever
 
 ### **Schema Management Methodology**
 
-Retrovue uses a **schema-first approach** with no migration framework:
+RetroVue uses a **schema-first approach** with no migration framework:
 
 - **Single Source of Truth**: `sql/retrovue_schema_v1.2.sql` is the authoritative schema
 - **No Migrations**: Schema changes are made directly to the SQL file
@@ -291,7 +293,7 @@ play_log (
 
 ### **Schema-First Approach**
 
-Retrovue uses a **schema-first approach** with no migration framework:
+RetroVue uses a **schema-first approach** with no migration framework:
 
 #### **Single Source of Truth**
 

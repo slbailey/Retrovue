@@ -1,5 +1,7 @@
 # Contributing to RetroVue Runtime
 
+_Related: [Runtime: Channel manager](../runtime/ChannelManager.md) • [Runtime: Master clock](../runtime/MasterClock.md) • [Architecture overview](../architecture/ArchitectureOverview.md)_
+
 **Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
 
 This document describes the development process and architectural contracts for RetroVue's runtime components.
@@ -140,5 +142,13 @@ AsRunLogger can split across broadcast day boundaries in reporting.
 scheduler_daemon polls MasterClock; MasterClock doesn't "wake" anything.
 
 The Prevue/guide channel will be a consumer of ScheduledSegments later, but we are intentionally NOT building that code yet. We are only documenting it so upstream systems expose the right data.
+
+## See also
+
+- [Runtime: Channel manager](../runtime/ChannelManager.md) - Per-channel runtime controller
+- [Runtime: Master clock](../runtime/MasterClock.md) - Authoritative time source
+- [Runtime: Schedule service](../runtime/schedule_service.md) - Programming authority
+- [Architecture overview](../architecture/ArchitectureOverview.md) - System architecture
+- [Tests: Broadcast day alignment](../tests/broadcast_day_alignment.md) - Testing broadcast day logic
 
 _Document version: v0.1 · Last updated: 2025-10-24_

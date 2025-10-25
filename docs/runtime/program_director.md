@@ -1,5 +1,7 @@
 # RetroVue Runtime — ProgramDirector
 
+_Related: [Runtime: Channel manager](ChannelManager.md) • [Runtime: Schedule service](schedule_service.md) • [Runtime: Master clock](MasterClock.md)_
+
 > Global coordinator and emergency controller for system-wide broadcast operations.
 
 **Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
@@ -548,9 +550,9 @@ ProgramDirector operates on BroadcastChannel entities using UUID identifiers for
 
 | Component                                  | Relationship                                                  |
 | ------------------------------------------ | ------------------------------------------------------------- |
-| **[ChannelManager](channel_manager.md)**   | Per-channel runtime controller and Producer lifecycle manager |
+| **[ChannelManager](ChannelManager.md)**    | Per-channel runtime controller and Producer lifecycle manager |
 | **[ScheduleService](schedule_service.md)** | Provides current airing status and broadcast day information  |
-| **[MasterClock](clock.md)**                | Provides authoritative station time for all operations        |
-| **[AsRunLogger](asrun_logger.md)**         | Coordinates with emergency response logging                   |
+| **[MasterClock](MasterClock.md)**          | Provides authoritative station time for all operations        |
+| **[AsRunLogger](AsRunLogging.md)**         | Coordinates with emergency response logging                   |
 
 _Document version: v0.1 · Last updated: 2025-10-24_

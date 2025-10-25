@@ -1,5 +1,7 @@
 # RetroVue System Architecture
 
+_Related: [Architecture overview](../architecture/ArchitectureOverview.md) • [Data flow](../architecture/DataFlow.md) • [Runtime: Channel manager](../runtime/ChannelManager.md)_
+
 > **The single source of truth for understanding RetroVue's architecture**  
 > What we're building, why we built it this way, and how the components fit together.
 
@@ -378,3 +380,11 @@ Planning happens in two scopes:
 ---
 
 _This document serves as the architectural foundation for RetroVue's development and maintenance._
+
+## See also
+
+- [Architecture overview](../architecture/ArchitectureOverview.md) - Detailed architecture documentation
+- [Data flow](../architecture/DataFlow.md) - End-to-end data movement
+- [Runtime: Channel manager](../runtime/ChannelManager.md) - Channel runtime operations
+- [Runtime: Program director](../runtime/program_director.md) - System-wide coordination
+- [Domain: Playout pipeline](../domain/PlayoutPipeline.md) - Stream generation process

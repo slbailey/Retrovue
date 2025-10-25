@@ -1,478 +1,461 @@
-# 🔌 API Reference
+# RetroVue API Reference
 
-Complete reference for the Retrovue REST API, including all endpoints, request/response formats, and authentication.
+_Related: [Developer: Plugin authoring](PluginAuthoring.md) • [Developer: Registry API](RegistryAPI.md) • [Developer: Testing plugins](TestingPlugins.md)_
 
-## 🌐 Base URL
+This document provides a comprehensive API reference for extending RetroVue with custom importers and enrichers.
 
-```
-http://localhost:8000/api
-```
+## Importer API
 
-## 🔐 Authentication
-
-Currently, the API does not require authentication for local development. In production deployments, authentication will be added.
-
-## 📋 Current API Endpoints
-
-The Retrovue API is built with FastAPI and provides endpoints for content management, ingestion, and health monitoring.
-
-## 📋 API Endpoints
-
-### **Health & Status**
-
-#### **GET** `/api/healthz`
-
-Check API health and database connectivity.
-
-**Response:**
-
-```json
-{
-  "status": "ok",
-  "version": "0.1.0",
-  "db": "ok",
-  "response_time_ms": 15.23,
-  "timestamp": 1640995200.0
-}
-```
-
-**Error Response (503):**
-
-```json
-{
-  "status": "error",
-  "version": "0.1.0",
-  "db": "error",
-  "db_error": "Connection failed",
-  "response_time_ms": 15.23,
-  "timestamp": 1640995200.0
-}
-```
-
-### **Assets Management**
-
-#### **GET** `/api/v1/assets`
-
-List all assets with optional filtering.
-
-**Query Parameters:**
-
-- `limit` (optional): Maximum number of items (default: 50)
-- `offset` (optional): Number of items to skip (default: 0)
-- `canonical` (optional): Filter by canonical status (true/false)
-- `deleted` (optional): Filter by deleted status (true/false)
-
-**Response:**
-
-```json
-{
-  "assets": [
-    {
-      "id": 1,
-      "uuid": "123e4567-e89b-12d3-a456-426614174000",
-      "uri": "file:///media/movie.mp4",
-      "size": 8589934592,
-      "duration_ms": 7200000,
-      "video_codec": "h264",
-      "audio_codec": "aac",
-      "container": "mp4",
-      "canonical": true,
-      "is_deleted": false,
-      "discovered_at": "2024-01-15T14:30:00Z"
-    }
-  ],
-  "total": 1250,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-#### **GET** `/api/v1/assets/{asset_id}`
-
-Get detailed information about a specific asset.
-
-**Parameters:**
-
-- `asset_id` (path): ID of the asset
-
-**Response:**
-
-```json
-{
-  "id": 1,
-  "uuid": "123e4567-e89b-12d3-a456-426614174000",
-  "uri": "file:///media/movie.mp4",
-  "size": 8589934592,
-  "duration_ms": 7200000,
-  "video_codec": "h264",
-  "audio_codec": "aac",
-  "container": "mp4",
-  "canonical": true,
-  "is_deleted": false,
-  "discovered_at": "2024-01-15T14:30:00Z",
-  "episodes": [
-    {
-      "id": "456e7890-e89b-12d3-a456-426614174000",
-      "title_id": "789e0123-e89b-12d3-a456-426614174000",
-      "season_id": "012e3456-e89b-12d3-a456-426614174000",
-      "number": 1,
-      "name": "Pilot"
-    }
-  ],
-  "markers": [
-    {
-      "id": "321e6543-e89b-12d3-a456-426614174000",
-      "kind": "chapter",
-      "start_ms": 0,
-      "end_ms": 300000,
-      "payload": { "title": "Opening Credits" }
-    }
-  ]
-}
-```
-
-### **Content Ingestion**
-
-#### **POST** `/api/ingest/run`
-
-Start content ingestion process.
-
-**Query Parameters:**
-
-- `source` (required): Source type (plex, filesystem, etc.)
-- `source_id` (optional): Specific source ID
-
-**Request Body:**
-
-```json
-{
-  "library_ids": ["library1", "library2"],
-  "enrichers": ["ffprobe", "metadata"]
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "discovered": 100,
-  "registered": 95,
-  "enriched": 90,
-  "canonicalized": 85,
-  "queued_for_review": 10
-}
-```
-
-#### **GET** `/api/ingest/status`
-
-Get status of the last ingestion process.
-
-**Response:**
-
-```json
-{
-  "last_run": "2024-01-15T14:30:00Z",
-  "status": "completed",
-  "discovered": 100,
-  "registered": 95,
-  "enriched": 90,
-  "canonicalized": 85,
-  "queued_for_review": 10
-}
-```
-
-### **Review System**
-
-#### **GET** `/api/v1/review`
-
-List items in the review queue.
-
-**Query Parameters:**
-
-- `status` (optional): Filter by status (pending, resolved, rejected)
-- `limit` (optional): Maximum number of items (default: 50)
-- `offset` (optional): Number of items to skip (default: 0)
-
-**Response:**
-
-```json
-{
-  "reviews": [
-    {
-      "id": "123e4567-e89b-12d3-a456-426614174000",
-      "asset_id": 1,
-      "reason": "Low confidence match",
-      "confidence": 0.3,
-      "status": "pending",
-      "created_at": "2024-01-15T14:30:00Z",
-      "asset": {
-        "id": 1,
-        "uuid": "987fcdeb-51a2-43d1-b456-426614174000",
-        "uri": "file:///media/movie.mp4",
-        "size": 8589934592,
-        "canonical": false
-      }
-    }
-  ],
-  "total": 5,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-#### **POST** `/api/v1/review/{review_id}/resolve`
-
-Resolve a review queue item.
-
-**Parameters:**
-
-- `review_id` (path): UUID of the review to resolve
-
-**Request Body:**
-
-```json
-{
-  "episode_id": "456e7890-e89b-12d3-a456-426614174000",
-  "notes": "Manually verified and approved"
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "review_id": "123e4567-e89b-12d3-a456-426614174000",
-  "asset_id": 1,
-  "episode_id": "456e7890-e89b-12d3-a456-426614174000"
-}
-```
-
-#### **POST** `/api/v1/review/{review_id}/reject`
-
-Reject a review queue item.
-
-**Parameters:**
-
-- `review_id` (path): UUID of the review to reject
-
-**Request Body:**
-
-```json
-{
-  "notes": "Poor quality, unsuitable for library"
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "review_id": "123e4567-e89b-12d3-a456-426614174000",
-  "status": "rejected"
-}
-```
-
-### **Series and Episodes**
-
-#### **GET** `/api/v1/series`
-
-List all series (titles) in the library.
-
-**Query Parameters:**
-
-- `limit` (optional): Maximum number of items (default: 50)
-- `offset` (optional): Number of items to skip (default: 0)
-- `kind` (optional): Filter by title kind (movie, show)
-
-**Response:**
-
-```json
-{
-  "series": [
-    {
-      "id": "789e0123-e89b-12d3-a456-426614174000",
-      "kind": "show",
-      "name": "Cheers",
-      "year": 1982,
-      "external_ids": { "imdb": "tt0083399" },
-      "created_at": "2024-01-15T14:30:00Z"
-    }
-  ],
-  "total": 25,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-#### **GET** `/api/v1/series/{series_id}/episodes`
-
-Get episodes for a specific series.
-
-**Parameters:**
-
-- `series_id` (path): UUID of the series
-
-**Response:**
-
-```json
-{
-  "series": {
-    "id": "789e0123-e89b-12d3-a456-426614174000",
-    "name": "Cheers",
-    "year": 1982
-  },
-  "episodes": [
-    {
-      "id": "456e7890-e89b-12d3-a456-426614174000",
-      "season_id": "012e3456-e89b-12d3-a456-426614174000",
-      "number": 1,
-      "name": "Pilot",
-      "assets": [
-        {
-          "id": 1,
-          "uuid": "987fcdeb-51a2-43d1-b456-426614174000",
-          "uri": "file:///media/cheers_s01e01.mp4",
-          "size": 8589934592,
-          "duration_ms": 1800000,
-          "canonical": true
-        }
-      ]
-    }
-  ]
-}
-```
-
-### **Metrics**
-
-#### **GET** `/api/metrics`
-
-Get system metrics and performance data.
-
-**Response:**
-
-```json
-{
-  "database": {
-    "connections": 5,
-    "active_queries": 2
-  },
-  "content": {
-    "total_assets": 1250,
-    "canonical_assets": 1200,
-    "pending_reviews": 3,
-    "total_series": 25,
-    "total_episodes": 500
-  },
-  "ingest": {
-    "last_run": "2024-01-15T14:30:00Z",
-    "status": "completed",
-    "total_discovered": 100,
-    "total_registered": 95
-  }
-}
-```
-
-## 📊 Error Handling
-
-### **Error Response Format**
-
-All API errors follow a consistent format:
-
-```json
-{
-  "detail": "Error message describing what went wrong",
-  "status_code": 400,
-  "timestamp": "2024-01-15T14:30:00Z"
-}
-```
-
-### **Common Error Codes**
-
-- `400` - Bad Request (invalid parameters)
-- `404` - Not Found (resource doesn't exist)
-- `422` - Unprocessable Entity (validation error)
-- `500` - Internal Server Error
-- `503` - Service Unavailable (database issues)
-
-### **HTTP Status Codes**
-
-- `200` - Success
-- `201` - Created
-- `400` - Bad Request
-- `404` - Not Found
-- `422` - Unprocessable Entity
-- `500` - Internal Server Error
-- `503` - Service Unavailable
-
-## 🔧 Rate Limiting
-
-Currently, no rate limiting is implemented. In production deployments, rate limiting will be added to prevent abuse.
-
-## 📝 Examples
-
-### **Complete Workflow Example**
-
-```bash
-# 1. Check API health
-curl http://localhost:8000/api/healthz
-
-# 2. List assets
-curl http://localhost:8000/api/v1/assets?limit=10
-
-# 3. Start content ingestion
-curl -X POST "http://localhost:8000/api/ingest/run?source=plex" \
-  -H "Content-Type: application/json" \
-  -d '{"library_ids": ["library1"], "enrichers": ["ffprobe"]}'
-
-# 4. Check ingestion status
-curl http://localhost:8000/api/ingest/status
-
-# 5. List review queue
-curl http://localhost:8000/api/v1/review
-
-# 6. Get series list
-curl http://localhost:8000/api/v1/series
-
-# 7. Get episodes for a series
-curl http://localhost:8000/api/v1/series/{series_id}/episodes
-```
-
-### **Python Client Example**
+### Base Importer Protocol
 
 ```python
-import requests
+from typing import Protocol
+from dataclasses import dataclass
+from datetime import datetime
 
-# Base URL
-base_url = "http://localhost:8000/api"
+@dataclass
+class DiscoveredItem:
+    """Standard format for discovered content items."""
+    path_uri: str                    # URI to the content
+    provider_key: str | None = None   # Provider-specific identifier
+    raw_labels: list[str] | None = None  # Extracted metadata labels
+    last_modified: datetime | None = None  # Last modification time
+    size: int | None = None           # File size in bytes
+    hash_sha256: str | None = None    # Content hash
 
-# Check health
-response = requests.get(f"{base_url}/healthz")
-print(response.json())
+class Importer(Protocol):
+    """Protocol that all importers must implement."""
+    name: str
 
-# List assets
-response = requests.get(f"{base_url}/v1/assets", params={"limit": 10})
-assets = response.json()
-print(f"Found {len(assets['assets'])} assets")
-
-# Start ingestion
-ingest_data = {
-    "library_ids": ["library1"],
-    "enrichers": ["ffprobe"]
-}
-response = requests.post(
-    f"{base_url}/ingest/run?source=plex",
-    json=ingest_data
-)
-result = response.json()
-print(f"Ingestion completed: {result['registered']} items registered")
+    def discover(self) -> list[DiscoveredItem]:
+        """Discover content items from the source."""
+        ...
 ```
 
-## 🎯 Next Steps
+### Required Implementation
 
-- **Check [CLI Reference](cli-reference.md)** for command-line interface
-- **Read [Architecture Guide](architecture.md)** for system design
-- **Review [Database Schema](database-schema.md)** for data models
-- **See [Testing Guide](testing.md)** for development practices
+All importers must implement:
+
+1. **`name`**: String identifier for the importer type
+2. **`discover()`**: Method that returns a list of `DiscoveredItem` objects
+
+### Example Implementation
+
+```python
+class CustomImporter:
+    name = "custom"
+
+    def __init__(self, **kwargs):
+        # Store configuration
+        pass
+
+    def discover(self) -> list[DiscoveredItem]:
+        # Implementation
+        pass
+```
+
+## Enricher API
+
+### Base Enricher Protocol
+
+```python
+from typing import Protocol
+from ..importers.base import DiscoveredItem
+
+class Enricher(Protocol):
+    """Protocol that all enrichers must implement."""
+    name: str
+
+    def enrich(self, discovered_item: DiscoveredItem) -> DiscoveredItem:
+        """Enrich a discovered item with additional metadata."""
+        ...
+```
+
+### Required Implementation
+
+All enrichers must implement:
+
+1. **`name`**: String identifier for the enricher type
+2. **`enrich()`**: Method that takes a `DiscoveredItem` and returns an enriched version
+
+### Example Implementation
+
+```python
+class CustomEnricher:
+    name = "custom"
+
+    def __init__(self, **kwargs):
+        # Store configuration
+        pass
+
+    def enrich(self, discovered_item: DiscoveredItem) -> DiscoveredItem:
+        # Implementation
+        pass
+```
+
+## Registry API
+
+### Importer Registration
+
+```python
+from retrovue.adapters.registry import SOURCES
+
+# Register a new importer
+SOURCES["custom"] = CustomImporter
+```
+
+### Enricher Registration
+
+```python
+from retrovue.adapters.registry import register_enricher
+
+# Register a new enricher
+register_enricher(CustomEnricher())
+```
+
+### Available Registry Functions
+
+```python
+# List available importers
+from retrovue.adapters.registry import list_importers
+importers = list_importers()
+
+# List available enrichers
+from retrovue.adapters.registry import list_enrichers
+enrichers = list_enrichers()
+
+# Get an importer instance
+from retrovue.adapters.registry import get_importer
+importer = get_importer("plex", server_url="...", token="...")
+
+# Get an enricher instance
+from retrovue.adapters.registry import get_enricher
+enricher = get_enricher("ffprobe")
+```
+
+## Built-in Importers
+
+### Filesystem Importer
+
+**Type**: `filesystem` or `fs`
+
+**Parameters**:
+
+- `source_name` (str): Human-readable name for the source
+- `root_paths` (list[str]): List of directories to scan
+- `glob_patterns` (list[str], optional): File patterns to match
+- `include_hidden` (bool, optional): Include hidden files
+- `calculate_hash` (bool, optional): Calculate SHA-256 hashes
+
+**Example**:
+
+```python
+importer = FilesystemImporter(
+    source_name="My Media Library",
+    root_paths=["/media/movies", "/media/tv"],
+    glob_patterns=["**/*.mp4", "**/*.mkv"],
+    include_hidden=False,
+    calculate_hash=True
+)
+```
+
+### Plex Importer
+
+**Type**: `plex`
+
+**Parameters**:
+
+- `servers` (list[dict]): List of server configurations
+  - `base_url` (str): Plex server URL
+  - `token` (str): Plex authentication token
+- `include_metadata` (bool, optional): Include Plex metadata
+
+**Example**:
+
+```python
+importer = PlexImporter(
+    servers=[
+        {
+            "base_url": "http://plex:32400",
+            "token": "your-plex-token"
+        }
+    ],
+    include_metadata=True
+)
+```
+
+### Custom Media Server Importer
+
+**Type**: `custom_media_server` (example)
+
+**Parameters**:
+
+- `servers` (list[dict]): List of server configurations
+  - `base_url` (str): Media server URL
+  - `api_key` (str): API key
+  - `user_id` (str): User ID
+- `include_metadata` (bool, optional): Include server metadata
+
+**Example**:
+
+```python
+importer = CustomMediaServerImporter(
+    servers=[
+        {
+            "base_url": "http://server:8096",
+            "api_key": "your-api-key",
+            "user_id": "user123"
+        }
+    ],
+    include_metadata=True
+)
+```
+
+## Built-in Enrichers
+
+### FFprobe Enricher
+
+**Type**: `ffprobe`
+
+**Parameters**:
+
+- `ffprobe_path` (str, optional): Path to FFprobe executable
+
+**Example**:
+
+```python
+enricher = FFprobeEnricher(ffprobe_path="ffprobe")
+```
+
+### Custom Metadata API Enricher
+
+**Type**: `custom_metadata_api` (example)
+
+**Parameters**:
+
+- `api_key` (str): API key for the metadata service
+- `base_url` (str, optional): API base URL
+
+**Example**:
+
+```python
+enricher = CustomMetadataAPIEnricher(
+    api_key="your-api-key",
+    base_url="https://api.example.com"
+)
+```
+
+## CLI Integration
+
+### Source Management Commands
+
+```bash
+# List available source types and enrichers
+retrovue source list-types
+
+# Add a source
+retrovue source add --type <importer_type> --name <name> [options]
+
+# List configured sources
+retrovue source list
+
+# List collections from sources
+retrovue source collections
+```
+
+### Source Type Parameters
+
+#### Filesystem Sources
+
+```bash
+retrovue source add --type filesystem \
+  --name "My Media Library" \
+  --base-path "/media/movies"
+```
+
+#### Plex Sources
+
+```bash
+retrovue source add --type plex \
+  --name "My Plex Server" \
+  --base-url "http://plex:32400" \
+  --token "your-plex-token"
+```
+
+#### Jellyfin Sources
+
+```bash
+retrovue source add --type jellyfin \
+  --name "My Jellyfin Server" \
+  --base-url "http://jellyfin:8096" \
+  --api-key "your-api-key" \
+  --user-id "user123"
+```
+
+#### Sources with Enrichers
+
+```bash
+retrovue source add --type plex \
+  --name "Plex Server" \
+  --base-url "http://plex:32400" \
+  --token "token" \
+  --enrichers "ffprobe,tvdb"
+```
+
+## Error Handling
+
+### Importer Errors
+
+```python
+from retrovue.adapters.importers.base import ImporterError, ImporterNotFoundError, ImporterConfigurationError
+
+# Raise specific errors
+raise ImporterError("General importer error")
+raise ImporterNotFoundError("Importer not found")
+raise ImporterConfigurationError("Invalid configuration")
+```
+
+### Enricher Errors
+
+```python
+from retrovue.adapters.enrichers.base import EnricherError, EnricherNotFoundError, EnricherConfigurationError
+
+# Raise specific errors
+raise EnricherError("General enricher error")
+raise EnricherNotFoundError("Enricher not found")
+raise EnricherConfigurationError("Invalid configuration")
+```
+
+## Testing
+
+### Unit Testing Importers
+
+```python
+import pytest
+from unittest.mock import Mock, patch
+from retrovue.adapters.importers.custom_importer import CustomImporter
+
+class TestCustomImporter:
+    def test_discover_basic(self):
+        """Test basic discovery functionality."""
+        with patch('external_api.get_items') as mock_get:
+            mock_get.return_value = [{"id": "123", "title": "Test"}]
+
+            importer = CustomImporter(api_key="test")
+            items = importer.discover()
+
+            assert len(items) == 1
+            assert items[0].provider_key == "123"
+```
+
+### Unit Testing Enrichers
+
+```python
+import pytest
+from retrovue.adapters.enrichers.custom_enricher import CustomEnricher
+from retrovue.adapters.importers.base import DiscoveredItem
+
+class TestCustomEnricher:
+    def test_enrich_basic(self):
+        """Test basic enrichment functionality."""
+        enricher = CustomEnricher(api_key="test")
+
+        item = DiscoveredItem(
+            path_uri="file:///test.mp4",
+            raw_labels=["title:Test Movie"]
+        )
+
+        enriched = enricher.enrich(item)
+
+        assert len(enriched.raw_labels) > len(item.raw_labels)
+        assert any("custom_metadata:" in label for label in enriched.raw_labels)
+```
+
+## Best Practices
+
+### 1. Configuration Validation
+
+```python
+def validate_config(config: dict) -> None:
+    """Validate importer/enricher configuration."""
+    required_fields = ['api_key', 'base_url']
+
+    for field in required_fields:
+        if field not in config:
+            raise ImporterConfigurationError(f"Missing required field: {field}")
+```
+
+### 2. Resource Management
+
+```python
+class ResourceImporter:
+    """Importer that properly manages resources."""
+
+    def __init__(self, config: dict):
+        self.config = config
+        self.session = None
+
+    def discover(self) -> list[DiscoveredItem]:
+        """Discover with proper resource management."""
+        try:
+            self.session = self._create_session()
+            return self._do_discovery()
+        finally:
+            self._cleanup_resources()
+
+    def _cleanup_resources(self):
+        """Clean up resources."""
+        if self.session:
+            self.session.close()
+```
+
+### 3. Error Handling
+
+```python
+def discover_with_retry(importer: Importer, max_retries: int = 3) -> list[DiscoveredItem]:
+    """Discover content with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            return importer.discover()
+        except ImporterConnectionError as e:
+            if attempt == max_retries - 1:
+                raise
+            print(f"Connection failed, retrying in 5 seconds... ({attempt + 1}/{max_retries})")
+            time.sleep(5)
+        except ImporterError as e:
+            print(f"Importer error: {e}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            raise
+```
+
+### 4. Logging
+
+```python
+import logging
+from retrovue.infra.logging import get_logger
+
+class LoggingImporter:
+    """Importer with comprehensive logging."""
+
+    def __init__(self, config: dict):
+        self.logger = get_logger(__name__)
+        self.config = config
+
+    def discover(self) -> list[DiscoveredItem]:
+        """Discover with detailed logging."""
+        self.logger.info("Starting content discovery", importer=self.name)
+
+        try:
+            items = self._do_discovery()
+            self.logger.info("Discovery completed", item_count=len(items))
+            return items
+        except Exception as e:
+            self.logger.error("Discovery failed", error=str(e))
+            raise
+```
+
+---
+
+_This API reference provides comprehensive information for extending RetroVue. For more examples, see the existing importers and enrichers in the source code._

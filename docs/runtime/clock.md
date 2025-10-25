@@ -1,5 +1,7 @@
 # RetroVue Runtime — MasterClock
 
+_Related: [Runtime: Channel manager](ChannelManager.md) • [Runtime: Schedule service](schedule_service.md) • [Runtime: As-run logging](AsRunLogging.md)_
+
 > Authoritative station time source for all runtime components.
 
 **Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
@@ -281,8 +283,8 @@ The test commands provide structured JSON output with the following key fields:
 | Component                                  | Relationship                                      |
 | ------------------------------------------ | ------------------------------------------------- |
 | **[ScheduleService](schedule_service.md)** | Uses MasterClock for all scheduling operations    |
-| **[ChannelManager](channel_manager.md)**   | Uses MasterClock for playout offset calculations  |
+| **[ChannelManager](ChannelManager.md)**    | Uses MasterClock for playout offset calculations  |
 | **[ProgramDirector](program_director.md)** | Uses MasterClock for system-wide coordination     |
-| **[AsRunLogger](asrun_logger.md)**         | Uses MasterClock for consistent timestamp logging |
+| **[AsRunLogger](AsRunLogging.md)**         | Uses MasterClock for consistent timestamp logging |
 
 _Document version: v0.1 · Last updated: 2025-10-24_

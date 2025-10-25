@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-The **Plex Sync CLI** (`cli/plex_sync.py`) is the primary command-line interface for managing Plex Media Server integration with Retrovue. It provides comprehensive tools for server management, library synchronization, content ingestion, and path mapping configuration.
+The **Plex Sync CLI** (`cli/plex_sync.py`) is the primary command-line interface for managing Plex Media Server integration with RetroVue. It provides comprehensive tools for server management, library synchronization, content ingestion, and path mapping configuration.
 
 ## 🚀 Quick Start
 
@@ -23,6 +23,7 @@ python cli/plex_sync.py <group> <subcommand> --help
 ## 📋 Command Tree
 
 ### **Server Management**
+
 - `servers` - Manage Plex server connections and authentication
   - `list` - List all configured Plex servers
   - `add` - Add a new Plex server
@@ -30,7 +31,8 @@ python cli/plex_sync.py <group> <subcommand> --help
   - `set-default` - Set the default Plex server
   - `delete` - Delete a Plex server
 
-### **Library Management** 
+### **Library Management**
+
 - `libraries` - Manage Plex libraries and sync settings
   - `list` - List all libraries for a server
   - `sync` - Sync libraries from Plex (default: enable-all)
@@ -40,6 +42,7 @@ python cli/plex_sync.py <group> <subcommand> --help
   - `delete` - Delete libraries (single or all)
 
 ### **Path Mapping**
+
 - `mappings` - Manage path mappings between Plex and local paths
   - `list` - List path mappings for a server/library
   - `add` - Add a new path mapping
@@ -47,16 +50,19 @@ python cli/plex_sync.py <group> <subcommand> --help
   - `test` - Test path mapping resolution
 
 ### **Content Operations**
-- `ingest` - Import content from Plex to Retrovue database
+
+- `ingest` - Import content from Plex to RetroVue database
   - `run` - Run content ingestion (full or incremental)
   - `status` - View synchronization status
 
 ### **Item Operations**
+
 - `items` - Preview and map Plex items
   - `preview` - Preview raw items returned by Plex
   - `map` - Map one Plex item JSON to our model
 
 ### **Testing & Debugging**
+
 - `guid` - GUID parsing and testing
   - `test` - Test GUID parsing functionality
 
@@ -65,6 +71,7 @@ python cli/plex_sync.py <group> <subcommand> --help
 ## 🔧 Server Management Commands
 
 ### **Add Plex Server**
+
 ```bash
 python cli/plex_sync.py servers add \
   --name "HomePlex" \
@@ -73,17 +80,20 @@ python cli/plex_sync.py servers add \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--name TEXT` - Server name (required)
 - `--base-url TEXT` - Server base URL (required)
 - `--token TEXT` - Authentication token (required)
 
 ### **List Plex Servers**
+
 ```bash
 python cli/plex_sync.py servers list
 ```
 
 **Output:**
+
 ```
 [OK] Found 2 Plex servers:
 ID   Name            Base URL                    Default
@@ -93,15 +103,18 @@ ID   Name            Base URL                    Default
 ```
 
 ### **Delete Plex Server**
+
 ```bash
 python cli/plex_sync.py servers delete --server-id 2
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-id INTEGER` - Server ID to delete (required)
 
 ### **Update Server Token**
+
 ```bash
 python cli/plex_sync.py servers update-token \
   --server-id 1 \
@@ -109,17 +122,20 @@ python cli/plex_sync.py servers update-token \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-id INTEGER` - Server ID (required)
 - `--token TEXT` - New authentication token (required)
 
 ### **Set Default Server**
+
 ```bash
 python cli/plex_sync.py servers set-default \
   --server-name "HomePlex"
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-name TEXT` - Server name to set as default
 - `--server-id INTEGER` - Server ID to set as default
@@ -129,16 +145,19 @@ python cli/plex_sync.py servers set-default \
 ## 📚 Library Management Commands
 
 ### **List Libraries**
+
 ```bash
 python cli/plex_sync.py libraries list
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-name TEXT` - Server name (from stored credentials)
 - `--server-id INTEGER` - Server ID (from stored credentials)
 
 **Output:**
+
 ```
 Libraries (showing 14):
 ID   Key    Title                Type     Sync  Last Full            Last Incr
@@ -160,6 +179,7 @@ ID   Key    Title                Type     Sync  Last Full            Last Incr
 ```
 
 ### **Sync Libraries from Plex**
+
 ```bash
 # Sync and enable all libraries (default behavior)
 python cli/plex_sync.py libraries sync
@@ -172,6 +192,7 @@ python cli/plex_sync.py libraries sync --enable-all
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-name TEXT` - Server name (from stored credentials)
 - `--server-id INTEGER` - Server ID (from stored credentials)
@@ -179,6 +200,7 @@ python cli/plex_sync.py libraries sync --enable-all
 - `--disable-all` - Disable sync for all imported libraries
 
 **Output:**
+
 ```
 === LIBRARY SYNC SUMMARY ===
 Libraries processed: 14
@@ -189,16 +211,19 @@ Sync enabled for: 14 libraries
 ```
 
 ### **List Sync Status**
+
 ```bash
 python cli/plex_sync.py libraries sync list
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-name TEXT` - Server name (from stored credentials)
 - `--server-id INTEGER` - Server ID (from stored credentials)
 
 ### **Enable/Disable Library Sync**
+
 ```bash
 # Enable sync for specific library
 python cli/plex_sync.py libraries sync enable \
@@ -210,10 +235,12 @@ python cli/plex_sync.py libraries sync disable \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--library-id INTEGER` - Library ID to modify (required)
 
 ### **Delete Libraries**
+
 ```bash
 # Delete specific library
 python cli/plex_sync.py libraries delete \
@@ -226,6 +253,7 @@ python cli/plex_sync.py libraries delete \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--library-id INTEGER` - Library ID to delete (required unless using --all)
 - `--server-name TEXT` - Server name (from stored credentials)
@@ -238,6 +266,7 @@ python cli/plex_sync.py libraries delete \
 ## 📥 Content Ingestion Commands
 
 ### **Run Content Ingestion**
+
 ```bash
 # Full ingest (dry run)
 python cli/plex_sync.py ingest run \
@@ -257,6 +286,7 @@ python cli/plex_sync.py ingest run \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-name TEXT` - Server name (from stored credentials)
 - `--server-id INTEGER` - Server ID (from stored credentials)
@@ -271,6 +301,7 @@ python cli/plex_sync.py ingest run \
 - `--verbose, -v` - Enable verbose output
 
 **Output:**
+
 ```
 Processing library 1 (movie) in full mode...
 Library 1 (movie): 150 scanned, 150 mapped, 0 errors
@@ -291,16 +322,19 @@ Total errors: 0
 ```
 
 ### **Show Ingest Status**
+
 ```bash
 python cli/plex_sync.py ingest status
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-name TEXT` - Server name (from stored credentials)
 - `--server-id INTEGER` - Server ID (from stored credentials)
 
 **Output:**
+
 ```
 Ingest Status (showing 14 libraries):
 ID   Key    Title                Type     Sync  Last Full                Last Incr
@@ -326,6 +360,7 @@ ID   Key    Title                Type     Sync  Last Full                Last In
 ## 📦 Item Operations Commands
 
 ### **Preview Raw Plex Items**
+
 ```bash
 python cli/plex_sync.py items preview \
   --library-key 1 \
@@ -334,6 +369,7 @@ python cli/plex_sync.py items preview \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-name TEXT` - Server name (from stored credentials)
 - `--server-id INTEGER` - Server ID (from stored credentials)
@@ -342,6 +378,7 @@ python cli/plex_sync.py items preview \
 - `--limit INTEGER` - Number of items to preview (default: 5)
 
 **Output:**
+
 ```
 [OK] Found 5 movie items in library 1:
   1. The Matrix (ratingKey: 123, 136min, updated: 1640995200)
@@ -352,6 +389,7 @@ python cli/plex_sync.py items preview \
 ```
 
 ### **Map Single Item**
+
 ```bash
 # From JSON file
 python cli/plex_sync.py items map --from-json sample_movie.json
@@ -361,10 +399,12 @@ echo '{"title":"Test Movie","type":"movie","duration":7200000}' | python cli/ple
 ```
 
 **Options:**
+
 - `--from-json TEXT` - JSON file path
 - `--from-stdin` - Read from stdin
 
 **Output:**
+
 ```
 [OK] Mapped: Test Movie (movie)
   Duration: 7200000 ms
@@ -376,6 +416,7 @@ echo '{"title":"Test Movie","type":"movie","duration":7200000}' | python cli/ple
 ## 🗺️ Path Mapping Commands
 
 ### **List Path Mappings**
+
 ```bash
 python cli/plex_sync.py mappings list \
   --server-id 1 \
@@ -383,11 +424,13 @@ python cli/plex_sync.py mappings list \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-id INTEGER` - Server ID (required)
 - `--library-id INTEGER` - Library ID (required)
 
 **Output:**
+
 ```
 [OK] Found 3 path mappings for server 1, library 1:
   /data/Movies -> C:\Media\Movies
@@ -396,6 +439,7 @@ python cli/plex_sync.py mappings list \
 ```
 
 ### **Add Path Mapping**
+
 ```bash
 python cli/plex_sync.py mappings add \
   --server-id 1 \
@@ -405,6 +449,7 @@ python cli/plex_sync.py mappings add \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-id INTEGER` - Server ID (required)
 - `--library-id INTEGER` - Library ID (required)
@@ -412,12 +457,14 @@ python cli/plex_sync.py mappings add \
 - `--local-prefix TEXT` - Local path prefix (required)
 
 **Output:**
+
 ```
 [OK] Added path mapping with ID 4:
   /data/Movies -> C:\Media\Movies
 ```
 
 ### **Resolve Path**
+
 ```bash
 python cli/plex_sync.py mappings resolve \
   --server-id 1 \
@@ -426,12 +473,14 @@ python cli/plex_sync.py mappings resolve \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-id INTEGER` - Server ID (required)
 - `--library-id INTEGER` - Library ID (required)
 - `--plex-path TEXT` - Plex path to resolve (required)
 
 **Output:**
+
 ```
 [OK] Resolved path: /data/Movies/The Matrix (1999)/The Matrix (1999).mkv -> C:\Media\Movies\The Matrix (1999)\The Matrix (1999).mkv
 ```
@@ -441,14 +490,17 @@ python cli/plex_sync.py mappings resolve \
 ## 🧪 Testing & Debugging Commands
 
 ### **Test GUID Parsing**
+
 ```bash
 python cli/plex_sync.py guid test --guid "com.plexapp.agents.imdb://tt0133093"
 ```
 
 **Options:**
+
 - `--guid TEXT` - GUID string to parse (required)
 
 **Output:**
+
 ```
 [OK] Parsed GUID: com.plexapp.agents.imdb://tt0133093
   imdb: 0133093
@@ -456,6 +508,7 @@ python cli/plex_sync.py guid test --guid "com.plexapp.agents.imdb://tt0133093"
 ```
 
 ### **Test Path Mapping**
+
 ```bash
 python cli/plex_sync.py mappings test \
   --server-id 1 \
@@ -464,12 +517,14 @@ python cli/plex_sync.py mappings test \
 ```
 
 **Options:**
+
 - `--db TEXT` - Database path (default: `./retrovue.db`)
 - `--server-id INTEGER` - Server ID (required)
 - `--library-id INTEGER` - Library ID (required)
 - `--plex-path TEXT` - Plex path to test (required)
 
 **Output:**
+
 ```
 [OK] Path mapping test:
   Plex: /data/Movies/Test.mkv
@@ -481,6 +536,7 @@ python cli/plex_sync.py mappings test \
 ## 🔧 Common Workflows
 
 ### **Initial Setup**
+
 ```bash
 # 1. Add Plex server
 python cli/plex_sync.py servers add \
@@ -520,6 +576,7 @@ python cli/plex_sync.py ingest run \
 ```
 
 ### **Regular Maintenance**
+
 ```bash
 # Check sync status
 python cli/plex_sync.py ingest status
@@ -536,6 +593,7 @@ python cli/plex_sync.py servers update-token \
 ```
 
 ### **Troubleshooting**
+
 ```bash
 # Test server connection
 python cli/plex_sync.py libraries list
@@ -561,32 +619,41 @@ python cli/plex_sync.py guid test --guid "com.plexapp.agents.imdb://tt0133093"
 ## ⚠️ Error Handling
 
 ### **Common Error Codes**
+
 - **Exit Code 1**: General error (check logs for details)
 - **Exit Code 2**: Configuration error (server not found, invalid parameters)
 - **Exit Code 3**: Network error (connection failed, authentication failed)
 
 ### **Authentication Errors**
+
 ```
 [ERROR] Authentication failed (HTTP 401): Invalid token
 ```
+
 **Solution**: Update server token using `servers update-token`
 
 ### **Connection Errors**
+
 ```
 [ERROR] Connection failed: [Errno 111] Connection refused
 ```
+
 **Solution**: Check server URL and ensure Plex server is running
 
 ### **Library Not Found**
+
 ```
 [ERROR] Library 999 not found
 ```
+
 **Solution**: Use `libraries list` to see available library IDs
 
 ### **Path Mapping Errors**
+
 ```
 No mapping found for: /data/Movies/Test.mkv
 ```
+
 **Solution**: Add path mapping using `mappings add` command
 
 ---
@@ -594,21 +661,25 @@ No mapping found for: /data/Movies/Test.mkv
 ## 📝 Best Practices
 
 ### **Database Management**
+
 - Always use `--dry-run` before `--commit` for ingest operations
 - Keep database backups before major operations
 - Use incremental sync for regular updates
 
 ### **Path Mapping**
+
 - Test path mappings with `mappings resolve` before ingesting
 - Use consistent path separators (forward slashes for Plex paths)
 - Map the longest common prefix for efficiency
 
 ### **Server Management**
+
 - Set a default server to avoid specifying `--server-name` repeatedly
 - Store tokens securely and update them when they expire
 - Use descriptive server names for multiple server setups
 
 ### **Performance**
+
 - Use `--limit` for testing with large libraries
 - Enable `--verbose` for debugging but disable for production
 - Use incremental sync for regular updates instead of full sync
@@ -618,6 +689,6 @@ No mapping found for: /data/Movies/Test.mkv
 ## 🔗 Related Documentation
 
 - **[Quick Start Guide](quick-start.md)** - Step-by-step setup instructions
-- **[Database Schema](database-schema.md)** - Understanding the data structure
-- **[Architecture Overview](architecture.md)** - How the system works
-- **[Development Roadmap](development-roadmap.md)** - Current status and future plans
+- **[Database schema](../developer/database-schema.md)** - Understanding the data structure
+- **[Architecture overview](../architecture/ArchitectureOverview.md)** - How the system works
+- **[Development roadmap](../developer/development-roadmap.md)** - Current status and future plans

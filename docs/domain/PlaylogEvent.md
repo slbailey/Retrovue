@@ -1,8 +1,12 @@
-# Domain — BroadcastPlaylogEvent
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+
+# Domain — Playlog event
 
 ## Purpose
 
-BroadcastPlaylogEvent represents a generated playout event that records what content was actually scheduled to play at a specific time. These events are created by ScheduleService and consumed by ChannelManager for playout execution.
+BroadcastPlaylogEvent represents a single scheduled, timestamped playout unit in the near-term horizon. This object feeds Producers and ChannelManager so they can build a playout plan at 'now', but this object itself does not launch ffmpeg.
+
+## Core model / scope
 
 BroadcastPlaylogEvent enables:
 
@@ -11,9 +15,7 @@ BroadcastPlaylogEvent enables:
 - Playout execution instructions
 - Broadcast day tracking and rollover handling
 
-The canonical name is BroadcastPlaylogEvent throughout code, documentation, and database schema.
-
-## Persistence model and fields
+## Contract / interface
 
 BroadcastPlaylogEvent is managed by SQLAlchemy with the following fields:
 
@@ -26,13 +28,9 @@ BroadcastPlaylogEvent is managed by SQLAlchemy with the following fields:
 - **broadcast_day** (Text, required): Broadcast day label in "YYYY-MM-DD" format
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 
-Schema migration is handled through Alembic. Postgres is the authoritative backing store.
-
 BroadcastPlaylogEvent has indexes on channel_id, start_utc, and broadcast_day for efficient playout queries.
 
-**Important**: BroadcastPlaylogEvent represents scheduled playout segments with absolute wallclock times. It references BroadcastChannel and CatalogAsset by INTEGER FK. It also has its own uuid to uniquely identify the aired segment for compliance review and as-run logging.
-
-## Scheduling and interaction rules
+## Execution model
 
 ScheduleService generates BroadcastPlaylogEvent records as the output of the scheduling process. These events represent the final playout schedule that will be executed by ChannelManager.
 
@@ -43,18 +41,15 @@ Playlog events are created by:
 3. Generating playout events with precise timing and sequencing
 4. Creating BroadcastPlaylogEvent records for each scheduled content item
 
-## Runtime relationship
+## Failure / fallback behavior
 
-BroadcastPlaylogEvent operates through the playout execution pipeline:
+If playlog events are missing or invalid, the system falls back to default programming or the most recent valid schedule.
 
-**ScheduleService** generates playlog events as the output of the scheduling process. It creates events with precise timing and content references.
+## Naming rules
 
-**ChannelManager** reads playlog events to determine what content to play and when. It uses the events to coordinate playout execution.
+The canonical name for this concept in code and documentation is BroadcastPlaylogEvent.
 
-**Producer** receives playout instructions from ChannelManager and plays the actual content files referenced by the events.
-
-Runtime hierarchy:
-BroadcastPlaylogEvent (persistent) → ChannelManager (playout coordination) → Producer (content playback)
+Playlog events are generated scheduling output, not runtime components. They define "what to play when" but do not execute playout.
 
 ## Operator workflows
 
@@ -68,12 +63,11 @@ BroadcastPlaylogEvent (persistent) → ChannelManager (playout coordination) →
 
 **Playout Troubleshooting**: Use playlog events to diagnose playout issues and content problems.
 
-## Naming and consistency rules
+## See also
 
-The canonical name for this concept in code and documentation is BroadcastPlaylogEvent.
-
-Playlog events are generated scheduling output, not runtime components. They define "what to play when" but do not execute playout.
-
-All scheduling logic, operator tooling, and documentation MUST refer to BroadcastPlaylogEvent as the persisted playout event definition.
-
-BroadcastPlaylogEvent represents the generated playout events (what was actually played) that are created by ScheduleService and executed by ChannelManager for broadcast playout.
+- [Scheduling](Scheduling.md) - High-level scheduling system
+- [Schedule day](ScheduleDay.md) - Template assignments
+- [Catalog asset](CatalogAsset.md) - Approved content
+- [Playout pipeline](PlayoutPipeline.md) - Live stream generation
+- [Channel manager](../runtime/ChannelManager.md) - Stream execution
+- [Operator CLI](../operator/CLI.md) - Operational procedures

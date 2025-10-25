@@ -1,12 +1,14 @@
 # Content Manager
 
+_Related: [Domain: Source](../domain/Source.md) • [Domain: Ingest pipeline](../domain/IngestPipeline.md) • [Domain: Asset](../domain/Asset.md)_
+
 ## Overview
 
 The **Content Manager** is RetroVue's Library Domain content discovery and library management system. It's responsible for finding media files, understanding what they contain, deciding which ones are suitable for broadcast, and maintaining the authoritative library that the rest of the system depends on.
 
-Think of it as the "librarian" of RetroVue—it knows what content exists, where it came from, and whether it's ready to be scheduled for broadcast. However, it does NOT schedule content or define channels, templates, or playlogs.
+Content Manager knows what content exists, where it came from, and whether it's ready to be scheduled for broadcast. However, it does NOT schedule content or define channels, templates, or playlogs.
 
-## What This Document Is
+## What this document is
 
 This document describes the **architecture and behavior** of the Content Manager layer. It explains:
 
@@ -17,38 +19,38 @@ This document describes the **architecture and behavior** of the Content Manager
 
 This is **not** a code-level API reference—it's about understanding the system's design and responsibilities.
 
-## Core Responsibilities
+## Core responsibilities
 
 The Content Manager has four main jobs:
 
-### 1. **Discovery & Ingest**
+### Discovery & ingest
 
 - **Find media** in external systems (Plex servers, filesystems, etc.)
 - **Extract metadata** like file size, duration, codecs, and content hashes
 - **Classify content deterministically** (episode, bumper, promo, ad, etc.)
 - **Annotate operational metadata** needed for scheduling, such as runtime, break markers / ad insertion points, and safety/restriction flags
 
-### 2. **Library Management**
+### Library management
 
 - **Create internal records** for discovered media files
 - **Link files to logical content** (episodes, shows, movies)
 - **Mark content as "canonical"** when it's good enough for broadcast
 - **Handle content lifecycle** (soft-delete, restore, etc.)
 
-### 3. **Source Configuration**
+### Source configuration
 
 - **Track content sources** (which Plex servers, which folders)
 - **Map file paths** so we can find files regardless of where they're stored
 - **Control what gets scanned** by enabling/disabling specific collections
 
-### 4. **Quality Control**
+### Quality control
 
 - **Score content confidence** to determine if it's broadcast-ready
 - **Auto-approve good content** for immediate use
 - **Queue questionable content** for human review
 - **Provide tools** for humans to resolve ambiguous cases
 
-## Design Principles Alignment
+## Design principles alignment
 
 The Content Manager follows RetroVue's architectural patterns:
 
@@ -62,9 +64,9 @@ The Content Manager follows RetroVue's architectural patterns:
 
 **Operational rule:** there is no such thing as a "partial ingest." If an ingest run half-worked and half-failed, the correct interpretation is "it failed."
 
-## System Boundaries
+## System boundaries
 
-**What Content Manager DOES:**
+**What Content Manager does:**
 
 - ✅ Discovers and catalogs content
 - ✅ Manages the authoritative content library
@@ -72,7 +74,7 @@ The Content Manager follows RetroVue's architectural patterns:
 - ✅ Handles content quality and review processes
 - ✅ Nominates content for promotion to Broadcast Domain
 
-**What Content Manager DOES NOT:**
+**What Content Manager does not:**
 
 - ❌ Schedule content for broadcast
 - ❌ Handle real-time playback
@@ -83,7 +85,7 @@ The Content Manager follows RetroVue's architectural patterns:
 
 > **Key Principle:** Content Manager is the **upstream supplier** for the Broadcast Domain. The Broadcast Domain asks Content Manager for eligible content—they don't go hunting through filesystems or calling Plex directly.
 
-## Core Data Model
+## Core data model
 
 All content information is stored in SQLAlchemy models in `src/retrovue/domain/entities.py`. These represent the "source of truth" for what content exists and how it's organized.
 
@@ -91,7 +93,7 @@ All content information is stored in SQLAlchemy models in `src/retrovue/domain/e
 
 Represents a single media file we know about.
 
-**Key Properties:**
+**Key properties:**
 
 - `id` - Database primary key
 - `uuid` - Stable external identifier
@@ -156,7 +158,7 @@ Describes where content comes from and how to access it.
 - **PathMapping** - Maps external paths to local filesystem paths
   - Path mapping only translates paths; it does not control ingest eligibility or access policy
 
-## Major Services
+## Major services
 
 ### LibraryService
 
@@ -164,9 +166,9 @@ Describes where content comes from and how to access it.
 
 **Role:** The single source of truth for the content library.
 
-**Design Pattern:** Authority + Service/Capability Provider
+**Design pattern:** Authority + Service/Capability Provider
 
-**Key Responsibilities:**
+**Key responsibilities:**
 
 - Register new assets from discovery
 - Enrich assets with metadata
@@ -176,14 +178,14 @@ Describes where content comes from and how to access it.
 - List and fetch assets
 - Handle asset lifecycle (delete, restore)
 
-**Important Behaviors:**
+**Important behaviors:**
 
 - **Soft delete by default** - Sets `is_deleted=True` instead of removing records
 - **Hard delete only when safe** - Checks if assets are referenced by episodes
 - **Unit of Work boundaries** - All operations are atomic (commit/rollback)
 - **Authority over content** - Nothing else should directly modify the library
 
-**Authority Rule:**
+**Authority rule:**
 LibraryService is the single authority over Assets, Episodes, and ReviewQueue state.
 No other part of the system (CLI, API, ingest orchestrator, schedulers, runtime) may write or mutate these records directly.
 All creation, enrichment, canonicalization, deletion, restore, and review resolution must go through LibraryService.
@@ -194,9 +196,9 @@ All creation, enrichment, canonicalization, deletion, restore, and review resolu
 
 **Role:** Manages external content sources and path mappings.
 
-**Design Pattern:** Authority + Service/Capability Provider
+**Design pattern:** Authority + Service/Capability Provider
 
-**Key Responsibilities:**
+**Key responsibilities:**
 
 - Create and register Plex sources
 - Discover libraries/collections from sources
@@ -204,10 +206,10 @@ All creation, enrichment, canonicalization, deletion, restore, and review resolu
 - Manage path mappings
 - List enabled collections with metadata
 
-**Why This Matters:**
+**Why this matters:**
 Ingest systems need to know which sources to scan and how to translate external paths to local filesystem paths. SourceService provides this information so ingest can be deterministic and source-agnostic.
 
-**Authority Rule:**
+**Authority rule:**
 SourceService is the single authority for external source configuration (Plex servers, filesystem roots), enabled/disabled collections, and path mappings.
 No other component is allowed to "just talk to Plex," "scan a random directory," or invent a mapping for a path on its own.
 
@@ -217,9 +219,9 @@ No other component is allowed to "just talk to Plex," "scan a random directory,"
 
 **Role:** Coordinates ingest from configured sources into the library.
 
-**Design Pattern:** Orchestrator
+**Design pattern:** Orchestrator
 
-**High-Level Flow:**
+**High-level flow:**
 
 1. **Identify sources** to scan
 2. **Use Importers** to discover content
@@ -230,7 +232,7 @@ No other component is allowed to "just talk to Plex," "scan a random directory,"
    - Either mark canonical or queue for review
 4. **Return summary counts**
 
-**Key Behaviors:**
+**Key behaviors:**
 
 - **Confidence scoring** - Determines if content is broadcast-ready
 - **Automatic canonicalization** - Good content is immediately usable
@@ -244,20 +246,20 @@ No other component is allowed to "just talk to Plex," "scan a random directory,"
 
 **Role:** Centralized path mapping and resolution for external sources.
 
-**Design Pattern:** Service / Capability Provider
+**Design pattern:** Service / Capability Provider
 
-**Key Features:**
+**Key features:**
 
 - Translates external source paths to local filesystem paths
 - Uses configured PathMapping records for resolution
 - Provides consistent path translation across the system
 - Validates resolved paths exist on local filesystem
 
-**Authority Rule:**
+**Authority rule:**
 PathResolverService is the only approved way to translate provider paths (e.g. Plex-provided paths) into local playable filesystem paths.
 No other component — CLI commands, ingest logic, runtime playback, schedulers — is allowed to guess or rewrite paths manually.
 
-## Adapter Layer
+## Adapter layer
 
 The ingest system is designed to be pluggable through adapters.
 
@@ -265,11 +267,11 @@ The ingest system is designed to be pluggable through adapters.
 
 **Location:** `src/retrovue/adapters/importers/`
 
-**Design Pattern:** Adapter
+**Design pattern:** Adapter
 
 **Purpose:** Discover content from external systems without modifying system state.
 
-**Key Importers:**
+**Key importers:**
 
 - **FilesystemImporter** - Walks local directories, extracts file stats, computes hashes
 - **PlexImporter** - Talks to Plex Media Server, discovers libraries and episodes
@@ -284,11 +286,11 @@ The ingest system is designed to be pluggable through adapters.
 
 **Location:** `src/retrovue/adapters/enrichers/`
 
-**Design Pattern:** Enricher
+**Design pattern:** Enricher
 
 **Purpose:** Add structured metadata to discovered content.
 
-**Key Enrichers:**
+**Key enrichers:**
 
 - **FFprobeEnricher** - Runs ffprobe to extract duration, codecs, container format
 
@@ -311,7 +313,7 @@ The ingest system is designed to be pluggable through adapters.
 - Registration and lookup functions
 - Plugin model for extensibility
 
-## CLI and API Surfaces
+## CLI and API surfaces
 
 ### CLI (Command Line Interface)
 
@@ -319,7 +321,7 @@ The ingest system is designed to be pluggable through adapters.
 
 **Purpose:** Manual operation of the Content Manager.
 
-**Key Command Groups:**
+**Key command groups:**
 
 #### `retrovue assets`
 
@@ -361,15 +363,15 @@ The ingest system is designed to be pluggable through adapters.
 - Proper schemas and DTOs
 - Unit of Work via `infra.uow.get_db()`
 
-**Key Routers:**
+**Key routers:**
 
 - `assets.py` - Asset management endpoints
 - `ingest.py` - Ingest operations
 - `review.py` - Review queue management
 
-## How Other Systems Use Content Manager
+## How other systems use Content Manager
 
-### Broadcast Domain Integration
+### Broadcast domain integration
 
 The Broadcast Domain will:
 
@@ -385,7 +387,7 @@ The Broadcast Domain will:
 - Ad break markers and restrictions
 - Content ratings and classifications
 
-### Promotion Workflow: Library → Broadcast Catalog
+### Promotion workflow: Library → Broadcast Catalog
 
 The Library Domain discovers, ingests, enriches, and reviews media. Once an operator decides "this can air," they run `retrovue assets promote`. Promotion writes a new row into `catalog_asset` in the Broadcast Domain. That row includes:
 
@@ -398,7 +400,7 @@ The Library Domain discovers, ingests, enriches, and reviews media. Once an oper
 
 After promotion, ScheduleService may consider that CatalogAsset when filling a schedule block. If canonical=false, it's visible to operators but still forbidden to air.
 
-**Critical Rules:**
+**Critical rules:**
 
 - **ScheduleService is forbidden** to schedule any CatalogAsset with canonical=false.
 - **Runtime / ChannelManager is forbidden** to playout any CatalogAsset with canonical=false.
@@ -411,7 +413,7 @@ At runtime, playback systems will:
 - **Trust enrichment data** for codecs, duration, container type
 - **Not guess content properties** - enrichment already handled this
 
-**Downstream Rule (Scheduler, ChannelManager, Producer):**
+**Downstream rule (Scheduler, ChannelManager, Producer):**
 
 - Must not scan the filesystem directly
 - Must not call Plex or any other external provider directly
@@ -420,9 +422,9 @@ At runtime, playback systems will:
 
 If downstream code needs information it can't get from Content Manager, that is a feature request for Content Manager — not permission to bypass it.
 
-## Key Architectural Principles
+## Key architectural principles
 
-### Single Responsibility
+### Single responsibility
 
 Each component has one clear purpose:
 
@@ -440,7 +442,7 @@ All components can be swapped without system-wide changes:
 - Enrichers can be added or replaced
 - Services have clear interfaces
 
-### Authority Boundaries
+### Authority boundaries
 
 - **LibraryService** is the authority over content assets
 - **SourceService** is the authority over external sources

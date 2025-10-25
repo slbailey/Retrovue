@@ -1,14 +1,14 @@
-# 🏗️ Architectural Guidelines
+# Architectural guidelines
 
-This document outlines the core architectural patterns, design principles, and industry standards used throughout the Retrovue system. It serves as the foundation for understanding how we build and organize our components.
+This document outlines the core architectural patterns, design principles, and industry standards used throughout the RetroVue system. It serves as the foundation for understanding how we build and organize our components.
 
-## 🎯 Design Philosophy
+## Design philosophy
 
-Retrovue follows a **Clean Architecture** approach with clear separation of concerns, dependency inversion, and industry-standard patterns. Our goal is to create a maintainable, testable, and extensible system that can evolve from a content management system to a full IPTV platform.
+RetroVue follows a **Clean Architecture** approach with clear separation of concerns, dependency inversion, and industry-standard patterns. The goal is to create a maintainable, testable, and extensible system that can evolve from a content management system to a full IPTV platform.
 
-## 🏛️ Core Architectural Patterns
+## Core architectural patterns
 
-### 1. Clean Architecture Layers
+### Clean architecture layers
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -37,11 +37,11 @@ Retrovue follows a **Clean Architecture** approach with clear separation of conc
 - **Open/Closed**: Open for extension, closed for modification
 - **Interface Segregation**: Small, focused interfaces
 
-### 2. Unit of Work (UoW) Pattern
+### Unit of work pattern
 
 The UoW pattern ensures consistent database transaction management across all interfaces:
 
-#### API Layer Implementation
+#### API layer implementation
 
 ```python
 def get_db() -> Generator:
@@ -61,7 +61,7 @@ def get_db() -> Generator:
         db.close()
 ```
 
-#### CLI Layer Implementation
+#### CLI layer implementation
 
 ```python
 @contextlib.contextmanager
@@ -85,9 +85,9 @@ def session() -> Generator[Session, None, None]:
 - **Resource cleanup** guaranteed
 - **Testable** with dependency injection
 
-### 3. FastAPI Integration Patterns
+### FastAPI integration patterns
 
-#### Dependency Injection
+#### Dependency injection
 
 ```python
 # API endpoints use dependency injection for services
@@ -99,7 +99,7 @@ def list_assets(
     return service.list_assets(db)
 ```
 
-#### Pydantic Schema Validation
+#### Pydantic schema validation
 
 ```python
 # Request/response schemas with automatic validation
@@ -115,7 +115,7 @@ class AssetResponse(BaseModel):
     created_at: datetime
 ```
 
-#### Error Handling
+#### Error handling
 
 ```python
 # Consistent error responses
@@ -127,9 +127,9 @@ async def validation_exception_handler(request, exc):
     )
 ```
 
-### 4. Adapter Pattern for External Integrations
+### Adapter pattern for external integrations
 
-#### Base Interfaces
+#### Base interfaces
 
 ```python
 class BaseImporter(ABC):
@@ -143,7 +143,7 @@ class BaseEnricher(ABC):
         pass
 ```
 
-#### Registry Pattern
+#### Registry pattern
 
 ```python
 class AdapterRegistry:
@@ -161,9 +161,9 @@ class AdapterRegistry:
 - **Extensible** for new data sources
 - **Consistent** interface across adapters
 
-## 🔧 Industry Standard Patterns
+## Industry standard patterns
 
-### 1. Repository Pattern
+### Repository pattern
 
 ```python
 class AssetRepository:
@@ -179,7 +179,7 @@ class AssetRepository:
         return asset
 ```
 
-### 2. Service Layer Pattern
+### Service layer pattern
 
 ```python
 class LibraryService:
@@ -193,7 +193,7 @@ class LibraryService:
         return self.asset_repo.save(asset)
 ```
 
-### 3. Factory Pattern for Complex Objects
+### Factory pattern for complex objects
 
 ```python
 class StreamingPipelineFactory:
@@ -206,32 +206,32 @@ class StreamingPipelineFactory:
         )
 ```
 
-## 🎨 Interface Design Patterns
+## Interface design patterns
 
-### 1. API vs CLI vs Web Separation
+### API vs CLI vs web separation
 
-#### API Layer (`api/`)
+#### API layer (`api/`)
 
 - **FastAPI** for REST endpoints
 - **Pydantic** for request/response validation
 - **Dependency injection** for services
 - **Automatic OpenAPI** documentation
 
-#### CLI Layer (`cli/`)
+#### CLI layer (`cli/`)
 
 - **Typer** for command-line interface
 - **Same services** as API layer
 - **JSON output** for scripting
 - **Human-readable** output for users
 
-#### Web Layer (`web/`)
+#### Web layer (`web/`)
 
 - **Jinja2** templates for HTML
 - **Same API endpoints** as REST API
 - **Bootstrap** for responsive design
 - **Progressive enhancement** with JavaScript
 
-### 2. Consistent Error Handling
+### Consistent error handling
 
 ```python
 # Standardized error responses
@@ -247,7 +247,7 @@ class NotFoundError(RetrovueError):
     pass
 ```
 
-### 3. Configuration Management
+### Configuration management
 
 ```python
 # Environment-based configuration with validation
@@ -261,9 +261,9 @@ class Settings(BaseSettings):
         case_sensitive = False
 ```
 
-## 🔄 Data Flow Patterns
+## Data flow patterns
 
-### 1. Content Ingestion Flow
+### Content ingestion flow
 
 ```
 External Source → Importer → Enricher → Domain Entities → Database
@@ -271,7 +271,7 @@ External Source → Importer → Enricher → Domain Entities → Database
   Plex API    FilesystemImporter  FFProbeEnricher  Asset/Episode
 ```
 
-### 2. API Request Flow
+### API request flow
 
 ```
 HTTP Request → FastAPI Router → Service Layer → Domain Layer → Database
@@ -279,7 +279,7 @@ HTTP Request → FastAPI Router → Service Layer → Domain Layer → Database
   JSON Input    Business Logic   Domain Rules   SQLAlchemy
 ```
 
-### 3. CLI Command Flow
+### CLI command flow
 
 ```
 CLI Command → Typer Router → Service Layer → Domain Layer → Database
@@ -287,9 +287,9 @@ CLI Command → Typer Router → Service Layer → Domain Layer → Database
   Arguments   Business Logic   Domain Rules   SQLAlchemy
 ```
 
-## 🧪 Testing Patterns
+## Testing patterns
 
-### 1. Unit Testing
+### Unit testing
 
 ```python
 # Test domain logic in isolation
@@ -299,7 +299,7 @@ def test_asset_creation():
     assert asset.uri == "file://test.mp4"
 ```
 
-### 2. Integration Testing
+### Integration testing
 
 ```python
 # Test service orchestration
@@ -310,7 +310,7 @@ def test_library_service_register_asset():
         assert asset.id is not None
 ```
 
-### 3. End-to-End Testing
+### End-to-end testing
 
 ```python
 # Test complete workflows
@@ -320,9 +320,9 @@ def test_api_asset_creation():
     assert response.json()["uri"] == "file://test.mp4"
 ```
 
-## 📊 Monitoring and Observability
+## Monitoring and observability
 
-### 1. Structured Logging
+### Structured logging
 
 ```python
 # Consistent logging across all layers
@@ -332,7 +332,7 @@ logger.info("Asset created", asset_id=asset.id, uri=asset.uri)
 logger.error("Ingest failed", source=source, error=str(e))
 ```
 
-### 2. Health Checks
+### Health checks
 
 ```python
 # System health monitoring
@@ -345,7 +345,7 @@ def health_check():
     }
 ```
 
-### 3. Metrics Collection
+### Metrics collection
 
 ```python
 # Performance and usage metrics
@@ -358,9 +358,9 @@ def get_metrics():
     }
 ```
 
-## 🚀 Extension Patterns
+## Extension patterns
 
-### 1. Adding New Importers
+### Adding new importers
 
 ```python
 # 1. Implement base interface
@@ -373,7 +373,7 @@ class CustomImporter(BaseImporter):
 registry.register("custom", CustomImporter)
 ```
 
-### 2. Adding New API Endpoints
+### Adding new API endpoints
 
 ```python
 # 1. Create router
@@ -388,7 +388,7 @@ def custom_endpoint(db: Session = Depends(get_db)):
 app.include_router(router, prefix="/api")
 ```
 
-### 3. Adding New CLI Commands
+### Adding new CLI commands
 
 ```python
 # 1. Create command function
@@ -402,37 +402,37 @@ def custom_command():
 cli.add_command(custom_command)
 ```
 
-## 🎯 Best Practices
+## Best practices
 
-### 1. Code Organization
+### Code organization
 
 - **Layer separation**: Keep domain, application, and infrastructure separate
 - **Single responsibility**: Each class/function has one clear purpose
 - **Dependency injection**: Use constructor injection for dependencies
 - **Interface segregation**: Small, focused interfaces
 
-### 2. Error Handling
+### Error handling
 
 - **Fail fast**: Validate inputs early
 - **Graceful degradation**: Handle errors without crashing
 - **Consistent responses**: Standardized error formats
 - **Logging**: Comprehensive error logging
 
-### 3. Performance
+### Performance
 
 - **Lazy loading**: Load data only when needed
 - **Connection pooling**: Efficient database connections
 - **Caching**: Cache expensive operations
 - **Async operations**: Use async for I/O-bound tasks
 
-### 4. Security
+### Security
 
 - **Input validation**: Validate all inputs
 - **SQL injection prevention**: Use parameterized queries
 - **Secret management**: Never hardcode secrets
 - **Access control**: Implement proper authorization
 
-## 📚 References
+## References
 
 - [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
@@ -442,4 +442,4 @@ cli.add_command(custom_command)
 
 ---
 
-_These architectural guidelines ensure consistency, maintainability, and extensibility across all Retrovue components while following industry best practices._
+_These architectural guidelines ensure consistency, maintainability, and extensibility across all RetroVue components while following industry best practices._

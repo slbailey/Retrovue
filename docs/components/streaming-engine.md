@@ -4,7 +4,7 @@
 
 ### **FFmpeg-Based MPEG-TS Streaming**
 
-Retrovue uses FFmpeg as the core technology for video processing, encoding, and MPEG-TS stream generation. This provides:
+RetroVue uses FFmpeg as the core technology for video processing, encoding, and MPEG-TS stream generation. This provides:
 
 - **Industry Standard**: FFmpeg is the de facto standard for video processing
 - **Format Support**: Handles virtually any input video format

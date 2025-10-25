@@ -1,10 +1,12 @@
-# Retrovue Configuration
+_Related: [Getting started](getting-started.md) • [Web interface](web-interface.md) • [Operator CLI](CLI.md)_
 
-This document describes all configuration options available in Retrovue, including environment variables, settings, and deployment configurations.
+# RetroVue Configuration
+
+This document describes all configuration options available in RetroVue, including environment variables, settings, and deployment configurations.
 
 ## Overview
 
-Retrovue uses a hierarchical configuration system with environment variables, configuration files, and default values. All settings are managed through Pydantic BaseSettings for validation and type safety.
+RetroVue uses a hierarchical configuration system with environment variables, configuration files, and default values. All settings are managed through Pydantic BaseSettings for validation and type safety.
 
 ## Environment Variables
 
@@ -566,5 +568,4 @@ if __name__ == "__main__":
 
 ---
 
-_This configuration system provides flexible and secure settings management for Retrovue across all deployment scenarios._
-
+_This configuration system provides flexible and secure settings management for RetroVue across all deployment scenarios._

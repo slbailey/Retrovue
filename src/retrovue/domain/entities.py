@@ -343,4 +343,23 @@ class PathMapping(Base):
         return f"<PathMapping(id={self.id}, collection_id={self.collection_id}, plex_path={self.plex_path}, local_path={self.local_path})>"
 
 
+class BroadcastChannel(Base):
+    """Broadcast channel model for scheduling."""
+
+    __tablename__ = "broadcast_channels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    timezone: Mapped[str] = mapped_column(String(255), nullable=False)  # IANA timezone string
+    grid_size_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    grid_offset_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    rollover_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("true"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return f"<BroadcastChannel(id={self.id}, name='{self.name}', timezone='{self.timezone}')>"
+
+
 

@@ -1,18 +1,23 @@
 """
-BroadcastChannel CLI Control Tool
+DEPRECATED - logic moved into cli/commands/channel.py
 
-This is an operator/maintenance surface for BroadcastChannel management.
-It is NOT ScheduleService - it does not start or stop streaming.
-It only manages the persisted BroadcastChannel definitions stored in Postgres.
+This file is kept for reference only. The functionality has been moved to the main Typer CLI
+under `retrovue channel` commands. Do not use this file for new development.
 
-This CLI provides human-readable operations for:
+Original BroadcastChannel CLI Control Tool
+
+This was an operator/maintenance surface for BroadcastChannel management.
+It was NOT ScheduleService - it did not start or stop streaming.
+It only managed the persisted BroadcastChannel definitions stored in Postgres.
+
+This CLI provided human-readable operations for:
 - Listing all channels
 - Viewing channel details  
 - Creating new channels
 - Updating existing channels
 - Deleting channels
 
-All operations go through BroadcastChannelService for business logic enforcement.
+All operations went through BroadcastChannelService for business logic enforcement.
 """
 
 import argparse
