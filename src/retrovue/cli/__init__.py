@@ -1,9 +1,6 @@
 """CLI package for Retrovue."""
 
-from .main import app, cli
+# Don't import from main here to avoid circular imports
+# Import app and cli directly when needed
 
-__all__ = ["app", "cli"]
-
-# For direct execution without module import warnings
-if __name__ == "__main__":
-    cli()
+__all__ = []
