@@ -1,8 +1,10 @@
 """
 Assets command group.
 
-Surfaces asset management capabilities including listing, selection, and deletion.
-Calls LibraryService under the hood for all asset operations.
+Surfaces Library Domain asset management capabilities including listing, selection, deletion, and promotion.
+This is the Library Domain (ingest, QC, source metadata, promotion to broadcast catalog).
+
+For Broadcast Domain operations (approved-for-air catalog used by ScheduleService), use the `catalog` commands.
 """
 
 from __future__ import annotations
@@ -18,8 +20,9 @@ from ...infra.uow import session
 from ...api.schemas import AssetListResponse, AssetSummary
 from ...content_manager.library_service import LibraryService
 from ...domain.entities import ProviderRef, EntityType
+from ...infra.admin_services import AssetAdminService
 
-app = typer.Typer(name="assets", help="Asset management operations using LibraryService")
+app = typer.Typer(name="assets", help="Library Domain asset management (ingest, QC, source metadata, promotion)")
 
 
 class AssetStatus(str, Enum):
@@ -566,3 +569,61 @@ def restore_asset(
         except Exception as e:
             typer.echo(f"Error restoring asset: {e}", err=True)
             raise typer.Exit(1)
+
+
+@app.command("promote")
+def promote_asset(
+    uuid: str = typer.Option(..., "--uuid", help="Library asset UUID to promote"),
+    title: str = typer.Option(..., "--title", help="Guide-facing title for broadcast catalog"),
+    tags: str = typer.Option(..., "--tags", help="Comma-separated tags (e.g., 'sitcom,retro')"),
+    canonical: bool = typer.Option(True, "--canonical", help="Whether this asset is canonical (approved for broadcast)"),
+    json: bool = typer.Option(False, "--json", help="Output in JSON format"),
+):
+    """
+    Promote a library asset to the broadcast catalog.
+    
+    Promotion will fail if the asset is not technically playout-ready.
+    Promotion does NOT automatically make it airable; canonical must be true AND scheduling must choose it.
+    ScheduleService is forbidden to schedule non-canonical assets.
+    
+    Examples:
+        retrovue assets promote --uuid 41dc6fd4-a9c1-4686-bec5-1cf7dfd03e4e --title "Batman: The Animated Series" --tags "sitcom,retro" --canonical true
+        retrovue assets promote --uuid 41dc6fd4-a9c1-4686-bec5-1cf7dfd03e4e --title "Classic Episode" --tags "drama,classic" --canonical false
+    """
+    try:
+        # Parse tags from comma-separated string
+        tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+        
+        # Call the admin service to promote the asset
+        result = AssetAdminService.promote_from_library(
+            source_asset_uuid=uuid,
+            title=title,
+            tags=tag_list,
+            canonical=canonical
+        )
+        
+        if json:
+            import json as json_module
+            typer.echo(json_module.dumps(result, indent=2))
+        else:
+            from rich.console import Console
+            from rich import print as rprint
+            
+            console = Console()
+            console.print("✓ Promoted to Broadcast Catalog", style="green")
+            console.print(f"  Catalog ID: {result['catalog_id']}")
+            console.print(f"  Title: {result['title']}")
+            console.print(f"  Canonical: {result['canonical']}")
+            console.print(f"  Duration (ms): {result['duration_ms']}")
+            console.print(f"  File: {result['file_path']}")
+            
+    except ValueError as e:
+        from rich.console import Console
+        console = Console()
+        console.print(f"✗ Promotion failed: {e}", style="red")
+        raise typer.Exit(1)
+    except Exception as e:
+        from rich.console import Console
+        console = Console()
+        console.print(f"✗ Error promoting asset: {e}", style="red")
+        raise typer.Exit(1)

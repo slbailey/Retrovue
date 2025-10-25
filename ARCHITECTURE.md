@@ -23,6 +23,32 @@ The system is intentionally layered so that:
 2. **Scheduling logic** plans what will air and when
 3. **Runtime logic** actually plays it out for viewers
 
+## Domain Separation
+
+RetroVue enforces a strict separation between two domains:
+
+### Library Domain
+
+- **Owns**: Media discovery, ingest, enrichment, QC, review
+- **Tracks**: Episodes, seasons, titles, sources, provider_refs, file metadata, technical metadata, markers, duration, etc.
+- **Operator Interface**: `retrovue assets ...`
+- **Authority**: Can nominate media for air, but does not schedule anything
+- **Forbidden**: Does NOT define channels, templates, schedules, or playlogs
+
+### Broadcast Domain
+
+- **Owns**: Channel policy, dayparting rules, broadcast-day assignment, airable catalog ("what the station is cleared to run"), and playlog_event
+- **Operator Interface**:
+  - `retrovue channel ...`
+  - `retrovue template ...`
+  - `retrovue schedule ...`
+  - `retrovue catalog ...`
+- **Authority**: ScheduleService and runtime consume this domain to generate and execute playout
+
+**Critical Rule**: The Library Domain and Broadcast Domain are now physically separated in Postgres and enforced by Alembic. The Library Domain no longer owns scheduling or playout structures.
+
+**Data Flow**: Library Domain → promotion → Broadcast Domain → ScheduleService → Runtime
+
 ---
 
 ## Layer Map
@@ -184,9 +210,9 @@ Each layer has a specific job and strict limits.
 
 > **Runtime's job is to make the station look live, not to invent programming.**
 
-### 5. Domain Layer (`retrovue/domain/`)
+### 5. Library Domain (`retrovue/domain/`)
 
-**Purpose:** Content ingestion, review, enrichment, and metadata.
+**Purpose:** Content ingestion, review, enrichment, and metadata management.
 
 #### **WHAT**
 
@@ -202,6 +228,7 @@ Each layer has a specific job and strict limits.
 - ✅ Normalize and enrich metadata
 - ✅ Track review state
 - ✅ Process content for broadcast readiness
+- ✅ Nominate content for promotion to Broadcast Domain
 
 #### **WHAT IT CANNOT DO**
 
@@ -209,8 +236,28 @@ Each layer has a specific job and strict limits.
 - ❌ Directly tell ScheduleService what to schedule
 - ❌ Directly drive runtime playout
 - ❌ Bypass operator approval
+- ❌ Define channels, templates, schedules, or playlogs
+- ❌ Own scheduling or playout structures
 
-> **This layer feeds infrastructure, but does not become infrastructure automatically.**
+> **This layer feeds the Broadcast Domain through promotion, but does not become infrastructure automatically.**
+
+## Promotion Workflow: Library → Broadcast Catalog
+
+The Library Domain discovers, ingests, enriches, and reviews media. Once an operator decides "this can air," they run `retrovue assets promote`. Promotion writes a new row into `catalog_asset` in the Broadcast Domain. That row includes:
+
+- title (guide-facing)
+- duration_ms (used by scheduler math)
+- tags (used to satisfy template_block rule_json)
+- file_path (what ChannelManager will actually playout)
+- canonical (if true, it's allowed on air)
+- source_ingest_asset_id (for provenance / audit)
+
+After promotion, ScheduleService may consider that CatalogAsset when filling a schedule block. If canonical=false, it's visible to operators but still forbidden to air.
+
+**Critical Rules:**
+
+- **ScheduleService is forbidden** to schedule any CatalogAsset with canonical=false.
+- **Runtime / ChannelManager is forbidden** to playout any CatalogAsset with canonical=false.
 
 ---
 
@@ -244,7 +291,7 @@ Each layer has a specific job and strict limits.
 
 ## Canonical Gating (Non-Negotiable Rule)
 
-> **Only assets with `canonical=true` in `schedule_manager.models.Asset` are eligible for scheduling.**
+> **Only assets with `canonical=true` in the Broadcast Domain `catalog_asset` table are eligible for scheduling.**
 
 ### The Rule
 
@@ -255,9 +302,9 @@ Each layer has a specific job and strict limits.
 ### The Only Path to Canonical
 
 ```
-retrovue asset add / retrovue asset update
+Library Domain: retrovue assets promote
     ↓
-infra.admin_services.AssetAdminService
+Promotion creates catalog_asset in Broadcast Domain
     ↓
 Database write with canonical=true
 ```
@@ -266,9 +313,19 @@ Database write with canonical=true
 
 - **ScheduleService** ❌ forbidden from promoting content to canonical
 - **Runtime** ❌ forbidden from promoting content to canonical
-- **Ingest/domain** ❌ forbidden from promoting content to canonical automatically
+- **Library Domain** ❌ forbidden from promoting content to canonical automatically
+- **Library Domain** ❌ forbidden from writing to Broadcast Domain tables directly
 
 > **That separation is how we protect on-air quality.**
+
+## Schema Migration Note (critical)
+
+- The tables `channels`, `templates`, `template_blocks`, `schedule_days`, and `playlog_events` have been removed.
+- Those tables used to live in the Library Domain.
+- They have been replaced by the Broadcast Domain tables:
+  `broadcast_channel`, `broadcast_template`, `broadcast_template_block`, `broadcast_schedule_day`, `catalog_asset`, and `broadcast_playlog_event`.
+- This is enforced by Alembic migration `68fecbe0ea79`.
+- Do not reintroduce scheduling tables into the Library Domain.
 
 ---
 
@@ -294,6 +351,39 @@ We are simulating a **TV station**:
 **Nobody is allowed to silently skip these steps.**
 
 > **If we follow these boundaries in code, the illusion holds, the system scales, and you never wake up to something airing that you didn't sign off on.**
+
+---
+
+## Deferred Integrations
+
+### Plex Path Mapping & Catalog File Resolution (Deferred Implementation)
+
+> **Status:** Deferred  
+> **Priority:** Medium – required before runtime playout reaches production  
+> **Scope:** Cross-domain integration (Library → Broadcast)
+
+RetroVue currently assumes that `catalog_asset.file_path` already points to a valid, locally playable file.  
+Ingest assets sourced from Plex use Plex's virtual path structure (e.g., `/library/tvshows/...`).  
+A future **Path Mapping Service** will translate these paths to RetroVue's local playout paths during promotion.
+
+**Design intent:**
+- Each Plex library defines a mapping pair (`root_path` → `local_path`).
+- When `retrovue assets promote` runs, it must resolve the ingest asset's Plex path through this mapping to produce the local playout path.
+- The resolved path is stored in `catalog_asset.file_path`.
+- Validation must confirm that the resolved file exists before allowing promotion.
+
+**Sync considerations:**
+- Plex libraries marked `sync_enabled` are scanned nightly.
+- When a Plex asset is deleted or moved:
+  - The Library Domain marks it `soft_deleted=true`.
+  - The Broadcast Catalog must be notified (via webhook or nightly reconciliation) to mark related `catalog_asset` records `available=false` and `canonical=false`.
+
+**Deferred tasks:**
+1. Introduce a `path_mapping` table or configuration per library.  
+2. Implement `PathResolver.resolve()` helper.  
+3. Add `available` boolean to `catalog_asset`.  
+4. Create ingest→catalog invalidation job or webhook listener.  
+5. Add unit test: promotion fails if resolved path does not exist.
 
 ---
 

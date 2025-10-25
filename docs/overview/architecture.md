@@ -36,7 +36,7 @@ Each channel maintains a **virtual linear timeline** in the database that always
 
 RetroVue is composed of several layers working together to maintain, schedule, and deliver believable "live" channels.
 
-### Content Ingest Layer
+### Library Domain (Content Ingest Layer)
 
 **Purpose:** Gather metadata about available content (shows, movies, promos, commercials).
 
@@ -45,13 +45,13 @@ RetroVue is composed of several layers working together to maintain, schedule, a
 - **Adapters** connect to external libraries (e.g., Plex, local folders, ad libraries)
 - **Enrichers** process this metadata to extract what broadcast scheduling needs: runtime, ratings, ad break markers, tags, and restrictions
 
-**Contract:** Ingest is authoritative for content availability and metadata quality, but runtime never queries ingest directly. It's batch, not real-time.
+**Contract:** Library Domain is authoritative for content availability and metadata quality, but runtime never queries Library Domain directly. It's batch, not real-time.
 
-> **Important:** Ingest can be slow. Playback cannot depend on it.
+> **Important:** Library Domain operations can be slow. Playback cannot depend on it.
 
-> **See docs/components/content-manager.md for ingestion/library details.**
+> **See docs/components/content-manager.md for Library Domain details.**
 
-### Scheduling Layer
+### Broadcast Domain (Scheduling Layer)
 
 Builds and maintains **two rolling planning horizons** for every channel:
 

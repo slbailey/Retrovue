@@ -16,10 +16,13 @@ retrovue --help
 
 ## Command Structure
 
-The CLI is organized into command groups:
+The CLI is organized into command groups reflecting the domain separation:
 
-- `retrovue assets` - Ingest world (content discovery, metadata, library operations)
-- `retrovue catalog` - Broadcast world (airable, canonical-approved assets for scheduling)
+- `retrovue assets` - Library Domain (content discovery, metadata, library operations)
+- `retrovue catalog` - Broadcast Domain (airable, canonical-approved assets for scheduling)
+- `retrovue channel` - Broadcast Domain (channel configuration and management)
+- `retrovue template` - Broadcast Domain (template and block management)
+- `retrovue schedule` - Broadcast Domain (schedule assignment and management)
 - `retrovue review` - Review queue operations
 - `retrovue test` - Testing operations for runtime components
 
@@ -79,7 +82,7 @@ retrovue test masterclock --json
 - `--timezone, -t` - Test timezone (default: "America/New_York")
 - `--json` - Output results in JSON format
 
-### Assets Commands (Ingest World)
+### Assets Commands (Library Domain)
 
 #### `retrovue assets run`
 
@@ -106,7 +109,36 @@ retrovue assets run filesystem:/media --json
 - `--enrichers TEXT` - Comma-separated list of enrichers (e.g., 'ffprobe')
 - `--json` - Output in JSON format
 
-### Catalog Commands (Broadcast World)
+#### `retrovue assets promote`
+
+Promotes a reviewed Library asset into the Broadcast Catalog.
+
+```bash
+# Promote an asset to the broadcast catalog
+retrovue assets promote --uuid "b4739f5c-7f91-4937-a7b2-4a5ba8ef4249" \
+  --title "Cheers S01E01" \
+  --tags "sitcom,comedy" \
+  --canonical true
+
+# Promote without canonical approval (not yet airable)
+retrovue assets promote --uuid "b4739f5c-7f91-4937-a7b2-4a5ba8ef4249" \
+  --title "New Episode" \
+  --tags "drama" \
+  --canonical false
+```
+
+**Options:**
+
+- `--uuid` - Library asset identifier (required)
+- `--title` - Guide-facing title (required)
+- `--tags` - Comma-separated tags (required)
+- `--canonical` - Mark as approved-for-air (required)
+- `--json` - Output as JSON
+
+**Purpose:**
+Promotion is the ONLY approved path to make content legally schedulable. This creates a new `catalog_asset` row in the Broadcast Domain.
+
+### Catalog Commands (Broadcast Domain)
 
 #### `retrovue catalog add`
 
@@ -175,7 +207,96 @@ retrovue catalog list --json
 - `--tag` - Filter by tag (e.g. sitcom)
 - `--json` - Output in JSON format
 
-### Assets Commands (Ingest World)
+### Channel Commands (Broadcast Domain)
+
+#### `retrovue channel add`
+
+Create/define a station channel.
+
+```bash
+# Create a new channel
+retrovue channel add --name "RetroVue-1" \
+  --timezone "America/New_York" \
+  --grid-size 30 \
+  --offset 0 \
+  --rollover 360
+```
+
+**Options:**
+
+- `--name` - Channel identifier (required)
+- `--timezone` - IANA timezone string (required)
+- `--grid-size` - Planning granularity in minutes (default: 30)
+- `--offset` - Offset from top of hour in minutes (default: 0)
+- `--rollover` - Broadcast day start in minutes after midnight (default: 360)
+
+**Purpose:**
+This is how you define "how the station rolls a day."
+
+### Template Commands (Broadcast Domain)
+
+#### `retrovue template add`
+
+Build reusable daypart templates.
+
+```bash
+# Create a template
+retrovue template add --name "All Sitcoms 24x7" \
+  --description "24-hour sitcom programming"
+```
+
+**Options:**
+
+- `--name` - Template identifier (required)
+- `--description` - Human-readable description (optional)
+
+#### `retrovue template block add`
+
+Add rule blocks to templates.
+
+```bash
+# Add a content block to a template
+retrovue template block add --template-id 1 \
+  --start "00:00" \
+  --end "24:00" \
+  --tags "sitcom" \
+  --episode-policy "syndication"
+```
+
+**Options:**
+
+- `--template-id` - Template ID (required)
+- `--start` - Block start time in HH:MM format (required)
+- `--end` - Block end time in HH:MM format (required)
+- `--tags` - Comma-separated content tags (required)
+- `--episode-policy` - Episode selection policy (required)
+
+**Purpose:**
+The rules contain tags/episode_policy that tell ScheduleService what kind of content to pull.
+
+### Schedule Commands (Broadcast Domain)
+
+#### `retrovue schedule assign`
+
+Assign a template to a specific channel and broadcast day.
+
+```bash
+# Assign template to channel for specific date
+retrovue schedule assign --channel "RetroVue-1" \
+  --template "All Sitcoms 24x7" \
+  --day "2025-01-24"
+```
+
+**Options:**
+
+- `--channel` - Channel name or ID (required)
+- `--template` - Template name or ID (required)
+- `--day` - Broadcast date in YYYY-MM-DD format (required)
+
+**Purpose:**
+This is how you declare tomorrow's programming spine.
+
+### Assets Commands (Library Domain)
 
 #### `retrovue assets list`
 
@@ -448,10 +569,10 @@ The CLI provides clear error messages and appropriate exit codes:
 ### Complete Workflow
 
 ```bash
-# 1. Ingest content from filesystem (ingest world)
+# 1. Ingest content from filesystem (Library Domain)
 retrovue assets run filesystem:/media/movies --enrichers ffprobe
 
-# 2. List discovered assets (ingest world)
+# 2. List discovered assets (Library Domain)
 retrovue assets list --status pending
 
 # 3. Check review queue
@@ -460,11 +581,36 @@ retrovue review list
 # 4. Resolve a review item
 retrovue review resolve 123e4567-e89b-12d3-a456-426614174000 987fcdeb-51a2-43d1-b456-426614174000
 
-# 5. Add approved content to broadcast catalog (broadcast world)
-retrovue catalog add --title "Approved Movie" --duration 7200 --tags "action" --path "/media/movie.mkv" --canonical true
+# 5. Promote approved content to broadcast catalog (Library → Broadcast Domain)
+retrovue assets promote --uuid "123e4567-e89b-12d3-a456-426614174000" \
+  --title "Approved Movie" \
+  --tags "action" \
+  --canonical true
 
-# 6. List airable assets (broadcast world)
+# 6. List airable assets (Broadcast Domain)
 retrovue catalog list --canonical-only
+
+# 7. Create channel (Broadcast Domain)
+retrovue channel add --name "RetroVue-1" \
+  --timezone "America/New_York" \
+  --grid-size 30 \
+  --rollover 360
+
+# 8. Create template (Broadcast Domain)
+retrovue template add --name "All Movies 24x7" \
+  --description "24-hour movie programming"
+
+# 9. Add template block (Broadcast Domain)
+retrovue template block add --template-id 1 \
+  --start "00:00" \
+  --end "24:00" \
+  --tags "action" \
+  --episode-policy "syndication"
+
+# 10. Assign template to channel (Broadcast Domain)
+retrovue schedule assign --channel "RetroVue-1" \
+  --template "All Movies 24x7" \
+  --day "2025-01-24"
 ```
 
 ### Automation Script

@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from .db import get_session
-from ..schedule_manager.models import Channel, Template, TemplateBlock, ScheduleDay, Asset
+from ..schedule_manager.models import BroadcastChannel, BroadcastTemplate, BroadcastTemplateBlock, BroadcastScheduleDay, CatalogAsset
+from ..domain.entities import Asset
 
 
 class ChannelAdminService:
@@ -25,7 +26,7 @@ class ChannelAdminService:
         """Create a new channel."""
         session = get_session()()
         try:
-            channel = Channel(
+            channel = BroadcastChannel(
                 name=name,
                 timezone=timezone,
                 grid_size_minutes=grid_size_minutes,
@@ -61,7 +62,7 @@ class TemplateAdminService:
         """Create a new template."""
         session = get_session()()
         try:
-            template = Template(
+            template = BroadcastTemplate(
                 name=name,
                 description=description
             )
@@ -99,7 +100,7 @@ class TemplateAdminService:
                 "episode_policy": episode_policy
             }
             
-            template_block = TemplateBlock(
+            template_block = BroadcastTemplateBlock(
                 template_id=template_id,
                 start_time=start_time,
                 end_time=end_time,
@@ -134,25 +135,25 @@ class ScheduleAdminService:
         session = get_session()()
         try:
             # Look up channel by name
-            channel = session.query(Channel).filter(Channel.name == channel_name).first()
+            channel = session.query(BroadcastChannel).filter(BroadcastChannel.name == channel_name).first()
             if not channel:
                 raise ValueError(f"Channel '{channel_name}' not found")
             
             # Look up template by name
-            template = session.query(Template).filter(Template.name == template_name).first()
+            template = session.query(BroadcastTemplate).filter(BroadcastTemplate.name == template_name).first()
             if not template:
                 raise ValueError(f"Template '{template_name}' not found")
             
             # Check if assignment already exists
-            existing = session.query(ScheduleDay).filter(
-                ScheduleDay.channel_id == channel.id,
-                ScheduleDay.schedule_date == schedule_date
+            existing = session.query(BroadcastScheduleDay).filter(
+                BroadcastScheduleDay.channel_id == channel.id,
+                BroadcastScheduleDay.schedule_date == schedule_date
             ).first()
             
             if existing:
                 raise ValueError(f"Channel '{channel_name}' already has a template assigned for {schedule_date}")
             
-            schedule_day = ScheduleDay(
+            schedule_day = BroadcastScheduleDay(
                 channel_id=channel.id,
                 template_id=template.id,
                 schedule_date=schedule_date
@@ -195,7 +196,7 @@ class AssetAdminService:
             # Convert tags list to comma-separated string
             tags_str = ",".join(tags) if tags else ""
             
-            asset = Asset(
+            asset = CatalogAsset(
                 title=title,
                 duration_ms=duration_ms,
                 tags=tags_str,
@@ -230,7 +231,7 @@ class AssetAdminService:
         """Update an existing asset."""
         session = get_session()()
         try:
-            asset = session.query(Asset).filter(Asset.id == asset_id).first()
+            asset = session.query(CatalogAsset).filter(CatalogAsset.id == asset_id).first()
             if not asset:
                 raise ValueError(f"Asset with ID {asset_id} not found")
             
@@ -261,6 +262,80 @@ class AssetAdminService:
             session.close()
     
     @staticmethod
+    def promote_from_library(
+        source_asset_uuid: str,
+        title: str,
+        tags: list[str],
+        canonical: bool,
+    ) -> Dict[str, Any]:
+        """
+        Promote a library asset to the broadcast catalog.
+        
+        This is the ONLY approved path for promoting content from the Library Domain 
+        into the Broadcast Domain. This method will REFUSE promotion if the library 
+        asset is not technically playout-ready. This protects ScheduleService and 
+        ChannelManager from impossible-to-air catalog entries.
+        
+        Args:
+            source_asset_uuid: UUID of the library asset to promote
+            title: Guide-facing title for the broadcast catalog
+            tags: List of tags for the broadcast catalog
+            canonical: Whether this asset is canonical (approved for broadcast)
+            
+        Returns:
+            Dict containing the new catalog asset ID and metadata
+            
+        Raises:
+            ValueError: If the library asset cannot be found or is not eligible for promotion
+        """
+        session = get_session()()
+        try:
+            # Look up the library asset by UUID
+            library_asset = session.query(Asset).filter(Asset.uuid == source_asset_uuid).first()
+            if not library_asset:
+                raise ValueError(f"Asset not found: {source_asset_uuid}")
+            
+            # Validate that the library asset is eligible for promotion
+            if library_asset.is_deleted:
+                raise ValueError(f"Asset {source_asset_uuid} cannot be promoted: asset is not active")
+            
+            # Broadcast Catalog must be clean. Bad assets are rejected at promotion time.
+            # Validate duration_ms is present and valid
+            if library_asset.duration_ms is None or library_asset.duration_ms <= 0:
+                raise ValueError(f"Asset {source_asset_uuid} cannot be promoted: missing duration_ms")
+            
+            # Validate file_path is present and not empty
+            if not library_asset.uri or library_asset.uri.strip() == "":
+                raise ValueError(f"Asset {source_asset_uuid} cannot be promoted: missing file_path")
+            
+            # Create new CatalogAsset in the Broadcast Domain
+            catalog_asset = CatalogAsset(
+                title=title,
+                duration_ms=library_asset.duration_ms,
+                tags=",".join(tags) if tags else "",
+                file_path=library_asset.uri,  # Use URI as the playable path
+                canonical=canonical,
+                source_ingest_asset_id=library_asset.id  # Track source for traceability
+            )
+            session.add(catalog_asset)
+            session.commit()
+            
+            result = {
+                "catalog_id": catalog_asset.id,
+                "title": catalog_asset.title,
+                "canonical": catalog_asset.canonical,
+                "duration_ms": catalog_asset.duration_ms,
+                "file_path": catalog_asset.file_path,
+                "source_ingest_asset_id": catalog_asset.source_ingest_asset_id
+            }
+            return result
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+    
+    @staticmethod
     def list_assets(
         canonical_only: Optional[bool] = None,
         tag: Optional[str] = None
@@ -268,13 +343,13 @@ class AssetAdminService:
         """List assets with optional filtering."""
         session = get_session()()
         try:
-            query = session.query(Asset)
+            query = session.query(CatalogAsset)
             
             if canonical_only is not None:
-                query = query.filter(Asset.canonical == canonical_only)
+                query = query.filter(CatalogAsset.canonical == canonical_only)
             
             if tag:
-                query = query.filter(Asset.tags.contains(tag))
+                query = query.filter(CatalogAsset.tags.contains(tag))
             
             assets = query.all()
             

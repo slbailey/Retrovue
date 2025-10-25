@@ -342,38 +342,6 @@ class PathMapping(Base):
         return f"<PathMapping(id={self.id}, collection_id={self.collection_id}, plex_path={self.plex_path}, local_path={self.local_path})>"
 
 
-class Channel(Base):
-    """Represents a broadcast channel with its own schedule and programming."""
-
-    __tablename__ = "channels"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    number: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    timezone: Mapped[str] = mapped_column(String(50), nullable=False, default="UTC")
-    epg_horizon_days: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
-    playlog_horizon_hours: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    # Relationships
-    epg_entries: Mapped[list["EPGEntry"]] = relationship(
-        "EPGEntry", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True
-    )
-    playlog_events: Mapped[list["PlaylogEvent"]] = relationship(
-        "PlaylogEvent", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True
-    )
-
-    __table_args__ = (
-        Index("ix_channels_enabled", "enabled"),
-        Index("ix_channels_number", "number"),
-    )
-
-    def __repr__(self) -> str:
-        return f"<Channel(id={self.id}, name={self.name}, number={self.number}, enabled={self.enabled})>"
-
-
 class EPGEntry(Base):
     """
     Represents scheduled programming in the Electronic Program Guide.
@@ -409,13 +377,9 @@ class EPGEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    channel: Mapped[Channel] = relationship("Channel", back_populates="epg_entries", passive_deletes=True)
     asset: Mapped[Asset | None] = relationship("Asset")
     episode: Mapped[Episode | None] = relationship("Episode")
     series: Mapped[Title | None] = relationship("Title")
-    playlog_events: Mapped[list["PlaylogEvent"]] = relationship(
-        "PlaylogEvent", back_populates="epg_entry", cascade="all, delete-orphan", passive_deletes=True
-    )
 
     __table_args__ = (
         Index("ix_epg_entries_channel_id", "channel_id"),
@@ -427,52 +391,3 @@ class EPGEntry(Base):
     def __repr__(self) -> str:
         return f"<EPGEntry(id={self.id}, channel_id={self.channel_id}, title={self.title}, start_time={self.start_time}, end_time={self.end_time})>"
 
-
-class PlaylogEvent(Base):
-    """
-    Represents actual playback events with precise timing.
-    
-    Playlog events are segment-level, absolute_start/absolute_end events that track
-    what actually plays on a channel. These have precise timestamps for seamless
-    playback and are used by playback systems to know exactly what to play when.
-    
-    The absolute_start/absolute_end timestamps are critical for:
-    - Joining mid-program without gaps or overlaps
-    - Precise timing for live events and scheduled programming
-    - Seamless transitions between content segments
-    - Accurate playback reporting and analytics
-    """
-
-    __tablename__ = "playlog_events"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    channel_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("channels.id", ondelete="CASCADE"), nullable=False
-    )
-    asset_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
-    )
-    absolute_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    absolute_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    segment_type: Mapped[str] = mapped_column(String(50), nullable=False)  # content, commercial, bumper, etc.
-    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
-    epg_entry_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("epg_entries.id", ondelete="SET NULL"), nullable=True
-    )
-    playback_status: Mapped[str] = mapped_column(String(20), nullable=False, default="scheduled")  # scheduled, playing, completed, failed
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    channel: Mapped[Channel] = relationship("Channel", back_populates="playlog_events", passive_deletes=True)
-    asset: Mapped[Asset] = relationship("Asset", passive_deletes=True)
-    epg_entry: Mapped[EPGEntry | None] = relationship("EPGEntry", back_populates="playlog_events", passive_deletes=True)
-
-    __table_args__ = (
-        Index("ix_playlog_events_channel_id", "channel_id"),
-        Index("ix_playlog_events_absolute_start", "absolute_start"),
-        Index("ix_playlog_events_absolute_end", "absolute_end"),
-        Index("ix_playlog_events_playback_status", "playback_status"),
-    )
-
-    def __repr__(self) -> str:
-        return f"<PlaylogEvent(id={self.id}, channel_id={self.channel_id}, asset_id={self.asset_id}, absolute_start={self.absolute_start}, absolute_end={self.absolute_end})>"

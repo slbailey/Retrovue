@@ -1,21 +1,25 @@
-# RetroVue Infrastructure — Channel, Template & Asset Bootstrap
+# RetroVue Infrastructure — Broadcast Domain Bootstrap
 
 > Foundational database and CLI layers that must exist before ScheduleService can generate horizons or playout plans.
 
-**Note:** This document defines the infrastructure layer that enables RetroVue's scheduling and playout systems. It establishes the data foundation that ScheduleService, ChannelManager, and ProgramDirector depend upon.
+**Note:** This document defines the Broadcast Domain infrastructure layer that enables RetroVue's scheduling and playout systems. It establishes the data foundation that ScheduleService, ChannelManager, and ProgramDirector depend upon. This is separate from the Library Domain (content discovery, ingest, enrichment, QC, review).
 
 ## 1. Introduction
 
-ScheduleService cannot function until channels, templates, and assets exist in the database. The `retrovue` CLI is the operator's tool for creating and approving these foundational entities.
+ScheduleService cannot function until channels, templates, and assets exist in the Broadcast Domain database. The `retrovue` CLI is the operator's tool for creating and approving these foundational entities.
 
-**Critical Separation:** Configuration data (channel/template/asset) is **read-only** for runtime services. Only the CLI and AdminService may modify these tables. ScheduleService, ChannelManager, and ProgramDirector are pure consumers of this infrastructure data.
+**Critical Separation:**
+
+- **Broadcast Domain** configuration data (channel/template/asset) is **read-only** for runtime services. Only the CLI and AdminService may modify these tables. ScheduleService, ChannelManager, and ProgramDirector are pure consumers of this infrastructure data.
+- **Library Domain** tables (episodes, assets, provider_refs, review_queue, seasons, titles, etc.) are managed separately and feed the Broadcast Domain through promotion.
 
 ## 2. Goals
 
-- Define a minimal, relational schema to describe channels, templates, blocks, schedules, and assets
+- Define a minimal, relational schema to describe channels, templates, blocks, schedules, and assets in the Broadcast Domain
 - Enable initialization of a complete, schedulable station using only CLI commands
 - Ensure ScheduleService has a clean, read-only data contract
-- Establish canonical asset gating as the approval mechanism between raw media and broadcast
+- Establish canonical asset gating as the approval mechanism between Library Domain and Broadcast Domain
+- Enforce physical separation between Library Domain and Broadcast Domain tables
 
 ## 3. System Overview
 
@@ -191,11 +195,11 @@ retrovue <entity> <action> [parameters]
 
 **Available Command Groups:**
 
-- `retrovue channel ...` - Channel configuration and management
-- `retrovue template ...` - Template and block management
-- `retrovue schedule ...` - Schedule assignment and management
-- `retrovue catalog ...` - Broadcast catalog management (schedulable assets)
-- `retrovue assets ...` - Ingest library management (raw inventory)
+- `retrovue channel ...` - Broadcast Domain: Channel configuration and management
+- `retrovue template ...` - Broadcast Domain: Template and block management
+- `retrovue schedule ...` - Broadcast Domain: Schedule assignment and management
+- `retrovue catalog ...` - Broadcast Domain: Broadcast catalog management (schedulable assets)
+- `retrovue assets ...` - Library Domain: Content discovery, metadata, library operations
 
 ### 6.2 Channel Management
 
@@ -334,9 +338,9 @@ retrovue catalog list --json
 
 > **Operator Note:** The `catalog` command family forms the _approval gate_ between raw media and broadcast. Only catalog entries marked `canonical=true` are eligible for scheduling. ScheduleService never schedules media that wasn't approved via this CLI.
 
-### 6.6 Ingest Library Management (retrovue assets ...)
+### 6.6 Library Domain Management (retrovue assets ...)
 
-The `retrovue assets` command group manages the ingest library, which contains all content discovered or imported from sources like Plex. This is the raw inventory of what the system has found, including pending review and potentially unsafe material.
+The `retrovue assets` command group manages the Library Domain, which contains all content discovered or imported from sources like Plex. This is the raw inventory of what the system has found, including pending review and potentially unsafe material.
 
 **Key Capabilities:**
 
@@ -345,19 +349,21 @@ The `retrovue assets` command group manages the ingest library, which contains a
 - Manage provider metadata, codecs, and technical details
 - Reflect everything the system has discovered from external sources
 - Handle pending, unreviewed, and potentially unsafe material
+- Promote content to Broadcast Domain via `retrovue assets promote`
 
-> **Critical Distinction:** Adding something to the ingest library does NOT make it schedulable. The operator must still promote it into the broadcast catalog using `retrovue catalog add`.
+> **Critical Distinction:** Adding something to the Library Domain does NOT make it schedulable. The operator must still promote it into the Broadcast Domain using `retrovue assets promote`.
 
 **Available Commands:**
 
-- `retrovue assets list` - List all assets in the ingest library
+- `retrovue assets list` - List all assets in the Library Domain
 - `retrovue assets list-advanced` - Advanced filtering and search options
 - `retrovue assets get <uuid>` - Get detailed information about a specific asset
 - `retrovue assets select <uuid>` - Select an asset for detailed inspection
 - `retrovue assets delete <uuid>` - Soft delete an asset from the library
 - `retrovue assets restore <uuid>` - Restore a soft-deleted asset
+- `retrovue assets promote` - Promote a Library Domain asset to Broadcast Domain catalog
 
-This command group is editorial/ingest-facing, not scheduling-facing. It represents "what exists in inventory" rather than "what is approved for broadcast."
+This command group is editorial/library-facing, not scheduling-facing. It represents "what exists in inventory" rather than "what is approved for broadcast."
 
 ## 7. Example Initialization Workflow
 
@@ -417,12 +423,13 @@ retrovue schedule assign --channel "RetroVue-1" \
 
 ### 8.2 Data Domain Separation
 
-**Ingest Library vs Broadcast Catalog:**
+**Library Domain vs Broadcast Domain:**
 
-- The ingest library is managed by `retrovue assets` and lives in the ingest/content domain
-- The broadcast catalog is managed by `retrovue catalog` and lives in the scheduling/broadcast domain
-- Only `catalog` entries where canonical=true are eligible for scheduling
-- ScheduleService is forbidden from directly reaching into ingest data when selecting something to air
+- The Library Domain is managed by `retrovue assets` and lives in the content discovery/ingest domain
+- The Broadcast Domain is managed by `retrovue catalog`, `retrovue channel`, `retrovue template`, `retrovue schedule` and lives in the scheduling/broadcast domain
+- Only `catalog_asset` entries where canonical=true are eligible for scheduling
+- ScheduleService is forbidden from directly reaching into Library Domain data when selecting something to air
+- Promotion from Library Domain to Broadcast Domain is the only approved path to make content schedulable
 
 ### 8.3 Canonical Gating
 
@@ -430,7 +437,7 @@ retrovue schedule assign --channel "RetroVue-1" \
 - ScheduleService is forbidden from scheduling non-canonical content
 - ChannelManager must not play unapproved media
 - The CLI is the sole authority for catalog entry approval
-- The only way for content to become schedulable is for an operator to explicitly add it to the broadcast catalog (or update it there) using `retrovue catalog`. The ingest library alone is not sufficient.
+- The only way for content to become schedulable is for an operator to explicitly promote it from the Library Domain to the Broadcast Domain using `retrovue assets promote`. The Library Domain alone is not sufficient.
 
 ### 8.4 Runtime Constraints
 
@@ -476,8 +483,8 @@ retrovue schedule assign --channel "RetroVue-1" \
 
 - [ ] Running `ScheduleService.build_playout_horizon()` succeeds with generated playlog entries
 - [ ] All runtime services treat infrastructure tables as read-only
-- [ ] `retrovue catalog` correctly governs canonical gating
-- [ ] ScheduleService.build_playout_horizon() must source candidates only from the broadcast catalog (canonical=true), never directly from the ingest library
+- [ ] `retrovue assets promote` correctly governs canonical gating
+- [ ] ScheduleService.build_playout_horizon() must source candidates only from the broadcast catalog (canonical=true), never directly from the Library Domain
 - [ ] ChannelManager can execute scheduled content without errors
 
 ### 10.4 Data Integrity

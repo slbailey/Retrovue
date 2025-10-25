@@ -2,9 +2,9 @@
 
 ## Overview
 
-The **Content Manager** is RetroVue's content discovery and library management system. It's responsible for finding media files, understanding what they contain, deciding which ones are suitable for broadcast, and maintaining the authoritative library that the rest of the system depends on.
+The **Content Manager** is RetroVue's Library Domain content discovery and library management system. It's responsible for finding media files, understanding what they contain, deciding which ones are suitable for broadcast, and maintaining the authoritative library that the rest of the system depends on.
 
-Think of it as the "librarian" of RetroVue—it knows what content exists, where it came from, and whether it's ready to be scheduled for broadcast.
+Think of it as the "librarian" of RetroVue—it knows what content exists, where it came from, and whether it's ready to be scheduled for broadcast. However, it does NOT schedule content or define channels, templates, or playlogs.
 
 ## What This Document Is
 
@@ -70,6 +70,7 @@ The Content Manager follows RetroVue's architectural patterns:
 - ✅ Manages the authoritative content library
 - ✅ Provides content metadata to scheduling systems
 - ✅ Handles content quality and review processes
+- ✅ Nominates content for promotion to Broadcast Domain
 
 **What Content Manager DOES NOT:**
 
@@ -77,8 +78,10 @@ The Content Manager follows RetroVue's architectural patterns:
 - ❌ Handle real-time playback
 - ❌ Manage viewer sessions
 - ❌ Generate programming guides
+- ❌ Define channels, templates, schedules, or playlogs
+- ❌ Own scheduling or playout structures
 
-> **Key Principle:** Content Manager is the **upstream supplier** for scheduling and playback systems. They ask Content Manager for eligible content—they don't go hunting through filesystems or calling Plex directly.
+> **Key Principle:** Content Manager is the **upstream supplier** for the Broadcast Domain. The Broadcast Domain asks Content Manager for eligible content—they don't go hunting through filesystems or calling Plex directly.
 
 ## Core Data Model
 
@@ -366,13 +369,14 @@ The ingest system is designed to be pluggable through adapters.
 
 ## How Other Systems Use Content Manager
 
-### ScheduleManager (Future)
+### Broadcast Domain Integration
 
-When we build the scheduling system, it will:
+The Broadcast Domain will:
 
 - **Ask Content Manager** for pools of canonical assets
 - **Get stable UUIDs** and metadata for scheduling
 - **Trust that canonical assets** are broadcast-ready
+- **Use promotion workflow** to move content from Library Domain to Broadcast Domain
 
 **Content Manager provides:**
 
@@ -380,6 +384,24 @@ When we build the scheduling system, it will:
 - Runtime and duration data
 - Ad break markers and restrictions
 - Content ratings and classifications
+
+### Promotion Workflow: Library → Broadcast Catalog
+
+The Library Domain discovers, ingests, enriches, and reviews media. Once an operator decides "this can air," they run `retrovue assets promote`. Promotion writes a new row into `catalog_asset` in the Broadcast Domain. That row includes:
+
+- title (guide-facing)
+- duration_ms (used by scheduler math)
+- tags (used to satisfy template_block rule_json)
+- file_path (what ChannelManager will actually playout)
+- canonical (if true, it's allowed on air)
+- source_ingest_asset_id (for provenance / audit)
+
+After promotion, ScheduleService may consider that CatalogAsset when filling a schedule block. If canonical=false, it's visible to operators but still forbidden to air.
+
+**Critical Rules:**
+
+- **ScheduleService is forbidden** to schedule any CatalogAsset with canonical=false.
+- **Runtime / ChannelManager is forbidden** to playout any CatalogAsset with canonical=false.
 
 ### ChannelManager / Producer (Future)
 
@@ -444,4 +466,4 @@ The Content Manager is RetroVue's content discovery and library management syste
 
 It follows RetroVue's architectural patterns and provides the foundation that scheduling and playback systems depend on. The CLI is the primary control interface, with the API enabling future GUI development.
 
-**Remember:** Content Manager is about **content discovery and library management**—not scheduling, playback, or runtime operations.
+**Remember:** Content Manager is about **content discovery and library management**—not scheduling, playback, or runtime operations. It is part of the Library Domain and feeds the Broadcast Domain through promotion.
