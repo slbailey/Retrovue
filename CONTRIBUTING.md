@@ -4,22 +4,27 @@ Thank you for your interest in contributing to Retrovue! This document provides 
 
 ## 📋 Table of Contents
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Coding Standards](#coding-standards)
-- [Testing](#testing)
-- [Submitting Changes](#submitting-changes)
-- [Documentation](#documentation)
+- Code of Conduct
+- Getting Started
+- Development Workflow
+- Coding Standards
+- Testing
+- Operator CLI Conventions
+- Contract-driven Tests
+- Submitting Changes
+- Documentation
+- What to Contribute
+- Communication
+- License
 
 ## 📜 Code of Conduct
 
 ### Our Standards
 
-- **Be respectful** and inclusive to all contributors
-- **Be constructive** when providing feedback
-- **Focus on what's best** for the community and project
-- **Show empathy** towards other community members
+- Be respectful and inclusive to all contributors.
+- Be constructive when providing feedback.
+- Focus on what's best for the community and project.
+- Show empathy towards other community members.
 
 ## 🚀 Getting Started
 
@@ -27,222 +32,241 @@ Thank you for your interest in contributing to Retrovue! This document provides 
 
 Before you begin, ensure you have:
 
-- Python 3.8 or higher installed
-- FFmpeg installed and in your PATH
+- Python 3.8+ installed
+- FFmpeg in your PATH
 - Git for version control
 - A GitHub account
 
 ### Fork and Clone
 
-1. Fork the Retrovue repository on GitHub
-2. Clone your fork locally:
-   ```bash
-   git clone https://github.com/YOUR-USERNAME/Retrovue.git
-   cd Retrovue
-   ```
-3. Add the upstream repository:
-   ```bash
-   git remote add upstream https://github.com/slbailey/Retrovue.git
-   ```
+- Fork the Retrovue repository on GitHub.
+- Clone your fork locally:
+  ```bash
+  git clone https://github.com/YOUR-USERNAME/Retrovue.git
+  cd Retrovue
+  ```
+- Add the upstream repository:
+  ```bash
+  git remote add upstream https://github.com/slbailey/Retrovue.git
+  ```
 
 ### Development Setup
 
 **Windows (PowerShell):**
 
 ```powershell
-# Create virtual environment
 python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# Install dependencies
+.
+env\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-# Install development tools
 pip install flake8 mypy pytest pytest-cov black isort
 ```
 
 **macOS/Linux (bash):**
 
 ```bash
-# Create virtual environment
 python -m venv venv
 source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Install development tools
 pip install flake8 mypy pytest pytest-cov black isort
 ```
 
 ### Verify Installation
 
-```bash
-# Test the CLI
-python -m cli.plex_sync --help
+Test the CLI:
 
-# Run tests
+```bash
+python -m cli.plex_sync --help
+```
+
+Run tests:
+
+```bash
 pytest tests/ -v
 ```
 
 ## 🔄 Development Workflow
 
-### 1. Create a Feature Branch
+1. Create a Feature Branch
 
 ```bash
-# Update your fork
 git fetch upstream
 git checkout main
 git merge upstream/main
-
-# Create a feature branch
 git checkout -b feature/your-feature-name
 ```
 
-### 2. Make Your Changes
+2. Make Your Changes
 
-- Write clear, documented code
-- Follow the coding standards (see below)
-- Add tests for new functionality
-- Update documentation as needed
+- Write clear, documented code.
+- Follow coding standards.
+- Add tests for new functionality.
+- Update documentation if needed.
 
-### 3. Test Your Changes
+3. Test Your Changes
 
 ```bash
-# Run linter
 flake8 .
-
-# Run type checker
 mypy cli/ src/retrovue/ --ignore-missing-imports
-
-# Run tests
 pytest tests/ -v --cov
 ```
 
-### 4. Commit Your Changes
+4. Commit Your Changes
 
 ```bash
-# Stage your changes
 git add .
-
-# Commit with a descriptive message
 git commit -m "feat: Add feature description"
 ```
 
-#### Commit Message Format
-
-Use conventional commits format:
-
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation changes
-- `style:` Code style/formatting
-- `refactor:` Code refactoring
-- `test:` Test updates
-- `chore:` Build/config changes
-
-### 5. Push and Create Pull Request
+5. Push and Create a Pull Request
 
 ```bash
-# Push to your fork
 git push origin feature/your-feature-name
 ```
 
-Then create a Pull Request on GitHub.
+Then open a Pull Request on GitHub.
 
 ## 📝 Coding Standards
 
 ### Python Style
 
-- Follow PEP 8 style guidelines
-- Use `black` for code formatting: `black .`
-- Use `isort` for import sorting: `isort .`
-- Maximum line length: 127 characters
-- Use type hints where appropriate
+- Follow PEP 8.
+- Format with black: `black .`
+- Sort imports with isort: `isort .`
+- Max line length: 127 characters.
+- Use type hints where appropriate.
 
 ### Code Quality
 
-- **Write docstrings** for all public functions and classes
-- **Keep functions focused** - one function, one responsibility
-- **Use meaningful variable names** - avoid single-letter variables except in loops
-- **Add comments** for complex logic or non-obvious code
+- Write docstrings for all public functions and classes.
+- Keep functions focused on one purpose.
+- Use meaningful variable names.
+- Comment complex or non-obvious logic.
 
 ## 🧪 Testing
 
 ### Writing Tests
 
-- Place tests in the `tests/` directory
-- Use pytest for test framework
-- Aim for good test coverage (>80%)
-- Test both success and failure cases
+- Place all tests under `tests/`.
+- Use pytest.
+- Aim for at least 80% coverage.
+- Test both success and failure cases.
 
 ### Running Tests
 
 ```bash
-# Run all tests
 pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_cli.py -v
-
-# Run with coverage
 pytest tests/ -v --cov=cli --cov=src/retrovue --cov-report=term-missing
-
-# Run in offline mode (no network calls)
 PLEX_OFFLINE=1 pytest tests/ -v
 ```
 
+## 💻 Operator CLI Conventions
+
+Retrovue’s CLI is treated as a first-class user interface. Every command must be intuitive, readable,
+and predictable for a human operator. The CLI follows a strict **noun → verb → parameters** pattern.
+
+**General Syntax:**
+
+```
+retrovue <noun> <verb> [options]
+```
+
+**Examples:**
+
+```
+retrovue collection wipe channels --dry-run
+retrovue sync schedule --test-db
+retrovue ingest media --force
+```
+
+**Guidelines:**
+
+- Keep verbs action-oriented (`sync`, `wipe`, `ingest`, `list`, `show`, `rebuild`).
+- Keep nouns clear and singular (`collection`, `asset`, `source`, `schedule`).
+- Destructive commands must require `--confirm` or `--force`.
+- All commands must support `--dry-run` for safety.
+- Optional `--test-db` flag redirects DB I/O to the mock database.
+- Human-readable output comes first; machine-readable `--json` is secondary.
+
+## 🔍 Contract-driven Tests
+
+Retrovue treats the CLI as part of the product. Every operator-facing command
+(`retrovue collection wipe`, `retrovue source sync`, etc.) has a written contract,
+and tests that enforce that contract.
+
+**The contract docs live in** `docs/contracts/*.md`.
+
+Each contract MUST define:
+
+- CLI shape (noun + verb), e.g. `retrovue collection wipe`
+- Required/optional flags (`--dry-run`, `--json`, `--force`, etc.)
+- Exit code expectations
+- Confirmation / safety behavior for destructive actions
+- Human-readable and machine-readable output formats
+- Data integrity guarantees
+
+**The tests live in** `tests/contracts/`.
+
+We use two styles of contract tests:
+
+1. CLI contract tests – test help text, required flags, output, exit codes.
+2. Data contract tests – run real logic against a test DB and validate state.
+
+**Referenced Contracts:**
+
+- [`collectionwipecontract.md`](docs/contracts/collectionwipecontract.md)
+- [`syncidempotencycontract.md`](docs/contracts/syncidempotencycontract.md)
+
+These define expected CLI syntax, behavior, and testing obligations.
+Any change to CLI syntax or side effects requires updating the relevant contract first.
+
+Golden Rule: Implementation must change to satisfy the contract—not the other way around.
+
 ## 📤 Submitting Changes
 
-### Before Submitting
+Before Submitting:
 
-- [ ] Code follows project style guidelines
-- [ ] Tests pass locally
-- [ ] New tests added for new features
-- [ ] Documentation updated
-- [ ] Commit messages are clear and descriptive
-- [ ] Branch is up to date with main
-
-### Pull Request Process
-
-1. **Create a PR** with a clear title and description
-2. **Link related issues** using "Fixes #123" or "Relates to #456"
-3. **Fill out the PR template** completely
-4. **Wait for CI checks** to pass
-5. **Address review feedback** promptly
-6. **Squash commits** if requested
+- Follow style guidelines.
+- Tests must pass locally.
+- Add tests for new features.
+- Update documentation.
+- Clear, descriptive commits.
+- Branch is up to date with main.
 
 ## 📚 Documentation
 
-### Documentation Updates
+When updating functionality:
 
-When making changes, update relevant documentation:
+- Update docstrings and inline comments.
+- Revise README.md if user-facing behavior changes.
+- Keep guides in `documentation/` current.
 
-- **Code Comments**: Document complex logic
-- **Docstrings**: Keep function/class documentation current
-- **README**: Update if user-facing features change
-- **Documentation Files**: Update guides in `documentation/` folder
+### 📘 Contract Documentation Index
+
+- **Collection Wipe Contract** → `docs/contracts/collectionwipecontract.md`
+- **Sync Idempotency Contract** → `docs/contracts/syncidempotencycontract.md`
+
+All operator commands must align with their documented contract, including syntax, flags, confirmation prompts,
+and test coverage. If your contribution adds a new CLI command, create a new `docs/contracts/*.md` file following
+the same pattern.
 
 ## 🎯 What to Contribute
 
-### High-Priority Areas
+High-Priority Areas:
 
-- **Bug Fixes**: Always welcome!
-- **Test Coverage**: Help improve test coverage
-- **Documentation**: Improve guides and examples
-- **Performance**: Optimize slow operations
+- Bug fixes
+- Test coverage improvements
+- Documentation enhancements
+- Performance optimizations
 
-### Feature Development
-
-Check the [Development Roadmap](documentation/development-roadmap.md) for planned features.
+Feature Development:
+See the [Development Roadmap](documentation/development-roadmap.md) for planned features.
 
 ## 💬 Communication
 
-### Where to Ask Questions
-
-- **GitHub Discussions**: General questions and ideas
-- **GitHub Issues**: Bug reports and feature requests
-- **Pull Requests**: Code-specific discussions
+- GitHub Discussions – questions and ideas
+- GitHub Issues – bugs and feature requests
+- Pull Requests – code-specific discussions
 
 ## 📄 License
 
@@ -251,4 +275,3 @@ By contributing to Retrovue, you agree that your contributions will be licensed 
 ---
 
 **Thank you for contributing to Retrovue!** 🎉📺
-

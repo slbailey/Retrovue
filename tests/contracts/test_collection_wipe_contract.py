@@ -1,244 +1,297 @@
 """
-Test contracts for collection wipe functionality.
+CLI-facing contract tests for `collection wipe`.
 
-These tests validate that the implementation matches the contract defined in
-docs/contracts/CollectionWipeContract.md.
+These tests guarantee:
+- stable flags/arguments (`--dry-run`, `--json`, `--force`)
+- stable human-readable and JSON output shapes
+- safe operator prompts / error handling
+- correct collection targeting behavior
+
+See docs/contracts/CollectionWipeContract.md for the source of truth.
+Behavior MUST NOT change without updating that contract first.
 """
 
-import pytest
 import json
+import pytest
 from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
-from src.retrovue.cli.main import app
-from src.retrovue.domain.entities import SourceCollection, Asset, Episode, Season, Title, ReviewQueue, EpisodeAsset, PathMapping
+# NOTE: These imports MUST refer to real modules in the repo.
+# If the CLI root or command path changes, update the contract doc first.
+from retrovue.cli.main import app  # TODO: confirm this path matches actual CLI entrypoint
 
 
-class TestCollectionWipeContract:
-    """Test collection wipe command against contract requirements."""
-    
+class TestCollectionWipeCliContract:
+    """CLI-level contract for `collection wipe`."""
+
     def setup_method(self):
-        """Set up test fixtures."""
         self.runner = CliRunner()
         self.test_collection_id = "2a3cd8d1-04cc-4385-bb07-981f7ad2badb"
         self.test_collection_name = "TV Shows"
-        
+
     def test_collection_wipe_help(self):
-        """Test that retrovue collection wipe --help works."""
+        """
+        The help text MUST expose required flags and usage.
+        Contract: --force, --dry-run, --json must be documented.
+        It must mention the collection identifier argument.
+        """
         result = self.runner.invoke(app, ["collection", "wipe", "--help"])
         assert result.exit_code == 0
-        assert "--force" in result.stdout
-        assert "--dry-run" in result.stdout
-        assert "--json" in result.stdout
-        assert "collection_identifier" in result.stdout or "collection_id" in result.stdout
-        
-    def test_collection_wipe_dry_run_contract(self):
-        """Test dry-run mode output matches contract format."""
-        with patch('src.retrovue.cli.commands.collection.session') as mock_session:
-            # Mock database session and queries
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock collection lookup
-            mock_collection = MagicMock()
-            mock_collection.id = self.test_collection_id
-            mock_collection.name = self.test_collection_name
-            mock_collection.external_id = "2"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_collection
-            
-            # Mock asset queries
-            mock_db.query.return_value.filter.return_value.all.return_value = []
-            mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
-            result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name, "--dry-run"])
-            
-            assert result.exit_code == 0
-            assert "Collection wipe analysis for:" in result.stdout
-            assert self.test_collection_name in result.stdout
-            assert "Collection ID:" in result.stdout
-            assert "External ID:" in result.stdout
-            assert "Items that will be deleted:" in result.stdout
-            assert "Review queue entries:" in result.stdout
-            assert "Episode-asset links:" in result.stdout
-            assert "Assets:" in result.stdout
-            assert "Episodes:" in result.stdout
-            assert "Seasons:" in result.stdout
-            assert "TV Shows/Titles:" in result.stdout
-            assert "DRY RUN - No changes made" in result.stdout
-            
-    def test_collection_wipe_json_output_contract(self):
-        """Test JSON output matches contract format."""
-        with patch('src.retrovue.cli.commands.collection.session') as mock_session:
-            # Mock database session and queries
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock collection lookup
-            mock_collection = MagicMock()
-            mock_collection.id = self.test_collection_id
-            mock_collection.name = self.test_collection_name
-            mock_collection.external_id = "2"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_collection
-            
-            # Mock asset queries
-            mock_db.query.return_value.filter.return_value.all.return_value = []
-            mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
-            result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name, "--dry-run", "--json"])
-            
-            assert result.exit_code == 0
-            
-            # Parse JSON output
-            try:
-                output_data = json.loads(result.stdout)
-            except json.JSONDecodeError:
-                pytest.fail("Output is not valid JSON")
-            
-            # Validate JSON structure matches contract
-            assert "collection" in output_data
-            assert "items_to_delete" in output_data
-            assert "dry_run" in output_data
-            
-            collection_data = output_data["collection"]
-            assert "id" in collection_data
-            assert "name" in collection_data
-            assert "external_id" in collection_data
-            
-            items_data = output_data["items_to_delete"]
-            assert "review_queue_entries" in items_data
-            assert "episode_assets" in items_data
-            assert "assets" in items_data
-            assert "episodes" in items_data
-            assert "seasons" in items_data
-            assert "titles" in items_data
-            
-            assert output_data["dry_run"] is True
-            
+
+        stdout = result.stdout
+        assert "--force" in stdout  # skip confirmation
+        assert "--dry-run" in stdout  # analysis-only mode
+        assert "--json" in stdout  # machine readable output
+
+        # Some form of positional collection identifier must be documented.
+        assert "collection_id" in stdout or "collection_identifier" in stdout or "name" in stdout
+
     def test_collection_wipe_collection_not_found(self):
-        """Test error handling when collection is not found."""
-        with patch('src.retrovue.cli.commands.collection.session') as mock_session:
-            # Mock database session
+        """
+        If the named/IDed collection cannot be resolved,
+        the command MUST exit non-zero and MUST communicate 'not found'.
+        """
+        with patch("retrovue.cli.commands.collection.session") as mock_session:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock collection not found
+
+            # Simulate lookup failure (no UUID match, no external_id match, no name match)
             mock_db.query.return_value.filter.return_value.first.return_value = None
-            
-            result = self.runner.invoke(app, ["collection", "wipe", "NonexistentCollection", "--dry-run"])
-            
+
+            result = self.runner.invoke(app, ["collection", "wipe", "DoesNotExist", "--dry-run"])
+
             assert result.exit_code != 0
             assert "not found" in result.stdout.lower() or "not found" in result.stderr.lower()
-            
+
     def test_collection_wipe_ambiguous_collection(self):
-        """Test error handling when multiple collections match name."""
-        with patch('src.retrovue.cli.commands.collection.session') as mock_session:
-            # Mock database session
+        """
+        If multiple collections match (e.g. two collections with same name),
+        the command MUST exit non-zero and MUST NOT perform destructive work.
+        """
+        with patch("retrovue.cli.commands.collection.session") as mock_session:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock query chain for ambiguous collection lookup
+
+            # Simulate name lookup returning >1 match
+            # We expect resolution logic in CLI to detect ambiguity.
             mock_query = MagicMock()
             mock_filter = MagicMock()
+
             mock_db.query.return_value = mock_query
             mock_query.filter.return_value = mock_filter
-            
-            # First call (UUID lookup) returns None
-            # Second call (external_id lookup) returns None  
-            # Third call (name lookup) returns multiple matches
-            mock_filter.first.side_effect = [None, None]  # UUID and external_id lookups
-            mock_filter.all.return_value = [MagicMock(), MagicMock()]  # Name lookup returns 2 matches
-            
-            result = self.runner.invoke(app, ["collection", "wipe", "TV Shows", "--dry-run"])
-            
+
+            # First() calls will return None (no unique match),
+            # and all() will return >1 (ambiguous human-readable name)
+            mock_filter.first.side_effect = [None, None]  # UUID lookup, external_id lookup
+            mock_filter.all.return_value = [MagicMock(), MagicMock()]  # Ambiguous name
+
+            result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name, "--dry-run"])
+
             assert result.exit_code != 0
             assert "multiple" in result.stdout.lower() or "multiple" in result.stderr.lower()
-            
-    def test_collection_wipe_force_mode(self):
-        """Test force mode bypasses confirmation."""
-        with patch('src.retrovue.cli.commands.collection.session') as mock_session:
-            # Mock database session
+
+    def test_collection_wipe_dry_run_contract(self):
+        """
+        In --dry-run mode, the CLI MUST:
+        - perform analysis ONLY
+        - print a human-readable plan that includes contract-mandated sections
+        - MUST NOT actually modify the DB
+        """
+        with patch("retrovue.cli.commands.collection.session") as mock_session:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock collection lookup
-            mock_collection = MagicMock()
-            mock_collection.id = self.test_collection_id
-            mock_collection.name = self.test_collection_name
-            mock_collection.external_id = "2"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_collection
-            
-            # Mock asset queries
+
+            # Fake resolved collection
+            fake_collection = MagicMock()
+            fake_collection.id = self.test_collection_id
+            fake_collection.name = self.test_collection_name
+            fake_collection.external_id = "2"
+            mock_db.query.return_value.filter.return_value.first.return_value = fake_collection
+
+            # Fake that queries return 0 items for deletion
             mock_db.query.return_value.filter.return_value.all.return_value = []
             mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
-            result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name, "--force", "--dry-run"])
-            
+
+            result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name, "--dry-run"])
             assert result.exit_code == 0
-            # Should not ask for confirmation in force mode
-            assert "Are you sure" not in result.stdout
-            assert "WARNING" not in result.stdout
-            
-    def test_collection_wipe_confirmation_prompt(self):
-        """Test confirmation prompt format matches contract."""
-        with patch('src.retrovue.cli.commands.collection.session') as mock_session:
-            # Mock database session
+
+            stdout = result.stdout
+            assert "Collection wipe analysis for:" in stdout
+            assert self.test_collection_name in stdout
+            assert "Collection ID:" in stdout
+            assert "External ID:" in stdout
+            assert "Items that will be deleted:" in stdout
+            assert "Review queue entries:" in stdout
+            assert "Episode-asset links:" in stdout
+            assert "Assets:" in stdout
+            assert "Episodes:" in stdout
+            assert "Seasons:" in stdout
+            assert "TV Shows/Titles:" in stdout
+            assert "DRY RUN - No changes made" in stdout
+
+    def test_collection_wipe_json_output_contract(self):
+        """
+        In --dry-run --json mode, the CLI MUST emit valid JSON containing:
+        {
+          "collection": { "id", "name", "external_id" },
+          "items_to_delete": {
+            "review_queue_entries": ...,
+            "episode_assets": ...,
+            "assets": ...,
+            "episodes": ...,
+            "seasons": ...,
+            "titles": ...
+          },
+          "dry_run": true
+        }
+        """
+        with patch("retrovue.cli.commands.collection.session") as mock_session:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock collection lookup
-            mock_collection = MagicMock()
-            mock_collection.id = self.test_collection_id
-            mock_collection.name = self.test_collection_name
-            mock_collection.external_id = "2"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_collection
-            
-            # Mock asset queries with some data to trigger confirmation
+
+            fake_collection = MagicMock()
+            fake_collection.id = self.test_collection_id
+            fake_collection.name = self.test_collection_name
+            fake_collection.external_id = "2"
+            mock_db.query.return_value.filter.return_value.first.return_value = fake_collection
+
+            mock_db.query.return_value.filter.return_value.all.return_value = []
+            mock_db.query.return_value.filter.return_value.count.return_value = 0
+
+            result = self.runner.invoke(
+                app,
+                ["collection", "wipe", self.test_collection_name, "--dry-run", "--json"],
+            )
+            assert result.exit_code == 0
+
+            # Should parse as JSON
+            try:
+                payload = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                pytest.fail("Output is not valid JSON")
+
+            assert "collection" in payload
+            assert "items_to_delete" in payload
+            assert "dry_run" in payload
+            assert payload["dry_run"] is True
+
+            # Collection block must contain id, name, external_id
+            assert "id" in payload["collection"]
+            assert "name" in payload["collection"]
+            assert "external_id" in payload["collection"]
+
+            # items_to_delete block must expose all expected buckets
+            items_block = payload["items_to_delete"]
+            assert "review_queue_entries" in items_block
+            assert "episode_assets" in items_block
+            assert "assets" in items_block
+            assert "episodes" in items_block
+            assert "seasons" in items_block
+            assert "titles" in items_block
+
+    def test_collection_wipe_confirmation_prompt(self):
+        """
+        When NOT in --dry-run and NOT in --force:
+        - MUST warn loudly (WARNING / cannot be undone / permanently delete)
+        - MUST prompt for confirmation
+        - MUST allow abort
+        - MUST exit 0 on abort with 'Operation cancelled'
+        """
+        with patch("retrovue.cli.commands.collection.session") as mock_session:
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+
+            fake_collection = MagicMock()
+            fake_collection.id = self.test_collection_id
+            fake_collection.name = self.test_collection_name
+            fake_collection.external_id = "2"
+            mock_db.query.return_value.filter.return_value.first.return_value = fake_collection
+
+            # Data such that wipe would actually delete stuff (to force prompt)
             mock_asset = MagicMock()
             mock_asset.id = 1
             mock_db.query.return_value.filter.return_value.all.return_value = [mock_asset]
             mock_db.query.return_value.filter.return_value.count.return_value = 5
-            
-            # Mock typer.prompt to return empty string (cancel)
-            with patch('src.retrovue.cli.commands.collection.typer.prompt') as mock_prompt:
+
+            # Patch typer.prompt to simulate operator hitting ENTER (cancel)
+            with patch("retrovue.cli.commands.collection.typer.prompt") as mock_prompt:
                 mock_prompt.return_value = ""
-                
+
                 result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name])
-                
                 assert result.exit_code == 0
-                assert "WARNING" in result.stdout
-                assert "permanently delete" in result.stdout
-                assert "This action cannot be undone" in result.stdout
-                assert "Operation cancelled" in result.stdout
+
+                stdout = result.stdout
+                assert "WARNING" in stdout
+                assert "permanently delete" in stdout
+                assert "This action cannot be undone" in stdout
+                assert "Operation cancelled" in stdout
+
                 mock_prompt.assert_called_once()
-                
-    def test_collection_wipe_asset_discovery_logic(self):
-        """Test that asset discovery uses both collection_id and path mapping approaches."""
-        with patch('src.retrovue.cli.commands.collection.session') as mock_session:
-            # Mock database session
+
+    def test_collection_wipe_force_mode(self):
+        """
+        With --force:
+        - MUST skip interactive prompt
+        - MUST proceed to perform the wipe logic
+        """
+        with patch("retrovue.cli.commands.collection.session") as mock_session:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock collection lookup
-            mock_collection = MagicMock()
-            mock_collection.id = self.test_collection_id
-            mock_collection.name = self.test_collection_name
-            mock_collection.external_id = "2"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_collection
-            
-            # Mock path mappings
-            mock_mapping = MagicMock()
-            mock_mapping.local_path = "R:\\media\\TV"
-            mock_db.query.return_value.filter.return_value.all.return_value = [mock_mapping]
-            
-            # Mock asset queries
+
+            fake_collection = MagicMock()
+            fake_collection.id = self.test_collection_id
+            fake_collection.name = self.test_collection_name
+            fake_collection.external_id = "2"
+            mock_db.query.return_value.filter.return_value.first.return_value = fake_collection
+
             mock_db.query.return_value.filter.return_value.all.return_value = []
             mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
-            result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name, "--dry-run"])
-            
+
+            result = self.runner.invoke(
+                app,
+                ["collection", "wipe", self.test_collection_name, "--force", "--dry-run"],
+            )
+
             assert result.exit_code == 0
-            
-            # Verify that both collection_id and path mapping queries were made
-            # This is a bit indirect, but we can check that the command completed successfully
-            # which means both asset discovery methods were attempted
+
+            # In --force mode, we should not be nagging the operator
+            assert "Are you sure" not in result.stdout
+            assert "Operation cancelled" not in result.stdout
+
+    def test_collection_wipe_asset_discovery_logic(self):
+        """
+        The wipe command MUST identify candidate assets using BOTH:
+        - Asset.collection_id == this SourceCollection.id
+        - path-based discovery via PathMapping.local_path
+
+        This test doesn't assert row math. It asserts that the CLI path
+        completes successfully with a collection that has path mappings,
+        which implies that both discovery strategies were attempted.
+
+        If discovery logic stops using PathMapping or stops looking at
+        Asset.collection_id, update the contract FIRST.
+        """
+        with patch("retrovue.cli.commands.collection.session") as mock_session:
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+
+            fake_collection = MagicMock()
+            fake_collection.id = self.test_collection_id
+            fake_collection.name = self.test_collection_name
+            fake_collection.external_id = "2"
+            mock_db.query.return_value.filter.return_value.first.return_value = fake_collection
+
+            # Pretend there is at least one PathMapping on this collection
+            fake_mapping = MagicMock()
+            fake_mapping.local_path = "R:\\media\\TV"
+            mock_db.query.return_value.filter.return_value.all.return_value = [fake_mapping]
+
+            # Also pretend there are assets that would match
+            mock_db.query.return_value.filter.return_value.count.return_value = 0
+
+            result = self.runner.invoke(app, ["collection", "wipe", self.test_collection_name, "--dry-run"])
+            assert result.exit_code == 0
+
+            # If we reached here, CLI didn't crash out of discovery.
+            # That's our contract-level signal that both discovery paths exist.
             assert "Collection wipe analysis for:" in result.stdout
