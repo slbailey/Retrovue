@@ -1,21 +1,23 @@
 """
-Plex Media Server importer for discovering content from Plex servers.
+Plex Media Server importer plugin for RetroVue.
 
 This importer connects to Plex Media Server instances and discovers content
-from their libraries, extracting metadata and file paths.
+from their libraries, following the plugin contract defined in docs/developer/PluginAuthoring.md.
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, List
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .base import DiscoveredItem, Importer, ImporterError
+from ...domain.asset_draft import AssetDraft
+from .base import Importer, ImporterError
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +54,7 @@ class PlexClient:
         
         return session
     
-    def get_libraries(self) -> list[dict[str, Any]]:
+    def get_libraries(self) -> List[Dict[str, Any]]:
         """
         Get all libraries from the Plex server.
         
@@ -66,49 +68,42 @@ class PlexClient:
             url = f"{self.base_url}/library/sections"
             params = {"X-Plex-Token": self.token}
             
-            print(f"DEBUG: Making request to {url} with token {'***' if self.token else None}")
-            
             response = self.session.get(url, params=params, timeout=20)
-            print(f"DEBUG: Response status: {response.status_code}")
-            print(f"DEBUG: Response content length: {len(response.content)}")
-            
             response.raise_for_status()
             
             # Parse XML response
             import xml.etree.ElementTree as ET
             root = ET.fromstring(response.content)
-            print(f"DEBUG: XML root tag: {root.tag}")
-            print(f"DEBUG: XML root attributes: {root.attrib}")
             
             libraries = []
             sections = root.findall('Directory')
-            print(f"DEBUG: Found {len(sections)} Directory elements")
             
-            for i, section in enumerate(sections):
+            for section in sections:
                 lib_id = section.get('key')
                 lib_name = section.get('title')
                 lib_type = section.get('type')
                 
-                print(f"DEBUG: Section {i}: key={lib_id}, title={lib_name}, type={lib_type}")
-                
                 if lib_id and lib_name:
+                    # Extract filesystem locations from Location elements
+                    locations = []
+                    for location in section.findall('Location'):
+                        path = location.get('path')
+                        if path:
+                            locations.append(path)
+                    
                     libraries.append({
                         "key": lib_id,
                         "title": lib_name,
-                        "type": lib_type
+                        "type": lib_type,
+                        "locations": locations
                     })
             
-            print(f"DEBUG: Returning {len(libraries)} libraries")
             return libraries
             
         except requests.RequestException as e:
-            print(f"DEBUG: Request exception: {e}")
-            raise ImporterError(f"Failed to fetch libraries: {e}") from e
-        except Exception as e:
-            print(f"DEBUG: General exception in get_libraries: {e}")
             raise ImporterError(f"Failed to fetch libraries: {e}") from e
     
-    def get_library_items(self, library_key: str) -> list[dict[str, Any]]:
+    def get_library_items(self, library_key: str, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> List[Dict[str, Any]]:
         """
         Get all items from a specific library.
         
@@ -122,51 +117,149 @@ class PlexClient:
             ImporterError: If the request fails
         """
         try:
+            # Get library content to determine type
             url = f"{self.base_url}/library/sections/{library_key}/all"
             params = {"X-Plex-Token": self.token}
-            
             response = self.session.get(url, params=params, timeout=20)
             response.raise_for_status()
             
-            # Parse XML response
             import xml.etree.ElementTree as ET
             root = ET.fromstring(response.content)
+            library_type = root.get('type', '')
+            view_group = root.get('viewGroup', '')
+            
             items = []
             
-            for video in root.findall('Video'):
-                rating_key = video.get('ratingKey')
-                title = video.get('title')
-                year = video.get('year')
-                type_attr = video.get('type')
+            # If it's a TV show library, drill down to get episodes
+            if library_type == 'show' or view_group == 'show':
+                # Use the shows we already have from the root
+                shows = root.findall('Directory')
                 
-                # Get file information
-                media = video.find('Media')
-                file_path = None
-                file_size = None
+                # For each show, get its seasons and episodes
+                for show in shows:
+                    show_key = show.get('ratingKey')
+                    show_title = show.get('title')
+                    
+                    # Apply title filter if specified
+                    if title_filter and title_filter.lower() not in show_title.lower():
+                        continue
+                    
+                    # Get seasons for this show
+                    seasons_url = f"{self.base_url}/library/metadata/{show_key}/children"
+                    seasons_response = self.session.get(seasons_url, params=params, timeout=20)
+                    seasons_response.raise_for_status()
+                    
+                    seasons_root = ET.fromstring(seasons_response.content)
+                    seasons = seasons_root.findall('Directory')
+                    
+                    # For each season, get its episodes
+                    for season in seasons:
+                        season_key = season.get('ratingKey')
+                        season_title = season.get('title')
+                        season_index = season.get('index')
+                        
+                        # Skip seasons without valid rating key
+                        if not season_key:
+                            continue
+                        
+                        # Apply season filter if specified
+                        if season_filter is not None and int(season_index) != season_filter:
+                            continue
+                        
+                        # Get episodes for this season
+                        episodes_url = f"{self.base_url}/library/metadata/{season_key}/children"
+                        episodes_response = self.session.get(episodes_url, params=params, timeout=20)
+                        episodes_response.raise_for_status()
+                        
+                        episodes_root = ET.fromstring(episodes_response.content)
+                        episodes = episodes_root.findall('Video')
+                        
+                        # Process each episode
+                        for episode in episodes:
+                            rating_key = episode.get('ratingKey')
+                            title = episode.get('title')
+                            year = episode.get('year')
+                            type_attr = episode.get('type')
+                            episode_index = episode.get('index')
+                            
+                            # Apply episode filter if specified
+                            if episode_filter is not None and int(episode_index) != episode_filter:
+                                continue
+                            
+                            # Get file information
+                            media = episode.find('Media')
+                            file_path = None
+                            file_size = None
+                            duration = None
+                            
+                            if media is not None:
+                                part = media.find('Part')
+                                if part is not None:
+                                    file_path = part.get('file')
+                                    file_size = part.get('size')
+                                duration = media.get('duration')
+                            
+                            if rating_key and title and file_path:
+                                items.append({
+                                    "ratingKey": rating_key,
+                                    "title": title,
+                                    "year": year,
+                                    "type": type_attr,
+                                    "file_path": file_path,
+                                    "fileSize": file_size,
+                                    "duration": duration,
+                                    "updatedAt": episode.get('updatedAt'),
+                                    "show_title": show_title,
+                                    "season_title": season_title,
+                                    "season_index": season_index,
+                                    "episode_index": episode.get('index')
+                                })
+            else:
+                # For movie libraries, get movies directly
+                url = f"{self.base_url}/library/sections/{library_key}/all"
+                response = self.session.get(url, params=params, timeout=20)
+                response.raise_for_status()
                 
-                if media is not None:
-                    part = media.find('Part')
-                    if part is not None:
-                        file_path = part.get('file')
-                        file_size = part.get('size')
+                root = ET.fromstring(response.content)
                 
-                if rating_key and title:
-                    items.append({
-                        "ratingKey": rating_key,
-                        "title": title,
-                        "year": year,
-                        "type": type_attr,
-                        "file_path": file_path,
-                        "fileSize": file_size,
-                        "updatedAt": video.get('updatedAt')
-                    })
+                # Handle Video elements (movies)
+                for video in root.findall('Video'):
+                    rating_key = video.get('ratingKey')
+                    title = video.get('title')
+                    year = video.get('year')
+                    type_attr = video.get('type')
+                    
+                    # Get file information
+                    media = video.find('Media')
+                    file_path = None
+                    file_size = None
+                    duration = None
+                    
+                    if media is not None:
+                        part = media.find('Part')
+                        if part is not None:
+                            file_path = part.get('file')
+                            file_size = part.get('size')
+                        duration = media.get('duration')
+                    
+                    if rating_key and title and file_path:
+                        items.append({
+                            "ratingKey": rating_key,
+                            "title": title,
+                            "year": year,
+                            "type": type_attr,
+                            "file_path": file_path,
+                            "fileSize": file_size,
+                            "duration": duration,
+                            "updatedAt": video.get('updatedAt')
+                        })
             
             return items
             
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch library items: {e}") from e
     
-    def get_episode_metadata(self, rating_key: int) -> dict[str, Any]:
+    def get_episode_metadata(self, rating_key: int) -> Dict[str, Any]:
         """
         Get metadata for a specific episode by rating key.
         
@@ -234,212 +327,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch episode metadata: {e}") from e
     
-    def find_series_by_title(self, series_title: str) -> list[dict[str, Any]]:
-        """
-        Find series by title (case-insensitive search).
-        
-        Args:
-            series_title: The series title to search for
-            
-        Returns:
-            List of matching series
-            
-        Raises:
-            ImporterError: If the request fails
-        """
-        try:
-            # First try the global search without type restriction
-            url = f"{self.base_url}/search"
-            params = {
-                "X-Plex-Token": self.token,
-                "query": series_title
-            }
-            
-            response = self.session.get(url, params=params, timeout=20)
-            response.raise_for_status()
-            
-            # Parse XML response
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(response.content)
-            
-            series_list = []
-            for video in root.findall('Video'):
-                if video.get('type') == 'show':
-                    series_info = {
-                        "ratingKey": video.get('ratingKey'),
-                        "title": video.get('title'),
-                        "year": video.get('year'),
-                        "summary": video.get('summary')
-                    }
-                    series_list.append(series_info)
-            
-            # If no results from global search, try searching in TV libraries
-            if not series_list:
-                series_list = self._search_in_tv_libraries(series_title)
-            
-            return series_list
-            
-        except requests.RequestException as e:
-            raise ImporterError(f"Failed to search for series: {e}") from e
-    
-    def _search_in_tv_libraries(self, series_title: str) -> list[dict[str, Any]]:
-        """
-        Search for series in TV libraries if global search fails.
-        
-        Args:
-            series_title: The series title to search for
-            
-        Returns:
-            List of matching series
-        """
-        try:
-            # Get all libraries first
-            libraries = self.get_libraries()
-            tv_libraries = [lib for lib in libraries if lib.get('type') == 'show']
-            
-            series_list = []
-            for library in tv_libraries:
-                try:
-                    # Try browsing the library directly instead of searching
-                    url = f"{self.base_url}/library/sections/{library['key']}/all"
-                    params = {
-                        "X-Plex-Token": self.token
-                    }
-                    
-                    response = self.session.get(url, params=params, timeout=20)
-                    response.raise_for_status()
-                    
-                    # Parse XML response
-                    import xml.etree.ElementTree as ET
-                    root = ET.fromstring(response.content)
-                    
-                    for directory in root.findall('Directory'):
-                        if directory.get('type') == 'show':
-                            title = directory.get('title', '')
-                            # Check if this series matches our search (case-insensitive)
-                            if series_title.lower() in title.lower():
-                                series_info = {
-                                    "ratingKey": directory.get('ratingKey'),
-                                    "title": title,
-                                    "year": directory.get('year'),
-                                    "summary": directory.get('summary'),
-                                    "library": library['title']
-                                }
-                                series_list.append(series_info)
-                
-                except Exception as e:
-                    continue
-            return series_list
-            
-        except Exception as e:
-            return []
-    
-    def get_series_seasons(self, series_rating_key: int) -> list[dict[str, Any]]:
-        """
-        Get seasons for a series.
-        
-        Args:
-            series_rating_key: The series rating key
-            
-        Returns:
-            List of seasons
-            
-        Raises:
-            ImporterError: If the request fails
-        """
-        try:
-            url = f"{self.base_url}/library/metadata/{series_rating_key}/children"
-            params = {"X-Plex-Token": self.token}
-            
-            response = self.session.get(url, params=params, timeout=20)
-            response.raise_for_status()
-            
-            # Parse XML response
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(response.content)
-            
-            seasons = []
-            for directory in root.findall('Directory'):
-                if directory.get('type') == 'season':
-                    seasons.append({
-                        "ratingKey": directory.get('ratingKey'),
-                        "title": directory.get('title'),
-                        "parentIndex": directory.get('parentIndex'),
-                        "index": directory.get('index')
-                    })
-            
-            return seasons
-            
-        except requests.RequestException as e:
-            raise ImporterError(f"Failed to fetch series seasons: {e}") from e
-    
-    def get_season_episodes(self, season_rating_key: int) -> list[dict[str, Any]]:
-        """
-        Get episodes for a season.
-        
-        Args:
-            season_rating_key: The season rating key
-            
-        Returns:
-            List of episodes
-            
-        Raises:
-            ImporterError: If the request fails
-        """
-        try:
-            url = f"{self.base_url}/library/metadata/{season_rating_key}/children"
-            params = {"X-Plex-Token": self.token}
-            
-            response = self.session.get(url, params=params, timeout=20)
-            response.raise_for_status()
-            
-            # Parse XML response
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(response.content)
-            
-            episodes = []
-            for video in root.findall('Video'):
-                if video.get('type') == 'episode':
-                    episodes.append({
-                        "ratingKey": video.get('ratingKey'),
-                        "title": video.get('title'),
-                        "grandparentTitle": video.get('grandparentTitle'),
-                        "parentIndex": video.get('parentIndex'),
-                        "index": video.get('index'),
-                        "summary": video.get('summary'),
-                        "year": video.get('year'),
-                        "duration": video.get('duration'),
-                        "Media": []
-                    })
-                    
-                    # Extract Media information
-                    for media in video.findall('Media'):
-                        media_info = {
-                            "duration": media.get('duration'),
-                            "videoCodec": media.get('videoCodec'),
-                            "audioCodec": media.get('audioCodec'),
-                            "container": media.get('container'),
-                            "bitrate": media.get('bitrate'),
-                            "Part": []
-                        }
-                        
-                        # Extract Part information
-                        for part in media.findall('Part'):
-                            part_info = {
-                                "file": part.get('file'),
-                                "size": part.get('size'),
-                                "duration": part.get('duration')
-                            }
-                            media_info["Part"].append(part_info)
-                        
-                        episodes[-1]["Media"].append(media_info)
-            
-            return episodes
-            
-        except requests.RequestException as e:
-            raise ImporterError(f"Failed to fetch season episodes: {e}") from e
-    
-    def find_episode_by_sse(self, series_title: str, season: int, episode: int) -> dict[str, Any]:
+    def find_episode_by_sse(self, series_title: str, season: int, episode: int) -> Dict[str, Any]:
         """
         Find an episode by series title, season, and episode number.
         
@@ -527,11 +415,216 @@ class PlexClient:
             
         except requests.RequestException as e:
             raise ImporterError(f"Failed to find episode: {e}") from e
+    
+    def find_series_by_title(self, series_title: str) -> List[Dict[str, Any]]:
+        """
+        Find series by title (case-insensitive search).
+        
+        Args:
+            series_title: The series title to search for
+            
+        Returns:
+            List of matching series
+            
+        Raises:
+            ImporterError: If the request fails
+        """
+        try:
+            # First try the global search without type restriction
+            url = f"{self.base_url}/search"
+            params = {
+                "X-Plex-Token": self.token,
+                "query": series_title
+            }
+            
+            response = self.session.get(url, params=params, timeout=20)
+            response.raise_for_status()
+            
+            # Parse XML response
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response.content)
+            
+            series_list = []
+            for video in root.findall('Video'):
+                if video.get('type') == 'show':
+                    series_info = {
+                        "ratingKey": video.get('ratingKey'),
+                        "title": video.get('title'),
+                        "year": video.get('year'),
+                        "summary": video.get('summary')
+                    }
+                    series_list.append(series_info)
+            
+            # If no results from global search, try searching in TV libraries
+            if not series_list:
+                series_list = self._search_in_tv_libraries(series_title)
+            
+            return series_list
+            
+        except requests.RequestException as e:
+            raise ImporterError(f"Failed to search for series: {e}") from e
+    
+    def _search_in_tv_libraries(self, series_title: str) -> List[Dict[str, Any]]:
+        """
+        Search for series in TV libraries if global search fails.
+        
+        Args:
+            series_title: The series title to search for
+            
+        Returns:
+            List of matching series
+        """
+        try:
+            # Get all libraries first
+            libraries = self.get_libraries()
+            tv_libraries = [lib for lib in libraries if lib.get('type') == 'show']
+            
+            series_list = []
+            for library in tv_libraries:
+                try:
+                    # Try browsing the library directly instead of searching
+                    url = f"{self.base_url}/library/sections/{library['key']}/all"
+                    params = {
+                        "X-Plex-Token": self.token
+                    }
+                    
+                    response = self.session.get(url, params=params, timeout=20)
+                    response.raise_for_status()
+                    
+                    # Parse XML response
+                    import xml.etree.ElementTree as ET
+                    root = ET.fromstring(response.content)
+                    
+                    for directory in root.findall('Directory'):
+                        if directory.get('type') == 'show':
+                            title = directory.get('title', '')
+                            # Check if this series matches our search (case-insensitive)
+                            if series_title.lower() in title.lower():
+                                series_info = {
+                                    "ratingKey": directory.get('ratingKey'),
+                                    "title": title,
+                                    "year": directory.get('year'),
+                                    "summary": directory.get('summary'),
+                                    "library": library['title']
+                                }
+                                series_list.append(series_info)
+                
+                except Exception as e:
+                    continue
+            return series_list
+            
+        except Exception as e:
+            return []
+    
+    def get_series_seasons(self, series_rating_key: int) -> List[Dict[str, Any]]:
+        """
+        Get seasons for a series.
+        
+        Args:
+            series_rating_key: The series rating key
+            
+        Returns:
+            List of seasons
+            
+        Raises:
+            ImporterError: If the request fails
+        """
+        try:
+            url = f"{self.base_url}/library/metadata/{series_rating_key}/children"
+            params = {"X-Plex-Token": self.token}
+            
+            response = self.session.get(url, params=params, timeout=20)
+            response.raise_for_status()
+            
+            # Parse XML response
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response.content)
+            
+            seasons = []
+            for directory in root.findall('Directory'):
+                if directory.get('type') == 'season':
+                    seasons.append({
+                        "ratingKey": directory.get('ratingKey'),
+                        "title": directory.get('title'),
+                        "parentIndex": directory.get('parentIndex'),
+                        "index": directory.get('index')
+                    })
+            
+            return seasons
+            
+        except requests.RequestException as e:
+            raise ImporterError(f"Failed to fetch series seasons: {e}") from e
+    
+    def get_season_episodes(self, season_rating_key: int) -> List[Dict[str, Any]]:
+        """
+        Get episodes for a season.
+        
+        Args:
+            season_rating_key: The season rating key
+            
+        Returns:
+            List of episodes
+            
+        Raises:
+            ImporterError: If the request fails
+        """
+        try:
+            url = f"{self.base_url}/library/metadata/{season_rating_key}/children"
+            params = {"X-Plex-Token": self.token}
+            
+            response = self.session.get(url, params=params, timeout=20)
+            response.raise_for_status()
+            
+            # Parse XML response
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response.content)
+            
+            episodes = []
+            for video in root.findall('Video'):
+                if video.get('type') == 'episode':
+                    episodes.append({
+                        "ratingKey": video.get('ratingKey'),
+                        "title": video.get('title'),
+                        "grandparentTitle": video.get('grandparentTitle'),
+                        "parentIndex": video.get('parentIndex'),
+                        "index": video.get('index'),
+                        "summary": video.get('summary'),
+                        "year": video.get('year'),
+                        "duration": video.get('duration'),
+                        "Media": []
+                    })
+                    
+                    # Extract Media information
+                    for media in video.findall('Media'):
+                        media_info = {
+                            "duration": media.get('duration'),
+                            "videoCodec": media.get('videoCodec'),
+                            "audioCodec": media.get('audioCodec'),
+                            "container": media.get('container'),
+                            "bitrate": media.get('bitrate'),
+                            "Part": []
+                        }
+                        
+                        # Extract Part information
+                        for part in media.findall('Part'):
+                            part_info = {
+                                "file": part.get('file'),
+                                "size": part.get('size'),
+                                "duration": part.get('duration')
+                            }
+                            media_info["Part"].append(part_info)
+                        
+                        episodes[-1]["Media"].append(media_info)
+            
+            return episodes
+            
+        except requests.RequestException as e:
+            raise ImporterError(f"Failed to fetch season episodes: {e}") from e
 
 
 class PlexImporter:
     """
-    Importer = Adapter. Talks to external system. Discovers content. Does not persist.
+    Plex importer plugin following the plugin contract.
     
     This importer connects to Plex servers and discovers content from their
     libraries, extracting metadata and file paths.
@@ -539,458 +632,198 @@ class PlexImporter:
     
     name = "plex"
     
-    def __init__(
-        self,
-        servers: list[dict[str, Any]] | None = None,
-        include_metadata: bool = True
-    ):
+    def __init__(self, base_url: str, token: str):
         """
         Initialize the Plex importer.
         
         Args:
-            servers: List of server configurations with 'base_url' and 'token'
-            include_metadata: Whether to include Plex metadata in discovered items
+            base_url: Plex server base URL
+            token: Plex authentication token
         """
-        self.servers = servers or []
-        self.include_metadata = include_metadata
+        self.base_url = base_url
+        self.token = token
+        self.client = PlexClient(base_url, token)
     
-    def discover(self) -> list[DiscoveredItem]:
+    def list_collections(self, source_config: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Discover content from all configured Plex servers.
+        Return the collections (libraries) available in that source.
         
-        Returns:
-            List of discovered content items
+        Args:
+            source_config: Source configuration (unused for Plex)
             
-        Raises:
-            ImporterError: If discovery fails
+        Returns:
+            List of collections with stable identifier, display name, source path, and filesystem locations
         """
         try:
-            discovered_items = []
+            libraries = self.client.get_libraries()
             
-            for server_config in self.servers:
-                try:
-                    server_items = self._discover_from_server(server_config)
-                    discovered_items.extend(server_items)
-                except Exception as e:
-                    logger.warning(f"Failed to discover from server {server_config.get('base_url', 'unknown')}: {e}")
-                    continue
+            collections = []
+            for lib in libraries:
+                collections.append({
+                    "external_id": lib["key"],
+                    "name": lib["title"],
+                    "type": lib.get("type", "unknown"),
+                    "plex_section_ref": f"plex://{lib['key']}",
+                    "locations": lib.get("locations", [])
+                })
             
-            return discovered_items
+            return collections
             
         except Exception as e:
-            raise ImporterError(f"Failed to discover content: {str(e)}") from e
+            logger.error(f"Failed to list collections: {e}")
+            raise ImporterError(f"Failed to list collections: {e}") from e
     
-    def discover_libraries(self) -> list[dict[str, Any]]:
+    def fetch_assets_for_collection(
+        self, 
+        source_config: Dict[str, Any], 
+        collection_descriptor: Dict[str, Any], 
+        local_path: str,
+        title_filter: str = None,
+        season_filter: int = None,
+        episode_filter: int = None
+    ) -> List[AssetDraft]:
         """
-        Discover libraries from all configured Plex servers.
+        Return AssetDraft objects for that collection.
         
-        Returns:
-            List of library information dictionaries
+        Args:
+            source_config: Source configuration (unused for Plex)
+            collection_descriptor: Collection information from list_collections
+            local_path: Local path mapping for the collection
             
-        Raises:
-            ImporterError: If discovery fails
+        Returns:
+            List of AssetDraft objects representing media items
         """
         try:
-            all_libraries = []
-            print(f"DEBUG: PlexImporter.discover_libraries called with {len(self.servers)} servers")
+            collection_id = collection_descriptor["id"]
+            items = self.client.get_library_items(
+                collection_id, 
+                title_filter=title_filter,
+                season_filter=season_filter,
+                episode_filter=episode_filter
+            )
             
-            for i, server_config in enumerate(self.servers):
+            asset_drafts = []
+            for item in items:
                 try:
-                    base_url = server_config.get("base_url")
-                    token = server_config.get("token")
-                    
-                    print(f"DEBUG: Server {i}: base_url={base_url}, token={'***' if token else None}")
-                    
-                    if not base_url or not token:
-                        print(f"DEBUG: Server configuration missing base_url or token: {server_config}")
-                        logger.warning(f"Server configuration missing base_url or token: {server_config}")
-                        continue
-                    
-                    # Create Plex client
-                    plex_client = PlexClient(base_url, token)
-                    print(f"DEBUG: Created PlexClient for {base_url}")
-                    
-                    # Get libraries from this server
-                    libraries = plex_client.get_libraries()
-                    print(f"DEBUG: Got {len(libraries)} libraries from {base_url}: {libraries}")
-                    all_libraries.extend(libraries)
-                    
+                    asset_draft = self._create_asset_draft(item, collection_descriptor, local_path)
+                    if asset_draft:
+                        asset_drafts.append(asset_draft)
                 except Exception as e:
-                    print(f"DEBUG: Failed to discover libraries from server {server_config.get('base_url', 'unknown')}: {e}")
-                    logger.warning(f"Failed to discover libraries from server {server_config.get('base_url', 'unknown')}: {e}")
+                    logger.warning(f"Failed to create asset draft for item {item.get('ratingKey', 'unknown')}: {e}")
                     continue
             
-            print(f"DEBUG: Returning {len(all_libraries)} total libraries")
-            return all_libraries
+            return asset_drafts
             
         except Exception as e:
-            print(f"DEBUG: Exception in discover_libraries: {e}")
-            raise ImporterError(f"Failed to discover libraries: {str(e)}") from e
-
-    def discover_from_collection(
-        self, 
-        collection_id: str, 
-        include_metadata: bool = True
-    ) -> list[DiscoveredItem]:
-        """
-        Discover content from a specific Plex collection (library).
-        
-        Args:
-            collection_id: Plex library key
-            include_metadata: Whether to include Plex metadata
-            
-        Returns:
-            List of discovered content items from the collection
-            
-        Raises:
-            ImporterError: If discovery fails
-        """
-        try:
-            discovered_items = []
-            
-            for server_config in self.servers:
-                try:
-                    server_items = self._discover_from_server_collection(
-                        server_config, 
-                        collection_id, 
-                        include_metadata
-                    )
-                    discovered_items.extend(server_items)
-                except Exception as e:
-                    logger.warning(f"Failed to discover from server {server_config.get('base_url', 'unknown')} collection {collection_id}: {e}")
-                    continue
-            
-            return discovered_items
-            
-        except Exception as e:
-            raise ImporterError(f"Failed to discover from collection {collection_id}: {str(e)}") from e
+            logger.error(f"Failed to fetch assets for collection {collection_descriptor.get('name', 'unknown')}: {e}")
+            raise ImporterError(f"Failed to fetch assets for collection: {e}") from e
     
-    def _discover_from_server(self, server_config: dict[str, Any]) -> list[DiscoveredItem]:
-        """
-        Discover content from a specific Plex server.
-        
-        Args:
-            server_config: Server configuration dictionary
-            
-        Returns:
-            List of discovered items from this server
-        """
-        base_url = server_config.get("base_url")
-        token = server_config.get("token")
-        
-        if not base_url or not token:
-            raise ImporterError("Server configuration missing base_url or token")
-        
-        # Create Plex client
-        plex_client = PlexClient(base_url, token)
-        
-        # Get all libraries
-        libraries = plex_client.get_libraries()
-        
-        discovered_items = []
-        
-        for library in libraries:
-            try:
-                library_items = self._discover_from_library(plex_client, library)
-                discovered_items.extend(library_items)
-            except Exception as e:
-                logger.warning(f"Failed to discover from library {library.get('title', 'unknown')}: {e}")
-                continue
-        
-        return discovered_items
-    
-    def _discover_from_server_collection(
+    def _create_asset_draft(
         self, 
-        server_config: dict[str, Any], 
-        collection_id: str, 
-        include_metadata: bool
-    ) -> list[DiscoveredItem]:
+        item: Dict[str, Any], 
+        collection_descriptor: Dict[str, Any], 
+        local_path: str
+    ) -> AssetDraft | None:
         """
-        Discover content from a specific collection on a Plex server.
-        
-        Args:
-            server_config: Server configuration dictionary
-            collection_id: Plex library key
-            include_metadata: Whether to include Plex metadata
-            
-        Returns:
-            List of discovered items from this collection
-        """
-        base_url = server_config.get("base_url")
-        token = server_config.get("token")
-        
-        if not base_url or not token:
-            raise ImporterError("Server configuration missing base_url or token")
-        
-        # Create Plex client
-        plex_client = PlexClient(base_url, token)
-        
-        # Get items from the specific collection
-        items = plex_client.get_library_items(collection_id)
-        
-        discovered_items = []
-        
-        for item in items:
-            try:
-                discovered_item = self._create_discovered_item(item, {"key": collection_id})
-                if discovered_item:
-                    discovered_items.append(discovered_item)
-            except Exception as e:
-                logger.warning(f"Failed to process item: {e}")
-                continue
-        
-        return discovered_items
-    
-    def _discover_from_library(
-        self, 
-        plex_client: PlexClient, 
-        library: dict[str, Any]
-    ) -> list[DiscoveredItem]:
-        """
-        Discover content from a specific library.
-        
-        Args:
-            plex_client: Plex client instance
-            library: Library information dictionary
-            
-        Returns:
-            List of discovered items from this library
-        """
-        library_key = library.get("key")
-        if not library_key:
-            return []
-        
-        # Get library items
-        items = plex_client.get_library_items(library_key)
-        
-        discovered_items = []
-        
-        for item in items:
-            try:
-                discovered_item = self._create_discovered_item(item, library)
-                if discovered_item:
-                    discovered_items.append(discovered_item)
-            except Exception as e:
-                logger.warning(f"Failed to process item: {e}")
-                continue
-        
-        return discovered_items
-    
-    def _create_discovered_item(
-        self, 
-        item: dict[str, Any], 
-        library: dict[str, Any]
-    ) -> DiscoveredItem | None:
-        """
-        Create a DiscoveredItem from a Plex item.
+        Create an AssetDraft from a Plex item.
         
         Args:
             item: Plex item information
-            library: Library information
+            collection_descriptor: Collection information
+            local_path: Local path mapping
             
         Returns:
-            DiscoveredItem or None if creation fails
+            AssetDraft or None if creation fails
         """
         try:
-            # Extract file path (this would come from Plex item data)
-            file_path = item.get("file_path", "")
-            if not file_path:
+            # Extract file path and map it to local path
+            plex_file_path = item.get("file_path", "")
+            if not plex_file_path:
                 return None
             
-            # Create Plex URI
-            rating_key = item.get("ratingKey", "")
-            path_uri = f"plex://{rating_key}" if rating_key else f"file://{file_path}"
+            # Map Plex path to local path
+            # This is a simple implementation - in production, you'd want more sophisticated path mapping
+            local_file_path = plex_file_path
+            if local_path and plex_file_path.startswith("/"):
+                # Simple path replacement - in production, use proper path mapping service
+                local_file_path = plex_file_path.replace("/", local_path + "/", 1)
             
             # Extract metadata
-            raw_labels = []
+            title = item.get("title", "Unknown Title")
+            year = item.get("year")
+            duration = item.get("duration")
+            file_size = item.get("fileSize")
             
-            if self.include_metadata:
-                # Add title
-                if "title" in item:
-                    raw_labels.append(f"title:{item['title']}")
-                
-                # Add year
-                if "year" in item:
-                    raw_labels.append(f"year:{item['year']}")
-                
-                # Add genre
-                if "genre" in item:
-                    raw_labels.append(f"genre:{item['genre']}")
-                
-                # Add library type
-                if "type" in library:
-                    raw_labels.append(f"library_type:{library['type']}")
+            # Extract TV show hierarchy information
+            series_title = item.get("show_title")
+            season_number = item.get("season_index")
+            episode_number = item.get("episode_index")
+            episode_title = title  # For episodes, the title is the episode title
             
-            # Get last modified time
-            last_modified = None
-            if "updatedAt" in item:
-                try:
-                    # Convert Plex timestamp to datetime
-                    timestamp = int(item["updatedAt"])
-                    last_modified = datetime.fromtimestamp(timestamp)
-                except (ValueError, TypeError):
-                    pass
+            # Create raw metadata
+            raw_metadata = {
+                "plex_rating_key": item.get("ratingKey"),
+                "plex_type": item.get("type"),
+                "plex_year": year,
+                "plex_updated_at": item.get("updatedAt"),
+                "collection_name": collection_descriptor.get("name"),
+                "collection_type": collection_descriptor.get("type"),
+                "show_title": series_title,
+                "season_title": item.get("season_title"),
+                "season_index": season_number,
+                "episode_index": episode_number
+            }
             
-            # Get file size
-            size = item.get("fileSize")
-            if size is not None:
-                try:
-                    size = int(size)
-                except (ValueError, TypeError):
-                    size = None
-            
-            return DiscoveredItem(
-                path_uri=path_uri,
-                provider_key=rating_key,
-                raw_labels=raw_labels if raw_labels else None,
-                last_modified=last_modified,
-                size=size,
-                hash_sha256=None  # Plex doesn't provide file hashes
+            # Create AssetDraft
+            asset_draft = AssetDraft(
+                uuid=uuid.uuid4(),
+                file_path=local_file_path,
+                title=episode_title,  # Use episode title as the main title
+                duration_ms=int(duration) if duration else None,
+                file_size=int(file_size) if file_size else None,
+                source_type="plex",
+                source_id=self.base_url,
+                collection_id=collection_descriptor["id"],
+                external_id=item.get("ratingKey"),
+                raw_metadata=raw_metadata,
+                discovered_at=datetime.utcnow(),
+                # TV show hierarchy
+                series_title=series_title,
+                season_number=int(season_number) if season_number else None,
+                episode_number=int(episode_number) if episode_number else None,
+                episode_title=episode_title
             )
             
+            return asset_draft
+            
         except Exception as e:
-            logger.warning(f"Failed to create discovered item: {e}")
+            logger.warning(f"Failed to create asset draft: {e}")
             return None
     
-    def list_asset_groups(self) -> list[dict[str, any]]:
+    def get_parameter_spec(self) -> Dict[str, Any]:
         """
-        List the asset groups (libraries) available from this Plex source.
+        Get parameter specification for CLI help.
         
         Returns:
-            List of dictionaries containing library information
-        """
-        try:
-            all_libraries = []
-            
-            for server_config in self.servers:
-                try:
-                    base_url = server_config.get("base_url")
-                    token = server_config.get("token")
-                    
-                    if not base_url or not token:
-                        continue
-                    
-                    # Create Plex client
-                    plex_client = PlexClient(base_url, token)
-                    
-                    # Get libraries from this server
-                    libraries = plex_client.get_libraries()
-                    
-                    for library in libraries:
-                        # Get item count for this library
-                        try:
-                            items = plex_client.get_library_items(library.get("key", ""))
-                            asset_count = len(items)
-                        except Exception:
-                            asset_count = None
-                        
-                        all_libraries.append({
-                            "id": library.get("key"),
-                            "name": library.get("title"),
-                            "path": f"plex://{library.get('key')}",
-                            "enabled": True,  # Default to enabled, actual state managed by database
-                            "asset_count": asset_count,
-                            "type": library.get("type"),
-                            "server": base_url
-                        })
-                        
-                except Exception as e:
-                    logger.warning(f"Failed to list libraries from server {server_config.get('base_url', 'unknown')}: {e}")
-                    continue
-            
-            return all_libraries
-            
-        except Exception as e:
-            raise ImporterError(f"Failed to list asset groups: {str(e)}") from e
-    
-    def enable_asset_group(self, group_id: str) -> bool:
-        """
-        Enable an asset group (library) for content discovery.
-        
-        Args:
-            group_id: Plex library key or plex:// URI
-            
-        Returns:
-            True if successfully enabled, False otherwise
-        """
-        try:
-            # Extract library key from group_id if it's a plex:// URI
-            if group_id.startswith("plex://"):
-                library_key = group_id.replace("plex://", "")
-            else:
-                library_key = group_id
-            
-            # For Plex, we just verify the library exists
-            for server_config in self.servers:
-                try:
-                    base_url = server_config.get("base_url")
-                    token = server_config.get("token")
-                    
-                    if not base_url or not token:
-                        continue
-                    
-                    # Create Plex client
-                    plex_client = PlexClient(base_url, token)
-                    
-                    # Get libraries to verify the library_key exists
-                    libraries = plex_client.get_libraries()
-                    library_keys = [lib.get("key") for lib in libraries]
-                    
-                    if library_key in library_keys:
-                        return True
-                        
-                except Exception as e:
-                    logger.warning(f"Failed to verify library {library_key} on server {server_config.get('base_url', 'unknown')}: {e}")
-                    continue
-            
-            return False
-            
-        except Exception as e:
-            logger.error(f"Failed to enable asset group {group_id}: {e}")
-            return False
-    
-    def disable_asset_group(self, group_id: str) -> bool:
-        """
-        Disable an asset group (library) from content discovery.
-        
-        Args:
-            group_id: Plex library key
-            
-        Returns:
-            True if successfully disabled, False otherwise
-        """
-        # For Plex, disabling is handled at the database level
-        # This method just confirms the operation
-        return True
-
-    def get_help(self) -> dict[str, any]:
-        """
-        Get help information for the Plex importer.
-        
-        Returns:
-            Dictionary containing help information
+            Dictionary containing parameter specification
         """
         return {
             "description": "Connect to Plex Media Server instances and discover content from their libraries",
             "required_params": [
                 {
-                    "name": "servers",
-                    "type": "list[dict]",
-                    "description": "List of server configurations",
-                    "example": '[{"base_url": "http://192.168.1.100:32400", "token": "your-token"}]'
-                }
-            ],
-            "optional_params": [
+                    "name": "base_url",
+                    "type": "string",
+                    "description": "Base URL for the Plex server (e.g., http://192.168.1.100:32400)"
+                },
                 {
-                    "name": "include_metadata",
-                    "type": "bool",
-                    "default": True,
-                    "description": "Whether to include Plex metadata in discovered items"
+                    "name": "token",
+                    "type": "string", 
+                    "description": "Plex authentication token"
                 }
             ],
+            "optional_params": [],
             "examples": [
-                'retrovue source add --type plex --name "My Plex Server" --base-url "http://192.168.1.100:32400" --token "your-plex-token"',
-                'retrovue source add --type plex --name "Plex Server" --base-url "http://plex:32400" --token "token" --enrichers "ffprobe"'
+                'retrovue source add --type plex --name "My Plex Server" --base-url "http://192.168.1.100:32400" --token "your-plex-token"'
             ],
             "cli_params": {
                 "name": "Friendly name for the Plex server",
@@ -998,7 +831,3 @@ class PlexImporter:
                 "token": "Plex authentication token"
             }
         }
-
-
-# Note: PlexImporter requires server configuration, so it should be registered
-# manually with proper server configuration when needed

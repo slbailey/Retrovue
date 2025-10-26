@@ -7,7 +7,7 @@ like Plex servers and filesystem collections.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from sqlalchemy.orm import Session
 
@@ -88,6 +88,9 @@ class SourceCollectionDTO:
     
     config: dict[str, Any] | None = None
     """Additional configuration for the collection"""
+    
+    locations: list[str] = field(default_factory=list)
+    """Filesystem locations for this collection (e.g., Plex library paths)"""
 
 
 class SourceService:
@@ -693,6 +696,8 @@ class SourceService:
             if not source:
                 return False
             
+            # NOTE: this entire block runs under a single unit-of-work / transaction. If any insert fails, we roll back the whole sync.
+            
             # Persist each collection
             for collection_dto in collections:
                 # Check if collection already exists
@@ -705,16 +710,43 @@ class SourceService:
                     # Update existing collection
                     existing.name = collection_dto.name
                     existing.config = collection_dto.config
+                    collection = existing
                 else:
                     # Create new collection
-                    new_collection = SourceCollection(
+                    collection = SourceCollection(
                         source_id=source.id,
                         external_id=collection_dto.external_id,
                         name=collection_dto.name,
                         enabled=collection_dto.enabled,
                         config=collection_dto.config
                     )
-                    self.db.add(new_collection)
+                    self.db.add(collection)
+                    self.db.flush()  # Get the ID for PathMapping creation
+                
+                # Create PathMapping rows for each filesystem location
+                # Get the locations from the original collection data
+                locations = getattr(collection_dto, 'locations', [])
+                if not locations:
+                    # Try to get from the original collections data if available
+                    # This is a fallback for when locations aren't passed in the DTO
+                    locations = []
+                
+                # For each location, create or update PathMapping
+                for plex_path in locations:
+                    # Check if PathMapping already exists
+                    existing_mapping = self.db.query(PathMapping).filter(
+                        PathMapping.collection_id == collection.id,
+                        PathMapping.plex_path == plex_path
+                    ).first()
+                    
+                    if not existing_mapping:
+                        # Create new PathMapping with empty local_path
+                        new_mapping = PathMapping(
+                            collection_id=collection.id,
+                            plex_path=plex_path,
+                            local_path=""  # Initially empty until operator maps it
+                        )
+                        self.db.add(new_mapping)
             
             self.db.commit()
             return True
@@ -724,6 +756,55 @@ class SourceService:
             print(f"Error persisting collections: {e}")
             return False
     
+    def delete_collection(self, collection_id: str) -> bool:
+        """
+        Delete a collection and all its associated data.
+        
+        Args:
+            collection_id: Collection ID, external ID, or UUID to delete
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Find the collection by ID (try UUID first, then external_id)
+            import uuid
+            collection = None
+            
+            # Try to find by UUID first
+            try:
+                if len(collection_id) == 36 and collection_id.count('-') == 4:
+                    collection_uuid = uuid.UUID(collection_id)
+                    collection = self.db.query(SourceCollection).filter(SourceCollection.id == collection_uuid).first()
+            except (ValueError, TypeError):
+                pass
+            
+            # If not found by UUID, try by external_id
+            if not collection:
+                collection = self.db.query(SourceCollection).filter(SourceCollection.external_id == collection_id).first()
+            
+            # If not found by external_id, try by name (case-insensitive)
+            if not collection:
+                name_matches = self.db.query(SourceCollection).filter(SourceCollection.name.ilike(collection_id)).all()
+                if len(name_matches) == 1:
+                    collection = name_matches[0]
+                elif len(name_matches) > 1:
+                    # Multiple matches - cannot delete
+                    return False
+            
+            if not collection:
+                return False
+            
+            # Delete the collection (cascade will handle PathMapping deletion)
+            self.db.delete(collection)
+            self.db.commit()
+            return True
+            
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error deleting collection: {e}")
+            return False
+
     def save_collections(self, source_id: str, updates: list["CollectionUpdateDTO"]) -> bool:
         """
         Save collection updates (enabled status and mapping pairs).

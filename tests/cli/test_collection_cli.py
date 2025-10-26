@@ -62,3 +62,30 @@ class TestCollectionCLI:
         """Test that retrovue collection detach-enricher command is registered (destructive test)."""
         exit_code, stdout, stderr = run_cli(["collection", "detach-enricher", "--help"])
         assert exit_code == 0
+    
+    def test_collection_delete_help(self):
+        """Test that retrovue collection delete --help works."""
+        exit_code, stdout, stderr = run_cli(["collection", "delete", "--help"])
+        assert exit_code == 0
+        assert "--force" in stdout
+        assert "Delete a collection and all its associated data" in stdout or "Delete a collection and all its associated data" in stderr
+    
+    def test_collection_wipe_help(self):
+        """Test that retrovue collection wipe --help works."""
+        exit_code, stdout, stderr = run_cli(["collection", "wipe", "--help"])
+        assert exit_code == 0
+        assert "--force" in stdout
+        assert "--dry-run" in stdout
+        assert "--json" in stdout
+        assert "NUCLEAR OPTION" in stdout or "NUCLEAR OPTION" in stderr or "nuclear option" in stdout
+        assert "Completely wipe a collection and ALL its associated data" in stdout or "Completely wipe a collection and ALL its associated data" in stderr
+    
+    def test_collection_ingest_help(self):
+        """Test that retrovue collection ingest --help works."""
+        exit_code, stdout, stderr = run_cli(["collection", "ingest", "--help"])
+        assert exit_code == 0
+        assert "--title" in stdout
+        assert "--season" in stdout
+        assert "--episode" in stdout
+        assert "--dry-run" in stdout
+        assert "--json" in stdout

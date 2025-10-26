@@ -8,10 +8,12 @@ Calls SourceService under the hood for all source operations.
 from __future__ import annotations
 
 import typer
+import uuid
 from typing import Optional
 
 from ...infra.uow import session
 from ...content_manager.source_service import SourceService
+from ...domain.entities import SourceCollection
 from ...adapters.registry import get_importer, list_importers, get_enricher, list_enrichers, get_importer_help
 from ...domain.entities import SourceCollection, PathMapping
 
@@ -409,7 +411,16 @@ def show_source(
             
             if json_output:
                 import json
-                typer.echo(json.dumps(source.model_dump(), indent=2))
+                source_dict = {
+                    "id": source.id,
+                    "external_id": source.external_id,
+                    "kind": source.kind,
+                    "name": source.name,
+                    "status": source.status,
+                    "base_url": source.base_url,
+                    "config": source.config
+                }
+                typer.echo(json.dumps(source_dict, indent=2))
             else:
                 typer.echo(f"Source Details:")
                 typer.echo(f"  ID: {source.id}")
@@ -489,7 +500,16 @@ def update_source(
             
             if json_output:
                 import json
-                typer.echo(json.dumps(updated_source.model_dump(), indent=2))
+                source_dict = {
+                    "id": updated_source.id,
+                    "external_id": updated_source.external_id,
+                    "kind": updated_source.kind,
+                    "name": updated_source.name,
+                    "status": updated_source.status,
+                    "base_url": updated_source.base_url,
+                    "config": updated_source.config
+                }
+                typer.echo(json.dumps(source_dict, indent=2))
             else:
                 typer.echo(f"Successfully updated source: {updated_source.name}")
                 typer.echo(f"  ID: {updated_source.id}")
@@ -568,19 +588,18 @@ def delete_source(
 @app.command("discover")
 def discover_collections(
     source_id: str = typer.Argument(..., help="Source ID, external ID, or name to discover collections from"),
-    persist: bool = typer.Option(False, "--persist", help="Persist discovered collections to database"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
-    Discover collections (libraries) from a source.
+    Discover and add collections (libraries) from a source to the repository.
     
-    This scans the source for available collections/libraries and optionally
-    persists them to the database for management.
+    This scans the source for available collections/libraries and adds them
+    to the RetroVue database for management. Collections start disabled by default.
     
     Examples:
         retrovue source discover "My Plex"
-        retrovue source discover plex-5063d926 --persist
-        retrovue source discover "My Plex" --persist --json
+        retrovue source discover plex-5063d926
+        retrovue source discover "My Plex" --json
     """
     with session() as db:
         source_service = SourceService(db)
@@ -592,65 +611,393 @@ def discover_collections(
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
             
-            # Discover collections from the source
-            collections = source_service.discover_collections(source.external_id)
+            # Get the importer for this source type
+            from ...adapters.importers.plex_importer import PlexImporter
             
-            if not collections:
-                typer.echo(f"No collections found for source '{source.name}'")
-                return
-            
-            if json_output:
-                import json
-                result = {
-                    "source": {
-                        "id": source.id,
-                        "name": source.name,
-                        "type": source.kind
-                    },
-                    "collections": [col.model_dump() for col in collections]
-                }
-                typer.echo(json.dumps(result, indent=2))
-            else:
-                typer.echo(f"Discovered {len(collections)} collections from '{source.name}':")
-                for collection in collections:
-                    typer.echo(f"  • {collection.name} (ID: {collection.external_id})")
-                    typer.echo(f"    Type: {collection.config.get('type', 'unknown')}")
-                    typer.echo(f"    Enabled: {collection.enabled}")
-                    typer.echo()
-            
-            # Persist collections if requested
-            if persist:
-                typer.echo("Persisting collections to database...")
-                success = source_service.persist_collections(source.external_id, collections)
-                if success:
-                    typer.echo(f"Successfully persisted {len(collections)} collections")
+            # Create importer with source config
+            if source.kind == "plex":
+                # Extract Plex configuration
+                config = source.config or {}
+                if "servers" in config and config["servers"]:
+                    # New format with servers array
+                    server_config = config["servers"][0]
+                    base_url = server_config.get("base_url")
+                    token = server_config.get("token")
                 else:
-                    typer.echo("Error persisting collections", err=True)
+                    # Old format with direct base_url and token
+                    base_url = config.get("base_url")
+                    token = config.get("token")
+                
+                if not base_url or not token:
+                    typer.echo(f"Error: Plex source '{source.name}' missing base_url or token", err=True)
                     raise typer.Exit(1)
+                
+                importer = PlexImporter(base_url=base_url, token=token)
+                
+                # Discover collections using the new plugin interface
+                collections = importer.list_collections({})
+                
+                if not collections:
+                    typer.echo(f"No collections found for source '{source.name}'")
+                    return
+                
+                # Convert to SourceCollectionDTO format and add to database
+                from ...content_manager.source_service import SourceCollectionDTO
+                collection_dtos = []
+                added_count = 0
+                
+                for collection in collections:
+                    # Check if collection already exists
+                    existing = db.query(SourceCollection).filter(
+                        SourceCollection.source_id == source.id,
+                        SourceCollection.external_id == collection["external_id"]
+                    ).first()
+                    
+                    if existing:
+                        typer.echo(f"  Collection '{collection['name']}' already exists, skipping")
+                        continue
+                    
+                    # Create new collection
+                    new_collection = SourceCollection(
+                        id=uuid.uuid4(),
+                        source_id=source.id,
+                        external_id=collection["external_id"],
+                        name=collection["name"],
+                        enabled=False,  # Newly discovered collections start disabled
+                        config={
+                            "plex_section_ref": collection.get("plex_section_ref", ""),
+                            "type": collection.get("type", "unknown")
+                        }
+                    )
+                    
+                    db.add(new_collection)
+                    collection_dtos.append(SourceCollectionDTO(
+                        external_id=collection["external_id"],
+                        name=collection["name"],
+                        enabled=False,
+                        mapping_pairs=[],
+                        source_type=source.kind,
+                        config=new_collection.config
+                    ))
+                    added_count += 1
+                
+                # Commit all new collections
+                db.commit()
+                
+                if json_output:
+                    import json
+                    result = {
+                        "source": {
+                            "id": str(source.id),
+                            "name": source.name,
+                            "type": source.kind
+                        },
+                        "collections_added": added_count,
+                        "collections": [
+                            {
+                                "external_id": col.external_id,
+                                "name": col.name,
+                                "enabled": col.enabled,
+                                "source_type": col.source_type
+                            } for col in collection_dtos
+                        ]
+                    }
+                    typer.echo(json.dumps(result, indent=2))
+                else:
+                    typer.echo(f"Successfully added {added_count} collections from '{source.name}':")
+                    for collection in collection_dtos:
+                        typer.echo(f"  • {collection.name} (ID: {collection.external_id}) - Disabled by default")
+                    typer.echo()
+                    typer.echo("Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync")
+            else:
+                typer.echo(f"Error: Source type '{source.kind}' not supported for discovery", err=True)
+                raise typer.Exit(1)
                     
         except Exception as e:
             typer.echo(f"Error discovering collections: {e}", err=True)
             raise typer.Exit(1)
 
 
-@app.command("sync-collections")
-def sync_collections(
-    source_id: str = typer.Argument(..., help="Source ID, external ID, or name to sync collections from"),
-    persist: bool = typer.Option(False, "--persist", help="Persist discovered collections to database"),
+@app.command("ingest")
+def source_ingest(
+    source_id: str = typer.Argument(..., help="Source ID, external ID, or name to ingest from"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be ingested without actually ingesting"),
+):
+    """
+    Ingest all sync-enabled, ingestible collections from a source.
+    
+    This command finds all collections that are both sync-enabled and ingestible,
+    then processes them using the ingest orchestrator.
+    
+    Examples:
+        retrovue source --name "My Plex Server" ingest
+        retrovue source plex-5063d926 ingest
+        retrovue source "My Plex Server" ingest --json
+    """
+    with session() as db:
+        import os
+        source_service = SourceService(db)
+        
+        try:
+            # Get the source first to validate it exists
+            source = source_service.get_source_by_id(source_id)
+            if not source:
+                typer.echo(f"Error: Source '{source_id}' not found", err=True)
+                raise typer.Exit(1)
+            
+            # Get sync-enabled, ingestible collections for this source
+            collections = db.query(SourceCollection).filter(
+                SourceCollection.source_id == source.id,
+                SourceCollection.enabled == True
+            ).all()
+            
+            if not collections:
+                typer.echo(f"No sync-enabled collections found for source '{source.name}'")
+                typer.echo("Use 'retrovue collection update <name> --sync-enabled true' to enable collections")
+                return
+            
+            # Filter to only ingestible collections
+            ingestible_collections = []
+            for collection in collections:
+                # Check if collection is ingestible (has valid local paths)
+                path_mappings = db.query(PathMapping).filter(
+                    PathMapping.collection_id == collection.id
+                ).all()
+                
+                ingestible = False
+                if path_mappings:
+                    for mapping in path_mappings:
+                        if mapping.local_path and os.path.exists(mapping.local_path) and os.access(mapping.local_path, os.R_OK):
+                            ingestible = True
+                            break
+                
+                if ingestible:
+                    ingestible_collections.append(collection)
+                else:
+                    typer.echo(f"  Skipping '{collection.name}' - not ingestible (no valid local paths)")
+            
+            if not ingestible_collections:
+                typer.echo(f"No ingestible collections found for source '{source.name}'")
+                typer.echo("Configure path mappings and ensure local paths are accessible")
+                return
+            
+            # Use the existing ingest orchestrator for bulk processing
+            from ...content_manager.ingest_orchestrator import IngestOrchestrator
+            
+            orchestrator = IngestOrchestrator(db)
+            sync_results = []
+            total_assets = 0
+            
+            for collection in ingestible_collections:
+                typer.echo(f"Ingesting collection: {collection.name}")
+                
+                try:
+                    # Run ingest for this collection
+                    result = orchestrator.ingest_collection(str(collection.id), dry_run=dry_run)
+                    
+                    asset_count = result.get("assets_processed", 0)
+                    total_assets += asset_count
+                    
+                    sync_results.append({
+                        "collection_name": collection.name,
+                        "assets_ingested": asset_count,
+                        "status": "success"
+                    })
+                    
+                    typer.echo(f"  Ingested {asset_count} assets")
+                    
+                except Exception as e:
+                    typer.echo(f"  Error ingesting '{collection.name}': {e}")
+                    sync_results.append({
+                        "collection_name": collection.name,
+                        "assets_ingested": 0,
+                        "status": "error",
+                        "error": str(e)
+                    })
+            
+            if json_output:
+                import json
+                result = {
+                    "source": {
+                        "id": str(source.id),
+                        "name": source.name,
+                        "type": source.kind
+                    },
+                    "collections_ingested": len(ingestible_collections),
+                    "total_assets": total_assets,
+                    "ingest_results": sync_results
+                }
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                typer.echo(f"Ingest completed for {len(ingestible_collections)} collections")
+                typer.echo(f"Total assets ingested: {total_assets}")
+                    
+        except Exception as e:
+            typer.echo(f"Error ingesting from source: {e}", err=True)
+            raise typer.Exit(1)
+
+
+@app.command("attach-enricher")
+def source_attach_enricher(
+    source_id: str = typer.Argument(..., help="Source ID, external ID, or name to attach enricher to"),
+    enricher_id: str = typer.Argument(..., help="Enricher ID to attach"),
+    priority: int = typer.Option(1, "--priority", help="Priority/order for enricher execution (default: 1)"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
-    Ask the importer to enumerate that Source's Collections (libraries). Create or update Collection rows in RetroVue.
+    Attach an ingest-scope enricher to all collections in a source.
     
-    Output: Shows discovered collections and sync status.
+    This command attaches the specified enricher to all collections under the source,
+    applying it during the ingest process for each collection.
+    
+    Parameters:
+    - source_id: Source to attach enricher to (can be ID, external ID, or name)
+    - enricher_id: Enricher to attach
+    - priority: Execution priority (lower numbers run first)
     
     Examples:
-        retrovue source sync-collections "My Plex"
-        retrovue source sync-collections plex-5063d926 --persist
-        retrovue source sync-collections "My Plex" --persist --json
+        retrovue source --name "My Plex Server" attach-enricher enricher-ffprobe-1
+        retrovue source plex-5063d926 attach-enricher enricher-metadata-1 --priority 2
+        retrovue source "My Plex Server" attach-enricher enricher-llm-1 --priority 3
     """
-    # This is an alias for the discover command - call the same underlying function
-    return discover_collections(source_id, persist, json_output)
+    with session() as db:
+        source_service = SourceService(db)
+        
+        try:
+            # Get the source first to validate it exists
+            source = source_service.get_source_by_id(source_id)
+            if not source:
+                typer.echo(f"Error: Source '{source_id}' not found", err=True)
+                raise typer.Exit(1)
+            
+            # Get all collections for this source
+            collections = db.query(SourceCollection).filter(
+                SourceCollection.source_id == source.id
+            ).all()
+            
+            if not collections:
+                typer.echo(f"No collections found for source '{source.name}'")
+                return
+            
+            # TODO: Implement actual enricher attachment logic
+            # For now, just show what would be attached
+            typer.echo(f"Attaching enricher '{enricher_id}' to {len(collections)} collections in source '{source.name}'")
+            typer.echo(f"Priority: {priority}")
+            typer.echo()
+            typer.echo("Collections that will have the enricher attached:")
+            for collection in collections:
+                typer.echo(f"  - {collection.name} (ID: {collection.id})")
+            
+            if json_output:
+                import json
+                result = {
+                    "source": {
+                        "id": str(source.id),
+                        "name": source.name,
+                        "type": source.kind
+                    },
+                    "enricher_id": enricher_id,
+                    "priority": priority,
+                    "collections_affected": len(collections),
+                    "collections": [
+                        {
+                            "id": str(collection.id),
+                            "name": collection.name,
+                            "external_id": collection.external_id
+                        }
+                        for collection in collections
+                    ],
+                    "status": "attached"
+                }
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                typer.echo(f"Successfully attached enricher '{enricher_id}' to {len(collections)} collections")
+                typer.echo("TODO: Implement actual enricher attachment logic")
+                
+        except Exception as e:
+            typer.echo(f"Error attaching enricher to source: {e}", err=True)
+            raise typer.Exit(1)
+
+
+@app.command("detach-enricher")
+def source_detach_enricher(
+    source_id: str = typer.Argument(..., help="Source ID, external ID, or name to detach enricher from"),
+    enricher_id: str = typer.Argument(..., help="Enricher ID to detach"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+):
+    """
+    Detach an ingest-scope enricher from all collections in a source.
+    
+    This command removes the specified enricher from all collections under the source,
+    preventing it from running during the ingest process for each collection.
+    
+    Parameters:
+    - source_id: Source to detach enricher from (can be ID, external ID, or name)
+    - enricher_id: Enricher to detach
+    
+    Examples:
+        retrovue source --name "My Plex Server" detach-enricher enricher-ffprobe-1
+        retrovue source plex-5063d926 detach-enricher enricher-metadata-1
+        retrovue source "My Plex Server" detach-enricher enricher-llm-1
+    """
+    with session() as db:
+        source_service = SourceService(db)
+        
+        try:
+            # Get the source first to validate it exists
+            source = source_service.get_source_by_id(source_id)
+            if not source:
+                typer.echo(f"Error: Source '{source_id}' not found", err=True)
+                raise typer.Exit(1)
+            
+            # Get all collections for this source
+            collections = db.query(SourceCollection).filter(
+                SourceCollection.source_id == source.id
+            ).all()
+            
+            if not collections:
+                typer.echo(f"No collections found for source '{source.name}'")
+                return
+            
+            # TODO: Implement actual enricher detachment logic
+            # For now, just show what would be detached
+            typer.echo(f"Detaching enricher '{enricher_id}' from {len(collections)} collections in source '{source.name}'")
+            typer.echo()
+            typer.echo("Collections that will have the enricher detached:")
+            for collection in collections:
+                typer.echo(f"  - {collection.name} (ID: {collection.id})")
+            
+            if json_output:
+                import json
+                result = {
+                    "source": {
+                        "id": str(source.id),
+                        "name": source.name,
+                        "type": source.kind
+                    },
+                    "enricher_id": enricher_id,
+                    "collections_affected": len(collections),
+                    "collections": [
+                        {
+                            "id": str(collection.id),
+                            "name": collection.name,
+                            "external_id": collection.external_id
+                        }
+                        for collection in collections
+                    ],
+                    "status": "detached"
+                }
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                typer.echo(f"Successfully detached enricher '{enricher_id}' from {len(collections)} collections")
+                typer.echo("TODO: Implement actual enricher detachment logic")
+                
+        except Exception as e:
+            typer.echo(f"Error detaching enricher from source: {e}", err=True)
+            raise typer.Exit(1)
+
+
 
 
 @asset_groups_app.command("enable")

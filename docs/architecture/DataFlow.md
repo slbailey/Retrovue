@@ -8,7 +8,7 @@ This describes how content moves through RetroVue from disk/library to screen.
 
 - An importer plugin (Source type) knows how to talk to something like Plex or a filesystem.
 - Operator registers that Source: `retrovue source add ...`
-- Operator syncs collections from that Source into RetroVue.
+- Operator discovers collections from that Source: `retrovue source discover <source_id>`
 - Operator enables ingest on selected Collections.
 - When ingest runs:
   - The importer returns AssetDraft objects for each item in that Collection.

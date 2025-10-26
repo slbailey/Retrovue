@@ -664,9 +664,9 @@ def run_tests(
                 typer.echo(result.stderr)
         
         if result.returncode == 0:
-            typer.echo("✅ All tests passed!")
+            typer.echo("All tests passed!")
         else:
-            typer.echo("❌ Some tests failed!")
+            typer.echo("Some tests failed!")
             raise typer.Exit(1)
             
     except Exception as e:

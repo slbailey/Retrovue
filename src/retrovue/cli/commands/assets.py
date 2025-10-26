@@ -102,7 +102,7 @@ def list_assets(
                 typer.echo()
                 
                 for asset in asset_summaries:
-                    status_str = "✅ CANONICAL" if asset.canonical else "⏳ PENDING"
+                    status_str = "CANONICAL" if asset.canonical else "PENDING"
                     typer.echo(f"  {asset.id} - {asset.uri} ({status_str})")
                     
         except Exception as e:
@@ -200,7 +200,7 @@ def list_assets_advanced(
                     
                     # Truncate UUID to first 8 characters for readability
                     uuid_short = str(asset.uuid)[:8]
-                    status_icon = "✅" if asset.canonical else "⏳"
+                    status_icon = "CANONICAL" if asset.canonical else "PENDING"
                     typer.echo(f"{uuid_short}\t\t{status_icon}\t{kind}\t{duration}\t{series_title}\t{season_num}\t{episode_num}\t{title}")
                     
         except Exception as e:
@@ -260,7 +260,7 @@ def get_asset(
                 typer.echo(f"  Audio Codec: {asset.audio_codec or 'Unknown'}")
                 typer.echo(f"  Container: {asset.container or 'Unknown'}")
                 typer.echo(f"  Hash: {asset.hash_sha256[:16]}..." if asset.hash_sha256 else "  Hash: Not computed")
-                canonical_status = "✅ CANONICAL (approved for broadcast)" if asset.canonical else "⏳ PENDING (not yet approved)"
+                canonical_status = "CANONICAL (approved for broadcast)" if asset.canonical else "PENDING (not yet approved)"
                 typer.echo(f"  Status: {canonical_status}")
                 typer.echo(f"  Discovered: {asset.discovered_at}")
                 

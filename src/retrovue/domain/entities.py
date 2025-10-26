@@ -144,6 +144,7 @@ class Asset(Base):
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    collection_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     episodes: Mapped[list[Episode]] = relationship(
@@ -152,6 +153,7 @@ class Asset(Base):
     markers: Mapped[list[Marker]] = relationship(
         "Marker", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
     )
+    collection: Mapped["SourceCollection | None"] = relationship("SourceCollection", passive_deletes=True)
     review_queue: Mapped[list[ReviewQueue]] = relationship(
         "ReviewQueue", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -310,6 +312,7 @@ class SourceCollection(Base):
     # Relationships
     source: Mapped[Source] = relationship("Source", back_populates="collections", passive_deletes=True)
     path_mappings: Mapped[list["PathMapping"]] = relationship("PathMapping", back_populates="collection", cascade="all, delete-orphan")
+    assets: Mapped[list["Asset"]] = relationship("Asset", passive_deletes=True, overlaps="collection")
 
     __table_args__ = (
         Index("ix_source_collections_source_id", "source_id"),

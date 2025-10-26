@@ -24,6 +24,7 @@ The plugin must expose:
     - source_path or equivalent remote path info
 - `fetch_assets_for_collection(source_config, collection_descriptor, local_path)`
   - Return AssetDraft objects for that collection.
+  - The ingest orchestrator handles duplicate detection automatically based on asset URI.
 
 The importer must NOT decide which collections sync. RetroVue handles that via `sync_enabled`.
 
@@ -92,9 +93,13 @@ If a plugin needs new config fields later (for example, `verify-ssl=false`), the
 
 ## Safety and operator expectations
 
-Importer plugins must not automatically ingest content on registration. Ingest only happens when an operator runs `retrovue ingest run`.
+Importer plugins must not automatically ingest content on registration. Ingest only happens when an operator runs `retrovue source <source_id> ingest` or `retrovue collection <collection_id> ingest`.
 
 Importer plugins must expose all collections they can see, including collections the operator may choose not to sync.
+
+Importer plugins must not implement their own duplicate detection logic. The ingest orchestrator handles duplicate detection automatically based on asset URI, preventing both database duplication and unnecessary review queue entries.
+
+Importer plugins must not implement their own collection deletion logic. The system provides `retrovue collection delete` for soft deletion and `retrovue collection wipe` for complete cleanup.
 
 Enricher plugins must not assume they run first or run alone.
 

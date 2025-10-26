@@ -107,6 +107,12 @@ Modify configuration.
 **retrovue enricher remove <enricher_id>**
 Remove configuration.
 
+**retrovue source <source_id> attach-enricher <enricher_id> --priority <n>**
+Attach an ingest-scope enricher to all Collections in a Source.
+
+**retrovue source <source_id> detach-enricher <enricher_id>**
+Detach an ingest-scope enricher from all Collections in a Source.
+
 **retrovue collection attach-enricher <collection_id> <enricher_id> --priority <n>**
 Attach an ingest-scope enricher to a Collection.
 

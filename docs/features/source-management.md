@@ -13,7 +13,7 @@ RetroVue's source management system provides a comprehensive solution for connec
 When adding a Plex source, collections (libraries) are automatically discovered and persisted to the database:
 
 - **Automatic discovery**: No manual collection scanning required
-- **Default state**: All collections start disabled (sync=false)
+- **Default state**: All collections start disabled (sync=false) and ingestible status depends on path mappings
 - **Selective activation**: Enable only the collections you want for content discovery
 - **Persistent storage**: Collection settings survive system restarts
 

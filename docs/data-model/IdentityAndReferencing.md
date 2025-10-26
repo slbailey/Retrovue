@@ -66,3 +66,31 @@ This dual-key approach enables:
 - Any code that assumes UUID primary keys for channels or EPG entries is deprecated
 - The canonical channel table is **broadcast_channel** (INTEGER PK), not channels
 - All new entities must follow the id (INTEGER PK) + uuid (stable external identity) pattern
+
+### Sequence management
+
+PostgreSQL auto-increment sequences can be reset when needed:
+
+```sql
+-- Reset assets sequence to start from 1
+ALTER SEQUENCE assets_id_seq RESTART WITH 1;
+
+-- Reset multiple sequences
+ALTER SEQUENCE assets_id_seq RESTART WITH 1;
+ALTER SEQUENCE catalog_asset_id_seq RESTART WITH 1;
+ALTER SEQUENCE broadcast_playlog_event_id_seq RESTART WITH 1;
+```
+
+**When to reset sequences:**
+
+- After complete collection wipe operations
+- During testing and development
+- When asset IDs become too large (e.g., > 100,000)
+- After schema changes requiring fresh data
+
+**Safety considerations:**
+
+- Only reset sequences when all related tables are empty
+- Always verify no data exists before resetting
+- Document sequence resets for audit purposes
+- Consider impact on any external systems using asset IDs

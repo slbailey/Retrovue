@@ -167,7 +167,7 @@ class IngestOrchestrator:
             # Process each discovered item
             for item in discovered_items:
                 try:
-                    item_report = self._process_discovered_item(item, dry_run)
+                    item_report = self._process_discovered_item(item, collection, dry_run)
                     self._merge_reports(report, item_report)
                 except Exception as e:
                     logger.error("episode_processing_failed", 
@@ -209,7 +209,7 @@ class IngestOrchestrator:
         
         return collections
     
-    def _process_collection(self, collection: SourceCollectionDTO, dry_run: bool) -> IngestReport:
+    def _process_collection(self, collection: SourceCollectionDTO, dry_run: bool, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> IngestReport:
         """Process a single collection."""
         report = IngestReport()
         
@@ -217,35 +217,49 @@ class IngestOrchestrator:
         importer = self._get_importer_for_collection(collection)
         
         # Discover items from the collection
-        discovered_items = self._discover_from_collection(importer, collection)
+        discovered_items = self._discover_from_collection(importer, collection, title_filter, season_filter, episode_filter)
         report.discovered = len(discovered_items)
         
         # Process each discovered item
         for item in discovered_items:
             try:
-                item_report = self._process_discovered_item(item, dry_run)
+                item_report = self._process_discovered_item(item, collection, dry_run)
                 self._merge_reports(report, item_report)
             except Exception as e:
+                item_uri = getattr(item, 'file_path', getattr(item, 'path_uri', 'unknown'))
                 logger.error("item_processing_failed", 
-                           item_uri=item.path_uri, error=str(e))
+                           item_uri=item_uri, error=str(e))
                 report.errors += 1
                 continue
         
         return report
     
-    def _discover_from_collection(self, importer, collection: SourceCollectionDTO) -> list:
+    def _discover_from_collection(self, importer, collection: SourceCollectionDTO, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> list:
         """Discover items from a collection using the appropriate importer."""
         if collection.source_type == "plex":
             # For Plex, use collection-specific discovery
-            return importer.discover_from_collection(
-                collection.external_id,
-                include_metadata=True
+            # Build source config and collection descriptor
+            source_config = {}  # PlexImporter doesn't need source config
+            collection_descriptor = {
+                "id": collection.external_id,
+                "name": collection.name
+            }
+            # Use first local path from mapping pairs
+            local_path = collection.mapping_pairs[0][1] if collection.mapping_pairs else ""
+            
+            return importer.fetch_assets_for_collection(
+                source_config,
+                collection_descriptor,
+                local_path,
+                title_filter=title_filter,
+                season_filter=season_filter,
+                episode_filter=episode_filter
             )
         else:
             # For other sources, use general discovery
             return importer.discover()
     
-    def _process_discovered_item(self, item, dry_run: bool) -> IngestReport:
+    def _process_discovered_item(self, item, collection: SourceCollectionDTO, dry_run: bool) -> IngestReport:
         """Process a single discovered item."""
         report = IngestReport()
         
@@ -255,13 +269,20 @@ class IngestOrchestrator:
             return report
         
         try:
-            # Step 1: Register the asset
-            asset = self.library_service.register_asset_from_discovery(item)
+            # Check if this is an AssetDraft (from Plex importer) or legacy discovery data
+            if hasattr(item, 'series_title') and hasattr(item, 'season_number'):
+                # This is an AssetDraft with TV show hierarchy
+                asset, is_newly_created = self._process_asset_draft_with_hierarchy(item, collection)
+            else:
+                # Legacy discovery data
+                asset = self.library_service.register_asset_from_discovery(item)
+                is_newly_created = True  # Assume legacy discovery creates new assets
+            
             report.registered = 1
             
-            # Step 2: Apply enrichers
-            enrichers = ["ffprobe"]  # Default enrichers
-            for enricher_name in enrichers:
+            # Step 2: Apply enrichers (only if enabled for this collection)
+            enabled_enrichers = self._get_enabled_enrichers_for_collection(collection)
+            for enricher_name in enabled_enrichers:
                 try:
                     enricher = get_enricher(enricher_name)
                     asset = enricher.enrich(asset)
@@ -272,24 +293,181 @@ class IngestOrchestrator:
                     continue
             
             # Step 3: Calculate confidence and make canonicalization decision
-            confidence = self._calculate_confidence(item, asset)
-            
-            if confidence >= 0.8:
-                self.library_service.mark_asset_canonical(asset.id)
-                report.canonicalized = 1
-                logger.debug("asset_canonicalized", asset_id=str(asset.id), confidence=confidence)
+            # Only do this for newly created assets, not existing duplicates
+            if is_newly_created:
+                confidence = self._calculate_confidence(item, asset)
+                
+                if confidence >= 0.8:
+                    self.library_service.mark_asset_canonical(asset.id)
+                    report.canonicalized = 1
+                    logger.debug("asset_processed", 
+                               asset_id=str(asset.id), 
+                               status="canonicalized", 
+                               confidence=confidence,
+                               series_title=getattr(item, 'series_title', 'unknown'),
+                               season=getattr(item, 'season_number', 'unknown'),
+                               episode=getattr(item, 'episode_number', 'unknown'))
+                else:
+                    reason = self._get_review_reason(asset, item)
+                    self.library_service.enqueue_review(asset.id, reason, confidence)
+                    report.queued_for_review = 1
+                    logger.debug("asset_processed", 
+                               asset_id=str(asset.id), 
+                               status="queued_for_review", 
+                               confidence=confidence,
+                               series_title=getattr(item, 'series_title', 'unknown'),
+                               season=getattr(item, 'season_number', 'unknown'),
+                               episode=getattr(item, 'episode_number', 'unknown'))
             else:
-                reason = self._get_review_reason(asset, item)
-                self.library_service.enqueue_review(asset.id, reason, confidence)
-                report.queued_for_review = 1
-                logger.debug("asset_queued_for_review", asset_id=str(asset.id), confidence=confidence)
+                # For duplicate assets, just log that we skipped processing
+                logger.debug("asset_processed", 
+                           asset_id=str(asset.id), 
+                           status="duplicate_skipped",
+                           series_title=getattr(item, 'series_title', 'unknown'),
+                           season=getattr(item, 'season_number', 'unknown'),
+                           episode=getattr(item, 'episode_number', 'unknown'))
             
             return report
             
         except Exception as e:
-            logger.error("item_processing_failed", item_uri=item.path_uri, error=str(e))
+            item_uri = getattr(item, 'file_path', getattr(item, 'path_uri', 'unknown'))
+            logger.error("item_processing_failed", item_uri=item_uri, error=str(e))
             report.errors = 1
             return report
+    
+    def _process_asset_draft_with_hierarchy(self, asset_draft, collection: SourceCollectionDTO):
+        """
+        Process an AssetDraft with TV show hierarchy, creating proper database entities.
+        
+        This method creates the full TV show hierarchy:
+        - Title (TV show/series)
+        - Season 
+        - Episode
+        - Asset
+        - EpisodeAsset (junction table)
+        
+        Returns:
+            tuple: (asset, is_newly_created) where is_newly_created is True if asset was created,
+                   False if it was an existing duplicate
+        """
+        from ..domain.entities import Title, Season, Episode, Asset, EpisodeAsset
+        import uuid
+        
+        session = self.db
+        
+        try:
+            # Get the actual collection entity from the database
+            from ..domain.entities import SourceCollection
+            collection_entity = session.query(SourceCollection).filter(
+                SourceCollection.external_id == collection.external_id
+            ).first()
+            
+            if not collection_entity:
+                raise ValueError(f"Collection with external_id '{collection.external_id}' not found in database")
+            # Step 1: Create or find the Title (TV show)
+            title = session.query(Title).filter(
+                Title.name == asset_draft.series_title,
+                Title.kind == "show"
+            ).first()
+            
+            if not title:
+                title = Title(
+                    id=uuid.uuid4(),
+                    name=asset_draft.series_title,
+                    kind="show",
+                    year=None  # Could extract from asset_draft if available
+                )
+                session.add(title)
+                session.flush()  # Get the ID
+            
+            # Step 2: Create or find the Season
+            season = session.query(Season).filter(
+                Season.title_id == title.id,
+                Season.number == asset_draft.season_number
+            ).first()
+            
+            if not season:
+                season = Season(
+                    id=uuid.uuid4(),
+                    title_id=title.id,
+                    number=asset_draft.season_number
+                )
+                session.add(season)
+                session.flush()  # Get the ID
+            
+            # Step 3: Create or find the Episode
+            episode = session.query(Episode).filter(
+                Episode.title_id == title.id,
+                Episode.season_id == season.id,
+                Episode.number == asset_draft.episode_number
+            ).first()
+            
+            if not episode:
+                episode = Episode(
+                    id=uuid.uuid4(),
+                    title_id=title.id,
+                    season_id=season.id,
+                    number=asset_draft.episode_number,
+                    name=asset_draft.episode_title,
+                    external_ids={"plex_rating_key": asset_draft.external_id}
+                )
+                session.add(episode)
+                session.flush()  # Get the ID
+            
+            # Step 4: Check for duplicate Asset before creating
+            existing_asset = session.query(Asset).filter(
+                Asset.uri == asset_draft.file_path
+            ).first()
+            
+            if existing_asset:
+                # Check if EpisodeAsset junction exists, create if not
+                existing_junction = session.query(EpisodeAsset).filter(
+                    EpisodeAsset.episode_id == episode.id,
+                    EpisodeAsset.asset_id == existing_asset.id
+                ).first()
+                
+                if not existing_junction:
+                    episode_asset = EpisodeAsset(
+                        episode_id=episode.id,
+                        asset_id=existing_asset.id
+                    )
+                    session.add(episode_asset)
+                    session.commit()
+                
+                return existing_asset, False  # False = not newly created (duplicate)
+            
+            # Create the Asset
+            asset = Asset(
+                uuid=asset_draft.uuid,
+                uri=asset_draft.file_path,
+                size=asset_draft.file_size or 0,
+                hash_sha256=None,  # Will be calculated by enrichers
+                canonical=False,  # Start as non-canonical
+                discovered_at=asset_draft.discovered_at,
+                collection_id=collection_entity.id
+            )
+            session.add(asset)
+            session.flush()  # Get the ID
+            
+            # Step 5: Create the EpisodeAsset junction
+            episode_asset = EpisodeAsset(
+                episode_id=episode.id,
+                asset_id=asset.id
+            )
+            session.add(episode_asset)
+            
+            session.commit()
+            
+            return asset, True  # True = newly created
+            
+        except Exception as e:
+            session.rollback()
+            logger.error("tv_show_hierarchy_creation_failed", 
+                        series_title=asset_draft.series_title,
+                        season=asset_draft.season_number,
+                        episode=asset_draft.episode_number,
+                        error=str(e))
+            raise
     
     def _get_importer_for_source(self, source: Source):
         """Get importer for a source."""
@@ -312,16 +490,26 @@ class IngestOrchestrator:
             if not plex_sources:
                 raise ValueError("No Plex sources configured")
             
-            # Build server configuration list
-            servers = []
-            for plex_source in plex_sources:
-                config = plex_source.config or {}
-                servers.append({
-                    "base_url": config.get("base_url"),
-                    "token": config.get("token")
-                })
+            # Use the first Plex source for now
+            # TODO: Support multiple Plex sources
+            plex_source = plex_sources[0]
+            config = plex_source.config or {}
             
-            return get_importer("plex", servers=servers)
+            # Get server configuration from the servers array
+            servers = config.get("servers", [])
+            if not servers:
+                raise ValueError("No Plex servers configured in source")
+            
+            server = servers[0]  # Use first server
+            base_url = server.get("base_url")
+            token = server.get("token")
+            
+            if not base_url or not token:
+                raise ValueError(f"Plex server configuration incomplete: base_url={base_url}, token={'***' if token else None}")
+            
+            return get_importer("plex", 
+                              base_url=base_url,
+                              token=token)
         else:
             return get_importer(collection.source_type)
     
@@ -333,10 +521,15 @@ class IngestOrchestrator:
         """
         confidence = 0.5  # Base confidence
         
-        # Handle both DiscoveredItem objects and dicts
+        # Handle DiscoveredItem objects, AssetDraft objects, and dicts
         if hasattr(discovered_item, 'raw_labels'):
             raw_labels = discovered_item.raw_labels or {}
+        elif hasattr(discovered_item, 'raw_metadata'):
+            # AssetDraft object - use the rich metadata from the source
+            raw_metadata = discovered_item.raw_metadata or {}
+            raw_labels = raw_metadata  # Use raw_metadata as our labels
         else:
+            # Dictionary
             raw_labels = discovered_item.get("raw_labels", {})
         
         # Ensure raw_labels is a dict
@@ -349,44 +542,54 @@ class IngestOrchestrator:
                     labels_dict[key] = value
             raw_labels = labels_dict
         
-        # +0.4 for title match (strong indicator) - but only for meaningful titles
-        if "title_guess" in raw_labels and raw_labels["title_guess"]:
-            title = raw_labels["title_guess"]
-            # Only boost confidence for titles that look meaningful (not just random strings)
-            if len(title) > 3 and not title.isdigit() and not title.isalnum():
-                confidence += 0.4
-            elif len(title) > 5:  # Allow longer alphanumeric titles
-                confidence += 0.2
+        # +0.4 for title match (strong indicator) - check multiple title fields
+        title_fields = ["title_guess", "show_title", "plex_title", "title"]
+        for field in title_fields:
+            if field in raw_labels and raw_labels[field]:
+                title = raw_labels[field]
+                # Only boost confidence for titles that look meaningful (not just random strings)
+                if len(title) > 3 and not title.isdigit() and not title.isalnum():
+                    confidence += 0.4
+                    break
+                elif len(title) > 5:  # Allow longer alphanumeric titles
+                    confidence += 0.2
+                    break
         
-        # +0.2 for season/episode structured data
-        if "season" in raw_labels and "episode" in raw_labels:
+        # +0.2 for season/episode structured data - check multiple field names
+        season_fields = ["season", "season_index", "season_number"]
+        episode_fields = ["episode", "episode_index", "episode_number"]
+        has_season = any(field in raw_labels and raw_labels[field] for field in season_fields)
+        has_episode = any(field in raw_labels and raw_labels[field] for field in episode_fields)
+        if has_season and has_episode:
             confidence += 0.2
         
-        # +0.2 for year data
-        if "year" in raw_labels:
+        # +0.2 for year data - check multiple field names
+        year_fields = ["year", "plex_year", "release_year"]
+        if any(field in raw_labels and raw_labels[field] for field in year_fields):
             confidence += 0.2
         
         # +0.2 for duration present (if we can detect it from file size or metadata)
-        if hasattr(discovered_item, 'size') and discovered_item.size and discovered_item.size > 100 * 1024 * 1024:  # > 100MB
+        if hasattr(discovered_item, 'file_size') and discovered_item.file_size and discovered_item.file_size > 100 * 1024 * 1024:  # > 100MB
             confidence += 0.2
         
         # +0.2 for codecs present (if we can detect from filename)
-        if hasattr(discovered_item, 'path_uri') and discovered_item.path_uri:
-            filename = discovered_item.path_uri.split('/')[-1].lower()
+        file_path = getattr(discovered_item, 'file_path', getattr(discovered_item, 'path_uri', None))
+        if file_path:
+            filename = file_path.split('/')[-1].lower()
             # Check for common codec indicators in filename
             codec_indicators = ['h264', 'h265', 'hevc', 'x264', 'x265', 'avc', 'aac', 'ac3', 'dts']
             if any(codec in filename for codec in codec_indicators):
                 confidence += 0.2
         
         # Additional boost for structured content type
-        if "type" in raw_labels:
+        if "type" in raw_labels or "plex_type" in raw_labels:
             confidence += 0.1
         
         # Boost confidence for Plex metadata (legacy support)
-        if "title" in raw_labels:
+        if "title" in raw_labels or "plex_title" in raw_labels:
             confidence += 0.3  # Plex provides good metadata
         
-        # Additional confidence from asset enrichment
+        # Additional confidence from asset enrichment (if available)
         if asset.duration_ms and asset.duration_ms > 0:
             confidence += 0.1
         
@@ -402,6 +605,102 @@ class IngestOrchestrator:
         if asset.size < 1024 * 1024:
             return "File size too small"
         return "Manual review required"
+    
+    def ingest_collection(self, collection_id: str, dry_run: bool = False, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> dict:
+        """
+        Ingest a single collection by ID.
+        
+        Args:
+            collection_id: UUID of the collection to ingest
+            
+        Returns:
+            Dictionary with ingest results
+        """
+        try:
+            # Get the collection from database
+            from ..domain.entities import SourceCollection
+            import uuid
+            
+            collection = None
+            
+            # Try to find by UUID first
+            try:
+                if len(collection_id) == 36 and collection_id.count('-') == 4:
+                    collection_uuid = uuid.UUID(collection_id)
+                    collection = self.db.query(SourceCollection).filter(SourceCollection.id == collection_uuid).first()
+            except (ValueError, TypeError):
+                pass
+            
+            # If not found by UUID, try by external_id
+            if not collection:
+                collection = self.db.query(SourceCollection).filter(SourceCollection.external_id == collection_id).first()
+            
+            # If not found by external_id, try by name (case-insensitive)
+            if not collection:
+                name_matches = self.db.query(SourceCollection).filter(SourceCollection.name.ilike(collection_id)).all()
+                if len(name_matches) == 1:
+                    collection = name_matches[0]
+                elif len(name_matches) > 1:
+                    raise ValueError(f"Multiple collections found with name '{collection_id}'. Use full UUID to specify.")
+            
+            if not collection:
+                raise ValueError(f"Collection '{collection_id}' not found")
+            
+            # Convert to DTO
+            from .source_service import SourceCollectionDTO
+            
+            # Get path mappings for this collection
+            from ..domain.entities import PathMapping
+            mappings = self.db.query(PathMapping).filter(
+                PathMapping.collection_id == collection.id
+            ).all()
+            
+            mapping_pairs = [(m.plex_path, m.local_path) for m in mappings]
+            
+            # Get source info
+            from ..domain.entities import Source
+            source = self.db.query(Source).filter(Source.id == collection.source_id).first()
+            
+            collection_dto = SourceCollectionDTO(
+                external_id=collection.external_id,
+                name=collection.name,
+                enabled=collection.enabled,
+                mapping_pairs=mapping_pairs,
+                source_type=source.kind if source else "unknown",
+                config=collection.config
+            )
+            
+            # Process the collection
+            report = self._process_collection(collection_dto, dry_run=dry_run, title_filter=title_filter, season_filter=season_filter, episode_filter=episode_filter)
+            
+            return {
+                "assets_processed": report.registered,
+                "assets_enriched": report.enriched,
+                "assets_canonicalized": report.canonicalized,
+                "assets_queued_for_review": report.queued_for_review,
+                "errors": report.errors
+            }
+            
+        except Exception as e:
+            logger.error("collection_ingest_failed", collection_id=collection_id, error=str(e))
+            raise
+    
+    def _get_enabled_enrichers_for_collection(self, collection: SourceCollectionDTO) -> list[str]:
+        """
+        Get list of enabled enrichers for a collection.
+        
+        For now, this returns a default set of enrichers.
+        In the future, this will check the database for enricher attachments.
+        
+        Args:
+            collection: The collection to check for enabled enrichers
+            
+        Returns:
+            List of enricher names that are enabled for this collection
+        """
+        # TODO: Implement actual enricher attachment checking from database
+        # For now, return empty list to test enricher behavior
+        return []
     
     def _merge_reports(self, target: IngestReport, source: IngestReport):
         """Merge source report into target report."""
