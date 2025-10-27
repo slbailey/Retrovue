@@ -61,4 +61,4 @@ See also:
 - [Playout pipeline](../domain/PlayoutPipeline.md)
 - [Producer lifecycle](ProducerLifecycle.md)
 - [As-run logging](AsRunLogging.md)
-  \_For CLI commands, refer to the [CLI contract](../contracts/cli_contract.md).
+  \_For CLI commands, refer to the [CLI contract](../contracts/README.md).

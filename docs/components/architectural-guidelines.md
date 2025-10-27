@@ -6,6 +6,8 @@ This document outlines the core architectural patterns, design principles, and i
 
 RetroVue follows a **Clean Architecture** approach with clear separation of concerns, dependency inversion, and industry-standard patterns. The goal is to create a maintainable, testable, and extensible system that can evolve from a content management system to a full IPTV platform.
 
+**Domain-Driven Design**: The architecture implements domain concepts defined in `docs/domain/` documentation, ensuring that technical implementation aligns with business requirements and entity relationships.
+
 ## Core architectural patterns
 
 ### Clean architecture layers
@@ -109,9 +111,10 @@ class AssetCreate(BaseModel):
     duration_ms: Optional[int] = None
 
 class AssetResponse(BaseModel):
-    id: UUID
+    uuid: UUID
     uri: str
-    canonical: bool
+    state: str
+    approved_for_broadcast: bool
     created_at: datetime
 ```
 
@@ -139,7 +142,7 @@ class BaseImporter(ABC):
 
 class BaseEnricher(ABC):
     @abstractmethod
-    def enrich(self, asset: Asset) -> dict[str, Any]:
+    def enrich(self, asset: Asset) -> Asset:
         pass
 ```
 
@@ -170,8 +173,8 @@ class AssetRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def find_by_id(self, asset_id: UUID) -> Optional[Asset]:
-        return self.db.query(Asset).filter(Asset.id == asset_id).first()
+    def find_by_uuid(self, asset_uuid: UUID) -> Optional[Asset]:
+        return self.db.query(Asset).filter(Asset.uuid == asset_uuid).first()
 
     def save(self, asset: Asset) -> Asset:
         self.db.add(asset)
@@ -189,7 +192,7 @@ class LibraryService:
 
     def register_asset(self, uri: str, metadata: dict) -> Asset:
         # Business logic coordination
-        asset = Asset(uri=uri, **metadata)
+        asset = Asset(uri=uri, state="new", **metadata)
         return self.asset_repo.save(asset)
 ```
 
@@ -294,8 +297,9 @@ CLI Command → Typer Router → Service Layer → Domain Layer → Database
 ```python
 # Test domain logic in isolation
 def test_asset_creation():
-    asset = Asset(uri="file://test.mp4", size=1000)
-    assert asset.canonical is False
+    asset = Asset(uri="file://test.mp4", size=1000, state="new")
+    assert asset.state == "new"
+    assert asset.approved_for_broadcast is False
     assert asset.uri == "file://test.mp4"
 ```
 
@@ -307,7 +311,7 @@ def test_library_service_register_asset():
     with session() as db:
         service = LibraryService(db)
         asset = service.register_asset("file://test.mp4", {})
-        assert asset.id is not None
+        assert asset.uuid is not None
 ```
 
 ### End-to-end testing
@@ -328,7 +332,7 @@ def test_api_asset_creation():
 # Consistent logging across all layers
 logger = structlog.get_logger()
 
-logger.info("Asset created", asset_id=asset.id, uri=asset.uri)
+logger.info("Asset created", asset_uuid=asset.uuid, uri=asset.uri, state=asset.state)
 logger.error("Ingest failed", source=source, error=str(e))
 ```
 

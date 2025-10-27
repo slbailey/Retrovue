@@ -1,4 +1,4 @@
-_Related: [Getting started](getting-started.md) • [Web interface](web-interface.md) • [Operator CLI](cli_contract.md)_
+_Related: [Getting started](getting-started.md) • [Web interface](web-interface.md) • [Operator CLI](README.md)_
 
 # RetroVue Configuration
 

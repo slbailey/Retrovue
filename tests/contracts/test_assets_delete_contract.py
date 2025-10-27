@@ -24,7 +24,7 @@ class TestAssetsDeleteContract:
 
     def test_delete_asset_by_uuid_soft_delete_with_confirmation(self, db_session):
         """Test soft delete with confirmation flag enforcement."""
-        # TODO: Update cli_contract.md to specify exact confirmation behavior
+        # TODO: Update README.md to specify exact confirmation behavior
         pytest.skip("Confirmation behavior not yet implemented")
 
     def test_delete_asset_by_id(self, db_session):
@@ -53,7 +53,7 @@ class TestAssetsDeleteContract:
 
     def test_delete_asset_partial_match_ambiguity(self, db_session):
         """Test error for non-unique title-based matches."""
-        # TODO: Update cli_contract.md to specify title-based selector behavior
+        # TODO: Update README.md to specify title-based selector behavior
         pytest.skip("Title-based selectors not yet implemented")
 
     def test_delete_asset_by_uuid_dry_run(self, db_session):
@@ -271,7 +271,7 @@ class TestAssetsRestoreContract:
 
     def test_restore_asset_partial_match_ambiguity(self, db_session):
         """Test ambiguity error if selector resolves to multiple possible assets."""
-        # TODO: Update cli_contract.md to specify title-based selector behavior
+        # TODO: Update README.md to specify title-based selector behavior
         pytest.skip("Title-based selectors not yet implemented")
 
     def test_restore_asset_json_output(self, db_session):
@@ -332,5 +332,5 @@ class TestAssetsRestoreContract:
     @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/AssetsDelete.md")
     def test_restore_asset_show_bulk_operation(self, db_session):
         """Test restoration of multiple soft-deleted assets for a TV show."""
-        # TODO: Update cli_contract.md to specify bulk restore behavior
+        # TODO: Update README.md to specify bulk restore behavior
         pytest.skip("Bulk restore operations not yet implemented")

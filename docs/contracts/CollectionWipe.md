@@ -1,4 +1,4 @@
-# Collection Wipe Contract
+# Collection Wipe
 
 ## Purpose
 
@@ -49,4 +49,6 @@ retrovue collection wipe channels --confirm
 
 ## Documentation Integration
 
-All CLI commands must have consistent, human-friendly syntax and appear in `CONTRIBUTING.md` under the “Operator Commands” section.
+All CLI commands must have consistent, human-friendly syntax and appear in `CONTRIBUTING.md` under the "Operator Commands" section.
+
+

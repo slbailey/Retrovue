@@ -11,7 +11,7 @@ RetroVue has **15 major contracts** defined across CLI, Domain, Testing, and Run
 
 ### 1. Unit of Work Contract - **COMPLETE** ✅
 
-- **File:** `docs/contracts/UnitOfWorkContract.md`
+- **File:** `docs/contracts/UnitOfWork.md`
 - **Implementation:** `src/retrovue/infra/validation.py`, `src/retrovue/infra/exceptions.py`
 - **Status:** Fully implemented and tested
 - **Features:**
@@ -23,7 +23,7 @@ RetroVue has **15 major contracts** defined across CLI, Domain, Testing, and Run
 
 ### 2. Collection Wipe Contract - **COMPLETE** ✅
 
-- **File:** `docs/contracts/CollectionWipeContract.md`
+- **File:** `docs/contracts/CollectionWipe.md`
 - **Implementation:** `src/retrovue/cli/commands/collection.py` (wipe command)
 - **Status:** Fully implemented and tested
 - **Features:**
@@ -197,4 +197,3 @@ RetroVue has **15 major contracts** defined across CLI, Domain, Testing, and Run
 ---
 
 **Note:** This analysis was performed after successfully implementing and testing the Unit of Work pattern for collection wipe and ingest operations. The pattern should be applied to all remaining contracts for consistency and reliability.
-

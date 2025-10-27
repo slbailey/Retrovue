@@ -1,7 +1,7 @@
 """
 CLI contract tests for retrovue ingest commands.
 
-Tests the ingest command group against the documented CLI contract in docs/contracts/cli_contract.md.
+Tests the ingest command group against the documented CLI contract in docs/contracts/README.md.
 """
 
 import pytest

@@ -1,4 +1,4 @@
-_Related: [CLI contract](../contracts/cli_contract.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Domain: Source](../domain/Source.md)_
+_Related: [CLI contract](../contracts/README.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Domain: Source](../domain/Source.md)_
 
 # Domain — Ingest pipeline
 

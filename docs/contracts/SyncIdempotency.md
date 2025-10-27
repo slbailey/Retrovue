@@ -1,4 +1,4 @@
-# Sync Idempotency Contract
+# Sync Idempotency
 
 ## Purpose
 
@@ -48,4 +48,6 @@ retrovue sync schedule
 
 ## Documentation Integration
 
-CLI syntax and usage examples must appear in `CONTRIBUTING.md` under the “Sync Operations” section.
+CLI syntax and usage examples must appear in `CONTRIBUTING.md` under the "Sync Operations" section.
+
+

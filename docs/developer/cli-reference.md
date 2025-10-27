@@ -1,6 +1,6 @@
 # RetroVue CLI
 
-\_See the [CLI contract](../contracts/cli_contract.md) for the complete reference.
+\_See the [CLI contract](../contracts/README.md) for the complete reference.
 
 The RetroVue CLI provides a command-line interface for managing your media library, content ingestion, and review workflows.
 

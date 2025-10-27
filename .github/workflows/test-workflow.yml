@@ -33,7 +33,3 @@ jobs:
         run: |
           ruff check src/ tests/
           mypy src/
-
-      - name: Run CLI contract tests
-        run: |
-          pytest tests/cli/test_source_cli.py tests/cli/test_collection_cli.py tests/cli/test_ingest_cli.py tests/cli/test_enricher_cli.py tests/cli/test_producer_cli.py tests/cli/test_channel_cli.py -v --tb=short

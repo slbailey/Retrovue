@@ -122,8 +122,7 @@ class Asset(Base):
 
     __tablename__ = "assets"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
+    uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
     uri: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     size: Mapped[int] = mapped_column(BigInteger, nullable=False)  # size in bytes
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -142,9 +141,21 @@ class Asset(Base):
                 "True = approved for playout without human review. "
                 "False = exists in inventory but not yet approved; may be in review_queue."
     )
+    state: Mapped[str] = mapped_column(
+        String(20), 
+        default="new", 
+        nullable=False,
+        comment="Asset lifecycle state: new, enriching, ready, retired"
+    )
+    approved_for_broadcast: Mapped[bool] = mapped_column(
+        Boolean, 
+        default=False, 
+        nullable=False,
+        comment="Asset approval status for broadcast. Must be true when state='ready'."
+    )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    collection_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="SET NULL"), nullable=True)
+    collection_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     episodes: Mapped[list[Episode]] = relationship(
@@ -163,11 +174,14 @@ class Asset(Base):
         Index("ix_assets_canonical", "canonical"),
         Index("ix_assets_discovered_at", "discovered_at"),
         Index("ix_assets_is_deleted", "is_deleted"),
+        Index("ix_assets_state", "state"),
+        Index("ix_assets_approved_for_broadcast", "approved_for_broadcast"),
+        Index("ix_assets_collection_uuid", "collection_uuid"),
     )
 
     def __repr__(self) -> str:
         return (
-            f"<Asset(id={self.id}, uri={self.uri}, size={self.size}, canonical={self.canonical})>"
+            f"<Asset(uuid={self.uuid}, uri={self.uri}, size={self.size}, canonical={self.canonical})>"
         )
 
 
@@ -179,12 +193,12 @@ class EpisodeAsset(Base):
     episode_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("episodes.id", ondelete="CASCADE"), primary_key=True
     )
-    asset_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True
+    asset_uuid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), primary_key=True
     )
 
     def __repr__(self) -> str:
-        return f"<EpisodeAsset(episode_id={self.episode_id}, asset_id={self.asset_id})>"
+        return f"<EpisodeAsset(episode_id={self.episode_id}, asset_uuid={self.asset_uuid})>"
 
 
 class ProviderRef(Base):
@@ -206,8 +220,8 @@ class ProviderRef(Base):
     episode_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=True
     )
-    asset_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=True
+    asset_uuid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), nullable=True
     )
 
     # Relationships
@@ -225,8 +239,8 @@ class Marker(Base):
     __tablename__ = "markers"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    asset_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    asset_uuid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), nullable=False
     )
     kind: Mapped[MarkerKind] = mapped_column(SQLEnum(MarkerKind), nullable=False)
     start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -237,12 +251,12 @@ class Marker(Base):
     asset: Mapped[Asset] = relationship("Asset", back_populates="markers", passive_deletes=True)
 
     __table_args__ = (
-        Index("ix_markers_asset_id", "asset_id"),
+        Index("ix_markers_asset_uuid", "asset_uuid"),
         Index("ix_markers_kind", "kind"),
     )
 
     def __repr__(self) -> str:
-        return f"<Marker(id={self.id}, asset_id={self.asset_id}, kind={self.kind}, start_ms={self.start_ms}, end_ms={self.end_ms})>"
+        return f"<Marker(id={self.id}, asset_uuid={self.asset_uuid}, kind={self.kind}, start_ms={self.start_ms}, end_ms={self.end_ms})>"
 
 
 class ReviewQueue(Base):
@@ -251,8 +265,8 @@ class ReviewQueue(Base):
     __tablename__ = "review_queue"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    asset_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    asset_uuid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), nullable=False
     )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
@@ -266,13 +280,13 @@ class ReviewQueue(Base):
     asset: Mapped[Asset] = relationship("Asset", back_populates="review_queue", passive_deletes=True)
 
     __table_args__ = (
-        Index("ix_review_queue_asset_id", "asset_id"),
+        Index("ix_review_queue_asset_uuid", "asset_uuid"),
         Index("ix_review_queue_status", "status"),
         Index("ix_review_queue_created_at", "created_at"),
     )
 
     def __repr__(self) -> str:
-        return f"<ReviewQueue(id={self.id}, asset_id={self.asset_id}, reason={self.reason}, status={self.status})>"
+        return f"<ReviewQueue(id={self.id}, asset_uuid={self.asset_uuid}, reason={self.reason}, status={self.status})>"
 
 
 class Source(Base):
@@ -283,7 +297,7 @@ class Source(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # External identifier
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    kind: Mapped[str] = mapped_column(String(50), nullable=False)  # 'plex', 'filesystem', etc.
+    type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'plex', 'filesystem', etc.
     config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)  # Additional configuration
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -292,7 +306,7 @@ class Source(Base):
     collections: Mapped[list["SourceCollection"]] = relationship("SourceCollection", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self) -> str:
-        return f"<Source(id={self.id}, name={self.name}, kind={self.kind})>"
+        return f"<Source(id={self.id}, name={self.name}, type={self.type})>"
 
 
 class SourceCollection(Base):
@@ -304,7 +318,8 @@ class SourceCollection(Base):
     source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False)
     external_id: Mapped[str] = mapped_column(String(255), nullable=False)  # Plex library ID, etc.
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"))
+    sync_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"))
+    ingestible: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"))
     config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)  # Plex library type, etc.
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -316,12 +331,13 @@ class SourceCollection(Base):
 
     __table_args__ = (
         Index("ix_source_collections_source_id", "source_id"),
-        Index("ix_source_collections_enabled", "enabled"),
+        Index("ix_source_collections_sync_enabled", "sync_enabled"),
+        Index("ix_source_collections_ingestible", "ingestible"),
         UniqueConstraint("source_id", "external_id", name="uq_source_collections_source_external"),
     )
 
     def __repr__(self) -> str:
-        return f"<SourceCollection(id={self.id}, source_id={self.source_id}, name={self.name}, enabled={self.enabled})>"
+        return f"<SourceCollection(id={self.id}, source_id={self.source_id}, name={self.name}, sync_enabled={self.sync_enabled}, ingestible={self.ingestible})>"
 
 
 class PathMapping(Base):

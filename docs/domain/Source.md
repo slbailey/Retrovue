@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Contracts](../contracts/Source.md)_
 
 # Domain — Source
 
@@ -43,23 +43,68 @@ PathMapping provides path translation between external systems and local storage
 - **plex_path** (String(500), required): External system path
 - **local_path** (String(500), required): Local filesystem path
 
+## Contract-driven behavior
+
+All Source operations are defined by behavioral contracts that specify exact CLI syntax, safety expectations, output formats, and data effects. The contracts ensure:
+
+- **Safety first**: No destructive operations run against live data during automated tests
+- **One contract per operation**: Each Source operation has its own focused contract
+- **Test isolation**: All operations support `--test-db` for isolated testing
+- **Idempotent operations**: Source operations are safely repeatable
+- **Clear error handling**: Failed operations provide clear diagnostic information
+
+Key contract patterns:
+
+- `--test-db` flag directs operations to isolated test environment
+- `--dry-run` flag shows what would be performed without executing
+- Confirmation prompts for destructive operations (with `--force` override)
+- JSON output format for automation and machine consumption
+- Atomic transactions with rollback on failure
+
+For complete behavioral specifications, see the [Source Contracts](../contracts/Source.md).
+
+---
+
 ## Execution model
 
-SourceService manages source lifecycle and collection discovery. When a Plex source is created, collections are automatically discovered and persisted with enabled=False by default.
+SourceService manages source lifecycle and collection discovery. When a Plex source is created with `--discover`, collections are automatically discovered and persisted with `enabled=False` by default.
 
-IngestOrchestrator consumes enabled collections to discover content for ingestion workflows.
+IngestOrchestrator consumes enabled collections to discover content for ingestion workflows. Source-level ingest operations orchestrate multiple collection ingests, with each collection ingest following atomic transaction boundaries.
+
+**Key execution patterns:**
+
+- Source creation triggers automatic collection discovery for Plex sources only when `--discover` is provided
+- Collection discovery creates SourceCollection records with `enabled=False`
+- PathMapping records are created with empty `local_path` for operator configuration
+- Source ingest iterates over all collections that are both `sync_enabled=true` AND ingestible (reachable/valid path mappings)
+- Each collection ingest operates within its own atomic transaction
+- Individual collection failures do not abort the entire source ingest operation
 
 ## Failure / fallback behavior
 
 If source connections fail, the system logs errors and continues with available sources. Collections with invalid paths are marked as not ingestable.
 
+**Contract-driven failure handling:**
+
+- Source deletion requires confirmation unless `--force` is provided
+- **PRODUCTION SAFETY**: Sources with assets in PlaylogEvent or AsRunLog cannot be deleted in production, even with `--force`
+- Collection discovery failures are logged but do not abort source creation
+- Individual collection ingest failures do not abort the entire source ingest operation
+- All operations support `--test-db` for isolated testing and `--dry-run` for preview operations
+- Transaction rollback occurs on any fatal error, ensuring no partial state changes
+
 ## Operator workflows
 
-**Create Plex source**: Use `retrovue source add --type plex` with required parameters. Collections are automatically discovered and persisted:
+**Create Plex source**: Use `retrovue source add --type plex` with required parameters. Collections are automatically discovered and persisted with `enabled=False` only when `--discover` is provided:
 
 ```bash
+# Create source without collection discovery
 retrovue source add --type plex --name "My Plex Server" \
   --base-url "https://plex.example.com" --token "your-token"
+
+# Create source with collection discovery
+retrovue source add --type plex --name "My Plex Server" \
+  --base-url "https://plex.example.com" --token "your-token" --discover
 ```
 
 **Create filesystem source**: Use `retrovue source add --type filesystem` with required parameters:
@@ -69,19 +114,23 @@ retrovue source add --type filesystem --name "Media Library" \
   --base-path "/media/movies"
 ```
 
-**List sources**: Use `retrovue source list` to see all sources, or `retrovue source list --json` for machine-readable output.
+**List sources**: Use `retrovue source list` to see all sources, or `retrovue source list --json` for machine-readable output. _(Contract: Planned)_
 
-**Show source details**: Use `retrovue source show "Source Name"` to see detailed source information including configuration and enrichers.
+**Show source details**: Use `retrovue source show "Source Name"` to see detailed source information including configuration and enrichers. _(Contract: Planned)_
 
-**Update source**: Use `retrovue source update "Source Name"` with new parameters to modify source configuration.
+**Update source**: Use `retrovue source update "Source Name"` with new parameters to modify source configuration. _(Contract: Planned)_
 
-**Update enrichers**: Use `retrovue source enrichers "Source Name" "enricher1,enricher2"` to add or modify enrichers without recreating the source.
+**Discover collections**: Use `retrovue source discover "Source Name"` to discover and add collections from external sources. New collections are created with `enabled=False` by default.
 
-**Manage collections**: Use `retrovue source collections` to view all collections, `retrovue source enable "Collection Name"` to activate collections, and `retrovue source disable "Collection Name"` to deactivate collections.
+**Ingest source**: Use `retrovue source ingest "Source Name"` to process all enabled and ingestible collections within a source. This orchestrates individual collection ingests and provides aggregated results. **Note**: Source ingest is bulk-only and does not support collection-level narrowing flags like `--title`, `--season`, or `--episode`. For targeted ingest, use `retrovue collection ingest <collection_id> [--title ... --season ... --episode ...]`.
 
-**Delete source**: Use `retrovue source delete "Source Name" --force` to permanently remove source and all related collections and path mappings.
+**Attach enrichers**: Use `retrovue source attach-enricher "Source Name" <enricher_id> --priority <n>` to attach enrichers to all collections in a source. _(Contract: Planned)_
 
-All operations support identification by name, UUID, or external ID. The CLI provides both human-readable and JSON output formats.
+**Detach enrichers**: Use `retrovue source detach-enricher "Source Name" <enricher_id>` to remove enrichers from all collections in a source. _(Contract: Planned)_
+
+**Delete source**: Use `retrovue source delete "Source Name"` (with confirmation) or `retrovue source delete "Source Name" --force` to permanently remove source and all related collections and path mappings. **PRODUCTION SAFETY**: Sources with assets in PlaylogEvent or AsRunLog cannot be deleted in production, even with `--force`.
+
+All operations support identification by name, UUID, or external ID. The CLI provides both human-readable and JSON output formats. All operations support `--test-db` for isolated testing and `--dry-run` for preview operations.
 
 ## Naming rules
 
@@ -97,7 +146,8 @@ Source is always capitalized in internal docs. external_id uses format "type-has
 
 ## See also
 
-- [Source collection](SourceCollection.md) - Content library management
+- [Source Contracts](../contracts/Source.md) - Complete behavioral contracts for all Source operations
+- [Collection](Collection.md) - Content library management
 - [Ingest pipeline](IngestPipeline.md) - Content discovery workflow
 - [Asset](Asset.md) - Media file management
-- [Operator CLI](../operator/CLI.md) - Operational procedures
+- [Collection Ingest](../contracts/CollectionIngest.md) - Collection-level ingest operations

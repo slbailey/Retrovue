@@ -1,0 +1,55 @@
+"""Domain interfaces for content importers."""
+
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
+
+from .entities import SourceCollection
+
+
+class ImporterInterface(ABC):
+    """Interface for content importers (Plex, filesystem, etc.)."""
+    
+    @abstractmethod
+    def validate_ingestible(self, collection: SourceCollection) -> bool:
+        """
+        Validate whether a collection meets the prerequisites for ingestion.
+        
+        This method checks if the collection can be ingested based on importer-specific
+        requirements (e.g., valid path mappings for Plex, accessible directories for filesystem).
+        
+        Args:
+            collection: The SourceCollection to validate
+            
+        Returns:
+            bool: True if collection can be ingested, False otherwise
+        """
+        raise NotImplementedError
+    
+    @abstractmethod
+    def discover_collections(self, source_id: str) -> List[Dict[str, Any]]:
+        """
+        Discover collections from the external source.
+        
+        Args:
+            source_id: The external source identifier
+            
+        Returns:
+            List of collection metadata dictionaries
+        """
+        raise NotImplementedError
+    
+    @abstractmethod
+    def ingest_collection(self, collection: SourceCollection, scope: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Ingest content from a collection.
+        
+        Args:
+            collection: The SourceCollection to ingest from
+            scope: Optional scope for targeted ingest (title, season, episode)
+            
+        Returns:
+            Dictionary with ingest results and statistics
+        """
+        raise NotImplementedError
+
+

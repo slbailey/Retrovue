@@ -1,7 +1,7 @@
 """
 Contract tests for catalog sync idempotency.
 
-These tests MUST enforce the rules defined in docs/contracts/SyncIdempotencyContract.md.
+These tests MUST enforce the rules defined in docs/contracts/SyncIdempotency.md.
 Do not change behavior. If behavior needs to change, update the contract first.
 
 Implementation rules:

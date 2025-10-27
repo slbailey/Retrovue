@@ -48,10 +48,11 @@ For example:
 
 This hierarchy allows for:
 
-- **Season-level operations**: Select all episodes from Season 1
-- **Episode-level operations**: Select specific episodes
-- **Show-level operations**: Select episodes across all seasons
-- **Asset-level operations**: Select specific playable files
+- **Collection-level operations**: Ingest entire collection (`retrovue collection ingest "TV Shows"`)
+- **Title-level operations**: Ingest specific show (`retrovue collection ingest "TV Shows" --title "The Simpsons"`)
+- **Season-level operations**: Ingest specific season (`retrovue collection ingest "TV Shows" --title "The Simpsons" --season 1`)
+- **Episode-level operations**: Ingest specific episode (`retrovue collection ingest "TV Shows" --title "The Simpsons" --season 1 --episode 1`)
+- **Asset-level operations**: Individual playable files are managed through asset operations
 
 ### Asset
 
@@ -110,6 +111,21 @@ Episode (1) → (N) Assets
 4. **Asset Registration**: For each collection (or episode for TV shows), RetroVue registers individual assets
 5. **Asset Enrichment**: Registered assets progress through the lifecycle state machine
 
+### Bulk vs Surgical Operations
+
+**Bulk Operations** (Source-level):
+
+- `retrovue source ingest "My Plex Server"` - Processes ALL enabled collections in a source
+- Used for scheduled/sanctioned sync operations
+- Requires collections to be `sync_enabled=true` AND ingestible
+
+**Surgical Operations** (Collection-level):
+
+- `retrovue collection ingest "TV Shows" --title "The Simpsons" --season 1` - Processes specific content
+- Used for manual/targeted operations
+- Can run even if collection is not `sync_enabled=true`
+- Supports hierarchical narrowing: collection → title → season → episode
+
 ### State Progression
 
 Assets progress through states as they are processed:
@@ -156,10 +172,19 @@ Asset {
 
 The hierarchy is exposed through the CLI and API:
 
-- **Source operations**: `retrovue sources list`, `retrovue sources scan`
-- **Collection operations**: `retrovue collections list`, `retrovue collections scan`
-- **TV Show operations**: `retrovue shows list`, `retrovue shows seasons`, `retrovue shows episodes`
-- **Asset operations**: `retrovue assets list`, `retrovue assets select`
+- **Source operations**:
+  - `retrovue source add` - Create new sources _(Contract: [SourceAdd](../contracts/SourceAdd.md))_
+  - `retrovue source delete` - Delete sources _(Contract: [SourceDelete](../contracts/SourceDelete.md))_
+  - `retrovue source discover` - Discover collections _(Contract: [SourceDiscover](../contracts/SourceDiscover.md))_
+  - `retrovue source ingest` - Bulk ingest all collections _(Contract: [SourceIngest](../contracts/SourceIngest.md))_
+  - `retrovue source list`, `retrovue source show`, `retrovue source update` _(Contracts: Planned)_
+- **Collection operations**:
+  - `retrovue collection ingest` - Targeted collection ingest _(Contract: [CollectionIngest](../contracts/CollectionIngest.md))_
+  - `retrovue collection wipe` - Complete collection cleanup _(Contract: [CollectionWipe](../contracts/CollectionWipe.md))_
+  - `retrovue collection list`, `retrovue collection update`, `retrovue collection delete` _(Contracts: Planned)_
+- **Asset operations**:
+  - `retrovue assets select` _(Contract: [AssetsSelect](../contracts/AssetsSelect.md))_
+  - `retrovue assets delete` _(Contract: [AssetsDelete](../contracts/AssetsDelete.md))_
 
 ## Operator Mental Model
 

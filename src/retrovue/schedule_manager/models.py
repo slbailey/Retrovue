@@ -65,30 +65,6 @@ class BroadcastScheduleDay(Base):
         return f"<BroadcastScheduleDay(id={self.id}, channel_id={self.channel_id}, template_id={self.template_id}, date='{self.schedule_date}')>"
 
 
-class CatalogAsset(Base):
-    """Broadcast-approved catalog entry (airable). NOT the ingest library asset."""
-    __tablename__ = "catalog_asset"
-    
-    id = sa.Column(sa.Integer, primary_key=True)
-    uuid = sa.Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
-    title = sa.Column(sa.Text, nullable=False)
-    duration_ms = sa.Column(sa.Integer, nullable=False)
-    tags = sa.Column(sa.Text, nullable=True)  # comma-separated tags like "sitcom,retro"
-    file_path = sa.Column(sa.Text, nullable=False)
-    canonical = sa.Column(sa.Boolean, nullable=False, server_default=sa.text("false"))
-    source_ingest_asset_id = sa.Column(sa.Integer, sa.ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)  # Reference to Library Domain asset.id for traceability
-    created_at = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()"))
-
-    __table_args__ = (
-        sa.Index("ix_catalog_asset_canonical", "canonical"),
-        sa.Index("ix_catalog_asset_tags", "tags"),
-        sa.Index("ix_catalog_asset_source_ingest_asset_id", "source_ingest_asset_id"),
-    )
-    
-    def __repr__(self):
-        return f"<CatalogAsset(id={self.id}, title='{self.title}', canonical={self.canonical})>"
-
-
 class BroadcastPlaylogEvent(Base):
     """Broadcast playlog event model for tracking what was actually played."""
     __tablename__ = "broadcast_playlog_event"
@@ -96,7 +72,7 @@ class BroadcastPlaylogEvent(Base):
     id = sa.Column(sa.Integer, primary_key=True)
     uuid = sa.Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False, unique=True)
     channel_id = sa.Column(sa.Integer, sa.ForeignKey("broadcast_channels.id", ondelete="CASCADE"), nullable=False, index=True)
-    asset_id = sa.Column(sa.Integer, sa.ForeignKey("catalog_asset.id", ondelete="RESTRICT"), nullable=False)
+    asset_uuid = sa.Column(UUID(as_uuid=True), sa.ForeignKey("assets.uuid", ondelete="RESTRICT"), nullable=False)
     start_utc = sa.Column(sa.DateTime(timezone=True), nullable=False)
     end_utc = sa.Column(sa.DateTime(timezone=True), nullable=False)
     broadcast_day = sa.Column(sa.Text, nullable=False)  # "YYYY-MM-DD" broadcast day label
@@ -105,12 +81,13 @@ class BroadcastPlaylogEvent(Base):
     __table_args__ = (
         sa.Index("ix_broadcast_playlog_event_channel_start", "channel_id", "start_utc"),
         sa.Index("ix_broadcast_playlog_event_broadcast_day", "broadcast_day"),
+        sa.Index("ix_broadcast_playlog_event_asset_uuid", "asset_uuid"),
     )
 
     channel = sa.orm.relationship("BroadcastChannel")
-    asset = sa.orm.relationship("CatalogAsset")
+    asset = sa.orm.relationship("Asset", foreign_keys=[asset_uuid])
     
     def __repr__(self):
-        return f"<BroadcastPlaylogEvent(id={self.id}, channel_id={self.channel_id}, asset_id={self.asset_id}, start='{self.start_utc}')>"
+        return f"<BroadcastPlaylogEvent(id={self.id}, channel_id={self.channel_id}, asset_uuid={self.asset_uuid}, start='{self.start_utc}')>"
 
 

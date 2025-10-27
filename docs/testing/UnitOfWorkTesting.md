@@ -386,7 +386,6 @@ All UoW tests MUST pass before:
 
 ## See Also
 
-- [Unit of Work Contract](UnitOfWorkContract.md)
-- [Collection Wipe Contract](CollectionWipeContract.md)
+- [Unit of Work](UnitOfWork.md)
+- [Collection Wipe](CollectionWipe.md)
 - [Ingest Pipeline Documentation](../domain/IngestPipeline.md)
-

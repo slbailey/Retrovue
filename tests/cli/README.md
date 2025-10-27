@@ -1,6 +1,6 @@
 # CLI Contract Tests
 
-This directory contains contract tests for the RetroVue CLI implementation against the documented interface in `docs/contracts/cli_contract.md`.
+This directory contains contract tests for the RetroVue CLI implementation against the documented interface in `docs/contracts/README.md`.
 
 ## Test Structure
 

@@ -1,4 +1,4 @@
-# Unit of Work Contract
+# Unit of Work
 
 ## Purpose
 
@@ -315,8 +315,9 @@ with session() as db:
 
 ## See Also
 
-- [Collection Wipe Contract](CollectionWipeContract.md)
+- [Collection Wipe](CollectionWipe.md)
 - [Ingest Pipeline Documentation](../domain/IngestPipeline.md)
 - [Database Schema](../developer/database-schema.md)
 - [Unit of Work Implementation](../../src/retrovue/infra/uow.py)
+
 

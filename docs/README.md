@@ -35,7 +35,7 @@ How RetroVue behaves at runtime. ChannelManager, ffmpeg lifecycle, timing.
 
 How an operator configures and runs the system.
 
-- [CLI contract](../contracts/cli_contract.md)
+- [CLI contract](../contracts/README.md)
 - [Operator workflows](operator/OperatorWorkflows.md)
 
 ## Developer

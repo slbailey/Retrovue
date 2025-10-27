@@ -30,4 +30,4 @@ This defines what RetroVue is responsible for and what it is not.
 See also:
 
 - [Plugin authoring](../developer/PluginAuthoring.md)
-- [CLI contract](../contracts/cli_contract.md)
+- [CLI contract](../contracts/README.md)
