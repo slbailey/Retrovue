@@ -25,6 +25,7 @@ The Content Manager has four main jobs:
 
 ### Discovery & ingest
 
+- **We ingest from sources, enumerate collections, and register assets**
 - **Find media** in external systems (Plex servers, filesystems, etc.)
 - **Extract metadata** like file size, duration, codecs, and content hashes
 - **Classify content deterministically** (episode, bumper, promo, ad, etc.)
@@ -36,6 +37,31 @@ The Content Manager has four main jobs:
 - **Link files to logical content** (episodes, shows, movies)
 - **Mark content as "canonical"** when it's good enough for broadcast
 - **Handle content lifecycle** (soft-delete, restore, etc.)
+
+### Promotion flow
+
+Assets progress through a state machine as they are processed and approved:
+
+```
+new → enriching → ready → retired
+```
+
+**State transitions:**
+
+- **`new`**: Recently discovered, minimal metadata
+- **`enriching`**: Being processed by enrichers
+- **`ready`**: Fully processed, approved for broadcast
+- **`retired`**: No longer available or approved
+
+**Critical rule:** Promotion is not row-copying into another table. Promotion is marking the existing asset as `state=ready` and `approved_for_broadcast=true`.
+
+**CLI verbs for state transitions:**
+
+- **`retrovue asset tag`**: Add tags and metadata to assets
+- **`retrovue asset promote`**: Transition asset from `enriching` to `ready` state
+- **`retrovue asset retire`**: Transition asset from `ready` to `retired` state
+
+These verbs provide operators with clear control over asset lifecycle and broadcast eligibility.
 
 ### Source configuration
 
@@ -375,10 +401,10 @@ The ingest system is designed to be pluggable through adapters.
 
 The Broadcast Domain will:
 
-- **Ask Content Manager** for pools of canonical assets
+- **Ask Content Manager** for pools of ready assets
 - **Get stable UUIDs** and metadata for scheduling
-- **Trust that canonical assets** are broadcast-ready
-- **Use promotion workflow** to move content from Library Domain to Broadcast Domain
+- **Trust that ready assets** are broadcast-ready
+- **Use state transitions** to manage asset lifecycle
 
 **Content Manager provides:**
 
@@ -387,29 +413,29 @@ The Broadcast Domain will:
 - Ad break markers and restrictions
 - Content ratings and classifications
 
-### Promotion workflow: Library → Broadcast Catalog
+### Promotion workflow: Asset State Transitions
 
-The Library Domain discovers, ingests, enriches, and reviews media. Once an operator decides "this can air," they run `retrovue assets promote`. Promotion writes a new row into `catalog_asset` in the Broadcast Domain. That row includes:
+The Library Domain discovers, ingests, enriches, and reviews media. Once an operator decides "this can air," they run `retrovue asset promote`. Promotion transitions the asset state from `enriching` to `ready` and sets `approved_for_broadcast=true`.
 
-- title (guide-facing)
-- duration_ms (used by scheduler math)
-- tags (used to satisfy template_block rule_json)
-- file_path (what ChannelManager will actually playout)
-- canonical (if true, it's allowed on air)
-- source_ingest_asset_id (for provenance / audit)
+**Promotion process:**
 
-After promotion, ScheduleService may consider that CatalogAsset when filling a schedule block. If canonical=false, it's visible to operators but still forbidden to air.
+- Asset state transitions: `enriching` → `ready`
+- Sets `approved_for_broadcast=true`
+- Asset becomes eligible for scheduling and playout
+- No row-copying or table duplication
+
+After promotion, ScheduleService may consider that asset when filling a schedule block. Only assets with `state=ready` and `approved_for_broadcast=true` are eligible for broadcast.
 
 **Critical rules:**
 
-- **ScheduleService is forbidden** to schedule any CatalogAsset with canonical=false.
-- **Runtime / ChannelManager is forbidden** to playout any CatalogAsset with canonical=false.
+- **ScheduleService is forbidden** to schedule any asset that is not in `ready` state
+- **Runtime / ChannelManager is forbidden** to playout any asset that is not in `ready` state
 
 ### ChannelManager / Producer (Future)
 
 At runtime, playback systems will:
 
-- **Only use canonical assets** that aren't soft-deleted
+- **Only use ready assets** that aren't soft-deleted
 - **Trust enrichment data** for codecs, duration, container type
 - **Not guess content properties** - enrichment already handled this
 

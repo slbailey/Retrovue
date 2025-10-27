@@ -4,7 +4,9 @@ _Related: [CLI contract](../contracts/cli_contract.md) • [Runtime: Channel man
 
 ## Purpose
 
-Define how external media becomes part of RetroVue's managed library. The ingest pipeline is responsible for enumerating sources, selecting which collections are eligible, pulling asset records, enriching those records, and storing them in RetroVue.
+Define how external media becomes part of RetroVue's managed library. The ingest pipeline is responsible for enumerating sources, selecting which collections are eligible, creating asset records, enriching those records, and storing them in RetroVue.
+
+**Critical Rule**: Assets created during ingest start in `state='new'` and progress through `enriching` → `ready` lifecycle states. Only assets in `ready` state are eligible for scheduling and playout.
 
 ## Core model / scope
 
@@ -110,20 +112,21 @@ def ingest_collection(collection_id: str, filters: IngestFilters) -> IngestResul
 ### Asset Processing Contract
 
 ```python
-def process_asset(asset_draft: AssetDraft, collection: Collection) -> AssetProcessingResult:
+def process_asset(asset_data: AssetData, collection: Collection) -> AssetProcessingResult:
     """
     Process a single asset through the ingest pipeline.
 
     Pre-conditions:
-    - AssetDraft is valid and complete
+    - AssetData is valid and complete
     - Collection exists and is accessible
     - All required enrichers are available
 
     Post-conditions:
-    - Asset is created with proper relationships
+    - Asset is created with state='new' and proper relationships
     - All enrichers have been applied
     - No duplicate assets exist
     - Hierarchy is properly maintained
+    - Asset progresses through lifecycle states
 
     Atomicity:
     - If any step fails, entire asset processing rolls back
@@ -133,35 +136,38 @@ def process_asset(asset_draft: AssetDraft, collection: Collection) -> AssetProce
     with session() as db:
         try:
             # Phase 1: Pre-flight validation
-            validate_asset_draft(asset_draft)
+            validate_asset_data(asset_data)
             validate_collection_accessible(db, collection)
             validate_enrichers_available(db, collection)
 
             # Phase 2: Execute processing
-            result = execute_asset_processing(db, asset_draft, collection)
+            result = execute_asset_processing(db, asset_data, collection)
 
             # Phase 3: Post-operation validation
             validate_asset_relationships(db, result.asset)
             validate_hierarchy_integrity(db, result)
             validate_no_duplicates(db, result.asset)
+            validate_asset_lifecycle_state(db, result.asset)
 
             return result
 
         except Exception as e:
-            logger.error("asset_processing_failed", asset_path=asset_draft.file_path, error=str(e))
+            logger.error("asset_processing_failed", asset_path=asset_data.file_path, error=str(e))
             raise AssetProcessingError(f"Asset processing failed: {e}")
 ```
 
-AssetDraft is the record produced during ingest for a single media item.
+AssetData is the raw data produced during ingest for a single media item.
 
-The importer for a collection returns AssetDraft objects with basic fields:
+The importer for a collection returns AssetData objects with basic fields:
 
 - file path (as reported by the source)
 - runtime/duration if known
 - guessed title / series / season / episode
 - any chapter/ad-break markers discovered
 
-AssetDrafts are then run through ingest-scope enrichers before being stored in RetroVue's catalog.
+AssetData is then processed to create Asset records with `state='new'`, which are then enriched by ingest-scope enrichers and progress through the lifecycle states.
+
+**AssetProcessingResult.asset** returns the newly created or updated Asset row (UUID, state, metadata) - this is the actual database entity, not a draft structure.
 
 ## Execution model
 
@@ -205,10 +211,12 @@ The ingest orchestration runs in this order:
    - If collection is not ingestible (no valid local paths), skip.
 
 3. Ingest that collection:
-   - `ImporterRegistry.fetch_assets_for_collection(source_id, collection_id, local_path)` retrieves AssetDrafts for that collection.
-   - Each AssetDraft is enriched by ingest enrichers attached to that collection (in priority order).
+   - `ImporterRegistry.fetch_assets_for_collection(source_id, collection_id, local_path)` retrieves AssetData for that collection.
+   - Each AssetData is processed to create Asset records with `state='new'`.
+   - Assets are enriched by ingest enrichers attached to that collection (in priority order).
    - Enrichers can be attached at the source level (applies to all collections) or collection level (applies to specific collection).
-   - The final enriched asset is stored in RetroVue's managed library.
+   - Assets progress through lifecycle states (`new` → `enriching` → `ready`) as enrichers complete.
+   - Only assets in `ready` state are eligible for scheduling and playout.
 
 ### TV Show Hierarchy Processing
 
@@ -358,7 +366,9 @@ A collection is considered ineligible for ingest if:
 - sync_enabled is false, OR
 - collection is not ingestible (no valid, accessible local paths)
 
-Enricher failures on a single AssetDraft do not abort ingest. Failures are logged and ingest continues.
+Enricher failures on a single Asset do not abort ingest. Failures are logged and ingest continues.
+
+**Asset Lifecycle**: Assets created during ingest start in `state='new'` and progress through `enriching` → `ready` states. Only assets in `ready` state with `approved_for_broadcast=true` are eligible for scheduling and playout.
 
 Fatal stop conditions are:
 
@@ -386,8 +396,9 @@ Fatal stop conditions are:
 
 - "Source" always refers to an external system instance (e.g. a Plex server).
 - "Collection" always refers to a logical library or subtree inside that Source (e.g. "TV Shows").
-- "AssetDraft" is the ingest-time representation of a media item before it is promoted into the RetroVue catalog.
-- "Ingest Enricher" refers to enrichers with scope=ingest, which run on AssetDraft before catalog storage.
+- "Asset" is the single entity representing media content, with lifecycle states (`new`, `enriching`, `ready`, `retired`).
+- "AssetData" is the raw data structure produced by importers before Asset creation.
+- "Ingest Enricher" refers to enrichers with scope=ingest, which run on Assets during the `enriching` state. These enrichers may update metadata, classification, runtime, rating, ad markers, etc., and may advance an Asset toward `ready`.
 
 ## See also
 

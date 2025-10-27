@@ -6,6 +6,8 @@ ChannelManager is responsible for the live runtime of a Channel.
 
 It decides when to launch ffmpeg, what to feed ffmpeg, and when to tear it down.
 
+**Critical Rule**: ChannelManager may only operate on assets where `state == 'ready'` and `approved_for_broadcast == true`.
+
 ## Core model / scope
 
 - One ChannelManager per Channel.
@@ -25,17 +27,22 @@ ChannelManager must be able to:
 - Stream output to all current viewers.
 - Report health/status of the active ffmpeg process.
 
+**Asset Eligibility**: ChannelManager queries only assets with `state='ready'` and `approved_for_broadcast=true`. Assets in `new`, `enriching`, or `retired` states are never considered for playout.
+
 ## Execution model
 
 1. First viewer triggers:
    - Query schedule: what should be on this Channel at this exact wall-clock time?
-   - Call Producer to build the base playout plan.
+   - ChannelManager asks ScheduleService/Playlog for the PlaylogEvent that's active right now. Each PlaylogEvent references asset_uuid. ChannelManager will refuse to build a playout plan if that asset is not in state='ready' AND approved_for_broadcast=true.
+   - Call Producer to build the base playout plan from ready assets only.
    - Apply playout enrichers.
    - Launch ffmpeg with that plan.
 2. Subsequent viewers attach to the same stream fanout.
 3. Last viewer leaving triggers:
    - Graceful teardown of ffmpeg.
    - ChannelManager remains idle, but the Channel timeline itself keeps logically advancing in the database.
+
+**Asset State Enforcement**: The Producer only considers assets with `state='ready'` and `approved_for_broadcast=true` when building playout plans. Assets in other states are invisible to the runtime layer.
 
 ## Failure / fallback behavior
 

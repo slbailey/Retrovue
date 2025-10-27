@@ -4,7 +4,9 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 ## Purpose
 
-The scheduling system assigns CatalogAssets (or rules to select them) into time slots for future air. This is planning-time logic that runs ahead of real time and builds out both the EPG horizon (coarse view) and the Playlog horizon (fine-grained view).
+The scheduling system assigns assets (or rules to select them) into time slots for future air. This is planning-time logic that runs ahead of real time and builds out both the EPG horizon (coarse view) and the Playlog horizon (fine-grained view).
+
+**Critical Rule:** The scheduler and playlog builder may only consider assets where `state == 'ready'` and `approved_for_broadcast == true`.
 
 ## Core model / scope
 
@@ -16,7 +18,7 @@ The Broadcast Scheduling Domain consists of six primary models that work togethe
 - **BroadcastTemplate** - Reusable daypart programming templates
 - **BroadcastTemplateBlock** - Time blocks within templates with content selection rules
 - **BroadcastScheduleDay** - Template assignments to channels for specific dates
-- **CatalogAsset** - Broadcast-approved catalog entries (airable content)
+- **Asset** - Broadcast-approved content (airable content)
 - **BroadcastPlaylogEvent** - Generated playout events (what was actually played)
 
 ## Contract / interface
@@ -28,7 +30,7 @@ These entities work together in a specific flow:
 1. **BroadcastChannel** defines the channel identity and timing configuration
 2. **BroadcastTemplate** and **BroadcastTemplateBlock** define programming structure and content selection rules
 3. **BroadcastScheduleDay** binds templates to channels for specific broadcast dates
-4. **CatalogAsset** provides the approved content available for scheduling
+4. **Asset** provides the approved content available for scheduling (must be in `ready` state)
 5. **BroadcastPlaylogEvent** represents the generated playout schedule that ChannelManager executes
 
 ## Execution model
@@ -37,22 +39,31 @@ ScheduleService is the primary consumer of the Broadcast Scheduling Domain model
 
 - Reads BroadcastScheduleDay to determine active templates
 - Retrieves BroadcastTemplateBlock entries for content selection rules
-- Queries CatalogAsset for eligible content (canonical=true)
+- Queries Asset for eligible content (`state='ready'` and `approved_for_broadcast=true`)
 - Generates BroadcastPlaylogEvent records as scheduling output
 - Uses BroadcastChannel configuration for timing and grid alignment
+
+**Critical Rules:**
+
+- **Scheduler never touches assets in `new` or `enriching` state**
+- **Only assets with `state='ready'` and `approved_for_broadcast=true` are eligible for scheduling**
 
 ProgramDirector coordinates multiple channels and may reference:
 
 - BroadcastChannel records for channel configuration
 - BroadcastScheduleDay assignments for cross-channel programming
 - BroadcastTemplateBlock rules for content conflict resolution
-- CatalogAsset records for content availability and approval status
+- Asset records for content availability and approval status
 
 ChannelManager executes playout but does not modify any Broadcast Scheduling Domain models. It:
 
 - Reads BroadcastPlaylogEvent records for playout instructions
 - References BroadcastChannel configuration for channel identity
-- Uses CatalogAsset file paths for content playback
+- Uses Asset file paths for content playback
+
+**Critical Rule:**
+
+- **Runtime never spins up playout for an asset unless it's in `ready` state**
 
 ## Failure / fallback behavior
 

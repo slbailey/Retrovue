@@ -1,85 +1,179 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+_Related: [Architecture](../overview/architecture.md) • [Asset](Asset.md) • [Ingest Pipeline](IngestPipeline.md)_
 
-# Domain — SourceCollection
+# Domain — Source Collection Hierarchy
 
 ## Purpose
 
-SourceCollection defines a persistent content library entity that represents individual libraries within a content source (e.g., Plex libraries, filesystem directories). Collections provide granular control over which content libraries are included in content discovery workflows.
+This document establishes the official mapping of the content hierarchy in RetroVue. It defines the relationship between Sources, Collections, and Assets, and serves as the high-level ingestion model reference.
 
-## Core model / scope
+## Hierarchy Definition
 
-SourceCollection is managed by SQLAlchemy with the following fields:
+### Source
 
-- **id** (UUID, primary key): Internal identifier for relational joins and foreign key references
-- **source_id** (UUID, foreign key, required): Reference to parent Source with cascade deletion
-- **external_id** (String(255), required): External system identifier (e.g., Plex library key "1", "2")
-- **name** (String(255), required): Human-readable collection name (e.g., "Movies", "TV Shows")
-- **enabled** (Boolean, required, default=False): Whether collection is active for content discovery
-- **config** (JSON, nullable): Collection-specific configuration including type and path mappings
-- **created_at** (DateTime(timezone=True), required): Record creation timestamp
+A **source** is an origin of media content. Sources represent external systems or locations where content can be discovered.
 
-The table is named `source_collections` (plural). Schema migration is handled through Alembic. Postgres is the authoritative backing store.
+**Examples:**
 
-SourceCollection has relationships with PathMapping through foreign key constraints with cascade deletion.
+- Plex library (e.g., "Movies", "TV Shows")
+- Filesystem path (e.g., `/media/shows`, `/media/commercials`)
+- Capture pipeline (e.g., live TV recording)
+- Ad library API (e.g., commercial content provider)
 
-## Contract / interface
+### Collection
 
-PathMapping provides path translation between external systems and local storage:
+A **collection** groups related content inside a source. Collections organize content into broadcast-relevant categories within their parent source.
 
-- **id** (UUID, primary key): Internal identifier
-- **collection_id** (UUID, foreign key, required): Reference to parent SourceCollection with cascade deletion
-- **plex_path** (String(500), required): External system path (e.g., "/plex/movies")
-- **local_path** (String(500), required): Local filesystem path (e.g., "/media/movies")
-- **created_at** (DateTime(timezone=True), required): Record creation timestamp
+**Examples:**
 
-## Execution model
+- "Transformers Season 1" (within a TV Shows source)
+- "Commercials_90s" (within a Commercials source)
+- "Station IDs" (within a Promos source)
+- "Classic Movies" (within a Movies source)
 
-SourceService manages collection lifecycle and discovery. Collections are automatically discovered when Plex sources are created and start with enabled=False by default.
+**TV Show Collections:**
 
-IngestOrchestrator consumes enabled collections to discover content for ingestion workflows. Only enabled collections participate in content discovery.
+Collections of TV shows typically have a hierarchical structure before reaching individual assets:
 
-## Failure / fallback behavior
-
-If collections are not reachable or have invalid paths, they are marked as not ingestable and excluded from content discovery.
-
-## Operator workflows
-
-**View collections**: Use `retrovue source collections` to see all collections with their enabled status, or `retrovue source collections --json` for machine-readable output.
-
-**Enable collection**: Use `retrovue source enable "Collection Name"` to activate a collection for content discovery:
-
-```bash
-retrovue source enable "Movies"
-retrovue source enable "TV Shows"
+```
+Collection (TV Show) → Title → Season → Episode → Asset
 ```
 
-**Disable collection**: Use `retrovue source disable "Collection Name"` to deactivate a collection:
+For example:
 
-```bash
-retrovue source disable "Horror"
+- **Collection**: "The Simpsons" (TV Show collection)
+- **Title**: "The Simpsons" (show title)
+- **Season**: "Season 1", "Season 2", etc.
+- **Episode**: "Bart the Genius", "Homer's Odyssey", etc.
+- **Asset**: Individual episode file
+
+This hierarchy allows for:
+
+- **Season-level operations**: Select all episodes from Season 1
+- **Episode-level operations**: Select specific episodes
+- **Show-level operations**: Select episodes across all seasons
+- **Asset-level operations**: Select specific playable files
+
+### Asset
+
+An **asset** is a playable unit within a collection. Assets represent individual pieces of content that can eventually be broadcast.
+
+**Examples:**
+
+- Individual episode files
+- Individual movie files
+- Individual commercial spots
+- Individual bumper/promo files
+
+## Relationship Cardinality
+
+### Basic Hierarchy
+
+```
+Source (1) → (N) Collections
+Collection (1) → (N) Assets
 ```
 
-**Filter by source**: Use `retrovue source collections --source-id "Source Name"` to view collections for a specific source.
+- **One source** can contain **many collections**
+- **One collection** can contain **many assets**
+- **Each asset** belongs to exactly **one collection**
+- **Each collection** belongs to exactly **one source**
 
-**Automatic discovery**: Collections are automatically discovered and persisted when Plex sources are created. No manual discovery is required.
+### TV Show Hierarchy
 
-All operations support identification by name or external ID. The CLI provides both human-readable and JSON output formats.
+For TV show collections, the hierarchy is more complex:
 
-## Naming rules
+```
+Source (1) → (N) Collections
+Collection (1) → (N) Titles
+Title (1) → (N) Seasons
+Season (1) → (N) Episodes
+Episode (1) → (N) Assets
+```
 
-The canonical name for this concept in code and documentation is SourceCollection.
+- **One source** can contain **many collections**
+- **One collection** can contain **many titles** (TV shows)
+- **One title** can contain **many seasons**
+- **One season** can contain **many episodes**
+- **One episode** can contain **many assets** (different formats, qualities, etc.)
 
-- **Operator-facing noun**: `collection` (humans type `retrovue source collections ...`)
-- **Internal canonical model**: `SourceCollection`
-- **Database table**: `source_collections` (plural)
-- **CLI commands**: Use names or external IDs for collection identification
-- **Code and docs**: Always refer to the persisted model as `SourceCollection`
+**Note:** Movies and other content types typically follow the simpler Collection → Asset hierarchy.
 
-SourceCollection is always capitalized in internal docs. external_id uses the external system's identifier (e.g., Plex library key "1", "2"). Collections start disabled by default and must be explicitly enabled for content discovery.
+## Ingestion Model
+
+> **We ingest sources, which yield collections, which yield assets.**
+
+### Ingestion Flow
+
+1. **Source Discovery**: RetroVue connects to and discovers available sources
+2. **Collection Enumeration**: For each source, RetroVue enumerates available collections
+3. **Content Structure Discovery**: For TV show collections, RetroVue discovers the Title → Season → Episode hierarchy
+4. **Asset Registration**: For each collection (or episode for TV shows), RetroVue registers individual assets
+5. **Asset Enrichment**: Registered assets progress through the lifecycle state machine
+
+### State Progression
+
+Assets progress through states as they are processed:
+
+```
+new → enriching → ready → retired
+```
+
+- **`new`**: Recently discovered, minimal metadata
+- **`enriching`**: Being processed by enrichers
+- **`ready`**: Fully processed, approved for broadcast
+- **`retired`**: No longer available or approved
+
+## Implementation Model
+
+### Database Relationships
+
+```sql
+-- Simplified schema representation
+Source {
+  id: Integer (PK)
+  uuid: UUID
+  name: String
+  type: String
+  -- source-specific configuration
+}
+
+Collection {
+  uuid: UUID (PK)
+  source_id: Integer (FK → Source.id)
+  name: String
+  -- collection-specific metadata
+}
+
+Asset {
+  uuid: UUID (PK)
+  collection_uuid: UUID (FK → Collection.uuid)
+  state: String
+  -- asset-specific metadata
+}
+```
+
+### API Surface
+
+The hierarchy is exposed through the CLI and API:
+
+- **Source operations**: `retrovue sources list`, `retrovue sources scan`
+- **Collection operations**: `retrovue collections list`, `retrovue collections scan`
+- **TV Show operations**: `retrovue shows list`, `retrovue shows seasons`, `retrovue shows episodes`
+- **Asset operations**: `retrovue assets list`, `retrovue assets select`
+
+## Operator Mental Model
+
+Operators should understand that:
+
+1. **Sources are discovered** - RetroVue connects to external systems
+2. **Collections are enumerated** - Sources reveal their content groupings
+3. **TV Show structure is discovered** - For TV collections, the Title → Season → Episode hierarchy is mapped
+4. **Assets are registered** - Individual playable units are cataloged
+5. **Assets are enriched** - Content progresses through processing states
+6. **Ready assets are schedulable** - Only `ready` assets can be broadcast
 
 ## See also
 
-- [Source](Source.md) - External content providers
-- [Ingest pipeline](IngestPipeline.md) - Content discovery workflow
-- [Asset](Asset.md) - Media file management
-- [Operator CLI](../operator/CLI.md) - Operational procedures
+- [Asset](Asset.md) - Individual content units
+- [Ingest Pipeline](IngestPipeline.md) - Content discovery workflow
+- [Architecture](../overview/architecture.md) - System overview

@@ -11,6 +11,21 @@ It defines:
 - Safety rules for destructive commands (confirmation, `--force`, `--dry-run`)
 - JSON output expectations where applicable
 
+## Contract Testing Pattern
+
+Each CLI command follows the **one contract per noun/verb** pattern with **two test files**:
+
+1. **CLI Contract Test**: `tests/contracts/test_{noun}_{verb}_contract.py`
+
+   - Validates CLI syntax, flags, prompts, help text, output format
+   - Tests operator-facing behavior and user experience
+   - Ensures stable command interface
+
+2. **Data Contract Test**: `tests/contracts/test_{noun}_{verb}_data_contract.py`
+   - Validates database persistence and data integrity
+   - Tests actual data changes, side effects, and cleanup
+   - Ensures correct database state transitions
+
 All tests in `tests/contracts/` that assert CLI behavior refer to this document.
 
 Changing any CLI surface (command names, flags, prompts, exit codes, output format)

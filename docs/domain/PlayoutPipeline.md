@@ -24,6 +24,21 @@ Viewer activity does not define the Channel. Viewer activity only decides whethe
 
 A Producer is a module responsible for generating a base playout plan. Producers generate the "what to air" plan, not how to render it (no ffmpeg launch).
 
+### Asset vs Segment Distinction
+
+**Critical Distinction:** Playout cares about segments derived from scheduled assets:
+
+- **Asset** = what we air conceptually ("Transformers S01E03")
+- **Segment** = the actual chunk+offset+overlays we're feeding ffmpeg right now
+
+**Flow:**
+
+1. **PlaylogEvent** references one asset
+2. **Playout pipeline** turns that into one or more segments fed to ffmpeg, maybe with overlays
+3. **Segment** contains the actual media file path, timing offsets, and any overlays or filters
+
+This distinction protects against reintroducing "broadcast asset" as a separate entity - assets are the conceptual content, segments are the technical playout instructions.
+
 Examples:
 
 - Linear content Producer (scheduled shows + ad breaks)
@@ -51,7 +66,7 @@ A playout plan is the structured description of what should be streaming right n
 - transitions between segments
 - any ffmpeg filtergraph directives needed for composition
 
-The Producer generates the base playout plan for "now" using schedule and timing information (e.g. from EPG / playlog horizon).
+The Producer generates the base playout plan for "now" using schedule and timing information (e.g. from EPG / playlog horizon). The plan converts scheduled assets into playout segments with specific timing and overlay instructions.
 
 After the Producer returns the base playout plan, RetroVue applies any playout-scope enrichers attached to that Channel in priority order.
 

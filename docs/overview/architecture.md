@@ -40,12 +40,42 @@ RetroVue is composed of several layers working together to maintain, schedule, a
 
 ### Library Domain (Content Ingest Layer)
 
-**Purpose:** Gather metadata about available content (shows, movies, promos, commercials).
+**Purpose:** Gather metadata about available content (shows, movies, promos, commercials) and prepare it for broadcast scheduling.
+
+#### Core Concepts
+
+**Source**  
+An origin of media content (e.g., Plex server, local filesystem, ad library). Sources are discovered and enumerated to find available content.
+
+**Collection**  
+A logical grouping of related content from a source (e.g., "The Simpsons", "Classic Movies", "Commercials"). Collections organize content into broadcast-relevant categories.
+
+**Asset**  
+The leaf unit RetroVue can eventually broadcast. Each asset belongs to exactly one collection and has a lifecycle state indicating its readiness for scheduling.
+
+#### Ingest Flow
+
+1. **Content Discovery**: Content is discovered from a source
+2. **Organization**: Content is organized into a collection
+3. **Storage**: Content is stored as an asset
+4. **Enrichment**: Assets progress through a state machine: `new` → `enriching` → `ready` → `retired`
+
+#### Asset Lifecycle States
+
+| State       | Description                             | Broadcast Eligibility |
+| ----------- | --------------------------------------- | --------------------- |
+| `new`       | Recently discovered, minimal metadata   | ❌ Not eligible       |
+| `enriching` | Being processed by enrichers            | ❌ Not eligible       |
+| `ready`     | Fully processed, approved for broadcast | ✅ Eligible           |
+| `retired`   | No longer available or approved         | ❌ Not eligible       |
+
+> **Critical Rule:** Scheduling and playout only operate on assets in state `ready`.
 
 **How it works:**
 
 - **Adapters** connect to external libraries (e.g., Plex, local folders, ad libraries)
-- **Enrichers** process this metadata to extract what broadcast scheduling needs: runtime, ratings, ad break markers, tags, and restrictions
+- **Enrichers** process asset metadata to extract what broadcast scheduling needs: runtime, ratings, ad break markers, tags, and restrictions
+- **State Machine** ensures only fully-processed, approved content reaches the scheduling layer
 
 **Contract:** Library Domain is authoritative for content availability and metadata quality, but runtime never queries Library Domain directly. It's batch, not real-time.
 
