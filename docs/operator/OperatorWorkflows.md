@@ -75,6 +75,6 @@ When you need to completely start over with a collection:
 
 See also:
 
-- [CLI contract](CLI.md)
+- [CLI contract](../contracts/cli_contract.md)
 - [Enricher](../domain/Enricher.md)
 - [Channel manager](../runtime/ChannelManager.md)

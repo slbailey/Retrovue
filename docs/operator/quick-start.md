@@ -525,7 +525,7 @@ python --version  # Should be 3.8+
 
 - **[System architecture](../architecture/ArchitectureOverview.md)** - How RetroVue works
 - **[Database schema](../developer/database-schema.md)** - How data is stored
-- **[CLI reference](CLI.md)** - Command-line interface
+- **[CLI reference](cli_contract.md)** - Command-line interface
 - **[Streaming engine](../components/streaming-engine.md)** - How streaming works
 
 ### **Try Advanced Features**

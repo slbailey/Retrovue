@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+_Related: [CLI contract](../contracts/cli_contract.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Domain: Source](../domain/Source.md)_
 
 # Domain — Ingest pipeline
 

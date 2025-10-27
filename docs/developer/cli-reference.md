@@ -1,6 +1,6 @@
 # RetroVue CLI
 
-_Related: [Operator CLI](../operator/CLI.md) • [Developer: Plugin authoring](PluginAuthoring.md) • [Domain: Source](../domain/Source.md)_
+\_See the [CLI contract](../contracts/cli_contract.md) for the complete reference.
 
 The RetroVue CLI provides a command-line interface for managing your media library, content ingestion, and review workflows.
 

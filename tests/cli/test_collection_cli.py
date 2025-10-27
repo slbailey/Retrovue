@@ -1,7 +1,7 @@
 """
 CLI contract tests for retrovue collection commands.
 
-Tests the collection command group against the documented CLI contract in docs/operator/CLI.md.
+Tests the collection command group against the documented CLI contract in docs/contracts/cli_contract.md.
 """
 
 import pytest

@@ -338,7 +338,7 @@ python --version  # Should be 3.8+
 
 - **[Web Interface Guide](web-interface.md)** - Using the modern web UI
 - **[Configuration Guide](configuration.md)** - System configuration
-- **[CLI reference](CLI.md)** - Command-line interface reference
+- **[CLI reference](cli_contract.md)** - Command-line interface reference
 - **[Configuration](configuration.md)** - System configuration guide
 
 ### **Try Advanced Features**

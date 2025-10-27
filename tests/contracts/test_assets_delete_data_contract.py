@@ -1,12 +1,21 @@
 """
-Tests for CLI asset delete and restore commands.
+Data contract tests for `retrovue assets delete` / `retrovue assets restore`.
 
-This module tests the CLI commands for asset deletion and restoration,
-including dry-run mode, confirmation prompts, and error handling.
+This suite enforces the persistence guarantees in:
+docs/contracts/AssetsDelete.md
+
+These tests MUST use a real test database fixture (e.g. `db_session`)
+and MUST assert on actual persisted state after running the CLI.
+
+Rules enforced here include:
+- soft delete sets is_deleted = True and is reversible
+- hard delete actually removes the Asset
+- restore flips is_deleted back to False
+- operations return the correct exit code
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from uuid import uuid4
 from typer.testing import CliRunner
 
@@ -14,11 +23,11 @@ from retrovue.cli.commands.assets import app
 from retrovue.domain.entities import Asset
 
 
-class TestCLIAssetDelete:
-    """Test CLI asset delete commands."""
+class TestAssetsDeleteDataContract:
+    """Data contract tests for retrovue assets delete command."""
 
     def test_delete_asset_by_uuid_soft_delete(self, db_session):
-        """Test soft deleting an asset by UUID via CLI."""
+        """Test soft delete sets is_deleted = True in database."""
         # Create test asset
         asset = Asset(
             uri="/test/path.mp4",
@@ -27,10 +36,10 @@ class TestCLIAssetDelete:
         )
         db_session.add(asset)
         db_session.flush()
+        original_id = asset.id
         
         runner = CliRunner()
         
-        # Test soft delete with confirmation
         with patch('retrovue.cli.commands.assets.session') as mock_session:
             mock_session.return_value.__enter__.return_value = db_session
             
@@ -39,59 +48,14 @@ class TestCLIAssetDelete:
             ])
             
             assert result.exit_code == 0
-            assert "soft deleted successfully" in result.output
-
-    def test_delete_asset_by_uuid_dry_run(self, db_session):
-        """Test dry run mode for asset deletion."""
-        # Create test asset
-        asset = Asset(
-            uri="/test/path.mp4",
-            size=1000,
-            canonical=False
-        )
-        db_session.add(asset)
-        db_session.flush()
-        
-        runner = CliRunner()
-        
-        with patch('retrovue.cli.commands.assets.session') as mock_session:
-            mock_session.return_value.__enter__.return_value = db_session
             
-            result = runner.invoke(app, [
-                "delete", "--uuid", str(asset.uuid), "--dry-run"
-            ])
-            
-            assert result.exit_code == 0
-            assert "Would soft delete asset" in result.output
-            assert "referenced_by_episodes=false" in result.output
-
-    def test_delete_asset_by_uuid_dry_run_json(self, db_session):
-        """Test dry run mode with JSON output."""
-        # Create test asset
-        asset = Asset(
-            uri="/test/path.mp4",
-            size=1000,
-            canonical=False
-        )
-        db_session.add(asset)
-        db_session.flush()
-        
-        runner = CliRunner()
-        
-        with patch('retrovue.cli.commands.assets.session') as mock_session:
-            mock_session.return_value.__enter__.return_value = db_session
-            
-            result = runner.invoke(app, [
-                "delete", "--uuid", str(asset.uuid), "--dry-run", "--json"
-            ])
-            
-            assert result.exit_code == 0
-            assert '"action": "soft_delete"' in result.output
-            assert '"uuid":' in result.output
-            assert '"referenced": false' in result.output
+            # Refresh asset from database and check persistence
+            db_session.refresh(asset)
+            assert asset.is_deleted is True
+            assert asset.id == original_id  # Asset still exists
 
     def test_delete_asset_by_id(self, db_session):
-        """Test deleting an asset by ID."""
+        """Test deleting an asset by ID sets is_deleted = True."""
         # Create test asset
         asset = Asset(
             uri="/test/path.mp4",
@@ -100,6 +64,7 @@ class TestCLIAssetDelete:
         )
         db_session.add(asset)
         db_session.flush()
+        original_id = asset.id
         
         runner = CliRunner()
         
@@ -111,10 +76,14 @@ class TestCLIAssetDelete:
             ])
             
             assert result.exit_code == 0
-            assert "soft deleted successfully" in result.output
+            
+            # Refresh asset from database and check persistence
+            db_session.refresh(asset)
+            assert asset.is_deleted is True
+            assert asset.id == original_id  # Asset still exists
 
-    def test_delete_asset_hard_delete_with_references(self, db_session):
-        """Test hard delete with references (should be refused)."""
+    def test_delete_asset_hard_delete_with_existing_references(self, db_session):
+        """Test hard delete refuses when asset is referenced by episodes."""
         # Create test asset
         asset = Asset(
             uri="/test/path.mp4",
@@ -123,6 +92,7 @@ class TestCLIAssetDelete:
         )
         db_session.add(asset)
         db_session.flush()
+        original_id = asset.id
         
         runner = CliRunner()
         
@@ -138,10 +108,14 @@ class TestCLIAssetDelete:
                 ])
                 
                 assert result.exit_code == 1
-                assert "referenced by episodes" in result.output
+                
+                # Refresh asset from database - should still exist and not be deleted
+                db_session.refresh(asset)
+                assert asset.is_deleted is False
+                assert asset.id == original_id
 
     def test_delete_asset_hard_delete_with_force(self, db_session):
-        """Test hard delete with force flag."""
+        """Test hard delete with force flag actually removes asset from database."""
         # Create test asset
         asset = Asset(
             uri="/test/path.mp4",
@@ -150,6 +124,7 @@ class TestCLIAssetDelete:
         )
         db_session.add(asset)
         db_session.flush()
+        asset_id = asset.id
         
         runner = CliRunner()
         
@@ -161,10 +136,13 @@ class TestCLIAssetDelete:
             ])
             
             assert result.exit_code == 0
-            assert "hard deleted successfully" in result.output
+            
+            # Check that asset is actually removed from database
+            deleted_asset = db_session.get(Asset, asset_id)
+            assert deleted_asset is None
 
     def test_delete_asset_nonexistent(self, db_session):
-        """Test deleting a non-existent asset."""
+        """Test deleting non-existent asset returns error exit code."""
         fake_uuid = uuid4()
         runner = CliRunner()
         
@@ -176,10 +154,9 @@ class TestCLIAssetDelete:
             ])
             
             assert result.exit_code == 1
-            assert "Asset not found" in result.output
 
     def test_delete_asset_invalid_uuid(self, db_session):
-        """Test deleting an asset with invalid UUID format."""
+        """Test deleting asset with invalid UUID returns error exit code."""
         runner = CliRunner()
         
         with patch('retrovue.cli.commands.assets.session') as mock_session:
@@ -190,48 +167,75 @@ class TestCLIAssetDelete:
             ])
             
             assert result.exit_code == 1
-            assert "Invalid UUID format" in result.output
-
-    def test_delete_asset_no_selector(self, db_session):
-        """Test deleting an asset without specifying a selector."""
-        runner = CliRunner()
-        
-        with patch('retrovue.cli.commands.assets.session') as mock_session:
-            mock_session.return_value.__enter__.return_value = db_session
-            
-            result = runner.invoke(app, [
-                "delete", "--yes"
-            ])
-            
-            assert result.exit_code == 1
-            assert "Must specify one selector" in result.output
-
-    def test_delete_asset_multiple_selectors(self, db_session):
-        """Test deleting an asset with multiple selectors (should fail)."""
-        runner = CliRunner()
-        
-        with patch('retrovue.cli.commands.assets.session') as mock_session:
-            mock_session.return_value.__enter__.return_value = db_session
-            
-            result = runner.invoke(app, [
-                "delete", "--uuid", str(uuid4()), "--id", "123", "--yes"
-            ])
-            
-            assert result.exit_code == 1
-            assert "Can only specify one selector" in result.output
 
 
-class TestCLIAssetRestore:
-    """Test CLI asset restore commands."""
+class TestAssetsRestoreDataContract:
+    """Data contract tests for retrovue assets restore command."""
 
     def test_restore_asset_success(self, db_session):
-        """Test restoring a soft-deleted asset."""
+        """Test restore sets is_deleted = False in database."""
         # Create test asset that is soft deleted
         asset = Asset(
             uri="/test/path.mp4",
             size=1000,
             canonical=False,
             is_deleted=True
+        )
+        db_session.add(asset)
+        db_session.flush()
+        original_id = asset.id
+        
+        runner = CliRunner()
+        
+        with patch('retrovue.cli.commands.assets.session') as mock_session:
+            mock_session.return_value.__enter__.return_value = db_session
+            
+            result = runner.invoke(app, [
+                "restore", str(asset.uuid)
+            ])
+            
+            assert result.exit_code == 0
+            
+            # Refresh asset from database and check persistence
+            db_session.refresh(asset)
+            assert asset.is_deleted is False
+            assert asset.id == original_id  # Asset still exists
+
+    def test_restore_asset_nonexistent(self, db_session):
+        """Test restoring non-existent asset returns error exit code."""
+        fake_uuid = uuid4()
+        runner = CliRunner()
+        
+        with patch('retrovue.cli.commands.assets.session') as mock_session:
+            mock_session.return_value.__enter__.return_value = db_session
+            
+            result = runner.invoke(app, [
+                "restore", str(fake_uuid)
+            ])
+            
+            assert result.exit_code == 1
+
+    def test_restore_asset_invalid_uuid(self, db_session):
+        """Test restoring asset with invalid UUID returns error exit code."""
+        runner = CliRunner()
+        
+        with patch('retrovue.cli.commands.assets.session') as mock_session:
+            mock_session.return_value.__enter__.return_value = db_session
+            
+            result = runner.invoke(app, [
+                "restore", "invalid-uuid"
+            ])
+            
+            assert result.exit_code == 1
+
+    def test_restore_asset_requires_soft_deleted_state(self, db_session):
+        """Test restoring asset that is not soft-deleted returns error."""
+        # Create test asset that is NOT soft deleted
+        asset = Asset(
+            uri="/test/path.mp4",
+            size=1000,
+            canonical=False,
+            is_deleted=False
         )
         db_session.add(asset)
         db_session.flush()
@@ -245,59 +249,8 @@ class TestCLIAssetRestore:
                 "restore", str(asset.uuid)
             ])
             
-            assert result.exit_code == 0
-            assert "restored successfully" in result.output
-
-    def test_restore_asset_json_output(self, db_session):
-        """Test restoring an asset with JSON output."""
-        # Create test asset that is soft deleted
-        asset = Asset(
-            uri="/test/path.mp4",
-            size=1000,
-            canonical=False,
-            is_deleted=True
-        )
-        db_session.add(asset)
-        db_session.flush()
-        
-        runner = CliRunner()
-        
-        with patch('retrovue.cli.commands.assets.session') as mock_session:
-            mock_session.return_value.__enter__.return_value = db_session
-            
-            result = runner.invoke(app, [
-                "restore", str(asset.uuid), "--json"
-            ])
-            
-            assert result.exit_code == 0
-            assert '"action": "restore"' in result.output
-            assert '"status": "ok"' in result.output
-
-    def test_restore_asset_nonexistent(self, db_session):
-        """Test restoring a non-existent asset."""
-        fake_uuid = uuid4()
-        runner = CliRunner()
-        
-        with patch('retrovue.cli.commands.assets.session') as mock_session:
-            mock_session.return_value.__enter__.return_value = db_session
-            
-            result = runner.invoke(app, [
-                "restore", str(fake_uuid)
-            ])
-            
             assert result.exit_code == 1
-            assert "Asset not found or not soft-deleted" in result.output
-
-    def test_restore_asset_invalid_uuid(self, db_session):
-        """Test restoring an asset with invalid UUID format."""
-        runner = CliRunner()
-        
-        with patch('retrovue.cli.commands.assets.session') as mock_session:
-            mock_session.return_value.__enter__.return_value = db_session
             
-            result = runner.invoke(app, [
-                "restore", "invalid-uuid"
-            ])
-            
-            assert result.exit_code == 1
-            assert "Invalid UUID format" in result.output
+            # Refresh asset from database - should remain unchanged
+            db_session.refresh(asset)
+            assert asset.is_deleted is False

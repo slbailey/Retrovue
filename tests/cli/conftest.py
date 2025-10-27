@@ -2,7 +2,7 @@
 Lightweight fixtures for CLI contract tests.
 
 These tests only assert that the CLI surface matches the documented contract
-in docs/operator/CLI.md (command presence, --help output shape, required flags).
+in docs/contracts/cli_contract.md (command presence, --help output shape, required flags).
 
 They are intentionally isolated:
 - They do NOT require a database.

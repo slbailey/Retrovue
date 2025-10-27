@@ -59,4 +59,4 @@ When an operator runs:
 See also:
 
 - [Plugin authoring](PluginAuthoring.md)
-- [CLI contract](../operator/CLI.md)
+- [CLI contract](../contracts/cli_contract.md)

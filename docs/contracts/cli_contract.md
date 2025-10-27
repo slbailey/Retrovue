@@ -1,8 +1,20 @@
-_Related: [Architecture overview](../architecture/ArchitectureOverview.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Domain: Source](../domain/Source.md)_
+# Retrovue CLI Contract
 
-# RetroVue CLI Contract
+This document is a binding contract for the Retrovue CLI.
 
-This document defines the expected CLI surface for operators. These commands must match implementation and vice versa. If implementation deviates from this contract, implementation is wrong.
+It defines:
+
+- Command shapes (`retrovue <noun> <verb> [options]`)
+- Required flags
+- Help text guarantees
+- Exit code expectations
+- Safety rules for destructive commands (confirmation, `--force`, `--dry-run`)
+- JSON output expectations where applicable
+
+All tests in `tests/contracts/` that assert CLI behavior refer to this document.
+
+Changing any CLI surface (command names, flags, prompts, exit codes, output format)
+without updating this file FIRST is treated as a breaking change.
 
 ## Sources
 

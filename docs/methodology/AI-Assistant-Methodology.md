@@ -123,4 +123,4 @@ This document outlines the methodology for using AI assistants effectively in Re
 - [Plugin Authoring](../developer/PluginAuthoring.md) - Plugin development guide
 - [Testing Plugins](../developer/TestingPlugins.md) - Plugin testing procedures
 - [Architecture Overview](../architecture/ArchitectureOverview.md) - System architecture
-- [Operator CLI](../operator/CLI.md) - Operational procedures
+- [Operator CLI](../contracts/cli_contract.md) - Operational procedures

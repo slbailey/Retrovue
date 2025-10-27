@@ -1,26 +1,33 @@
 """
-CLI contract tests for retrovue channel commands.
+Contract tests for Retrovue CLI commands.
 
-Tests the channel command group against the documented CLI contract in docs/operator/CLI.md.
+This test enforces the global CLI contract defined in:
+docs/contracts/cli_contract.md
+
+Any change to CLI shape, flags, prompts, help text, or exit codes
+must update that contract first.
 """
 
+
 import pytest
-from .utils import run_cli
+from ..cli.utils import run_cli
 
 
-class TestChannelCLI:
+class TestChannelContract:
     """Test suite for retrovue channel commands."""
     
     def test_channel_list_help(self):
         """Test that retrovue channel list --help works."""
         exit_code, stdout, stderr = run_cli(["channel", "list", "--help"])
         assert exit_code == 0
+        # TODO: Update cli_contract.md to specify exact help text for channel list
         assert "List all channels" in stdout or "List all channels" in stderr
     
     def test_channel_list(self):
         """Test that retrovue channel list command exists and works."""
         exit_code, stdout, stderr = run_cli(["channel", "list"])
         assert exit_code == 0
+        # TODO: Update cli_contract.md to specify exact output format for channel list
         # Should show channels or empty list
         assert "channels" in stdout.lower() or "found" in stdout.lower()
     
@@ -44,6 +51,7 @@ class TestChannelCLI:
         exit_code, stdout, stderr = run_cli(["channel", "attach-enricher", "--help"])
         assert exit_code == 0
         assert "--priority" in stdout
+        # TODO: Update cli_contract.md to specify exact help text for channel attach-enricher
         assert "Attach a playout-scope enricher" in stdout or "Attach a playout-scope enricher" in stderr
     
     @pytest.mark.skip(reason="destructive; presence-only check")
@@ -56,6 +64,7 @@ class TestChannelCLI:
         """Test that retrovue channel detach-enricher --help works."""
         exit_code, stdout, stderr = run_cli(["channel", "detach-enricher", "--help"])
         assert exit_code == 0
+        # TODO: Update cli_contract.md to specify exact help text for channel detach-enricher
         assert "Remove enricher from channel" in stdout or "Remove enricher from channel" in stderr
     
     @pytest.mark.skip(reason="destructive; presence-only check")
