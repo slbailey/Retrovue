@@ -34,7 +34,7 @@ class YourImporterName(BaseImporter):
     # Change these to your importer type name
     name = "your-importer-type"
     
-    def __init__(self, **config) -> None:
+    def __init__(self, **config: Any) -> None:
         """
         Initialize your importer with configuration parameters.
         
@@ -529,7 +529,7 @@ class ExampleSystemImporter(BaseImporter):
     
     name = "example-system"
     
-    def __init__(self, **config) -> None:
+    def __init__(self, **config: Any) -> None:
         super().__init__(**config)
         # No configuration parameters needed - uses system defaults
     

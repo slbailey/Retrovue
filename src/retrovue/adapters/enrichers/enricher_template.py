@@ -31,7 +31,7 @@ class YourEnricherName(BaseEnricher):
     name = "your-enricher-type"
     scope = "ingest"  # or "playout"
     
-    def __init__(self, **config) -> None:
+    def __init__(self, **config: Any) -> None:
         """
         Initialize your enricher with enrichment parameters.
         
@@ -318,7 +318,7 @@ class ExampleSystemEnricher(BaseEnricher):
     name = "example-system"
     scope = "ingest"
     
-    def __init__(self, **config) -> None:
+    def __init__(self, **config: Any) -> None:
         super().__init__(**config)
         # No enrichment parameters needed - uses system defaults
     

@@ -241,7 +241,7 @@ class BaseImporter(ABC):
     # Override these in your implementation
     name: str = "base-importer"
     
-    def __init__(self, **config) -> None:
+    def __init__(self, **config: Any) -> None:
         """
         Initialize the importer with configuration parameters.
         

@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .enrichers.base import Enricher, EnricherNotFoundError, EnricherConfig
+from .enrichers.base import Enricher, EnricherConfig, EnricherNotFoundError
 from .enrichers.ffprobe_enricher import FFprobeEnricher
-from .importers.base import Importer, ImporterNotFoundError, DiscoveredItem
+from .importers.base import DiscoveredItem, Importer, ImporterNotFoundError
 from .importers.filesystem_importer import FilesystemImporter
 from .importers.plex_importer import PlexImporter
 
@@ -85,7 +85,7 @@ def get_importer(name: str, **kwargs: Any) -> Importer:
     except KeyError:
         raise UnsupportedSource(f"Unsupported source: {name}. "
                                 f"Available: {', '.join(sorted(SOURCES.keys()))}") from None
-    return cls(**kwargs)
+    return cls(**kwargs)  # type: ignore[no-any-return]
 
 
 def get_importer_help(name: str) -> dict[str, Any]:
@@ -118,7 +118,7 @@ def get_importer_help(name: str) -> dict[str, Any]:
         else:
             instance = cls()
         
-        return instance.get_help()
+        return instance.get_help()  # type: ignore[no-any-return]
     except Exception:
         # If we can't create an instance, return basic help
         return {

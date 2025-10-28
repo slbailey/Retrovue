@@ -92,7 +92,7 @@ class Enricher:
     @staticmethod
     def _get_default_config(enricher_type: str) -> dict[str, Any]:
         """Get default configuration for an enricher type."""
-        defaults: dict[str, Any] = {
+        defaults: dict[str, dict[str, Any]] = {
             "ingest": {},
             "playout": {}
         }

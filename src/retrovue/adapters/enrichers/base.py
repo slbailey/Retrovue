@@ -166,7 +166,7 @@ class BaseEnricher(ABC):
     name: str = "base-enricher"
     scope: str = "ingest"  # or "playout"
     
-    def __init__(self, **config) -> None:
+    def __init__(self, **config: Any) -> None:
         """
         Initialize the enricher with enrichment parameters.
         

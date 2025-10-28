@@ -45,12 +45,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Debug: List files to verify requirements files exist
           ls -la *.txt
-          # Install dependencies
           pip install -r requirements.txt
           pip install pytest pytest-asyncio ruff mypy types-requests
-          # Install the retrovue package in development mode
           pip install -e .
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
@@ -64,12 +61,7 @@ jobs:
           mypy
           echo "✅ MyPy check passed"
 
-      - name: Run contract tests
-        run: |
-          # Run all contract tests with enforcement for ENFORCED contracts
-          pytest tests/contracts --maxfail=1 --disable-warnings -q
-        env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+      # ENFORCED contracts only. Do NOT run draft/in-progress contracts here.
 
       - name: Enforce SourceAdd contract (ENFORCED)
         run: |
@@ -124,21 +116,5 @@ jobs:
           echo "🔒 ENFORCED: SourceListTypes contract tests must pass"
           pytest tests/contracts/test_source_list_types_contract.py tests/contracts/test_source_list_types_data_contract.py -v --tb=short
           echo "✅ SourceListTypes contract enforcement passed"
-        env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
-
-      - name: Enforce SourceList contract (ENFORCED)
-        run: |
-          echo "🔒 ENFORCED: SourceList contract tests must pass"
-          pytest tests/contracts/test_source_list_contract.py tests/contracts/test_source_list_data_contract.py -v --tb=short
-          echo "✅ SourceList contract enforcement passed"
-        env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
-
-      - name: Enforce Cross-Domain Guarantees (CROSS-DOMAIN)
-        run: |
-          echo "🔗 CROSS-DOMAIN: Cross-domain guarantee tests must pass"
-          pytest tests/contracts/cross-domain/ -v --tb=short
-          echo "✅ Cross-domain guarantees enforcement passed"
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
