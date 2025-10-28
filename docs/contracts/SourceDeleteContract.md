@@ -140,14 +140,14 @@ Successfully deleted source: My Plex Server
 
 ## Behavior Contract Rules (B-#)
 
-- **B-1:** The command MUST require interactive confirmation unless `--force` is provided.
-- **B-2:** Interactive confirmation MUST require the user to type "yes" exactly to proceed.
-- **B-3:** The confirmation prompt MUST show source details and cascade impact count.
+- **B-1:** The command MUST require interactive confirmation unless `--force` is provided. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-2:** Interactive confirmation MUST require the user to type "yes" exactly to proceed. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-3:** The confirmation prompt MUST show source details and cascade impact count. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
 - **B-4:** When `--json` is supplied, output MUST include fields `"deleted"`, `"source_id"`, `"name"`, and `"type"`.
 - **B-5:** On validation failure (source not found), the command MUST exit with code `1` and print "Error: Source 'X' not found".
-- **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Deletion cancelled".
-- **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately.
-- **B-8:** The source_selector argument MAY be a wildcard. Wildcard selection MUST resolve to a deterministic list of matching sources before any deletion occurs. If multiple sources are selected and `--force` is not provided, the command MUST present a single aggregated confirmation prompt summarizing impact across all matched sources and require the operator to type "yes". If `--force` is provided, the command MUST skip confirmation and attempt deletion of each matched source.
+- **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Deletion cancelled". Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-8:** The source_selector argument MAY be a wildcard. Wildcard selection MUST resolve to a deterministic list of matching sources before any deletion occurs. If multiple sources are selected and `--force` is not provided, the command MUST present a single aggregated confirmation prompt summarizing impact across all matched sources and require the operator to type "yes". If `--force` is provided, the command MUST skip confirmation and attempt deletion of each matched source. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
 
 ---
 
