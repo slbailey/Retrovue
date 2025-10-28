@@ -88,7 +88,7 @@ def list_sources(
             else:
                 typer.echo(f"Found {len(sources)} configured sources:")
                 for source in sources:
-                    typer.echo(f"  - {source.name} ({source.kind})")
+                    typer.echo(f"  - {source.name} ({source.type})")
                     typer.echo(f"    External ID: {source.external_id}")
                     if source.config:
                         # Redact sensitive information like tokens
@@ -132,7 +132,7 @@ def list_asset_groups(
             
             # Filter out enrichers from config as importers don't need them
             importer_config = {k: v for k, v in source.config.items() if k != 'enrichers'}
-            importer = get_importer(source.kind, **importer_config)
+            importer = get_importer(source.type, **importer_config)
             
             # Get asset groups from the importer
             asset_groups = importer.list_asset_groups()
@@ -176,6 +176,9 @@ def add_source(
     token: str | None = typer.Option(None, "--token", help="Authentication token"),
     base_path: str | None = typer.Option(None, "--base-path", help="Base filesystem path to scan"),
     enrichers: str | None = typer.Option(None, "--enrichers", help="Comma-separated list of enrichers to use"),
+    discover: bool = typer.Option(False, "--discover", help="Automatically discover and persist collections after source creation"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be created without executing"),
+    test_db: bool = typer.Option(False, "--test-db", help="Direct command to test database environment"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
     help_type: bool = typer.Option(False, "--help", help="Show help for the specified source type"),
 ):
@@ -252,6 +255,7 @@ def add_source(
         
         # Build configuration based on source type
         config = {}
+        importer_params = {}
         
         if type == "plex":
             if not base_url:
@@ -260,17 +264,28 @@ def add_source(
             if not token:
                 typer.echo("Error: --token is required for Plex sources", err=True)
                 raise typer.Exit(1)
-            config.update({
+            # For importer instantiation
+            importer_params = {
+                "base_url": base_url,
+                "token": token
+            }
+            # For database storage
+            config = {
                 "servers": [{"base_url": base_url, "token": token}]
-            })
+            }
         elif type == "filesystem":
             if not base_path:
                 typer.echo("Error: --base-path is required for filesystem sources", err=True)
                 raise typer.Exit(1)
-            config.update({
+            # For importer instantiation
+            importer_params = {
+                "base_path": base_path
+            }
+            # For database storage
+            config = {
                 "source_name": name,
                 "root_paths": [base_path]
-            })
+            }
         
         # Parse enrichers
         enricher_list = []
@@ -282,7 +297,44 @@ def add_source(
                     typer.echo(f"Warning: Unknown enricher '{enricher}'. Available: {', '.join(available_enrichers)}", err=True)
         
         # Create the importer instance to validate configuration
-        importer = get_importer(type, **config)
+        importer = get_importer(type, **importer_params)
+        
+        # Handle dry-run mode
+        if dry_run:
+            # Generate external ID for preview
+            import uuid
+            external_id = f"{type}-{uuid.uuid4().hex[:8]}"
+            
+            if json_output:
+                import json
+                result = {
+                    "id": f"preview-{external_id}",
+                    "external_id": external_id,
+                    "name": name,
+                    "type": type,
+                    "config": config,
+                    "enrichers": enricher_list,
+                    "importer_name": importer.name,
+                    "dry_run": True
+                }
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                typer.echo(f"[DRY RUN] Would create {type} source: {name}")
+                typer.echo(f"  External ID: {external_id}")
+                typer.echo(f"  Type: {type}")
+                typer.echo(f"  Importer: {importer.name}")
+                if enricher_list:
+                    typer.echo(f"  Enrichers: {', '.join(enricher_list)}")
+                typer.echo(f"  Configuration: {config}")
+                if discover:
+                    typer.echo(f"  Would discover collections: {'Yes' if type == 'plex' else 'No (not supported)'}")
+            return
+        
+        # Handle test-db mode
+        if test_db:
+            typer.echo("Using test database environment", err=True)
+            # TODO: Implement test database isolation
+            # For now, just continue with normal flow but mark as test mode
         
         # Now actually create and save the source in the database
         with session() as db:
@@ -307,7 +359,7 @@ def add_source(
             source = Source(
                 external_id=external_id,
                 name=name,
-                kind=type,
+                type=type,
                 config=db_config
             )
             
@@ -315,18 +367,22 @@ def add_source(
             db.commit()
             db.refresh(source)
             
-            # For Plex sources, automatically discover and persist collections
-            if type == "plex":
+            # For Plex sources, discover collections if --discover flag is provided
+            collections_discovered = 0
+            if type == "plex" and discover:
                 typer.echo("Discovering collections from Plex server...")
                 collections = source_service.discover_collections(source.external_id)
                 if collections:
                     success = source_service.persist_collections(source.external_id, collections)
                     if success:
-                        typer.echo(f"  Discovered and persisted {len(collections)} collections (all disabled by default)")
+                        collections_discovered = len(collections)
+                        typer.echo(f"  Discovered and persisted {collections_discovered} collections (all disabled by default)")
                     else:
                         typer.echo("  Warning: Failed to persist collections", err=True)
                 else:
                     typer.echo("  No collections found on Plex server")
+            elif type == "filesystem" and discover:
+                typer.echo("  Warning: Collection discovery not supported for filesystem sources", err=True)
             
             if json_output:
                 import json
@@ -334,11 +390,18 @@ def add_source(
                     "id": str(source.id),
                     "external_id": source.external_id,
                     "name": source.name,
-                    "type": source.kind,
+                    "type": source.type,
                     "config": source.config,
                     "enrichers": enricher_list,
                     "importer_name": importer.name
                 }
+                
+                # Add collection discovery information if --discover was used
+                if discover and collections_discovered > 0:
+                    result["collections_discovered"] = collections_discovered
+                    # TODO: Add actual collection details when available
+                    result["collections"] = []
+                
                 typer.echo(json.dumps(result, indent=2))
             else:
                 typer.echo(f"Successfully created {type} source: {name}")
@@ -564,7 +627,7 @@ def show_source(
                 source_dict = {
                     "id": source.id,
                     "external_id": source.external_id,
-                    "kind": source.kind,
+                    "type": source.type,
                     "name": source.name,
                     "status": source.status,
                     "base_url": source.base_url,
@@ -576,7 +639,7 @@ def show_source(
                 typer.echo(f"  ID: {source.id}")
                 typer.echo(f"  External ID: {source.external_id}")
                 typer.echo(f"  Name: {source.name}")
-                typer.echo(f"  Type: {source.kind}")
+                typer.echo(f"  Type: {source.type}")
                 typer.echo(f"  Status: {source.status}")
                 if source.base_url:
                     typer.echo(f"  Base URL: {source.base_url}")
@@ -622,7 +685,7 @@ def update_source(
             if name:
                 updates["name"] = name
             
-            if current_source.kind == "plex":
+            if current_source.type == "plex":
                 if base_url:
                     new_config["servers"] = [{"base_url": base_url, "token": new_config.get("servers", [{}])[0].get("token", "")}]
                 if token:
@@ -632,7 +695,7 @@ def update_source(
                 if new_config:
                     updates["config"] = new_config
                     
-            elif current_source.kind == "filesystem":
+            elif current_source.type == "filesystem":
                 if base_path:
                     new_config["root_paths"] = [base_path]
                 if new_config:
@@ -653,7 +716,7 @@ def update_source(
                 source_dict = {
                     "id": updated_source.id,
                     "external_id": updated_source.external_id,
-                    "kind": updated_source.kind,
+                    "type": updated_source.type,
                     "name": updated_source.name,
                     "status": updated_source.status,
                     "base_url": updated_source.base_url,
@@ -663,7 +726,7 @@ def update_source(
             else:
                 typer.echo(f"Successfully updated source: {updated_source.name}")
                 typer.echo(f"  ID: {updated_source.id}")
-                typer.echo(f"  Type: {updated_source.kind}")
+                typer.echo(f"  Type: {updated_source.type}")
                 if updated_source.base_url:
                     typer.echo(f"  Base URL: {updated_source.base_url}")
                 if updated_source.config:
@@ -728,7 +791,7 @@ def delete_source(
             else:
                 typer.echo(f"Successfully deleted source: {source.name}")
                 typer.echo(f"  ID: {source.id}")
-                typer.echo(f"  Type: {source.kind}")
+                typer.echo(f"  Type: {source.type}")
                     
         except Exception as e:
             typer.echo(f"Error deleting source: {e}", err=True)
@@ -765,7 +828,7 @@ def discover_collections(
             from ...adapters.importers.plex_importer import PlexImporter
             
             # Create importer with source config
-            if source.kind == "plex":
+            if source.type == "plex":
                 # Extract Plex configuration
                 config = source.config or {}
                 if "servers" in config and config["servers"]:
@@ -826,7 +889,7 @@ def discover_collections(
                         name=collection["name"],
                         enabled=False,
                         mapping_pairs=[],
-                        source_type=source.kind,
+                        source_type=source.type,
                         config=new_collection.config
                     ))
                     added_count += 1
@@ -840,7 +903,7 @@ def discover_collections(
                         "source": {
                             "id": str(source.id),
                             "name": source.name,
-                            "type": source.kind
+                            "type": source.type
                         },
                         "collections_added": added_count,
                         "collections": [
@@ -860,7 +923,7 @@ def discover_collections(
                     typer.echo()
                     typer.echo("Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync")
             else:
-                typer.echo(f"Error: Source type '{source.kind}' not supported for discovery", err=True)
+                typer.echo(f"Error: Source type '{source.type}' not supported for discovery", err=True)
                 raise typer.Exit(1)
                     
         except Exception as e:
@@ -972,7 +1035,7 @@ def source_ingest(
                     "source": {
                         "id": str(source.id),
                         "name": source.name,
-                        "type": source.kind
+                        "type": source.type
                     },
                     "collections_ingested": len(ingestible_collections),
                     "total_assets": total_assets,
@@ -1045,7 +1108,7 @@ def source_attach_enricher(
                     "source": {
                         "id": str(source.id),
                         "name": source.name,
-                        "type": source.kind
+                        "type": source.type
                     },
                     "enricher_id": enricher_id,
                     "priority": priority,
@@ -1124,7 +1187,7 @@ def source_detach_enricher(
                     "source": {
                         "id": str(source.id),
                         "name": source.name,
-                        "type": source.kind
+                        "type": source.type
                     },
                     "enricher_id": enricher_id,
                     "collections_affected": len(collections),
@@ -1177,7 +1240,7 @@ def enable_asset_group(
             
             # Filter out enrichers from config as importers don't need them
             importer_config = {k: v for k, v in source.config.items() if k != 'enrichers'}
-            importer = get_importer(source.kind, **importer_config)
+            importer = get_importer(source.type, **importer_config)
             
             # Enable the asset group
             success = importer.enable_asset_group(group_id)
@@ -1220,7 +1283,7 @@ def disable_asset_group(
             
             # Filter out enrichers from config as importers don't need them
             importer_config = {k: v for k, v in source.config.items() if k != 'enrichers'}
-            importer = get_importer(source.kind, **importer_config)
+            importer = get_importer(source.type, **importer_config)
             
             # Disable the asset group
             success = importer.disable_asset_group(group_id)

@@ -652,13 +652,18 @@ class SourceService:
                     "token": source.config.get("token")
                 }]
             
-            importer = PlexImporter(
-                servers=servers,
-                include_metadata=True
-            )
+            # Extract base_url and token from first server
+            if servers and len(servers) > 0:
+                server = servers[0]
+                importer = PlexImporter(
+                    base_url=server["base_url"],
+                    token=server["token"]
+                )
+            else:
+                raise ValueError("No servers configured for Plex source")
             
             # Discover libraries
-            libraries = importer.discover_libraries()
+            libraries = importer.discover()
             
             # Convert to DTOs
             collections = []

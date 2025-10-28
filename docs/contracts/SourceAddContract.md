@@ -56,6 +56,20 @@ retrovue source add --type <type> --name <name> [options] [--discover] [--test-d
 - Configuration must be valid before database operations
 - `--discover` option only applies to sources with discoverable collections (as declared by the importer)
 
+### Dry-run Behavior
+
+- In `--dry-run` mode, no database writes MAY occur
+- On valid input, exit code MUST be 0 and output MUST match the normal `--json` shape
+- On invalid input, exit code MUST be 1 and MUST emit the same human-readable error used in non-dry-run mode
+
+### Test Database Behavior
+
+- In `--test-db` mode, ALL database writes MUST be isolated to a non-production test environment
+- `--test-db` MUST NOT leak any writes to production databases or persistent storage
+- When `--test-db` is combined with `--dry-run`, dry-run behavior takes precedence (no writes occur)
+- Behavior, output format, and exit codes MUST remain identical to production mode
+- External system calls (e.g., Plex API) in `--test-db` mode MAY use mock/stub implementations
+
 ---
 
 ## Output Format
@@ -88,9 +102,9 @@ Successfully created plex source: My Plex Server
   Interface Status: Valid ✓
 
 Successfully discovered 3 collections:
-  • Movies (ID: 1) - Disabled by default
-  • TV Shows (ID: 2) - Disabled by default
-  • Music (ID: 3) - Disabled by default
+  • Movies (ID: 1) - Sync disabled by default
+  • TV Shows (ID: 2) - Sync disabled by default
+  • Music (ID: 3) - Sync disabled by default
 
 Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync
 ```
@@ -137,17 +151,17 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
     {
       "external_id": "1",
       "name": "Movies",
-      "enabled": false
+      "sync_enabled": false
     },
     {
       "external_id": "2",
       "name": "TV Shows",
-      "enabled": false
+      "sync_enabled": false
     },
     {
       "external_id": "3",
       "name": "Music",
-      "enabled": false
+      "sync_enabled": false
     }
   ]
 }
@@ -176,7 +190,7 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 
 2. **Collection Discovery** (Plex sources with `--discover` only):
    - Automatic discovery of Plex libraries within the same Unit of Work
-   - SourceCollection records created with `enabled=False`
+   - SourceCollection records created with `sync_enabled=False`
    - PathMapping records created with empty `local_path`
    - All discovery operations must be atomic with source creation
 
@@ -195,7 +209,11 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 - **B-3:** External ID MUST be generated in format "type-hash" and MUST be unique.
 - **B-4:** When `--json` is supplied, output MUST include fields `"id"`, `"external_id"`, `"name"`, `"type"`, `"config"`, `"enrichers"`, and `"importer_name"`.
 - **B-5:** On validation failure, the command MUST exit with code `1` and print a human-readable error message.
-- **B-6:** The `--dry-run` flag MUST show configuration validation and external ID generation without executing.
+- **B-5a:** On discovery failure (when `--discover` is provided), the command MUST exit with code `1` and rollback all changes, including source creation.
+- **B-6:** The `--dry-run` flag MUST show configuration validation and external ID generation without executing. In dry-run mode, no database writes MAY occur. On valid input, exit code MUST be 0 and output MUST match the normal `--json` shape. On invalid input, exit code MUST be 1 and MUST emit the same human-readable error used in non-dry-run mode.
+- **B-6a:** The `--test-db` flag MUST isolate ALL database writes to a non-production test environment. `--test-db` MUST NOT leak any writes to production databases or persistent storage.
+- **B-6b:** When `--test-db` is combined with `--dry-run`, dry-run behavior takes precedence (no writes occur).
+- **B-6c:** Behavior, output format, and exit codes MUST remain identical to production mode when using `--test-db`.
 - **B-7:** The `--discover` flag MUST trigger immediate collection discovery if (and only if) the importer for this source type declares that it supports discovery. If discovery is not supported, the flag MUST be ignored with a warning, not treated as an error.
 - **B-8:** When `--discover` is provided with `--json`, output MUST include `"collections_discovered"` and `"collections"` fields.
 - **B-9:** Collection discovery MUST NOT occur unless `--discover` is explicitly provided.
@@ -210,7 +228,7 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 - **D-1:** Source creation MUST occur within a single transaction boundary.
 - **D-2:** External ID generation MUST be atomic and collision-free.
 - **D-3:** Collection discovery (when `--discover` is provided) MUST occur within the same transaction as source creation, following Unit of Work principles.
-- **D-4:** Newly discovered collections MUST be persisted with `enabled=False`.
+- **D-4:** Newly discovered collections MUST be persisted with `sync_enabled=False`.
 - **D-5:** PathMapping records MUST be created with empty `local_path` for discovered collections.
 - **D-6:** On transaction failure, ALL changes MUST be rolled back with no partial creation.
 - **D-7:** Source configuration MUST be validated before database persistence.
@@ -218,13 +236,15 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 - **D-9:** Collection discovery MUST NOT occur unless `--discover` is explicitly provided.
 - **D-10:** Importer interface compliance MUST be verified before source creation.
 - **D-11:** Configuration schema validation MUST be performed using importer's `get_config_schema()` method.
+- **D-12:** When `--test-db` is provided, ALL database operations MUST be isolated to a test environment and MUST NOT affect production data.
+- **D-13:** Test database isolation MUST be enforced at the transaction level, ensuring no cross-contamination with production systems.
 
 ---
 
 ## Test Coverage Mapping
 
 - `B-1..B-12` → `test_source_add_contract.py`
-- `D-1..D-11` → `test_source_add_data_contract.py`
+- `D-1..D-13` → `test_source_add_data_contract.py`
 
 ---
 

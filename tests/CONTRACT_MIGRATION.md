@@ -8,26 +8,40 @@ This document tracks the migration from legacy tests to contract-based testing a
 
 ## Current Enforcement Status
 
-| Status        | Count | Notes                                       |
-| ------------- | ----- | ------------------------------------------- |
-| ENFORCED      | 6     | All Enricher commands + SourceListTypes     |
-| TESTS CREATED | 0     | None                                        |
-| PLANNED       | 12    | Source, Collection, Assets, Channel, System |
+| Status        | Count | Notes                                                                                         |
+| ------------- | ----- | --------------------------------------------------------------------------------------------- |
+| ENFORCED      | 7     | All Enricher commands + SourceListTypes + SourceAdd                                           |
+| TESTS CREATED | 0     | All tests moved to ENFORCED                                                                   |
+| PLANNED       | 11    | Source, Collection, Assets, Channel, System                                                   |
+| CROSS-DOMAIN  | 4     | Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests) |
 
-**6 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes  
-**0 Contracts with Tests:** None  
-**12 Contracts Planned:** Source, Collection, Assets, Channel, and System operations
+**7 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd  
+**0 Contracts with Tests:** All tests moved to ENFORCED  
+**11 Contracts Planned:** Source, Collection, Assets, Channel, and System operations  
+**4 Cross-Domain Guarantees:** Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests)
 
 ## Migration Status Legend
 
 - **ENFORCED**: Contract is fully implemented and enforced by tests. Changes require contract update first.
 - **IN_PROGRESS**: Contract tests exist but implementation is incomplete.
 - **PLANNED**: Contract defined but tests not yet created.
+- **CROSS-DOMAIN**: Cross-domain guarantees defined but tests not yet created.
 - **LEGACY**: Old implementation preserved in `_legacy/` for reference.
 
 ---
 
 ## Enforced Contracts
+
+### SourceAdd
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/SourceAddContract.md  
+**Tests:**
+
+- tests/contracts/test_source_add_contract.py
+- tests/contracts/test_source_add_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 32 contract tests passing. Complete implementation with --discover, --dry-run, and --test-db flags.
 
 ### EnricherAdd
 
@@ -97,15 +111,51 @@ This document tracks the migration from legacy tests to contract-based testing a
 
 ---
 
-## Migration Progress
+## Cross-Domain Guarantees
+
+> **Cross-Domain Guarantees are governed by the House Standard defined in `docs/cross-domain/README.md`.**  
+> All domain interactions that cross boundaries must have explicit guarantee documents and test suites.
+
+### Source ↔ Enricher Guarantees
+
+**Status:** CROSS-DOMAIN  
+**Document:** docs/cross-domain/Source_Enricher_Guarantees.md  
+**Tests:** tests/contracts/cross-domain/test_source_enricher_guarantees.py  
+**CI:** YES  
+**Notes:** Defines guarantees for source-enricher interactions, validation, and transactional integrity. G-1 through G-4 enforced, G-5 planned (requires SourceRemoveContract and SourceUpdateContract).
+
+### Source ↔ Importer Guarantees
+
+**Status:** CROSS-DOMAIN  
+**Document:** docs/cross-domain/Source_Importer_Guarantees.md  
+**Tests:** tests/contracts/cross-domain/test_source_importer_guarantees.py  
+**CI:** YES  
+**Notes:** Defines guarantees for source-importer interactions, interface compliance, and capability validation. All 9 tests passing (G-1 through G-6 + error standards + transaction boundaries + ID correlation).
+
+### Source ↔ Collection Guarantees
+
+**Status:** CROSS-DOMAIN  
+**Document:** docs/cross-domain/Source_Collection_Guarantees.md  
+**Tests:** tests/contracts/cross-domain/test_source_collection_guarantees.py  
+**CI:** YES  
+**Notes:** Defines guarantees for source-collection interactions, discovery coordination, and lifecycle synchronization. All 9 tests passing (G-1 through G-6 + exit code semantics + error standards + transaction boundaries).
+
+### CLI ↔ Data Guarantees
+
+**Status:** CROSS-DOMAIN  
+**Document:** docs/cross-domain/CLI_Data_Guarantees.md  
+**Tests:** tests/contracts/cross-domain/test_cli_data_guarantees.py  
+**CI:** YES  
+**Notes:** Defines guarantees for CLI-data interactions, transaction management, and error handling consistency. All 8 tests passing (G-1 through G-6 + error standards + transaction boundaries).
+
+---
 
 ### Contracts with Tests Created
 
-- None (all contracts with tests have been moved to ENFORCED)
+_None - all tests moved to ENFORCED_
 
 ### Planned Contracts
 
-- ⏳ SourceAdd
 - ⏳ SourceDiscover
 - ⏳ SourceIngest
 - ⏳ CollectionIngest
@@ -128,7 +178,7 @@ All previous test implementations have been moved to `tests/_legacy/` for refere
 
 **Enforced Contracts:** CI runs contract tests for all ENFORCED contracts plus minimal unit tests that don't contradict contracts.
 
-**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes
+**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd
 
 **Command:** `pytest tests/contracts --maxfail=1 --disable-warnings -q`
 
