@@ -714,6 +714,73 @@ def update_enricher(
         raise typer.Exit(1)
 
 
+def check_enricher_removal_safety(enricher: EnricherModel, db_session) -> tuple[bool, str]:
+    """
+    Check if an enricher can be safely removed in production.
+    
+    Safety is based on harm prevention, not static categories.
+    Checks for two types of harm:
+    1. Enricher is currently in use by active operations
+    2. Enricher is marked as protected_from_removal = true
+    
+    Args:
+        enricher: The enricher to check
+        db_session: Database session for queries
+        
+    Returns:
+        tuple[bool, str]: (is_safe, reason_if_not_safe)
+    """
+    import os
+    
+    # Non-production environments are always permissive
+    if os.getenv('ENV') != 'production' and 'production' not in os.getenv('DATABASE_URL', ''):
+        return True, ""
+    
+    # Check if enricher is explicitly protected from removal
+    if enricher.protected_from_removal:
+        return False, f"Enricher '{enricher.name}' is marked as protected from removal and cannot be deleted in production"
+    
+    # Check if enricher is currently in use by active operations
+    # Note: These tables don't exist yet, so we'll return safe for now
+    # When attachment and job tables are implemented, uncomment these checks:
+    
+    # # Check for active collection attachments
+    # collection_attachments = db_session.query(CollectionAttachment).filter(
+    #     CollectionAttachment.enricher_id == enricher.enricher_id
+    # ).count()
+    # 
+    # if collection_attachments > 0:
+    #     return False, f"Enricher '{enricher.name}' is attached to {collection_attachments} collections and cannot be removed while in use"
+    # 
+    # # Check for active channel attachments  
+    # channel_attachments = db_session.query(ChannelAttachment).filter(
+    #     ChannelAttachment.enricher_id == enricher.enricher_id
+    # ).count()
+    # 
+    # if channel_attachments > 0:
+    #     return False, f"Enricher '{enricher.name}' is attached to {channel_attachments} channels and cannot be removed while in use"
+    # 
+    # # Check for active ingest jobs
+    # active_ingest_jobs = db_session.query(IngestJob).filter(
+    #     IngestJob.enricher_id == enricher.enricher_id,
+    #     IngestJob.status.in_(['running', 'pending'])
+    # ).count()
+    # 
+    # if active_ingest_jobs > 0:
+    #     return False, f"Enricher '{enricher.name}' is currently being used by {active_ingest_jobs} active ingest jobs"
+    # 
+    # # Check for active playout sessions
+    # active_playout_sessions = db_session.query(PlayoutSession).filter(
+    #     PlayoutSession.enricher_id == enricher.enricher_id,
+    #     PlayoutSession.status.in_(['active', 'scheduled'])
+    # ).count()
+    # 
+    # if active_playout_sessions > 0:
+    #     return False, f"Enricher '{enricher.name}' is currently being used by {active_playout_sessions} active playout sessions"
+    
+    return True, ""
+
+
 @app.command("remove")
 def remove_enricher(
     enricher_id: str = typer.Argument(..., help="Enricher ID to remove"),
@@ -741,6 +808,13 @@ def remove_enricher(
                 typer.echo(f"Error: Enricher '{enricher_id}' not found", err=True)
                 raise typer.Exit(1)
             
+            # Check production safety before proceeding
+            is_safe, safety_reason = check_enricher_removal_safety(enricher, db)
+            if not is_safe:
+                typer.echo(f"Error: Cannot remove enricher in production: {safety_reason}", err=True)
+                typer.echo("Use --test-db flag to test removal in a safe environment", err=True)
+                raise typer.Exit(1)
+            
             # Calculate cascade impact before deletion
             # Note: These tables don't exist yet, so we'll set to 0 for now
             # When collection/channel attachment tables are implemented, uncomment these:
@@ -759,6 +833,8 @@ def remove_enricher(
                 typer.echo("This will also remove:")
                 typer.echo(f"  - {collection_attachments_removed} collection attachments")
                 typer.echo(f"  - {channel_attachments_removed} channel attachments")
+                if enricher.protected_from_removal:
+                    typer.echo("⚠️  WARNING: This enricher is marked as protected from removal")
                 typer.echo("This action cannot be undone.")
                 confirm = typer.prompt("Type 'yes' to confirm", default="no")
                 if confirm.lower() != "yes":

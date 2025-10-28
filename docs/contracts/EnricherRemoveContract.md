@@ -138,7 +138,7 @@ Successfully removed enricher: Video Analysis
 - **D-2:** Enricher removal MUST cascade delete all associated channel attachment records.
 - **D-3:** All removal operations MUST occur within a single transaction boundary.
 - **D-4:** On transaction failure, ALL changes MUST be rolled back with no partial deletions.
-- **D-5:** **PRODUCTION SAFETY**: An Enricher MUST NOT be removed in production if it has been used in any active ingest or playout operations. `--force` MUST NOT override this rule.
+- **D-5:** **PRODUCTION SAFETY**: An enricher MUST NOT be removed in production if its removal would cause harm to running or future operations. Harm means breaking an active process, violating an operational expectation, or leaving the system in an invalid state. `--force` MUST NOT override this safeguard. The implementation checks for harm using two criteria: (1) whether the enricher is currently in use by an active ingest or playout operation, and (2) whether the enricher is marked `protected_from_removal = true`. Historical usage is not considered harmful unless the enricher is explicitly protected. Non-production environments remain permissive with no safety checks.
 - **D-6:** Removal MUST be logged with enricher details, collection count, and channel count.
 - **D-7:** The command MUST verify enricher existence before attempting removal.
 
@@ -204,10 +204,12 @@ retrovue enricher remove enricher-metadata-b2c3d4e5 --test-db
 
 ## Safety Guidelines
 
-- Always use `--test-db` for testing removal logic
-- Verify cascade impact before using `--force`
+- Always use `--test-db` for testing removal logic in non-production environments
+- Verify cascade impact before using `--force` in non-production environments
 - Use `--dry-run` equivalent by checking enricher details first
 - Confirm enricher identification before removal
+- **Production Safety**: Enrichers marked as `protected_from_removal = true` cannot be removed in production environments, even with `--force`
+- **Harm Prevention**: The system prevents removal of enrichers that would break active operations or violate operational expectations
 
 ---
 

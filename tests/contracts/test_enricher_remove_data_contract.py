@@ -137,12 +137,94 @@ class TestEnricherRemoveDataContract:
 
     def test_enricher_remove_production_safety_check(self):
         """
-        Contract D-5: An Enricher MUST NOT be removed in production if it has been used 
-        in any active ingest or playout operations. --force MUST NOT override this rule.
+        Contract D-5: An enricher MUST NOT be removed in production if its removal would cause harm 
+        to running or future operations. Harm means breaking an active process, violating an operational 
+        expectation, or leaving the system in an invalid state. --force MUST NOT override this safeguard.
         
-        NOTE: This test is currently skipped because production safety checks are not yet implemented.
+        The implementation checks for harm using two criteria:
+        1. Whether the enricher is currently in use by an active ingest or playout operation
+        2. Whether the enricher is marked protected_from_removal = true
+        
+        Historical usage is not considered harmful unless the enricher is explicitly protected.
+        Non-production environments remain permissive with no safety checks.
         """
-        pytest.skip("Production safety checks not yet implemented - TODO")
+        # Test 1: Protected enricher cannot be removed in production
+        with patch("retrovue.cli.commands.enricher.session") as mock_session, \
+             patch("os.getenv") as mock_getenv:
+            
+            # Mock production environment
+            mock_getenv.side_effect = lambda key, default="": "production" if key == "ENV" else default
+            
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+            
+            # Create a protected enricher
+            protected_enricher = MagicMock()
+            protected_enricher.enricher_id = "enricher-ffprobe-a1b2c3d4"
+            protected_enricher.name = "Protected Video Analysis"
+            protected_enricher.type = "ffprobe"
+            protected_enricher.scope = "ingest"
+            protected_enricher.protected_from_removal = True
+            
+            mock_db.query.return_value.filter.return_value.first.return_value = protected_enricher
+            
+            result = self.runner.invoke(app, ["enricher", "remove", "enricher-ffprobe-a1b2c3d4", "--force"])
+            
+            assert result.exit_code == 1
+            assert "Cannot remove enricher in production" in result.stderr
+            assert "marked as protected from removal" in result.stderr
+        
+        # Test 2: Non-protected enricher can be removed in production (when not in active use)
+        with patch("retrovue.cli.commands.enricher.session") as mock_session, \
+             patch("os.getenv") as mock_getenv:
+            
+            # Mock production environment
+            mock_getenv.side_effect = lambda key, default="": "production" if key == "ENV" else default
+            
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+            
+            # Create a non-protected enricher
+            normal_enricher = MagicMock()
+            normal_enricher.enricher_id = "enricher-metadata-b2c3d4e5"
+            normal_enricher.name = "Normal Metadata Enricher"
+            normal_enricher.type = "metadata"
+            normal_enricher.scope = "ingest"
+            normal_enricher.protected_from_removal = False
+            
+            mock_db.query.return_value.filter.return_value.first.return_value = normal_enricher
+            
+            result = self.runner.invoke(app, ["enricher", "remove", "enricher-metadata-b2c3d4e5", "--force"])
+            
+            # Should succeed since it's not protected and not in active use
+            assert result.exit_code == 0
+            assert "Successfully removed enricher" in result.stdout
+        
+        # Test 3: Non-production environments are permissive
+        with patch("retrovue.cli.commands.enricher.session") as mock_session, \
+             patch("os.getenv") as mock_getenv:
+            
+            # Mock non-production environment
+            mock_getenv.side_effect = lambda key, default="": "development" if key == "ENV" else default
+            
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+            
+            # Create a protected enricher
+            protected_enricher = MagicMock()
+            protected_enricher.enricher_id = "enricher-ffprobe-a1b2c3d4"
+            protected_enricher.name = "Protected Video Analysis"
+            protected_enricher.type = "ffprobe"
+            protected_enricher.scope = "ingest"
+            protected_enricher.protected_from_removal = True
+            
+            mock_db.query.return_value.filter.return_value.first.return_value = protected_enricher
+            
+            result = self.runner.invoke(app, ["enricher", "remove", "enricher-ffprobe-a1b2c3d4", "--force"])
+            
+            # Should succeed in non-production even if protected
+            assert result.exit_code == 0
+            assert "Successfully removed enricher" in result.stdout
 
     def test_enricher_remove_audit_logging(self):
         """

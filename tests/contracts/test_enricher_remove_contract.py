@@ -106,6 +106,7 @@ class TestEnricherRemoveContract:
             mock_enricher.type = "ffprobe"
             mock_enricher.name = "Video Analysis"
             mock_enricher.scope = "ingest"
+            mock_enricher.protected_from_removal = True  # Mark as protected
             
             mock_query = MagicMock()
             mock_query.first.return_value = mock_enricher
@@ -118,6 +119,7 @@ class TestEnricherRemoveContract:
             assert "Video Analysis" in result.stdout
             assert "enricher-ffprobe-a1b2c3d4" in result.stdout
             assert "This action cannot be undone" in result.stdout
+            assert "WARNING: This enricher is marked as protected from removal" in result.stdout
 
     def test_enricher_remove_json_output_format(self):
         """

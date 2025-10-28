@@ -396,6 +396,7 @@ class Enricher(Base):
     scope: Mapped[str] = mapped_column(String(50), nullable=False)  # "ingest" or "playout"
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    protected_from_removal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # Operational criticality flag
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -403,10 +404,11 @@ class Enricher(Base):
         Index("ix_enrichers_type", "type"),
         Index("ix_enrichers_scope", "scope"),
         Index("ix_enrichers_enricher_id", "enricher_id"),
+        Index("ix_enrichers_protected", "protected_from_removal"),
     )
 
     def __repr__(self) -> str:
-        return f"<Enricher(id={self.id}, enricher_id={self.enricher_id}, type={self.type}, scope={self.scope}, name={self.name})>"
+        return f"<Enricher(id={self.id}, enricher_id={self.enricher_id}, type={self.type}, scope={self.scope}, name={self.name}, protected={self.protected_from_removal})>"
 
 
 

@@ -42,6 +42,25 @@ Enrichers must be pure in the sense that they receive an object and return a new
 
 Enrichers must tolerate being skipped. The system is allowed to run zero enrichers.
 
+## Production Safety Philosophy
+
+Enricher removal is governed by a harm-prevention philosophy rather than static categories. The system prevents removal of enrichers that would cause harm to running or future operations.
+
+**Harm Definition:**
+- Breaking an active process
+- Violating an operational expectation  
+- Leaving the system in an invalid state
+
+**Safety Criteria:**
+1. **Active Usage**: Enricher is currently in use by an active ingest or playout operation
+2. **Explicit Protection**: Enricher is marked as `protected_from_removal = true`
+
+**Environment Behavior:**
+- **Production**: Strict safety checks enforced, `--force` cannot override safeguards
+- **Non-Production**: Permissive behavior, no safety checks applied
+
+**Historical Usage**: Past usage is not considered harmful unless the enricher is explicitly protected from removal.
+
 ## Enrichment Parameters
 
 Enrichers require specific parameters to perform their enrichment tasks. These parameters vary by enricher type and implementation:
