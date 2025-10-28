@@ -453,7 +453,7 @@ def add_source(
                 typer.echo(f"Successfully created {type} source: {name}")
                 typer.echo(f"  Name: {name}")
                 typer.echo(f"  ID: {source.id}")
-                typer.echo(f"  Importer: {importer.name}")
+                typer.echo(f"  Type: {type}")
                 if enricher_list:
                     typer.echo(f"  Enrichers: {', '.join(enricher_list)}")
                 
