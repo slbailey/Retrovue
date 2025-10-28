@@ -155,7 +155,7 @@ class Asset(Base):
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    collection_uuid: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="SET NULL"), nullable=True)
+    collection_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     episodes: Mapped[list[Episode]] = relationship(
