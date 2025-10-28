@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Contracts](../contracts/README.md) • [Registry](Registry.md) • [Source](Source.md) • [Collection](Collection.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Contracts](../contracts/README.md) • [Source](Source.md) • [Collection](Collection.md)_
 
 # Domain — Importer
 
@@ -6,11 +6,11 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Contracts
 
 Importer defines the conceptual domain for content discovery and ingestion from external media systems. Importers bridge the gap between external content sources (Plex, filesystem, etc.) and RetroVue's internal content management system by implementing standardized discovery, validation, and ingestion operations.
 
-Importers are **modular and extensible** - they can be developed by third parties without modifying core RetroVue code. The [Registry](Registry.md) domain manages importer discovery, registration, and lifecycle.
+Importers are **modular and extensible** - they can be developed by third parties without modifying core RetroVue code. Importers are discovered at runtime through a registry — a runtime collection of available importer implementations. The registry is responsible for mapping stable type identifiers (like plex, filesystem) to importer classes.
 
 ### Importer vs Source
 
-An **Importer** is code. A **Source** is a configured instance of that Importer type (with credentials, base URLs, etc.) stored in the database and referenced by `source_id`. Operators interact with Sources through `retrovue source ....` Importers are never configured directly; they are discovered at runtime by the Registry.
+An **Importer** is code. A **Source** is a configured instance of that Importer type (with credentials, base URLs, etc.) stored in the database and referenced by `source_id`. Operators interact with Sources through `retrovue source ....` Importers are never configured directly; they are discovered at runtime through the registry.
 
 ## Core model / scope
 
@@ -21,6 +21,18 @@ Importer is implemented as an abstract interface (`ImporterInterface`) that defi
 - **Content Ingestion**: Extracting metadata and producing normalized asset descriptions that become Asset records
 
 The interface ensures consistent behavior across all importer types while allowing source-specific implementations.
+
+### Registry vs CLI Architecture
+
+**Registry Responsibility**: The registry is responsible for enumerating importer identifiers (simple names like "plex", "filesystem") and maintaining the mapping from identifiers to importer classes.
+
+**CLI Responsibility**: The CLI is responsible for resolving those identifiers into structured output and validating interface compliance. Interface compliance is enforced at CLI time, not registry time.
+
+This separation provides:
+
+- **Clean boundaries**: Registry handles discovery, CLI handles presentation and validation
+- **Flexibility**: Registry can be simple, CLI can add rich metadata and validation
+- **Testability**: Easier to test individual components in isolation
 
 ## Contract / interface
 
@@ -40,24 +52,50 @@ Third-party importers SHOULD subclass it, but if they don't, they MUST still sat
 
 Orchestration may call these behaviors at different granularities. For the developer-facing method signatures and CLI wiring (including `get_config_schema()`, filtering by title/season/episode, etc.), see the [Importer Development Guide](../developer/Importer.md).
 
-All importers MUST implement the `ImporterInterface` abstract base class:
+All importers MUST implement the `ImporterInterface` protocol:
 
 ```python
-class ImporterInterface(ABC):
-    @abstractmethod
-    def validate_ingestible(self, collection: SourceCollection) -> bool:
-        """Validate whether a collection meets prerequisites for ingestion."""
+class ImporterInterface(Protocol):
+    name: str
 
-    @abstractmethod
-    def discover_collections(self, source_id: str) -> List[Dict[str, Any]]:
-        """Discover collections from the external source."""
+    @classmethod
+    def get_config_schema(cls) -> ImporterConfig: ...
 
-    @abstractmethod
-    def ingest_collection(self, collection: SourceCollection, scope: Optional[str] = None) -> Dict[str, Any]:
-        """Ingest content from a collection."""
+    def discover(self) -> list[DiscoveredItem]: ...
+
+    def get_help(self) -> dict[str, any]: ...
+
+    def list_asset_groups(self) -> list[dict[str, any]]: ...
+
+    def enable_asset_group(self, group_id: str) -> bool: ...
+
+    def disable_asset_group(self, group_id: str) -> bool: ...
 ```
 
 **Note:** RetroVue orchestration may call importer behavior at two granularities: discovery / asset fetch (per collection, per title/season/episode), and full ingest execution of that collection. For clarity, `ImporterInterface` here reflects the semantic responsibilities at the domain level. For method signatures and CLI-driven calling patterns, see [Importer Development Guide](../developer/Importer.md).
+
+### Interface Responsibility Boundaries
+
+The `ImporterInterface` defines three distinct responsibility areas with different operational characteristics:
+
+**Discovery Operations** (Side-effect-free):
+
+- `discover()`: Enumerate available collections from external sources
+- `list_asset_groups()`: List asset groups within collections
+- These operations MUST NOT modify external systems or database state
+
+**Validation Operations** (Side-effect-free):
+
+- `get_config_schema()`: Declare configuration requirements
+- `get_help()`: Provide usage information
+- These operations MUST NOT perform external system calls or database modifications
+
+**Control Operations** (State-modifying):
+
+- `enable_asset_group()` / `disable_asset_group()`: Modify collection state
+- These operations operate within Unit of Work boundaries and MUST NOT persist directly to authoritative tables
+
+**Critical Invariant**: Importers MUST NOT directly persist to authoritative tables. They return normalized data; the ingest service handles persistence within controlled Unit of Work boundaries.
 
 ### Prerequisites Validation
 
@@ -127,12 +165,25 @@ Each importer file MUST follow the naming pattern `{source_type}_importer.py`:
 
 ### Registry Integration
 
-Importers are managed by the Registry domain:
+Importers are exposed through a runtime registry with clear separation of responsibilities:
 
 - **Runtime Discovery**: Registry scans `adapters/importers/` directory for `*_importer.py` files
-- **Source Type Mapping**: Source type automatically derived from filename
+- **Identifier Enumeration**: Registry returns simple importer identifiers (strings like "plex", "filesystem")
+- **Class Mapping**: Registry maintains mapping from identifiers to importer classes
 - **Dynamic Loading**: Importers loaded on-demand when needed
-- **Interface Validation**: Registry validates `ImporterInterface` implementation
+- **Interface Validation**: CLI validates `ImporterInterface` implementation at runtime, not registry time
+
+**Registry does NOT:**
+
+- Validate interface compliance
+- Build rich metadata objects
+- Perform complex validation logic
+
+**CLI does:**
+
+- Resolve identifiers to classes
+- Validate interface compliance
+- Build structured output with status and compliance information
 
 ### Configuration Management
 
@@ -171,11 +222,12 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 ### Discovery Workflow
 
 1. **Importer Discovery**: Registry scans `adapters/importers/` directory for `*_importer.py` files
-2. **Source Creation**: Source created with `type` field
-3. **Importer Selection**: Registry provides importer based on source type
-4. **Collection Discovery**: Importer's discovery capability called to enumerate libraries
-5. **Prerequisites Validation**: `validate_ingestible()` called for each collection
-6. **Collection Persistence**: Collections created with `sync_enabled=false`, `ingestible=<validation_result>`
+2. **Identifier Enumeration**: Registry returns simple importer identifiers (e.g., ["plex", "filesystem"])
+3. **Source Creation**: Source created with `type` field referencing an importer identifier
+4. **CLI Processing**: CLI resolves identifiers to classes and validates interface compliance
+5. **Collection Discovery**: Importer's discovery capability called to enumerate libraries
+6. **Prerequisites Validation**: `validate_ingestible()` called for each collection
+7. **Collection Persistence**: Collections created with `sync_enabled=false`, `ingestible=<validation_result>`
 
 ### Ingest Workflow
 
@@ -197,8 +249,9 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 ### Importer Lifecycle
 
 - **Discovery**: Importers discovered at runtime from filesystem
-- **Validation**: All importers MUST implement `ImporterInterface`
-- **Configuration**: Each importer declares its configuration requirements
+- **Identifier Enumeration**: Registry returns simple identifiers, CLI handles validation
+- **Interface Validation**: CLI validates `ImporterInterface` implementation at runtime
+- **Configuration**: Each importer declares its configuration requirements via `get_config_schema()`
 - **Availability**: Importers immediately available when files exist
 
 ### Source Type Mapping
@@ -225,7 +278,7 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 
 ## Cross-references
 
-- **[Registry Domain](Registry.md)** - Importer discovery, registration, and lifecycle management
+- **Importer registry** – Runtime collection of available importer implementations and their identifiers
 - **[Source Contracts](../contracts/Source.md)** - Source-level operations that use importers
 - **[Collection Contracts](../contracts/Collection.md)** - Collection-level operations that use importers
 - **[Unit of Work](../contracts/UnitOfWork.md)** - Transaction management for importer operations
@@ -234,15 +287,51 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 - **[Collection Domain](Collection.md)** - Collection entity model and relationships
 - **[Developer Guide](../developer/Importer.md)** - Implementation details and development guide
 
+## Contract Alignment
+
+Importer contracts must maintain backward-compatible CLI behavior across migrations. Changes to interface signatures or discovery semantics require a corresponding update to the [CONTRACT_MIGRATION.md](../../tests/CONTRACT_MIGRATION.md) document.
+
+**Migration Requirements:**
+
+- **Interface Changes**: Any modification to `ImporterInterface` methods must be reflected in contract documentation
+- **Discovery Semantics**: Changes to discovery behavior must update corresponding Source contracts
+- **Validation Logic**: Modifications to validation requirements must align with Collection contracts
+- **Test Coverage**: All interface changes must include corresponding contract test updates
+
+This ensures importer evolution is formally tied to the global contract lifecycle and maintains backward compatibility for operators.
+
 ## Contract test requirements
 
 All importer operations MUST have comprehensive test coverage following the contract test responsibilities in [README.md](../contracts/README.md). Tests MUST:
 
-- **Validate prerequisites**: Test `validate_ingestible()` for each importer type
+- **Validate registry enumeration**: Test that registry returns simple identifiers correctly
+- **Validate CLI processing**: Test that CLI correctly resolves identifiers and validates interface compliance
 - **Test discovery**: Verify importer's discovery capability returns expected results
-- **Test ingestion**: Verify importer's enumeration capability returns normalized asset data that results in correct Asset records being created by the ingest service
+- **Test ingestion**: Verify importer's enumeration capability returns normalized asset data
 - **Test error handling**: Verify graceful handling of external system failures
 - **Test atomicity**: Verify per-collection Unit of Work behavior for all operations
 - **Test idempotence**: Verify operations can be safely repeated
 
 Each test MUST reference specific contract rule IDs to provide bidirectional traceability between contracts and implementation.
+
+## Domain Integrity
+
+The Importer domain operates within a larger system where each domain knows what it owns. The following table maps importer responsibilities to their enforcement and testing:
+
+| Behavior             | Defined in      | Enforced by               | Tested by                                |
+| -------------------- | --------------- | ------------------------- | ---------------------------------------- |
+| Discovery            | Importer domain | Source contracts          | `test_source_discover_contract.py`       |
+| Validation           | Importer domain | Collection contracts      | `test_collection_validation_contract.py` |
+| Ingestion            | Importer domain | UnitOfWork contracts      | `test_source_ingest_contract.py`         |
+| Registry Enumeration | Importer domain | SourceListTypes contracts | `test_source_list_types_contract.py`     |
+| Interface Compliance | Importer domain | All Source contracts      | Contract validation tests                |
+
+**Cross-Domain Dependencies:**
+
+- **Importer registry**: Runtime list of importer implementations and their stable identifiers; no persistence; no validation; no operator-facing output
+- **Source Domain**: Uses importers for collection discovery and ingestion
+- **Collection Domain**: Validates importer prerequisites and manages collection state
+- **UnitOfWork Domain**: Ensures atomicity for importer operations
+- **CLI Contracts**: Enforce interface compliance and output formatting
+
+This reinforces the "each domain knows what it owns" philosophy that underpins the architecture.

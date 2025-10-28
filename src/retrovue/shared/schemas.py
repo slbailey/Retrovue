@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .types import AssetType, PackageType
 
@@ -54,8 +54,7 @@ class PackageItemRead(PackageItemBase):
     id: uuid.UUID
     package_id: uuid.UUID
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PackageRead(PackageBase):
@@ -66,8 +65,7 @@ class PackageRead(PackageBase):
     updated_at: datetime
     items: list[PackageItemRead] = Field(default_factory=list)
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Update schemas
@@ -102,8 +100,7 @@ class PackageList(BaseModel):
     updated_at: datetime
     item_count: int = Field(..., description="Number of items in the package")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Bulk operation schemas

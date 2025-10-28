@@ -6,7 +6,7 @@ This module defines all configuration settings for Retrovue using Pydantic BaseS
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -27,9 +27,10 @@ class Settings(BaseSettings):
     allowed_origins: str = Field(default="*", alias="ALLOWED_ORIGINS")  # Comma-separated origins
     env: str = Field(default="dev", alias="ENV")  # dev|prod|test
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=False
+    )
 
 
 # Global settings instance

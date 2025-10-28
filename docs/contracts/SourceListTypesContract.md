@@ -29,13 +29,14 @@ retrovue source list-types [--json] [--test-db] [--dry-run]
 - **Dry-run support**: Preview enumeration without external effects. In --dry-run mode, the command MAY use an in-memory view of the registry state instead of re-scanning the filesystem.
 - **Test isolation**: `--test-db` prevents external system calls
 
-### Source Type Derivation
+### Architecture Responsibilities
 
-- Source types derived from importer filenames following `{source_type}_importer.py` pattern
-- Registry maintains mapping from source types to importer implementations
-- All importers must implement `ImporterInterface` runtime contract
-- Validation of source type uniqueness and interface compliance
-- Reporting of source type availability and interface status
+- **Registry responsibility**: Enumerate importer identifiers (simple names like "plex", "filesystem")
+- **CLI responsibility**: Resolve identifiers into structured output and validate interface compliance
+- **Interface compliance**: Enforced at CLI time, not registry time
+- **Source type derivation**: Derived from importer filenames following `{source_type}_importer.py` pattern
+- **Validation**: Source type uniqueness and interface compliance validated by CLI layer
+- **Reporting**: Source type availability and interface status assembled by CLI layer
 
 ---
 
@@ -111,18 +112,19 @@ Would list 3 source types from registry:
 
 ### Registry Enumeration
 
-1. **Source Type Discovery**:
+1. **Importer Identifier Discovery**:
 
    - Registry scans discovered importers from `adapters/importers/` directory
-   - Extracts source types from importer filenames following `{source_type}_importer.py` pattern
-   - Validates source type uniqueness and interface compliance
-   - Checks `ImporterInterface` implementation for each discovered importer
+   - Returns simple importer identifiers (e.g., "plex", "filesystem")
+   - Registry maintains mapping from identifiers to importer classes
+   - Registry does NOT validate interface compliance or build rich objects
 
-2. **Mapping Validation**:
-   - Verifies source type to importer mapping
-   - Reports availability status and interface compliance
-   - Maintains registry state consistency
-   - Validates configuration schema compliance
+2. **CLI Processing**:
+   - CLI receives importer identifiers from registry
+   - CLI resolves identifiers to importer classes via registry mapping
+   - CLI validates interface compliance for each importer class
+   - CLI builds structured output with status, compliance, and metadata
+   - CLI handles error cases and validation failures
 
 ### Side Effects
 
@@ -134,8 +136,8 @@ Would list 3 source types from registry:
 
 ## Behavior Contract Rules (B-#)
 
-- **B-1:** The command MUST return source types derived from discovered importer filenames following `{source_type}_importer.py` pattern.
-- **B-2:** The command MUST validate source type uniqueness and interface compliance before reporting.
+- **B-1:** The command MUST obtain importer identifiers from the registry and derive source types from importer filenames following `{source_type}_importer.py` pattern.
+- **B-2:** The command MUST validate source type uniqueness and interface compliance at CLI time before reporting.
 - **B-3:** When `--json` is supplied, output MUST include fields `"status"`, `"source_types"`, and `"total"` with appropriate data structures including interface compliance status.
 - **B-4:** On enumeration failure (registry error), the command MUST exit with code `1` and print a human-readable error message.
 - **B-5:** The `--dry-run` flag MUST show what would be listed without executing external validation. In --dry-run mode, the command MAY use an in-memory view of the registry state instead of re-scanning the filesystem. It MUST still produce deterministic output.
@@ -147,14 +149,14 @@ Would list 3 source types from registry:
 
 ## Data Contract Rules (D-#)
 
-- **D-1:** Registry MUST maintain mapping from source types to importer implementations that implement `ImporterInterface`.
-- **D-2:** Source type mapping MUST be derived automatically from importer filenames following `{source_type}_importer.py` pattern.
-- **D-3:** Multiple importers claiming the same source type MUST cause registration failure with clear error message.
-- **D-4:** Source type enumeration MUST NOT modify external systems or database tables.
-- **D-5:** Registry state queries MUST be read-only during enumeration.
-- **D-6:** Source type availability MUST be validated against importer implementation status and `ImporterInterface` compliance.
-- **D-7:** Enumeration operations MUST be atomic and consistent.
-- **D-8:** Source type mapping MUST be maintained atomically during registry updates.
+- **D-1:** Registry MUST maintain mapping from importer identifiers to importer implementations. Registry returns simple identifiers (strings), not rich objects.
+- **D-2:** CLI MUST resolve importer identifiers to classes and validate `ImporterInterface` implementation at CLI time.
+- **D-3:** Source type derivation MUST follow `{source_type}_importer.py` filename pattern, where `{source_type}` becomes the source type identifier.
+- **D-4:** Source type uniqueness MUST be enforced - duplicate source types MUST be detected and reported as errors.
+- **D-5:** Interface compliance validation MUST occur at CLI time, not registry time. Registry is responsible only for identifier enumeration.
+- **D-6:** Output structure MUST include `status`, `source_types` array, and `total` count fields when `--json` is specified.
+- **D-7:** Each source type object MUST include `type`, `importer_file`, `display_name`, `available`, `interface_compliant`, and `status` fields.
+- **D-8:** Registry enumeration MUST be read-only - no external system calls or database modifications.
 
 ---
 

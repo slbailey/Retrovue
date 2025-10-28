@@ -55,6 +55,13 @@ Importers ultimately write into this world. Enrichers annotate data that becomes
 
 RetroVue is intentionally modular. You can add new behavior without editing core by providing plugins and registering them.
 
+#### `Importer.md`
+
+Detailed guide for implementing custom importers.  
+Covers the `ImporterInterface` protocol, configuration schema definition, discovery and ingestion patterns, error handling, and testing requirements. This is the authoritative reference for importer implementation details and method signatures.
+
+Read this when implementing a new importer or modifying existing importer behavior.
+
 #### `extending-retrovue.md`
 
 High-level guide to extending RetroVue through **Importers** and **Enrichers**.  
@@ -190,7 +197,7 @@ When you add documentation under `developer/`, follow these rules so we don’t 
 
 - `abstract-design-principles.md` is the guardrail for architecture.
 - `architecture.md` and `database-schema.md` describe what already exists.
-- `PluginAuthoring.md`, `extending-retrovue.md`, `RegistryAPI.md`, and `TestingPlugins.md` describe how to add new importers, enrichers, and producers and get them accepted.
+- `Importer.md`, `PluginAuthoring.md`, `extending-retrovue.md`, `RegistryAPI.md`, and `TestingPlugins.md` describe how to add new importers, enrichers, and producers and get them accepted.
 - `api-reference.md` and `cli-reference.md` describe the concrete surfaces you code against and the way operators will actually call your work.
 
 If you add a new kind of module or registry, you must update these docs in lockstep — otherwise you're creating behavior that the rest of the system is not allowed to trust.

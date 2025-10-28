@@ -16,6 +16,7 @@ from ...adapters.registry import (
     get_importer_help,
     list_enrichers,
     list_importers,
+    SOURCES,
 )
 from ...content_manager.source_service import SourceService
 from ...domain.entities import PathMapping, SourceCollection
@@ -359,37 +360,182 @@ def add_source(
 @app.command("list-types")
 def list_source_types(
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database environment"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be listed without executing external validation"),
 ):
     """
-    List all available source types (importers).
+    List all available source types (importers) with interface compliance validation.
+    
+    This command enumerates source types from the importer registry, validates
+    interface compliance, and reports availability status.
     
     Examples:
         retrovue source list-types
         retrovue source list-types --json
+        retrovue source list-types --dry-run
+        retrovue source list-types --test-db
     """
     try:
+        # Get available importers from registry
         available_importers = list_importers()
-        available_enrichers = [e.name for e in list_enrichers()]
         
+        
+        if not available_importers:
+            if json_output:
+                import json
+                result = {
+                    "status": "ok",
+                    "source_types": [],
+                    "total": 0
+                }
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                typer.echo("No source types available")
+            return
+        
+        # Build source type information with interface compliance validation
+        source_types = []
+        
+        for importer_name in available_importers:
+            try:
+                # Get importer class from registry
+                importer_class = SOURCES.get(importer_name)
+                if not importer_class:
+                    continue
+                
+                # Check interface compliance
+                interface_compliant = _check_interface_compliance(importer_class)
+                
+                # Get display name and status
+                display_name = _get_display_name(importer_name)
+                status = "valid" if interface_compliant else "error"
+                
+                source_type_info = {
+                    "type": importer_name,
+                    "importer_file": f"{importer_name}_importer.py",
+                    "display_name": display_name,
+                    "available": True,
+                    "interface_compliant": interface_compliant,
+                    "status": status
+                }
+                
+                source_types.append(source_type_info)
+                
+            except Exception as e:
+                # Handle individual importer validation errors
+                source_type_info = {
+                    "type": importer_name,
+                    "importer_file": f"{importer_name}_importer.py",
+                    "display_name": f"{importer_name.title()} Source",
+                    "available": False,
+                    "interface_compliant": False,
+                    "status": "error"
+                }
+                source_types.append(source_type_info)
+        
+        # Handle dry-run mode
+        if dry_run:
+            if json_output:
+                import json
+                result = {
+                    "status": "dry_run",
+                    "source_types": source_types,
+                    "total": len(source_types)
+                }
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                typer.echo(f"Would list {len(source_types)} source types from registry:")
+                for source_type in source_types:
+                    status_indicator = "[OK]" if source_type["interface_compliant"] else "[ERROR]"
+                    typer.echo(f"  - {source_type['type']} ({source_type['importer_file']}) {status_indicator}")
+            return
+        
+        # Normal output
         if json_output:
             import json
             result = {
-                "importers": available_importers,
-                "enrichers": available_enrichers
+                "status": "ok",
+                "source_types": source_types,
+                "total": len(source_types)
             }
             typer.echo(json.dumps(result, indent=2))
         else:
             typer.echo("Available source types:")
-            for importer in available_importers:
-                typer.echo(f"  - {importer}")
+            for source_type in source_types:
+                status_indicator = "[OK]" if source_type["interface_compliant"] else "[ERROR]"
+                compliance_text = "compliant" if source_type["interface_compliant"] else "non-compliant"
+                typer.echo(f"  - {source_type['type']} {status_indicator} ({compliance_text})")
             
-            typer.echo("\nAvailable enrichers:")
-            for enricher in available_enrichers:
-                typer.echo(f"  - {enricher}")
+            typer.echo(f"\nTotal: {len(source_types)} source types available")
                 
     except Exception as e:
         typer.echo(f"Error listing source types: {e}", err=True)
         raise typer.Exit(1)
+
+
+def _check_interface_compliance(importer_class) -> bool:
+    """
+    Check if an importer class implements the required interface.
+    
+    Args:
+        importer_class: The importer class to check
+        
+    Returns:
+        True if the class implements the required interface, False otherwise
+    """
+    try:
+        # Check if the class has the required methods from ImporterInterface
+        required_methods = [
+            'get_config_schema',
+            'discover',
+            'get_help',
+            'list_asset_groups',
+            'enable_asset_group',
+            'disable_asset_group'
+        ]
+        
+        for method_name in required_methods:
+            if not hasattr(importer_class, method_name):
+                return False
+        
+        # Check if it has the name attribute (class attribute, not instance)
+        if not hasattr(importer_class, 'name'):
+            return False
+        
+        # Verify the name attribute is accessible
+        try:
+            name_value = getattr(importer_class, 'name')
+            if not name_value:
+                return False
+        except Exception:
+            return False
+        
+        # Try to create a minimal instance to test interface
+        # This is a basic check - in a real implementation you'd want more thorough validation
+        return True
+        
+    except Exception:
+        return False
+
+
+def _get_display_name(importer_name: str) -> str:
+    """
+    Get a human-readable display name for an importer.
+    
+    Args:
+        importer_name: The importer name
+        
+    Returns:
+        Human-readable display name
+    """
+    display_names = {
+        "plex": "Plex Media Server",
+        "filesystem": "Local Filesystem",
+        "fs": "Local Filesystem",
+        "jellyfin": "Jellyfin Media Server"
+    }
+    
+    return display_names.get(importer_name, f"{importer_name.title()} Source")
 
 
 @app.command("show")

@@ -45,4 +45,11 @@ jobs:
 
       - name: Run contract tests
         run: |
+          # Run all contract tests with enforcement for ENFORCED contracts
           pytest tests/contracts --maxfail=1 --disable-warnings -q
+
+      - name: Enforce SourceListTypes contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: SourceListTypes contract tests must pass"
+          pytest tests/contracts/test_source_list_types_contract.py tests/contracts/test_source_list_types_data_contract.py -v --tb=short
+          echo "✅ SourceListTypes contract enforcement passed"

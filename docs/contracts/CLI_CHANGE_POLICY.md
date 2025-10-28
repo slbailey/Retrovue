@@ -1,16 +1,15 @@
 # CLI Change Policy
 
-## Overview
+> **This document is part of the RetroVue Contract System.**  
+> For enforcement status, see `tests/CONTRACT_MIGRATION.md`.
 
 This document establishes the governance policy for RetroVue CLI interfaces. Once a command is marked as **ENFORCED** in `tests/CONTRACT_MIGRATION.md`, it becomes a governed interface with strict change controls.
 
 ## Governed Interfaces
 
-### Current Governed Interfaces
+**Status Source:** Governed interfaces are listed in `tests/CONTRACT_MIGRATION.md`. See that document for the authoritative list of enforced contracts and their current status.
 
-- `retrovue enricher add` - **ENFORCED** (see `tests/CONTRACT_MIGRATION.md`)
-
-### Policy for Governed Interfaces
+**Definition:** A governed interface is any command marked as **ENFORCED** in `tests/CONTRACT_MIGRATION.md`.
 
 **NO DIRECT CHANGES ALLOWED**
 
@@ -123,7 +122,6 @@ To add a new governed interface:
 2. Create contract tests in `tests/contracts/`
 3. Implement the command to pass all tests
 4. Update `tests/CONTRACT_MIGRATION.md` to mark as **ENFORCED**
-5. Update this policy document
 
 ## Emergency Overrides
 
