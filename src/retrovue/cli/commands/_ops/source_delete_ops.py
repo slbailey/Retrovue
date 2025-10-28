@@ -63,12 +63,12 @@ def resolve_source_selector(db: Session, source_selector: str) -> list[Source]:
         )
         return sources
     
-    # Otherwise, treat it as an exact match against id, external_id, OR exact name
+    # For exact matches, we need to be more careful about UUID parsing
+    # Try to match against external_id and name first (safer)
     sources = (
         db.query(Source)
         .filter(
             or_(
-                Source.id == source_selector,
                 Source.external_id == source_selector,
                 Source.name == source_selector
             )
@@ -76,7 +76,35 @@ def resolve_source_selector(db: Session, source_selector: str) -> list[Source]:
         .order_by(Source.name, Source.id)
         .all()
     )
+    
+    # If no matches found and the selector looks like a UUID, try UUID match
+    if not sources and _is_valid_uuid(source_selector):
+        sources = (
+            db.query(Source)
+            .filter(Source.id == source_selector)
+            .order_by(Source.name, Source.id)
+            .all()
+        )
+    
     return sources
+
+
+def _is_valid_uuid(uuid_string: str) -> bool:
+    """
+    Check if a string is a valid UUID format.
+    
+    Args:
+        uuid_string: String to check
+        
+    Returns:
+        True if the string is a valid UUID format, False otherwise
+    """
+    import uuid
+    try:
+        uuid.UUID(uuid_string)
+        return True
+    except (ValueError, TypeError):
+        return False
 
 
 def build_pending_delete_summary(db: Session, sources: list[Source]) -> PendingDeleteSummary:
