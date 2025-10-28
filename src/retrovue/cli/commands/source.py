@@ -271,10 +271,13 @@ def add_source(
             
             typer.echo()
             typer.echo("Optional parameters:")
-            for param in help_info['optional_params']:
-                typer.echo(f"  --{param['name']}: {param['description']}")
-                if 'default' in param:
-                    typer.echo(f"    Default: {param['default']}")
+            if help_info['optional_params']:
+                for param in help_info['optional_params']:
+                    typer.echo(f"  --{param['name']}: {param['description']}")
+                    if 'default' in param:
+                        typer.echo(f"    Default: {param['default']}")
+            else:
+                typer.echo("  None")
             
             typer.echo()
             typer.echo("Examples:")

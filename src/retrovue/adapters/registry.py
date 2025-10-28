@@ -114,7 +114,7 @@ def get_importer_help(name: str) -> dict[str, Any]:
         if key == "filesystem":
             instance = cls(source_name="help", root_paths=["."])
         elif key == "plex":
-            instance = cls(servers=[{"base_url": "http://localhost:32400", "token": "dummy"}])
+            instance = cls(base_url="http://localhost:32400", token="dummy")
         else:
             instance = cls()
         
