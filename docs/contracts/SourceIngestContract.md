@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the exact behavior, safety, idempotence, and data effects of the ingest operation for an entire source. This is an iterative operation that processes all enabled collections within a source, following the same pattern as Source Discover but for asset ingestion rather than collection discovery. All operations must use importers that implement the BaseImporter interface correctly. Each collection ingest operates in its own transaction boundary, allowing for partial success when some collections fail.
+Defines the exact behavior, safety, idempotence, and data effects of the ingest operation for an entire source. This is an iterative operation that processes all enabled collections within a source, following the same pattern as Source Discover but for asset ingestion rather than collection discovery. All operations must use importers that implement the ImporterInterface correctly. Each collection ingest operates in its own transaction boundary, allowing for partial success when some collections fail.
 
 NOTE: This command operates at the source level and iterates across all enabled collections, processing each collection's ingest operation. Each collection ingest follows the exact same process defined in the Collection Ingest, with each collection operating in its own transaction boundary to allow for partial success when some collections fail.
 
