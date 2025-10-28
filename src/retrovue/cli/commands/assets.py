@@ -9,18 +9,17 @@ For Broadcast Domain operations (approved-for-air catalog used by ScheduleServic
 
 from __future__ import annotations
 
-import typer
-import json
 import random
-from typing import Optional
 from enum import Enum
 from uuid import UUID
 
-from ...infra.uow import session
+import typer
+
 from ...api.schemas import AssetListResponse, AssetSummary
 from ...content_manager.library_service import LibraryService
-from ...domain.entities import ProviderRef, EntityType
+from ...domain.entities import EntityType, ProviderRef
 from ...infra.admin_services import AssetAdminService
+from ...infra.uow import session
 
 app = typer.Typer(name="assets", help="Library Domain asset management (ingest, QC, source metadata, promotion)")
 
@@ -112,10 +111,10 @@ def list_assets(
 
 @app.command("list-advanced")
 def list_assets_advanced(
-    kind: Optional[str] = typer.Option(None, "--kind", help="Filter by asset kind (episode, ad, bumper)"),
-    series: Optional[str] = typer.Option(None, "--series", help="Filter by series title"),
-    season: Optional[int] = typer.Option(None, "--season", help="Filter by season number"),
-    q: Optional[str] = typer.Option(None, "--q", help="Search query for title or series"),
+    kind: str | None = typer.Option(None, "--kind", help="Filter by asset kind (episode, ad, bumper)"),
+    series: str | None = typer.Option(None, "--series", help="Filter by series title"),
+    season: int | None = typer.Option(None, "--season", help="Filter by season number"),
+    q: str | None = typer.Option(None, "--q", help="Search query for title or series"),
     canonical_only: bool = typer.Option(False, "--canonical-only", help="Show only canonical (approved) assets"),
     include_pending: bool = typer.Option(False, "--include-pending", help="Include pending (non-canonical) assets"),
     limit: int = typer.Option(50, "--limit", help="Maximum number of results"),
@@ -210,8 +209,8 @@ def list_assets_advanced(
 
 @app.command("get")
 def get_asset(
-    uuid_arg: Optional[str] = typer.Argument(None, help="Asset UUID (positional)"),
-    uuid_opt: Optional[str] = typer.Option(None, "--uuid", help="Asset UUID (flag)"),
+    uuid_arg: str | None = typer.Argument(None, help="Asset UUID (positional)"),
+    uuid_opt: str | None = typer.Option(None, "--uuid", help="Asset UUID (flag)"),
     json: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
@@ -274,9 +273,9 @@ def get_asset(
 
 @app.command("select")
 def select_asset(
-    series_arg: Optional[str] = typer.Argument(None, help="Series name (positional)"),
-    series_opt: Optional[str] = typer.Option(None, "--series", help="Series name (flag)"),
-    genre: Optional[str] = typer.Option(None, "--genre", help="Filter by genre"),
+    series_arg: str | None = typer.Argument(None, help="Series name (positional)"),
+    series_opt: str | None = typer.Option(None, "--series", help="Series name (flag)"),
+    genre: str | None = typer.Option(None, "--genre", help="Filter by genre"),
     mode: SelectionMode = typer.Option(SelectionMode.RANDOM, "--mode", help="Selection mode"),
     json: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
@@ -402,10 +401,10 @@ def select_asset(
 
 @app.command("delete")
 def delete_asset(
-    uuid: Optional[str] = typer.Option(None, "--uuid", help="Asset UUID to delete"),
-    id: Optional[int] = typer.Option(None, "--id", help="Asset ID to delete"),
-    source: Optional[str] = typer.Option(None, "--source", help="Source provider (e.g., plex)"),
-    rating_key: Optional[str] = typer.Option(None, "--rating-key", help="Source rating key"),
+    uuid: str | None = typer.Option(None, "--uuid", help="Asset UUID to delete"),
+    id: int | None = typer.Option(None, "--id", help="Asset ID to delete"),
+    source: str | None = typer.Option(None, "--source", help="Source provider (e.g., plex)"),
+    rating_key: str | None = typer.Option(None, "--rating-key", help="Source rating key"),
     hard: bool = typer.Option(False, "--hard", help="Perform hard delete (permanent removal)"),
     force: bool = typer.Option(False, "--force", help="Force hard delete even if referenced"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen without making changes"),
@@ -486,14 +485,14 @@ def delete_asset(
             
             # Confirmation for hard delete
             if hard and not force and referenced:
-                typer.echo(f"Refused hard delete: asset is referenced by episodes. Use --force to override or perform a soft delete.", err=True)
+                typer.echo("Refused hard delete: asset is referenced by episodes. Use --force to override or perform a soft delete.", err=True)
                 raise typer.Exit(1)
             
             # Confirmation prompt
             if not yes and not dry_run:
                 action = "hard delete" if hard else "soft delete"
                 if hard and referenced:
-                    typer.echo(f"Warning: Asset is referenced by episodes. This will cascade delete related records.")
+                    typer.echo("Warning: Asset is referenced by episodes. This will cascade delete related records.")
                 confirm = typer.confirm(f"Are you sure you want to {action} asset {asset.uuid}?")
                 if not confirm:
                     typer.echo("Operation cancelled")
@@ -607,7 +606,6 @@ def promote_asset(
             typer.echo(json_module.dumps(result, indent=2))
         else:
             from rich.console import Console
-            from rich import print as rprint
             
             console = Console()
             console.print("✓ Promoted to Broadcast Catalog", style="green")

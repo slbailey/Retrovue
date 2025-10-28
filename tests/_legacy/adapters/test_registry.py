@@ -6,14 +6,20 @@ This module tests the registry functionality for importers and enrichers.
 
 import pytest
 
+from retrovue.adapters.enrichers.base import EnricherNotFoundError
+from retrovue.adapters.importers.base import DiscoveredItem, ImporterNotFoundError
 from retrovue.adapters.registry import (
-    register_importer, get_importer, list_importers, unregister_importer,
-    register_enricher, get_enricher, list_enrichers, unregister_enricher,
-    clear_registries, get_registry_stats
+    clear_registries,
+    get_enricher,
+    get_importer,
+    get_registry_stats,
+    list_enrichers,
+    list_importers,
+    register_enricher,
+    register_importer,
+    unregister_enricher,
+    unregister_importer,
 )
-from retrovue.adapters.importers.base import Importer, ImporterNotFoundError
-from retrovue.adapters.enrichers.base import Enricher, EnricherNotFoundError
-from retrovue.adapters.importers.base import DiscoveredItem
 
 
 class MockImporter:

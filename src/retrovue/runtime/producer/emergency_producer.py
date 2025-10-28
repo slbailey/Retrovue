@@ -1,7 +1,7 @@
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
 
-from .base import Producer, ProducerMode, ContentSegment
+from .base import ContentSegment, Producer, ProducerMode
 
 
 class EmergencyProducer(Producer):
@@ -14,11 +14,11 @@ class EmergencyProducer(Producer):
     for reliable operation during system emergencies.
     """
 
-    def __init__(self, channel_id: str, configuration: Dict[str, Any]):
+    def __init__(self, channel_id: str, configuration: dict[str, Any]):
         super().__init__(channel_id, ProducerMode.EMERGENCY, configuration)
         # TODO: Initialize emergency producer features
 
-    def start(self, playout_plan: List[Dict[str, Any]], start_at_station_time: datetime) -> bool:
+    def start(self, playout_plan: list[dict[str, Any]], start_at_station_time: datetime) -> bool:
         """Start emergency producer with simplified features."""
         # TODO: Implement emergency producer startup
         # - Initialize simplified feature set
@@ -44,7 +44,7 @@ class EmergencyProducer(Producer):
         # - Return success status
         pass
 
-    def get_stream_endpoint(self) -> Optional[str]:
+    def get_stream_endpoint(self) -> str | None:
         """Get emergency stream endpoint."""
         # TODO: Implement emergency stream endpoint
         # - Return basic stream URL

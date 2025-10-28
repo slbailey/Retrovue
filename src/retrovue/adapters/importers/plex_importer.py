@@ -10,14 +10,14 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from ...domain.asset_draft import AssetDraft
-from .base import Importer, ImporterError
+from .base import ImporterError
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class PlexClient:
         
         return session
     
-    def get_libraries(self) -> List[Dict[str, Any]]:
+    def get_libraries(self) -> list[dict[str, Any]]:
         """
         Get all libraries from the Plex server.
         
@@ -103,7 +103,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch libraries: {e}") from e
     
-    def get_library_items(self, library_key: str, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> List[Dict[str, Any]]:
+    def get_library_items(self, library_key: str, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> list[dict[str, Any]]:
         """
         Get all items from a specific library.
         
@@ -259,7 +259,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch library items: {e}") from e
     
-    def get_episode_metadata(self, rating_key: int) -> Dict[str, Any]:
+    def get_episode_metadata(self, rating_key: int) -> dict[str, Any]:
         """
         Get metadata for a specific episode by rating key.
         
@@ -327,7 +327,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch episode metadata: {e}") from e
     
-    def find_episode_by_sse(self, series_title: str, season: int, episode: int) -> Dict[str, Any]:
+    def find_episode_by_sse(self, series_title: str, season: int, episode: int) -> dict[str, Any]:
         """
         Find an episode by series title, season, and episode number.
         
@@ -416,7 +416,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to find episode: {e}") from e
     
-    def find_series_by_title(self, series_title: str) -> List[Dict[str, Any]]:
+    def find_series_by_title(self, series_title: str) -> list[dict[str, Any]]:
         """
         Find series by title (case-insensitive search).
         
@@ -464,7 +464,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to search for series: {e}") from e
     
-    def _search_in_tv_libraries(self, series_title: str) -> List[Dict[str, Any]]:
+    def _search_in_tv_libraries(self, series_title: str) -> list[dict[str, Any]]:
         """
         Search for series in TV libraries if global search fails.
         
@@ -509,14 +509,14 @@ class PlexClient:
                                 }
                                 series_list.append(series_info)
                 
-                except Exception as e:
+                except Exception:
                     continue
             return series_list
             
-        except Exception as e:
+        except Exception:
             return []
     
-    def get_series_seasons(self, series_rating_key: int) -> List[Dict[str, Any]]:
+    def get_series_seasons(self, series_rating_key: int) -> list[dict[str, Any]]:
         """
         Get seasons for a series.
         
@@ -555,7 +555,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch series seasons: {e}") from e
     
-    def get_season_episodes(self, season_rating_key: int) -> List[Dict[str, Any]]:
+    def get_season_episodes(self, season_rating_key: int) -> list[dict[str, Any]]:
         """
         Get episodes for a season.
         
@@ -644,7 +644,7 @@ class PlexImporter:
         self.token = token
         self.client = PlexClient(base_url, token)
     
-    def list_collections(self, source_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def list_collections(self, source_config: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Return the collections (libraries) available in that source.
         
@@ -675,13 +675,13 @@ class PlexImporter:
     
     def fetch_assets_for_collection(
         self, 
-        source_config: Dict[str, Any], 
-        collection_descriptor: Dict[str, Any], 
+        source_config: dict[str, Any], 
+        collection_descriptor: dict[str, Any], 
         local_path: str,
         title_filter: str = None,
         season_filter: int = None,
         episode_filter: int = None
-    ) -> List[AssetDraft]:
+    ) -> list[AssetDraft]:
         """
         Return AssetDraft objects for that collection.
         
@@ -720,8 +720,8 @@ class PlexImporter:
     
     def _create_asset_draft(
         self, 
-        item: Dict[str, Any], 
-        collection_descriptor: Dict[str, Any], 
+        item: dict[str, Any], 
+        collection_descriptor: dict[str, Any], 
         local_path: str
     ) -> AssetDraft | None:
         """
@@ -800,7 +800,7 @@ class PlexImporter:
             logger.warning(f"Failed to create asset draft: {e}")
             return None
     
-    def get_parameter_spec(self) -> Dict[str, Any]:
+    def get_parameter_spec(self) -> dict[str, Any]:
         """
         Get parameter specification for CLI help.
         

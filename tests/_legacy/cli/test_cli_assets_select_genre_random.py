@@ -5,9 +5,8 @@ This module tests the new assets select command when filtering by genre.
 Note: Genre filtering is not yet implemented, so these tests verify the error handling.
 """
 
-import pytest
-import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app

@@ -12,8 +12,9 @@ Behavior MUST NOT change without updating that contract first.
 """
 
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
 # NOTE: These imports MUST refer to real modules in the repo.

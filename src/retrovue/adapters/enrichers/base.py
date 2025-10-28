@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from typing import Protocol, Dict, Any, Optional, List
 from dataclasses import dataclass
+from typing import Any, Protocol
 
 from ..importers.base import DiscoveredItem
 
@@ -103,9 +103,9 @@ class EnricherConfig:
     Enrichment parameters are specific values an enricher needs to perform
     its enrichment tasks (API keys, file paths, timing values, etc.).
     """
-    required_params: List[Dict[str, str]]
+    required_params: list[dict[str, str]]
     """List of required enrichment parameters with name and description"""
-    optional_params: List[Dict[str, str]]
+    optional_params: list[dict[str, str]]
     """List of optional enrichment parameters with name, description, and default value"""
     scope: str
     """Enricher scope: 'ingest' or 'playout'"""
@@ -241,6 +241,7 @@ class BaseEnricher(ABC):
         # Validate enrichment parameter types and values
         self._validate_parameter_types()
     
+    @abstractmethod
     def _validate_parameter_types(self) -> None:
         """
         Validate enrichment parameter types and values.
@@ -258,7 +259,7 @@ class BaseEnricher(ABC):
     def _create_enriched_item(
         self, 
         original_item: DiscoveredItem, 
-        additional_labels: List[str]
+        additional_labels: list[str]
     ) -> DiscoveredItem:
         """
         Helper method to create an enriched DiscoveredItem.
@@ -418,7 +419,7 @@ class ExampleEnricher(BaseEnricher):
         # Example: Only process video files
         return item.path_uri.endswith(('.mp4', '.mkv', '.avi'))
     
-    def _fetch_metadata(self, item: DiscoveredItem) -> Dict[str, Any]:
+    def _fetch_metadata(self, item: DiscoveredItem) -> dict[str, Any]:
         """Fetch metadata from external API."""
         # Example implementation - replace with actual API call
         return {
@@ -427,7 +428,7 @@ class ExampleEnricher(BaseEnricher):
             "rating": 8.5
         }
     
-    def _metadata_to_labels(self, metadata: Dict[str, Any]) -> List[str]:
+    def _metadata_to_labels(self, metadata: dict[str, Any]) -> list[str]:
         """Convert metadata dictionary to label list."""
         labels = []
         for key, value in metadata.items():

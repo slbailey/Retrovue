@@ -5,6 +5,7 @@ Tests the collection command group against the documented CLI contract in docs/c
 """
 
 import pytest
+
 from .utils import run_cli
 
 

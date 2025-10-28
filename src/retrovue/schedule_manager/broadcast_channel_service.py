@@ -17,14 +17,13 @@ This service handles:
 - Timezone and grid parameter validation
 """
 
-from typing import List, Dict, Any, Optional
-import uuid
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
+from typing import Any
 
-from ..infra.uow import session
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+
 from ..domain.entities import BroadcastChannel
+from ..infra.uow import session
 
 
 class BroadcastChannelService:
@@ -36,7 +35,7 @@ class BroadcastChannelService:
     """
     
     @staticmethod
-    def list_channels() -> List[Dict[str, Any]]:
+    def list_channels() -> list[dict[str, Any]]:
         """
         Return a list of all BroadcastChannels with core fields.
         
@@ -64,7 +63,7 @@ class BroadcastChannelService:
             return result
     
     @staticmethod
-    def get_channel(channel_id: int) -> Optional[Dict[str, Any]]:
+    def get_channel(channel_id: int) -> dict[str, Any] | None:
         """
         Return full details for one BroadcastChannel.
         
@@ -102,7 +101,7 @@ class BroadcastChannelService:
         grid_offset_minutes: int,
         rollover_minutes: int,
         is_active: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a new BroadcastChannel with validation.
         
@@ -171,7 +170,7 @@ class BroadcastChannelService:
                 raise ValueError(f"Channel with name '{name}' already exists")
     
     @staticmethod
-    def update_channel(channel_id: int, **fields) -> Dict[str, Any]:
+    def update_channel(channel_id: int, **fields) -> dict[str, Any]:
         """
         Update a BroadcastChannel with partial updates.
         

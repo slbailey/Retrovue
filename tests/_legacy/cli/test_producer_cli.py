@@ -5,6 +5,7 @@ Tests the producer command group against the documented CLI contract in docs/con
 """
 
 import pytest
+
 from .utils import run_cli
 
 

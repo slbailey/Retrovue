@@ -8,12 +8,26 @@ calling application services and outputting JSON when requested.
 from __future__ import annotations
 
 import typer
-from typing import Optional
 
-from ..infra.uow import session
-from .commands import assets, catalog, review, plex, source, test, channel, template, schedule, asset, enricher, producer, collection
 # Ensure registry is populated
 import retrovue.adapters.importers  # noqa: F401
+
+from .commands import (
+    asset,
+    assets,
+    catalog,
+    channel,
+    collection,
+    enricher,
+    plex,
+    producer,
+    review,
+    schedule,
+    source,
+    template,
+    test,
+)
+from .play import play, play_channel
 
 app = typer.Typer(
     help="RetroVue operator CLI"
@@ -39,7 +53,6 @@ app.add_typer(producer.app, name="producer", help="Producer management operation
 app.add_typer(collection.app, name="collection", help="Collection management operations")
 
 # Add play commands directly
-from .play import play, play_channel
 app.command("play")(play)
 app.command("play-channel")(play_channel)
 

@@ -24,11 +24,11 @@ Design Principles:
 - Event coordination
 """
 
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone, timedelta
-from dataclasses import dataclass
-from enum import Enum
 import zoneinfo
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
 
 
 class TimePrecision(Enum):
@@ -54,7 +54,7 @@ class TimeEvent:
     event_id: str
     trigger_time: datetime
     event_type: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 class MasterClock:
@@ -88,8 +88,8 @@ class MasterClock:
         """
         self.precision = precision
         self.is_synchronized = True
-        self.timezone_cache: Dict[str, zoneinfo.ZoneInfo] = {}
-        self.scheduled_events: Dict[str, TimeEvent] = {}
+        self.timezone_cache: dict[str, zoneinfo.ZoneInfo] = {}
+        self.scheduled_events: dict[str, TimeEvent] = {}
     
     def now_utc(self) -> datetime:
         """
@@ -98,7 +98,7 @@ class MasterClock:
         Returns:
             Current UTC time with specified precision
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         
         # Apply precision based on settings
         if self.precision == TimePrecision.SECOND:
@@ -156,8 +156,8 @@ class MasterClock:
         now = self.now_utc()
         
         # Convert dt to UTC if it's not already
-        if dt.tzinfo != timezone.utc:
-            dt_utc = dt.astimezone(timezone.utc)
+        if dt.tzinfo != UTC:
+            dt_utc = dt.astimezone(UTC)
         else:
             dt_utc = dt
         
@@ -265,7 +265,7 @@ class MasterClock:
         return True
     
     def schedule_event(self, event_id: str, trigger_time: datetime, 
-                      event_type: str, payload: Dict[str, Any]) -> bool:
+                      event_type: str, payload: dict[str, Any]) -> bool:
         """
         Schedule a time-based event.
         
@@ -280,7 +280,7 @@ class MasterClock:
         """
         # Ensure trigger_time is timezone-aware
         if trigger_time.tzinfo is None:
-            trigger_time = trigger_time.replace(tzinfo=timezone.utc)
+            trigger_time = trigger_time.replace(tzinfo=UTC)
         
         event = TimeEvent(
             event_id=event_id,
@@ -374,7 +374,7 @@ class MasterClock:
         # Future versions may validate against external sources
         return True
     
-    def get_timezone_info(self, timezone_name: str) -> Dict[str, Any]:
+    def get_timezone_info(self, timezone_name: str) -> dict[str, Any]:
         """
         Get information about a timezone.
         

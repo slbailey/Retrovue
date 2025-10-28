@@ -2,8 +2,7 @@
 Unit tests for FFmpeg command builder module.
 """
 
-import pytest
-from retrovue.streaming.ffmpeg_cmd import build_cmd, validate_cmd_args, get_cmd_summary
+from retrovue.streaming.ffmpeg_cmd import build_cmd, get_cmd_summary, validate_cmd_args
 
 
 class TestFFmpegCommandBuilder:

@@ -5,6 +5,7 @@ Tests the source command group against the documented CLI contract in docs/contr
 """
 
 import pytest
+
 from .utils import run_cli
 
 

@@ -10,6 +10,7 @@ must update that contract first.
 
 
 import pytest
+
 from ..cli.utils import run_cli
 
 

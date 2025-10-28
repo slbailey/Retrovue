@@ -10,8 +10,8 @@ enricher needs to perform its enrichment tasks (API keys, file paths, timing val
 """
 
 import json
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

@@ -3,8 +3,6 @@ Architecture guard tests for Retrovue.
 Ensures proper layer boundaries are maintained.
 """
 
-import ast
-import pytest
 from pathlib import Path
 
 
@@ -36,7 +34,7 @@ class TestArchitectureGuard:
                 continue
                 
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
                     
                 # Check for specific import statements
@@ -77,7 +75,7 @@ class TestArchitectureGuard:
                 continue
                 
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
                     
                 for pattern in forbidden_patterns:
@@ -110,7 +108,7 @@ class TestArchitectureGuard:
                 continue
                 
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
                     
                 for pattern in forbidden_patterns:

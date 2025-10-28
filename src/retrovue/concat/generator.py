@@ -7,15 +7,15 @@ video streams.
 """
 
 from __future__ import annotations
+
+import logging
 import os
 import tempfile
-import logging
-from typing import List
 
 logger = logging.getLogger(__name__)
 
 
-def generate_concat_file(episode_segments: List[str], ads: List[str]) -> str:
+def generate_concat_file(episode_segments: list[str], ads: list[str]) -> str:
     """
     Generate a temporary concat file with alternating episode segments and ads.
     
@@ -88,7 +88,7 @@ def validate_concat_file(path: str) -> bool:
         return False
     
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             lines = f.readlines()
         
         for line_num, line in enumerate(lines, 1):
@@ -120,7 +120,7 @@ def validate_concat_file(path: str) -> bool:
         return False
 
 
-def read_concat_file(path: str) -> List[str]:
+def read_concat_file(path: str) -> list[str]:
     """
     Read and return the contents of a concat file as a list of file paths.
     
@@ -140,7 +140,7 @@ def read_concat_file(path: str) -> List[str]:
     
     file_paths = []
     
-    with open(path, 'r') as f:
+    with open(path) as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -181,8 +181,8 @@ def cleanup_concat_file(path: str) -> None:
 
 def create_episode_with_ads(
     episode_path: str, 
-    ad_paths: List[str], 
-    break_points: List[float]
+    ad_paths: list[str], 
+    break_points: list[float]
 ) -> str:
     """
     Create a concat file for an episode with ads inserted at break points.

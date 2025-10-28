@@ -2,11 +2,11 @@
 Asset management commands for RetroVue infrastructure.
 """
 import json
+
 import typer
-from typing import Optional
+from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
-from rich import print as rprint
 
 from ...infra.admin_services import AssetAdminService
 
@@ -51,11 +51,11 @@ def add(
 @app.command()
 def update(
     asset_id: int = typer.Option(..., "--id", help="Asset ID"),
-    title: Optional[str] = typer.Option(None, "--title", help="Asset title"),
-    duration: Optional[int] = typer.Option(None, "--duration", help="Duration in seconds"),
-    tags: Optional[str] = typer.Option(None, "--tags", help="Comma-separated tags"),
-    path: Optional[str] = typer.Option(None, "--path", help="File path"),
-    canonical: Optional[bool] = typer.Option(None, "--canonical", help="Canonical flag"),
+    title: str | None = typer.Option(None, "--title", help="Asset title"),
+    duration: int | None = typer.Option(None, "--duration", help="Duration in seconds"),
+    tags: str | None = typer.Option(None, "--tags", help="Comma-separated tags"),
+    path: str | None = typer.Option(None, "--path", help="File path"),
+    canonical: bool | None = typer.Option(None, "--canonical", help="Canonical flag"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")
 ):
     """Update an existing asset."""
@@ -92,8 +92,8 @@ def update(
 
 @app.command()
 def list(
-    canonical_only: Optional[bool] = typer.Option(None, "--canonical-only", help="Show only canonical assets"),
-    tag_filter: Optional[str] = typer.Option(None, "--tag", help="Filter by tag"),
+    canonical_only: bool | None = typer.Option(None, "--canonical-only", help="Show only canonical assets"),
+    tag_filter: str | None = typer.Option(None, "--tag", help="Filter by tag"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")
 ):
     """List assets with optional filtering."""

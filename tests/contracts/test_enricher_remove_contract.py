@@ -8,8 +8,9 @@ This test enforces the CLI contract rules (B-#) for the enricher remove command.
 """
 
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

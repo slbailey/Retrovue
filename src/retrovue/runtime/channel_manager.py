@@ -29,7 +29,7 @@ Boundaries:
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Protocol
+from typing import Any, Protocol
 
 # Producer Protocol / types from runtime.producer package.
 # Note: ProducerMode / ProducerStatus are imported even if not all are used yet
@@ -37,8 +37,6 @@ from typing import Optional, Dict, Any, List, Protocol
 from retrovue.runtime.producer import (
     Producer,
     ProducerState,
-    ProducerStatus,
-    ProducerMode,
 )
 
 # MasterClock is the single source of authoritative "now"
@@ -52,7 +50,7 @@ class ScheduleService(Protocol):
         self,
         channel_id: str,
         at_station_time: datetime,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Return the resolved segment sequence that should be airing 'right now' on this channel.
 
@@ -84,11 +82,11 @@ class ChannelRuntimeState:
     current_mode: str  # "normal" | "emergency" | "guide"
     viewer_count: int
     producer_status: str  # mirrors ProducerStatus as string
-    producer_started_at: Optional[datetime]
-    stream_endpoint: Optional[str]  # what viewers attach to
-    last_health: Optional[str]  # "running", "degraded", "stopped", etc.
+    producer_started_at: datetime | None
+    stream_endpoint: str | None  # what viewers attach to
+    last_health: str | None  # "running", "degraded", "stopped", etc.
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert runtime state to dictionary for reporting/telemetry.
         """
@@ -169,10 +167,10 @@ class ChannelManager:
         # Track active tuning sessions (viewer_id -> session data)
         # NOTE: We intentionally store dicts for now instead of a ViewerSession class,
         # but this can later become a @dataclass that matches the DB model.
-        self.viewer_sessions: Dict[str, Dict[str, Any]] = {}
+        self.viewer_sessions: dict[str, dict[str, Any]] = {}
 
         # At most one active producer for this channel.
-        self.active_producer: Optional[Producer] = None
+        self.active_producer: Producer | None = None
 
         # Runtime snapshot for ProgramDirector / dashboards / analytics.
         self.runtime_state = ChannelRuntimeState(
@@ -197,7 +195,7 @@ class ChannelManager:
         self.runtime_state.current_mode = mode
         return mode
 
-    def _get_playout_plan(self) -> List[Dict[str, Any]]:
+    def _get_playout_plan(self) -> list[dict[str, Any]]:
         """
         Ask ScheduleService what should be airing right now for this channel.
 
@@ -231,7 +229,7 @@ class ChannelManager:
 
         return playout_plan
 
-    def viewer_join(self, session_id: str, session_info: Dict[str, Any]) -> None:
+    def viewer_join(self, session_id: str, session_info: dict[str, Any]) -> None:
         """
         Called when a viewer starts watching this channel.
 
@@ -424,7 +422,7 @@ class ChannelManager:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _build_producer_for_mode(self, mode: str) -> Optional[Producer]:
+    def _build_producer_for_mode(self, mode: str) -> Producer | None:
         """
         Factory hook: build the correct Producer implementation for the given mode.
 

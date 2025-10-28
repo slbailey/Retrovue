@@ -5,11 +5,12 @@ Tests the service layer business logic, validation, and database operations
 for BroadcastChannel CRUD operations.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from retrovue.schedule_manager.broadcast_channel_service import BroadcastChannelService
 from retrovue.schedule_manager.models import BroadcastChannel

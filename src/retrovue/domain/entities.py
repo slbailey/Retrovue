@@ -164,7 +164,7 @@ class Asset(Base):
     markers: Mapped[list[Marker]] = relationship(
         "Marker", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
     )
-    collection: Mapped["SourceCollection | None"] = relationship("SourceCollection", passive_deletes=True)
+    collection: Mapped[SourceCollection | None] = relationship("SourceCollection", passive_deletes=True)
     review_queue: Mapped[list[ReviewQueue]] = relationship(
         "ReviewQueue", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -303,7 +303,7 @@ class Source(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    collections: Mapped[list["SourceCollection"]] = relationship("SourceCollection", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
+    collections: Mapped[list[SourceCollection]] = relationship("SourceCollection", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self) -> str:
         return f"<Source(id={self.id}, name={self.name}, type={self.type})>"
@@ -326,8 +326,8 @@ class SourceCollection(Base):
 
     # Relationships
     source: Mapped[Source] = relationship("Source", back_populates="collections", passive_deletes=True)
-    path_mappings: Mapped[list["PathMapping"]] = relationship("PathMapping", back_populates="collection", cascade="all, delete-orphan")
-    assets: Mapped[list["Asset"]] = relationship("Asset", passive_deletes=True, overlaps="collection")
+    path_mappings: Mapped[list[PathMapping]] = relationship("PathMapping", back_populates="collection", cascade="all, delete-orphan")
+    assets: Mapped[list[Asset]] = relationship("Asset", passive_deletes=True, overlaps="collection")
 
     __table_args__ = (
         Index("ix_source_collections_source_id", "source_id"),

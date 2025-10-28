@@ -5,18 +5,24 @@ This module tests the collection delete command and collection list command
 to ensure they work correctly with the database and follow the expected behavior.
 """
 
-import pytest
 import json
+
 from sqlalchemy.orm import Session
-from retrovue.domain.entities import (
-    Source, SourceCollection, PathMapping, Asset, Episode, Season, Title, 
-    EpisodeAsset, ReviewQueue
-)
-from retrovue.content_manager.source_service import SourceService
-from retrovue.cli.commands.collection import wipe_collection
-from unittest.mock import patch
-import typer
 from typer.testing import CliRunner
+
+from retrovue.cli.commands.collection import wipe_collection
+from retrovue.content_manager.source_service import SourceService
+from retrovue.domain.entities import (
+    Asset,
+    Episode,
+    EpisodeAsset,
+    PathMapping,
+    ReviewQueue,
+    Season,
+    Source,
+    SourceCollection,
+    Title,
+)
 
 
 class TestCollectionDelete:

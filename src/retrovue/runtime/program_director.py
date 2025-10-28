@@ -23,10 +23,10 @@ Design Principles:
 - Resource coordination and health monitoring
 """
 
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
 
 class SystemMode(Enum):
@@ -54,7 +54,7 @@ class SystemHealth:
     total_viewers: int
     system_mode: SystemMode
     last_health_check: datetime
-    alerts: List[str]
+    alerts: list[str]
 
 
 @dataclass
@@ -118,7 +118,7 @@ class ProgramDirector:
         # - Return comprehensive health status
         pass
     
-    def get_channel_status(self, channel_id: str) -> Optional[ChannelInfo]:
+    def get_channel_status(self, channel_id: str) -> ChannelInfo | None:
         """
         Get runtime status for a specific channel.
         
@@ -135,7 +135,7 @@ class ProgramDirector:
         # - Return channel information
         pass
     
-    def get_all_channels(self) -> List[ChannelInfo]:
+    def get_all_channels(self) -> list[ChannelInfo]:
         """
         Get status for all channels in the system.
         
@@ -181,7 +181,7 @@ class ProgramDirector:
         # - Return success status
         pass
     
-    def enforce_system_policies(self) -> List[str]:
+    def enforce_system_policies(self) -> list[str]:
         """
         Enforce system-wide policies across all channels.
         
@@ -195,7 +195,7 @@ class ProgramDirector:
         # - Return list of actions taken
         pass
     
-    def coordinate_channel_operations(self) -> Dict[str, Any]:
+    def coordinate_channel_operations(self) -> dict[str, Any]:
         """
         Coordinate operations across all channels.
         
@@ -209,7 +209,7 @@ class ProgramDirector:
         # - Return coordination results
         pass
     
-    def monitor_system_performance(self) -> Dict[str, Any]:
+    def monitor_system_performance(self) -> dict[str, Any]:
         """
         Monitor system performance and resource usage.
         
@@ -223,7 +223,7 @@ class ProgramDirector:
         # - Return performance metrics
         pass
     
-    def handle_system_alerts(self, alerts: List[str]) -> bool:
+    def handle_system_alerts(self, alerts: list[str]) -> bool:
         """
         Handle system alerts and notifications.
         
@@ -240,7 +240,7 @@ class ProgramDirector:
         # - Return success status
         pass
     
-    def get_emergency_content(self) -> List[Dict[str, Any]]:
+    def get_emergency_content(self) -> list[dict[str, Any]]:
         """
         Get emergency content for system-wide override.
         

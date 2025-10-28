@@ -2,8 +2,10 @@
 Shared test fixtures for runtime component tests.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timezone, timedelta
+
 from retrovue.runtime.clock import MasterClock, TimePrecision
 
 
@@ -34,7 +36,7 @@ def master_clock_microsecond_precision():
 @pytest.fixture
 def sample_utc_time():
     """Provide a sample UTC datetime for testing."""
-    return datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+    return datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -46,10 +48,10 @@ def sample_naive_time():
 @pytest.fixture
 def future_time():
     """Provide a future datetime for testing."""
-    return datetime.now(timezone.utc) + timedelta(hours=1)
+    return datetime.now(UTC) + timedelta(hours=1)
 
 
 @pytest.fixture
 def past_time():
     """Provide a past datetime for testing."""
-    return datetime.now(timezone.utc) - timedelta(hours=1)
+    return datetime.now(UTC) - timedelta(hours=1)

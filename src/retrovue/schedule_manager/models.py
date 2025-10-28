@@ -1,12 +1,12 @@
 """
 SQLAlchemy models for RetroVue broadcast scheduling domain.
 """
-import sqlalchemy as sa
-from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from retrovue.infra.db import Base
 
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import UUID
+
+from retrovue.infra.db import Base
 
 # BroadcastChannel model moved to domain/entities.py
 

@@ -6,11 +6,12 @@ the FFmpeg process if it exits or stalls, with exponential backoff and jitter.
 """
 
 from __future__ import annotations
+
 import asyncio
 import logging
 import random
 import time
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 from .mpegts_stream import MPEGTSStreamer
 
@@ -41,12 +42,12 @@ class MPEGTSWatchdog:
         """
         self.cmd = cmd
         self.stall_timeout = stall_timeout
-        self._streamer: Optional[MPEGTSStreamer] = None
+        self._streamer: MPEGTSStreamer | None = None
         self._running = False
         
         # Metrics
         self.restart_count = 0
-        self.last_restart_at: Optional[float] = None
+        self.last_restart_at: float | None = None
         self.bytes_out = 0
         
         # Backoff state

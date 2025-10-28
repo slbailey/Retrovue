@@ -5,9 +5,10 @@ Tests the watchdog's restart logic, metrics tracking, and stall detection.
 """
 
 import asyncio
-import pytest
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from src.retrovue.streaming.watchdog import MPEGTSWatchdog
 
@@ -172,7 +173,7 @@ class TestMPEGTSWatchdog:
             
             try:
                 # Start streaming briefly
-                async for chunk in watchdog.stream():
+                async for _chunk in watchdog.stream():
                     await asyncio.sleep(0.1)
                     if watchdog.restart_count >= 3:
                         break
@@ -333,7 +334,7 @@ class TestDeadStdoutSimulation:
             # Start streaming briefly
             start_time = time.time()
             try:
-                async for chunk in watchdog.stream():
+                async for _chunk in watchdog.stream():
                     if time.time() - start_time > 2.0:
                         break
             except asyncio.CancelledError:

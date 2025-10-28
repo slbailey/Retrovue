@@ -1,14 +1,13 @@
 from .base import (
+    ContentSegment,
     Producer,
     ProducerMode,
-    ProducerStatus,
     ProducerState,
-    ContentSegment,
+    ProducerStatus,
 )
-
-from .normal_producer import NormalProducer
 from .emergency_producer import EmergencyProducer
 from .guide_producer import GuideProducer
+from .normal_producer import NormalProducer
 
 __all__ = [
     "Producer",

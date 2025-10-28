@@ -5,15 +5,13 @@ This module tests the complete pipeline from file discovery through
 confidence scoring and asset registration.
 """
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 from unittest.mock import Mock
 
 from retrovue.adapters.importers.filesystem_importer import FilesystemImporter
 from retrovue.content_manager.ingest_service import IngestService
-from retrovue.content_manager.library_service import LibraryService
 
 
 class TestFilesystemPipeline:

@@ -15,7 +15,15 @@ from uuid import UUID
 import structlog
 from sqlalchemy.orm import Session
 
-from ..domain.entities import Asset, Episode, EpisodeAsset, ReviewQueue, ReviewStatus, ProviderRef, EntityType, Provider
+from ..domain.entities import (
+    Asset,
+    EntityType,
+    Episode,
+    EpisodeAsset,
+    ProviderRef,
+    ReviewQueue,
+    ReviewStatus,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -250,67 +258,6 @@ class LibraryService:
             # Session rollback handled by get_db() dependency
             logger.error("asset_canonicalization_failed", asset_id=str(asset_id), error=str(e))
             raise
-
-    def enqueue_review(self, asset_id: int, reason: str, confidence: float) -> ReviewQueue:
-        """
-        Enqueue an asset for human review (moves asset to pending approval state).
-        
-        **Critical Safety Boundary:** This method places an asset in the review queue,
-        indicating it exists in inventory but is NOT yet approved for downstream use.
-        Assets in review_queue are considered pending and should not be used by
-        schedulers or runtime systems until they pass review and are marked canonical.
-        
-        **Business Rule:** Assets that fail automated quality checks, have uncertain
-        metadata, or require human judgment should be enqueued for review before
-        being approved for broadcast.
-
-        Args:
-            asset_id: ID of the asset to review
-            reason: Reason for review (e.g., "low confidence metadata", "quality concerns")
-            confidence: Confidence score (0.0-1.0) - lower scores indicate higher review priority
-
-        Returns:
-            The ReviewQueue entry
-        """
-        session = self.db
-
-        try:
-            # Verify asset exists
-            asset = session.get(Asset, asset_id)
-            if not asset:
-                raise ValueError(f"Asset {asset_id} not found")
-
-            # Validate confidence score
-            if not 0.0 <= confidence <= 1.0:
-                raise ValueError("Confidence must be between 0.0 and 1.0")
-
-            # Create review queue entry
-            review = ReviewQueue(
-                asset_id=asset_id, reason=reason, confidence=confidence, status=ReviewStatus.PENDING
-            )
-
-            session.add(review)
-
-            # Log the review enqueue
-            logger.info(
-                "review_enqueued", asset_id=str(asset_id), reason=reason, confidence=confidence
-            )
-
-            # Always flush to get DB-generated values
-            session.flush()
-            return review
-
-        except Exception as e:
-            # Session rollback handled by get_db() dependency
-            logger.error(
-                "review_enqueue_failed",
-                asset_id=str(asset_id),
-                error=str(e),
-                reason=reason,
-                confidence=confidence,
-            )
-            raise
-
 
     def mark_asset_canonical_asset(self, asset: Asset) -> Asset:
         """

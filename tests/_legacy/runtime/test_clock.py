@@ -4,11 +4,11 @@ Tests for MasterClock
 Tests the authoritative time source for the RetroVue system.
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, MagicMock
+from datetime import UTC, datetime, timedelta
 
-from retrovue.runtime.clock import MasterClock, TimePrecision, TimeInfo, TimeEvent
+import pytest
+
+from retrovue.runtime.clock import MasterClock, TimeEvent, TimeInfo, TimePrecision
 
 
 class TestMasterClock:
@@ -36,10 +36,10 @@ class TestMasterClock:
         utc_time = self.clock.now_utc()
         
         # Should be timezone-aware UTC
-        assert utc_time.tzinfo == timezone.utc
+        assert utc_time.tzinfo == UTC
         
         # Should be recent (within last second)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         time_diff = abs((now - utc_time).total_seconds())
         assert time_diff < 1.0
     
@@ -89,12 +89,12 @@ class TestMasterClock:
         """Test getting local time with invalid timezone."""
         # Should fall back to UTC instead of raising exception
         result = self.clock.now_local("Invalid/Timezone")
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
     
     def test_seconds_since(self):
         """Test calculating seconds since a datetime."""
         # Create a reference time 5 seconds ago
-        reference_time = datetime.now(timezone.utc) - timedelta(seconds=5)
+        reference_time = datetime.now(UTC) - timedelta(seconds=5)
         
         seconds = self.clock.seconds_since(reference_time)
         
@@ -113,7 +113,7 @@ class TestMasterClock:
     def test_seconds_since_future_time(self):
         """Test seconds_since with future time (should clamp to 0.0)."""
         # Create a future datetime
-        future_time = datetime.now(timezone.utc) + timedelta(seconds=5)
+        future_time = datetime.now(UTC) + timedelta(seconds=5)
         
         seconds = self.clock.seconds_since(future_time)
         
@@ -123,7 +123,7 @@ class TestMasterClock:
     def test_to_channel_time(self):
         """Test converting UTC datetime to channel timezone."""
         # Create a UTC datetime
-        utc_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        utc_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
         
         # Convert to New York time
         ny_time = self.clock.to_channel_time(utc_time, "America/New_York")
@@ -146,7 +146,7 @@ class TestMasterClock:
     def test_to_channel_time_invalid_timezone(self):
         """Test to_channel_time with invalid timezone."""
         # Create a UTC datetime
-        utc_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        utc_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
         
         # Should fall back to UTC for invalid timezone
         result = self.clock.to_channel_time(utc_time, "Invalid/Timezone")
@@ -174,7 +174,7 @@ class TestMasterClock:
     def test_convert_timezone(self):
         """Test timezone conversion."""
         # Create a UTC datetime
-        utc_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        utc_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
         
         # Convert to New York time
         ny_time = self.clock.convert_timezone(utc_time, "UTC", "America/New_York")
@@ -215,7 +215,7 @@ class TestMasterClock:
     
     def test_schedule_event(self):
         """Test scheduling a time-based event."""
-        trigger_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+        trigger_time = datetime.now(UTC) + timedelta(minutes=5)
         
         result = self.clock.schedule_event(
             "test_event",
@@ -247,12 +247,12 @@ class TestMasterClock:
         assert result is True
         # Should be converted to UTC
         event = self.clock.scheduled_events["test_event_naive"]
-        assert event.trigger_time.tzinfo == timezone.utc
+        assert event.trigger_time.tzinfo == UTC
     
     def test_cancel_event(self):
         """Test canceling a scheduled event."""
         # Schedule an event first
-        trigger_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+        trigger_time = datetime.now(UTC) + timedelta(minutes=5)
         self.clock.schedule_event("test_event", trigger_time, "test_type", {})
         
         # Cancel the event
@@ -269,7 +269,7 @@ class TestMasterClock:
     
     def test_get_scheduled_events(self):
         """Test getting events in a time range."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         
         # Schedule events at different times
         self.clock.schedule_event("event1", now + timedelta(minutes=1), "type1", {})
@@ -284,7 +284,7 @@ class TestMasterClock:
     
     def test_trigger_scheduled_events(self):
         """Test triggering due events."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         
         # Schedule events - one in the past, one in the future
         self.clock.schedule_event("past_event", now - timedelta(minutes=1), "type1", {})
@@ -393,7 +393,7 @@ class TestTimeInfo:
     
     def test_time_info_creation(self):
         """Test creating TimeInfo object."""
-        utc_time = datetime.now(timezone.utc)
+        utc_time = datetime.now(UTC)
         local_time = datetime.now()
         precision = TimePrecision.MILLISECOND
         
@@ -417,7 +417,7 @@ class TestTimeEvent:
     
     def test_time_event_creation(self):
         """Test creating TimeEvent object."""
-        trigger_time = datetime.now(timezone.utc)
+        trigger_time = datetime.now(UTC)
         payload = {"key": "value", "number": 42}
         
         event = TimeEvent(

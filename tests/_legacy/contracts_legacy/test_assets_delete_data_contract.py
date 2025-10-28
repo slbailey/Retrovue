@@ -14,9 +14,9 @@ Rules enforced here include:
 - operations return the correct exit code
 """
 
-import pytest
 from unittest.mock import patch
 from uuid import uuid4
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app

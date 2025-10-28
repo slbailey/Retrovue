@@ -7,13 +7,13 @@ Calls LibraryService under the hood for all review operations.
 
 from __future__ import annotations
 
-import typer
-from typing import Optional
 from uuid import UUID
 
-from ...infra.uow import session
+import typer
+
 from ...api.schemas import ReviewQueueListResponse, ReviewQueueSummary
 from ...content_manager.library_service import LibraryService
+from ...infra.uow import session
 
 app = typer.Typer(name="review", help="Review queue operations using LibraryService")
 
@@ -61,7 +61,7 @@ def list_reviews(
 def resolve_review(
     review_id: str = typer.Argument(..., help="Review ID to resolve"),
     episode_id: str = typer.Argument(..., help="Episode ID to associate"),
-    notes: Optional[str] = typer.Option(None, "--notes", help="Resolution notes"),
+    notes: str | None = typer.Option(None, "--notes", help="Resolution notes"),
     json: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """

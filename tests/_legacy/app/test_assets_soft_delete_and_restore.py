@@ -6,12 +6,11 @@ ensuring that soft-deleted assets are excluded from queries by default
 and can be restored properly.
 """
 
-import pytest
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from retrovue.content_manager.library_service import LibraryService
-from retrovue.domain.entities import Asset, Episode, EpisodeAsset
+from retrovue.domain.entities import Asset
 
 
 class TestAssetSoftDeleteAndRestore:

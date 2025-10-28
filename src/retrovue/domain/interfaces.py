@@ -1,7 +1,7 @@
 """Domain interfaces for content importers."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .entities import SourceCollection
 
@@ -26,7 +26,7 @@ class ImporterInterface(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def discover_collections(self, source_id: str) -> List[Dict[str, Any]]:
+    def discover_collections(self, source_id: str) -> list[dict[str, Any]]:
         """
         Discover collections from the external source.
         
@@ -39,7 +39,7 @@ class ImporterInterface(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def ingest_collection(self, collection: SourceCollection, scope: Optional[str] = None) -> Dict[str, Any]:
+    def ingest_collection(self, collection: SourceCollection, scope: str | None = None) -> dict[str, Any]:
         """
         Ingest content from a collection.
         

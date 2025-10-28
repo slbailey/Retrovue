@@ -11,18 +11,15 @@ that have already been imported and enriched.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from typing import Any, Literal
-from uuid import UUID
 
 import structlog
 from sqlalchemy.orm import Session
 
-from ..adapters.registry import get_importer, get_enricher
+from ..adapters.registry import get_enricher, get_importer
 from ..domain.entities import Asset, Source
 from .library_service import LibraryService
-from .source_service import SourceService, SourceCollectionDTO
+from .source_service import SourceCollectionDTO, SourceService
 
 logger = structlog.get_logger(__name__)
 
@@ -136,6 +133,7 @@ class IngestOrchestrator:
         self, 
         source_id: str, 
         episode_id: str,
+        collection_id: str,
         dry_run: bool = False
     ) -> IngestReport:
         """
@@ -159,6 +157,11 @@ class IngestOrchestrator:
             
             # Get importer for the source
             importer = self._get_importer_for_source(source)
+            
+            # Get the collection
+            collection = self.source_service.get_collection(source_id, collection_id)
+            if not collection:
+                raise ValueError(f"Collection {collection_id} not found for source {source_id}")
             
             # Discover the specific episode
             discovered_items = importer.discover_episode(episode_id)
@@ -350,8 +353,9 @@ class IngestOrchestrator:
             tuple: (asset, is_newly_created) where is_newly_created is True if asset was created,
                    False if it was an existing duplicate
         """
-        from ..domain.entities import Title, Season, Episode, Asset, EpisodeAsset
         import uuid
+
+        from ..domain.entities import Asset, Episode, EpisodeAsset, Season, Title
         
         session = self.db
         
@@ -618,8 +622,9 @@ class IngestOrchestrator:
         """
         try:
             # Get the collection from database
-            from ..domain.entities import SourceCollection
             import uuid
+
+            from ..domain.entities import SourceCollection
             
             collection = None
             
@@ -647,10 +652,9 @@ class IngestOrchestrator:
                 raise ValueError(f"Collection '{collection_id}' not found")
             
             # Convert to DTO
-            from .source_service import SourceCollectionDTO
-            
             # Get path mappings for this collection
             from ..domain.entities import PathMapping
+            from .source_service import SourceCollectionDTO
             mappings = self.db.query(PathMapping).filter(
                 PathMapping.collection_id == collection.id
             ).all()

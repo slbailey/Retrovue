@@ -5,9 +5,9 @@ This module provides test functions for validating ScheduleService's broadcast-d
 and rollover handling, specifically for the HBO-style 05:00–07:00 scenario.
 """
 
-from typing import Dict, Any, Tuple
-from datetime import datetime, timezone, timedelta, date
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from ...runtime.clock import MasterClock
 from ...schedule_manager.schedule_service import ScheduleService
@@ -47,7 +47,7 @@ def test_broadcast_day_alignment(
     
     try:
         # Create test instances
-        clock = MasterClock()
+        MasterClock()
         schedule_service = ScheduleService()
         
         # Set up test scenario: Movie airing 05:00–07:00 local time
@@ -61,20 +61,20 @@ def test_broadcast_day_alignment(
         # Convert to UTC for testing
         # Note: This is a simplified conversion for testing
         # In real implementation, this would use MasterClock.to_channel_time()
-        movie_start_utc = movie_start_local.replace(tzinfo=timezone.utc)
-        movie_end_utc = movie_end_local.replace(tzinfo=timezone.utc)
+        movie_start_local.replace(tzinfo=UTC)
+        movie_end_local.replace(tzinfo=UTC)
         
         # Test broadcast_day_for() at different times
         # 05:30 local should return Day A (2025-10-24)
         test_time_530_local = movie_start_local + timedelta(minutes=30)
-        test_time_530_utc = test_time_530_local.replace(tzinfo=timezone.utc)
+        test_time_530_utc = test_time_530_local.replace(tzinfo=UTC)
         
         day_a_result = schedule_service.broadcast_day_for(channel_id, test_time_530_utc)
         day_a_label = day_a_result.isoformat()
         
         # 06:30 local should return Day B (2025-10-25)
         test_time_630_local = movie_start_local + timedelta(hours=1, minutes=30)
-        test_time_630_utc = test_time_630_local.replace(tzinfo=timezone.utc)
+        test_time_630_utc = test_time_630_local.replace(tzinfo=UTC)
         
         day_b_result = schedule_service.broadcast_day_for(channel_id, test_time_630_utc)
         day_b_label = day_b_result.isoformat()
@@ -85,7 +85,7 @@ def test_broadcast_day_alignment(
         
         # Test active_segment_spanning_rollover() at rollover moment
         rollover_time_local = datetime.combine(test_date, datetime.min.time().replace(hour=6, minute=0))
-        rollover_time_utc = rollover_time_local.replace(tzinfo=timezone.utc)
+        rollover_time_utc = rollover_time_local.replace(tzinfo=UTC)
         
         carryover_info = schedule_service.active_segment_spanning_rollover(channel_id, rollover_time_utc)
         carryover_exists = carryover_info is not None
@@ -142,7 +142,7 @@ def test_broadcast_day_alignment(
         )
 
 
-def run_broadcast_day_alignment_tests() -> Dict[str, Any]:
+def run_broadcast_day_alignment_tests() -> dict[str, Any]:
     """
     Run all broadcast day alignment tests.
     

@@ -8,10 +8,9 @@ codec information, and overall health.
 import asyncio
 import json
 import subprocess
-from pathlib import Path
-from typing import Dict, Any, Optional
 import tempfile
-import os
+from pathlib import Path
+from typing import Any
 
 
 async def capture_seconds(url: str, seconds: int, out: Path) -> None:
@@ -78,11 +77,11 @@ def has_ts_sync(file: Path, sample_packets: int = 50) -> bool:
                     return False
                     
         return True
-    except (IOError, OSError):
+    except OSError:
         return False
 
 
-def ffprobe_streams(file: Path) -> Dict[str, Any]:
+def ffprobe_streams(file: Path) -> dict[str, Any]:
     """
     Analyze the TS file using ffprobe to extract stream information.
     
@@ -108,7 +107,7 @@ def ffprobe_streams(file: Path) -> Dict[str, Any]:
     return json.loads(result.stdout)
 
 
-def analyze_ts_health(file: Path) -> Dict[str, Any]:
+def analyze_ts_health(file: Path) -> dict[str, Any]:
     """
     Perform comprehensive health analysis on a TS file.
     
@@ -154,7 +153,7 @@ def analyze_ts_health(file: Path) -> Dict[str, Any]:
     return results
 
 
-async def diagnose_url(url: str, sample_duration: int = 5) -> Dict[str, Any]:
+async def diagnose_url(url: str, sample_duration: int = 5) -> dict[str, Any]:
     """
     Diagnose a TS stream URL by capturing a sample and analyzing it.
     
@@ -185,15 +184,15 @@ async def diagnose_url(url: str, sample_duration: int = 5) -> Dict[str, Any]:
             temp_path.unlink()
 
 
-def print_diagnosis(results: Dict[str, Any]) -> None:
+def print_diagnosis(results: dict[str, Any]) -> None:
     """
     Print formatted diagnosis results to console.
     
     Args:
         results: Diagnosis results from analyze_ts_health or diagnose_url
     """
-    print(f"TS Health Diagnosis")
-    print(f"==================")
+    print("TS Health Diagnosis")
+    print("==================")
     
     if "url" in results:
         print(f"URL: {results['url']}")

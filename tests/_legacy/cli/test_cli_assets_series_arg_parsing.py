@@ -5,8 +5,8 @@ This module tests the mutual exclusivity of positional and --series arguments,
 and ensures proper error handling.
 """
 
-import pytest
 from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app

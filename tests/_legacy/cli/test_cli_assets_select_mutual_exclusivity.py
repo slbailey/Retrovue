@@ -5,8 +5,8 @@ This module tests that the assets select command properly validates
 mutual exclusivity between positional and flag arguments.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app

@@ -7,15 +7,19 @@ Calls SourceService under the hood for all source operations.
 
 from __future__ import annotations
 
-import typer
 import uuid
-from typing import Optional
 
-from ...infra.uow import session
+import typer
+
+from ...adapters.registry import (
+    get_importer,
+    get_importer_help,
+    list_enrichers,
+    list_importers,
+)
 from ...content_manager.source_service import SourceService
-from ...domain.entities import SourceCollection
-from ...adapters.registry import get_importer, list_importers, get_enricher, list_enrichers, get_importer_help
-from ...domain.entities import SourceCollection, PathMapping
+from ...domain.entities import PathMapping, SourceCollection
+from ...infra.uow import session
 
 
 def _redact_sensitive_config(config: dict) -> dict:
@@ -165,12 +169,12 @@ def list_asset_groups(
 
 @app.command("add")
 def add_source(
-    type: Optional[str] = typer.Option(None, "--type", help="Source type (plex, filesystem, etc.)"),
-    name: Optional[str] = typer.Option(None, "--name", help="Friendly name for the source"),
-    base_url: Optional[str] = typer.Option(None, "--base-url", help="Base URL for the source"),
-    token: Optional[str] = typer.Option(None, "--token", help="Authentication token"),
-    base_path: Optional[str] = typer.Option(None, "--base-path", help="Base filesystem path to scan"),
-    enrichers: Optional[str] = typer.Option(None, "--enrichers", help="Comma-separated list of enrichers to use"),
+    type: str | None = typer.Option(None, "--type", help="Source type (plex, filesystem, etc.)"),
+    name: str | None = typer.Option(None, "--name", help="Friendly name for the source"),
+    base_url: str | None = typer.Option(None, "--base-url", help="Base URL for the source"),
+    token: str | None = typer.Option(None, "--token", help="Authentication token"),
+    base_path: str | None = typer.Option(None, "--base-path", help="Base filesystem path to scan"),
+    enrichers: str | None = typer.Option(None, "--enrichers", help="Comma-separated list of enrichers to use"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
     help_type: bool = typer.Option(False, "--help", help="Show help for the specified source type"),
 ):
@@ -285,6 +289,7 @@ def add_source(
             
             # Create the source entity
             import uuid
+
             from ...domain.entities import Source
             
             external_id = f"{type}-{uuid.uuid4().hex[:8]}"
@@ -422,7 +427,7 @@ def show_source(
                 }
                 typer.echo(json.dumps(source_dict, indent=2))
             else:
-                typer.echo(f"Source Details:")
+                typer.echo("Source Details:")
                 typer.echo(f"  ID: {source.id}")
                 typer.echo(f"  External ID: {source.external_id}")
                 typer.echo(f"  Name: {source.name}")
@@ -441,10 +446,10 @@ def show_source(
 @app.command("update")
 def update_source(
     source_id: str = typer.Argument(..., help="Source ID, external ID, or name to update"),
-    name: Optional[str] = typer.Option(None, "--name", help="New name for the source"),
-    base_url: Optional[str] = typer.Option(None, "--base-url", help="New base URL for the source"),
-    token: Optional[str] = typer.Option(None, "--token", help="New authentication token"),
-    base_path: Optional[str] = typer.Option(None, "--base-path", help="New base filesystem path"),
+    name: str | None = typer.Option(None, "--name", help="New name for the source"),
+    base_url: str | None = typer.Option(None, "--base-url", help="New base URL for the source"),
+    token: str | None = typer.Option(None, "--token", help="New authentication token"),
+    base_path: str | None = typer.Option(None, "--base-path", help="New base filesystem path"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
@@ -749,7 +754,7 @@ def source_ingest(
             # Get sync-enabled, ingestible collections for this source
             collections = db.query(SourceCollection).filter(
                 SourceCollection.source_id == source.id,
-                SourceCollection.enabled == True
+                SourceCollection.enabled
             ).all()
             
             if not collections:

@@ -6,19 +6,15 @@ All tests use a dedicated test database schema to ensure isolation.
 """
 
 import os
-import subprocess
-import tempfile
 from collections.abc import Generator
-from typing import Generator as TypingGenerator
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
 from alembic import command
 from alembic.config import Config
-
-from retrovue.infra.db import Base
 from retrovue.infra.settings import settings
 
 

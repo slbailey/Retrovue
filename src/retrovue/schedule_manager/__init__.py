@@ -10,9 +10,9 @@ Key Components:
 - Rules: Content rules and policy definitions
 """
 
-from .schedule_service import ScheduleService
+from .rules import BlockPolicy, BlockRule, RotationRule
 from .schedule_orchestrator import ScheduleOrchestrator
-from .rules import BlockRule, BlockPolicy, RotationRule
+from .schedule_service import ScheduleService
 
 __all__ = [
     "ScheduleService",

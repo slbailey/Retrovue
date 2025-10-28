@@ -5,17 +5,19 @@ Provides the ability to play episodes as live MPEG-TS streams for IPTV-style pla
 """
 
 from __future__ import annotations
+
 import pathlib
-import typer
+import platform
 import socket
 import subprocess
-import platform
-from typing import Optional
 
-from retrovue.web.server import run_server, set_active_stream
-from ..infra.uow import session
+import typer
+
+from retrovue.web.server import run_server
+
 from ..content_manager.library_service import LibraryService
-from ..domain.entities import ProviderRef, EntityType
+from ..domain.entities import EntityType, ProviderRef
+from ..infra.uow import session
 
 
 def is_port_in_use(port: int) -> bool:

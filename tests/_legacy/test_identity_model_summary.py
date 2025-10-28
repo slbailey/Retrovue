@@ -4,17 +4,15 @@ Summary test documenting the current state of the identity model implementation.
 This test validates what is currently working and what needs to be implemented
 to fully comply with the identity model documentation.
 """
-import pytest
-from sqlalchemy import inspect
 
 from retrovue.domain.entities import Asset
 from retrovue.schedule_manager.models import (
-    BroadcastChannel, 
-    BroadcastTemplate, 
-    BroadcastTemplateBlock,
+    BroadcastChannel,
+    BroadcastPlaylogEvent,
     BroadcastScheduleDay,
+    BroadcastTemplate,
+    BroadcastTemplateBlock,
     CatalogAsset,
-    BroadcastPlaylogEvent
 )
 
 

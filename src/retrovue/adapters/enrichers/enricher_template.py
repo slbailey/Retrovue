@@ -10,8 +10,7 @@ specific values needed to perform enrichment tasks (API keys, file paths, timing
 
 from __future__ import annotations
 
-from typing import Dict, Any, List
-from pathlib import Path
+from typing import Any
 
 from ..importers.base import DiscoveredItem
 from .base import BaseEnricher, EnricherConfig, EnricherError
@@ -172,7 +171,7 @@ class YourEnricherName(BaseEnricher):
         
         return True  # Process all items by default
     
-    def _extract_metadata(self, item: DiscoveredItem) -> Dict[str, Any]:
+    def _extract_metadata(self, item: DiscoveredItem) -> dict[str, Any]:
         """
         Extract metadata from the discovered item.
         
@@ -201,7 +200,7 @@ class YourEnricherName(BaseEnricher):
         
         return {}  # Return empty dict by default
     
-    def _metadata_to_labels(self, metadata: Dict[str, Any]) -> List[str]:
+    def _metadata_to_labels(self, metadata: dict[str, Any]) -> list[str]:
         """
         Convert metadata dictionary to label list.
         

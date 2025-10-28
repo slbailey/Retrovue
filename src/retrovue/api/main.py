@@ -8,20 +8,20 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Callable
+import os
+from collections.abc import Callable
 
-import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from ..infra.db import Base
-from ..infra.settings import settings
-from .routers import assets, ingest, review, health, metrics
-from .web import pages
 # Ensure registry is populated
 import retrovue.adapters.importers  # noqa: F401
+
+from ..infra.settings import settings
+from .routers import assets, health, ingest, metrics, review
+from .web import pages
 
 # Create FastAPI app
 app = FastAPI(
@@ -103,7 +103,6 @@ async def request_id_middleware(request: Request, call_next: Callable) -> Respon
         raise
 
 # Mount static files (if directory exists)
-import os
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 

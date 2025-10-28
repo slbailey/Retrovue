@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+
 from sqlalchemy.orm import Session
 
-from ..domain.entities import Source, SourceCollection, PathMapping
+from ..domain.entities import PathMapping, Source, SourceCollection
 
 
 @dataclass
@@ -126,7 +127,7 @@ class SourceService:
         """Get a content source by its name."""
         return self.db.query(Source).filter(Source.name == name).first()
     
-    def list_sources(self) -> list["ContentSourceDTO"]:
+    def list_sources(self) -> list[ContentSourceDTO]:
         """
         List all content sources.
         
@@ -147,7 +148,7 @@ class SourceService:
             for source in sources
         ]
     
-    def get_source_by_id(self, source_id: str) -> "ContentSourceDTO | None":
+    def get_source_by_id(self, source_id: str) -> ContentSourceDTO | None:
         """
         Get a content source by its ID.
         
@@ -205,7 +206,7 @@ class SourceService:
         
         return None
     
-    def update_source(self, source_id: str, **updates) -> "ContentSourceDTO | None":
+    def update_source(self, source_id: str, **updates) -> ContentSourceDTO | None:
         """
         Update a content source.
         
@@ -335,7 +336,7 @@ class SourceService:
         
         collections = self.db.query(SourceCollection).filter(
             SourceCollection.source_id == source.id,
-            SourceCollection.enabled == True
+            SourceCollection.enabled
         ).all()
         
         result = []
@@ -535,7 +536,7 @@ class SourceService:
             return False
     
     
-    def create_plex_source(self, name: str, base_url: str, token: str) -> "ContentSourceDTO":
+    def create_plex_source(self, name: str, base_url: str, token: str) -> ContentSourceDTO:
         """
         Create a new Plex source.
         
@@ -574,7 +575,7 @@ class SourceService:
             config=source.config
         )
     
-    def create_filesystem_source(self, name: str, base_path: str) -> "ContentSourceDTO":
+    def create_filesystem_source(self, name: str, base_path: str) -> ContentSourceDTO:
         """
         Create a new filesystem source.
         
@@ -585,8 +586,8 @@ class SourceService:
         Returns:
             ContentSourceDTO for the created source
         """
-        import uuid
         import os
+        import uuid
         
         # Create external ID
         external_id = f"filesystem-{uuid.uuid4().hex[:8]}"
@@ -805,7 +806,7 @@ class SourceService:
             print(f"Error deleting collection: {e}")
             return False
 
-    def save_collections(self, source_id: str, updates: list["CollectionUpdateDTO"]) -> bool:
+    def save_collections(self, source_id: str, updates: list[CollectionUpdateDTO]) -> bool:
         """
         Save collection updates (enabled status and mapping pairs).
         
@@ -862,6 +863,6 @@ class SourceService:
             self.db.flush()
             return True
             
-        except Exception as e:
+        except Exception:
             self.db.rollback()
             return False

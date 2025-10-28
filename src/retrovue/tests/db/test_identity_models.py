@@ -9,12 +9,12 @@ These tests validate that:
 - All models can be created and queried through the ORM
 """
 
-import pytest
 import uuid
-from sqlalchemy.orm import Session
-from sqlalchemy import select
 
-from retrovue.domain.entities import Asset, Marker, ReviewQueue, Title, Season, Episode
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from retrovue.domain.entities import Asset, Episode, Marker, ReviewQueue, Season, Title
 from retrovue.schedule_manager.models import BroadcastChannel, CatalogAsset
 
 

@@ -6,12 +6,11 @@ This module tests the filesystem importer functionality.
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
+from retrovue.adapters.importers.base import DiscoveredItem, ImporterError
 from retrovue.adapters.importers.filesystem_importer import FilesystemImporter
-from retrovue.adapters.importers.base import DiscoveredItem
 
 
 class TestFilesystemImporter:
@@ -127,7 +126,7 @@ class TestFilesystemImporter:
         """Test discovering from a nonexistent path."""
         importer = FilesystemImporter(root_paths=["/nonexistent/path"])
         
-        with pytest.raises(Exception):  # Should raise an error
+        with pytest.raises(ImporterError):  # Should raise an error
             importer.discover()
     
     def test_discover_file_not_directory(self):
@@ -135,7 +134,7 @@ class TestFilesystemImporter:
         with tempfile.NamedTemporaryFile() as temp_file:
             importer = FilesystemImporter(root_paths=[temp_file.name])
             
-            with pytest.raises(Exception):  # Should raise an error
+            with pytest.raises(ImporterError):  # Should raise an error
                 importer.discover()
     
     def test_extract_filename_labels(self):

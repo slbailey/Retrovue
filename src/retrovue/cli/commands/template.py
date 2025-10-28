@@ -2,10 +2,10 @@
 Template management commands for RetroVue infrastructure.
 """
 import json
+
 import typer
-from typing import Optional
-from rich.console import Console
 from rich import print as rprint
+from rich.console import Console
 
 from ...infra.admin_services import TemplateAdminService
 
@@ -16,7 +16,7 @@ console = Console()
 @app.command()
 def add(
     name: str = typer.Option(..., "--name", help="Template name"),
-    description: Optional[str] = typer.Option(None, "--description", help="Template description"),
+    description: str | None = typer.Option(None, "--description", help="Template description"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")
 ):
     """Add a new template."""

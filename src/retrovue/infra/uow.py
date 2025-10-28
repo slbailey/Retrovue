@@ -11,7 +11,7 @@ operations and API requests.
 from __future__ import annotations
 
 import contextlib
-from typing import Generator
+from collections.abc import Generator
 
 from sqlalchemy.orm import Session
 

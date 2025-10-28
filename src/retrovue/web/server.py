@@ -5,24 +5,24 @@ Provides FastAPI-based HTTP serving for MPEG-TS streams and IPTV playlists.
 """
 
 from __future__ import annotations
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import StreamingResponse, HTMLResponse
-from fastapi.templating import Jinja2Templates
-from starlette.middleware.base import BaseHTTPMiddleware
-import uvicorn
-import logging
-import re
+
 import gzip
 import io
-import asyncio
-import subprocess
 import json
-import tempfile
+import logging
 import os
-from pathlib import Path
+import re
+import subprocess
+import tempfile
 
-from retrovue.streaming.mpegts_stream import MPEGTSStreamer
+import uvicorn
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from retrovue.streaming.ffmpeg_cmd import build_cmd
+from retrovue.streaming.mpegts_stream import MPEGTSStreamer
 
 logger = logging.getLogger(__name__)
 
@@ -409,7 +409,7 @@ def run_server(port: int = 8000, active_streams: dict | None = None, debug: bool
             
             # Create async streamer
             streamer = MPEGTSStreamer(cmd)
-            print(f"DEBUG: Created async streamer, starting stream")
+            print("DEBUG: Created async streamer, starting stream")
             
             # Return streaming response with proper headers
             return StreamingResponse(

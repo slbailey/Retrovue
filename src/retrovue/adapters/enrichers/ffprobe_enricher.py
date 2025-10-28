@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..importers.base import DiscoveredItem
-from .base import BaseEnricher, EnricherConfig, EnricherError, EnricherConfigurationError
+from .base import BaseEnricher, EnricherConfig, EnricherConfigurationError, EnricherError
 
 
 class FFprobeEnricher(BaseEnricher):
@@ -188,11 +188,11 @@ class FFprobeEnricher(BaseEnricher):
             return metadata
             
         except subprocess.TimeoutExpired:
-            raise EnricherError("FFprobe timed out")
+            raise EnricherError("FFprobe timed out") from None
         except json.JSONDecodeError as e:
-            raise EnricherError(f"Failed to parse FFprobe output: {e}")
+            raise EnricherError(f"Failed to parse FFprobe output: {e}") from e
         except Exception as e:
-            raise EnricherError(f"FFprobe execution failed: {e}")
+            raise EnricherError(f"FFprobe execution failed: {e}") from e
     
     def _metadata_to_labels(self, metadata: dict[str, Any]) -> list[str]:
         """

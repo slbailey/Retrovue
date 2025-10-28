@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,9 +16,9 @@ from sqlalchemy.orm import Session
 
 from ...content_manager.ingest_orchestrator import IngestOrchestrator
 from ...content_manager.library_service import LibraryService
-from ...content_manager.source_service import SourceService, SourceCollectionDTO
-from ...infra.uow import get_db
+from ...content_manager.source_service import SourceService
 from ...domain.entities import ReviewQueue, ReviewStatus
+from ...infra.uow import get_db
 
 # Setup templates
 templates = Jinja2Templates(directory="src/retrovue/api/web/templates")
@@ -104,7 +103,7 @@ async def create_source(
     """Create a new Plex source."""
     # Use the source service to create the source
     source_service = SourceService(db)
-    source_dto = source_service.create_plex_source(name, base_url, token)
+    source_service.create_plex_source(name, base_url, token)
     
     return RedirectResponse(url="/sources", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -226,9 +225,9 @@ async def run_ingest(
     import json
     
     try:
-        library_ids_list = json.loads(library_ids) if library_ids else []
+        json.loads(library_ids) if library_ids else []
     except json.JSONDecodeError:
-        library_ids_list = []
+        pass
     
     # Run ingest using the new orchestrator
     orchestrator = IngestOrchestrator(db)
@@ -276,9 +275,9 @@ async def play_asset(
         raise HTTPException(status_code=404, detail="Asset not found")
     
     # Launch file with OS
-    import subprocess
-    import platform
     import os
+    import platform
+    import subprocess
     
     try:
         if platform.system() == "Windows":
@@ -396,7 +395,6 @@ async def review_list(request: Request, db: Session = Depends(get_db)):
 @router.get("/review/{review_id}", response_class=HTMLResponse)
 async def review_detail(request: Request, review_id: str, db: Session = Depends(get_db)):
     """Show review item details with resolution form."""
-    from ...domain.entities import Asset
     
     # Get the review item
     review = db.get(ReviewQueue, uuid.UUID(review_id))

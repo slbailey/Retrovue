@@ -12,20 +12,20 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from ...infra.uow import get_db
 from ...api.schemas import (
     AssetDetailResponse,
     AssetListResponse,
     AssetSummary,
     AssetWithReviews,
+    EpisodesBySeriesResponse,
+    EpisodeSummary,
     ReviewQueueListResponse,
     ReviewQueueSummary,
     SeriesListResponse,
-    EpisodeSummary,
-    EpisodesBySeriesResponse,
 )
 from ...content_manager.library_service import LibraryService
 from ...domain.entities import Asset, ReviewQueue
+from ...infra.uow import get_db
 
 router = APIRouter(prefix="/api/v1", tags=["assets"])
 

@@ -13,8 +13,6 @@ Behavior MUST NOT change without updating that contract first.
 """
 
 import pytest
-from retrovue.domain import entities
-from tests.cli.utils import run_cli
 
 
 @pytest.mark.asyncio

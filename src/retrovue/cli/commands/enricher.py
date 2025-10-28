@@ -9,17 +9,17 @@ perform its enrichment tasks (API keys, file paths, timing values, etc.).
 from __future__ import annotations
 
 import json
-import typer
-from typing import Optional, Dict, Any
-from pathlib import Path
+from typing import Any
 
-from ...infra.uow import session
+import typer
+
 from ...domain.entities import Enricher as EnricherModel
+from ...infra.uow import session
 
 app = typer.Typer(name="enricher", help="Enricher management operations")
 
 
-def validate_enrichment_parameters(enricher_type: str, config: Dict[str, Any]) -> None:
+def validate_enrichment_parameters(enricher_type: str, config: dict[str, Any]) -> None:
     """
     Validate enrichment parameters for a specific enricher type.
     
@@ -50,7 +50,7 @@ def validate_enrichment_parameters(enricher_type: str, config: Dict[str, Any]) -
         _validate_generic_parameters(config)
 
 
-def _validate_tvdb_parameters(config: Dict[str, Any]) -> None:
+def _validate_tvdb_parameters(config: dict[str, Any]) -> None:
     """Validate TheTVDB enricher enrichment parameters."""
     if "api_key" in config:
         api_key = config["api_key"]
@@ -63,7 +63,7 @@ def _validate_tvdb_parameters(config: Dict[str, Any]) -> None:
             raise ValueError("Language enrichment parameter must be at least 2 characters long")
 
 
-def _validate_tmdb_parameters(config: Dict[str, Any]) -> None:
+def _validate_tmdb_parameters(config: dict[str, Any]) -> None:
     """Validate TMDB enricher enrichment parameters."""
     if "api_key" in config:
         api_key = config["api_key"]
@@ -76,7 +76,7 @@ def _validate_tmdb_parameters(config: Dict[str, Any]) -> None:
             raise ValueError("Language enrichment parameter must be at least 2 characters long")
 
 
-def _validate_watermark_parameters(config: Dict[str, Any]) -> None:
+def _validate_watermark_parameters(config: dict[str, Any]) -> None:
     """Validate watermark enricher enrichment parameters."""
     if "overlay_path" in config:
         overlay_path = config["overlay_path"]
@@ -95,15 +95,15 @@ def _validate_watermark_parameters(config: Dict[str, Any]) -> None:
     
     if "opacity" in config:
         opacity = config["opacity"]
-        if not isinstance(opacity, (int, float)) or not (0.0 <= opacity <= 1.0):
+        if not isinstance(opacity, int | float) or not (0.0 <= opacity <= 1.0):
             raise ValueError("Opacity enrichment parameter must be between 0.0 and 1.0")
 
 
-def _validate_crossfade_parameters(config: Dict[str, Any]) -> None:
+def _validate_crossfade_parameters(config: dict[str, Any]) -> None:
     """Validate crossfade enricher enrichment parameters."""
     if "duration" in config:
         duration = config["duration"]
-        if not isinstance(duration, (int, float)) or duration <= 0:
+        if not isinstance(duration, int | float) or duration <= 0:
             raise ValueError("Duration enrichment parameter must be a positive number")
     
     if "curve" in config:
@@ -113,7 +113,7 @@ def _validate_crossfade_parameters(config: Dict[str, Any]) -> None:
             raise ValueError(f"Curve enrichment parameter must be one of: {', '.join(valid_curves)}")
 
 
-def _validate_llm_parameters(config: Dict[str, Any]) -> None:
+def _validate_llm_parameters(config: dict[str, Any]) -> None:
     """Validate LLM enricher enrichment parameters."""
     if "api_key" in config:
         api_key = config["api_key"]
@@ -131,7 +131,7 @@ def _validate_llm_parameters(config: Dict[str, Any]) -> None:
             raise ValueError("Prompt template enrichment parameter must be a string")
 
 
-def _validate_ffmpeg_parameters(config: Dict[str, Any]) -> None:
+def _validate_ffmpeg_parameters(config: dict[str, Any]) -> None:
     """Validate FFmpeg/FFprobe enricher enrichment parameters."""
     # FFmpeg enrichers typically don't need parameters - they use system defaults
     # If parameters are provided, validate them but inform user they're not necessary
@@ -141,7 +141,7 @@ def _validate_ffmpeg_parameters(config: Dict[str, Any]) -> None:
         pass
 
 
-def _validate_generic_parameters(config: Dict[str, Any]) -> None:
+def _validate_generic_parameters(config: dict[str, Any]) -> None:
     """Validate generic enrichment parameters for unknown enricher types."""
     # Basic validation for unknown enricher types
     for key, value in config.items():
@@ -149,7 +149,7 @@ def _validate_generic_parameters(config: Dict[str, Any]) -> None:
             raise ValueError(f"Enrichment parameter key '{key}' must be a string")
         
         # Basic type validation
-        if not isinstance(value, (str, int, float, bool, dict, list)):
+        if not isinstance(value, str | int | float | bool | dict | list):
             raise ValueError(f"Enrichment parameter '{key}' has invalid type: {type(value)}")
 
 
@@ -262,20 +262,20 @@ def list_enricher_types(
 
 @app.command("add")
 def add_enricher(
-    type: Optional[str] = typer.Option(None, "--type", help="Enricher type (ingest or playout)"),
-    name: Optional[str] = typer.Option(None, "--name", help="Human-readable label"),
+    type: str | None = typer.Option(None, "--type", help="Enricher type (ingest or playout)"),
+    name: str | None = typer.Option(None, "--name", help="Human-readable label"),
     # Configuration parameter
-    config: Optional[str] = typer.Option(None, "--config", help="JSON configuration for the enricher"),
+    config: str | None = typer.Option(None, "--config", help="JSON configuration for the enricher"),
     # Enrichment parameters for specific enricher types
-    api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for external services"),
-    language: Optional[str] = typer.Option(None, "--language", help="Language preference"),
-    overlay_path: Optional[str] = typer.Option(None, "--overlay-path", help="Path to overlay file"),
-    position: Optional[str] = typer.Option(None, "--position", help="Position for overlay"),
-    opacity: Optional[float] = typer.Option(None, "--opacity", help="Opacity value (0.0-1.0)"),
-    duration: Optional[float] = typer.Option(None, "--duration", help="Duration value"),
-    curve: Optional[str] = typer.Option(None, "--curve", help="Curve type"),
-    model: Optional[str] = typer.Option(None, "--model", help="Model name"),
-    prompt_template: Optional[str] = typer.Option(None, "--prompt-template", help="Prompt template"),
+    api_key: str | None = typer.Option(None, "--api-key", help="API key for external services"),
+    language: str | None = typer.Option(None, "--language", help="Language preference"),
+    overlay_path: str | None = typer.Option(None, "--overlay-path", help="Path to overlay file"),
+    position: str | None = typer.Option(None, "--position", help="Position for overlay"),
+    opacity: float | None = typer.Option(None, "--opacity", help="Opacity value (0.0-1.0)"),
+    duration: float | None = typer.Option(None, "--duration", help="Duration value"),
+    curve: str | None = typer.Option(None, "--curve", help="Curve type"),
+    model: str | None = typer.Option(None, "--model", help="Model name"),
+    prompt_template: str | None = typer.Option(None, "--prompt-template", help="Prompt template"),
     # Global options
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be created without executing"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
@@ -434,7 +434,7 @@ def add_enricher(
                 typer.echo(json.dumps(result, indent=2))
             else:
                 typer.echo("DRY RUN - Configuration validation:")
-                typer.echo(f"Would create enricher:")
+                typer.echo("Would create enricher:")
                 typer.echo(f"  ID: {enricher_domain.id}")
                 typer.echo(f"  Type: {enricher_domain.type}")
                 typer.echo(f"  Scope: {enricher_domain.scope}")
@@ -477,7 +477,7 @@ def add_enricher(
         raise typer.Exit(1)
 
 
-def _build_enricher_config(enricher_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def _build_enricher_config(enricher_type: str, params: dict[str, Any]) -> dict[str, Any]:
     """Build configuration dictionary based on enricher type and provided parameters."""
     # Start with default configuration
     from ...domain.enricher import Enricher as EnricherDomain

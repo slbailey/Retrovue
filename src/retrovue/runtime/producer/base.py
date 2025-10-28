@@ -27,10 +27,10 @@ Design Principles:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
 
 class ProducerMode(Enum):
@@ -56,9 +56,9 @@ class ProducerState:
     channel_id: str
     mode: ProducerMode
     status: ProducerStatus
-    output_url: Optional[str]
-    started_at: Optional[datetime]
-    configuration: Dict[str, Any]
+    output_url: str | None
+    started_at: datetime | None
+    configuration: dict[str, Any]
 
 
 @dataclass
@@ -68,7 +68,7 @@ class ContentSegment:
     start_time: datetime
     end_time: datetime
     segment_type: str  # e.g. "content", "commercial", "bumper", etc.
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class Producer(ABC):
@@ -92,7 +92,7 @@ class Producer(ABC):
     - IS NOT allowed to: Pick content, make content decisions, access Content Manager directly, make scheduling decisions
     """
 
-    def __init__(self, channel_id: str, mode: ProducerMode, configuration: Dict[str, Any]):
+    def __init__(self, channel_id: str, mode: ProducerMode, configuration: dict[str, Any]):
         """
         Initialize the Producer.
 
@@ -109,7 +109,7 @@ class Producer(ABC):
         self.started_at = None
 
     @abstractmethod
-    def start(self, playout_plan: List[Dict[str, Any]], start_at_station_time: datetime) -> bool:
+    def start(self, playout_plan: list[dict[str, Any]], start_at_station_time: datetime) -> bool:
         """
         Begin output for this channel.
 
@@ -146,7 +146,7 @@ class Producer(ABC):
         pass
 
     @abstractmethod
-    def get_stream_endpoint(self) -> Optional[str]:
+    def get_stream_endpoint(self) -> str | None:
         """
         Return a handle / URL / socket description that viewers can attach to.
 

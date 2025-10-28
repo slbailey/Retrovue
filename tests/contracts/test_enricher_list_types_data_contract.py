@@ -8,8 +8,9 @@ This test enforces the data contract rules (D-#) for the enricher list-types com
 """
 
 import json
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

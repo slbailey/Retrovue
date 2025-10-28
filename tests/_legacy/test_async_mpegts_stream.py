@@ -3,10 +3,12 @@ Unit tests for async MPEGTSStreamer.
 """
 
 import asyncio
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from retrovue.streaming.mpegts_stream import MPEGTSStreamer
+
 from retrovue.streaming.ffmpeg_cmd import build_cmd
+from retrovue.streaming.mpegts_stream import MPEGTSStreamer
 
 
 class TestAsyncMPEGTSStreamer:
@@ -146,7 +148,7 @@ class TestAsyncMPEGTSStreamer:
         
         with patch('asyncio.create_subprocess_exec', return_value=mock_proc):
             # Start and immediately stop
-            async for chunk in streamer.stream():
+            async for _chunk in streamer.stream():
                 break
         
         # Should have called terminate and wait (may not be called in test environment)
@@ -163,13 +165,13 @@ class TestAsyncMPEGTSStreamer:
         mock_proc.returncode = None
         mock_proc.stdout.read = AsyncMock(return_value=b"data" * 100)
         mock_proc.terminate = AsyncMock()
-        mock_proc.wait = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_proc.wait = AsyncMock(side_effect=TimeoutError())
         mock_proc.kill = AsyncMock()
         
         with patch('asyncio.create_subprocess_exec', return_value=mock_proc):
-            with patch('asyncio.wait_for', side_effect=asyncio.TimeoutError()):
+            with patch('asyncio.wait_for', side_effect=TimeoutError()):
                 # Start and immediately stop
-                async for chunk in streamer.stream():
+                async for _chunk in streamer.stream():
                     break
         
         # Should have called terminate, then kill (may not be called in test environment)
@@ -184,7 +186,7 @@ class TestAsyncMPEGTSStreamer:
         
         with patch('asyncio.create_subprocess_exec') as mock_create:
             # Should return early without creating subprocess
-            async for chunk in streamer.stream():
+            async for _chunk in streamer.stream():
                 pass
             
             mock_create.assert_not_called()
@@ -197,7 +199,7 @@ class TestAsyncMPEGTSStreamer:
         
         with patch('asyncio.create_subprocess_exec', side_effect=OSError("Process creation failed")):
             with pytest.raises(OSError):
-                async for chunk in streamer.stream():
+                async for _chunk in streamer.stream():
                     pass
     
     @pytest.mark.asyncio
@@ -215,7 +217,7 @@ class TestAsyncMPEGTSStreamer:
         
         with patch('asyncio.create_subprocess_exec', return_value=mock_proc):
             with pytest.raises(OSError):
-                async for chunk in streamer.stream():
+                async for _chunk in streamer.stream():
                     pass
 
 
@@ -316,7 +318,7 @@ class TestMPEGTSStreamerEdgeCases:
         streamer = MPEGTSStreamer([], validate_inputs=False)
         
         with pytest.raises((OSError, ValueError, TypeError)):
-            async for chunk in streamer.stream():
+            async for _chunk in streamer.stream():
                 pass
     
     @pytest.mark.asyncio
@@ -325,7 +327,7 @@ class TestMPEGTSStreamerEdgeCases:
         streamer = MPEGTSStreamer(["nonexistent_command", "arg1", "arg2"], validate_inputs=False)
         
         with pytest.raises(OSError):
-            async for chunk in streamer.stream():
+            async for _chunk in streamer.stream():
                 pass
     
     @pytest.mark.asyncio
@@ -343,12 +345,12 @@ class TestMPEGTSStreamerEdgeCases:
         mock_proc.wait = AsyncMock()
         
         with patch('asyncio.create_subprocess_exec', return_value=mock_proc):
-            async for chunk in streamer.stream():
+            async for _chunk in streamer.stream():
                 break
         
         # Second call should log warning and return early
         with patch('asyncio.create_subprocess_exec') as mock_create:
-            async for chunk in streamer.stream():
+            async for _chunk in streamer.stream():
                 pass
             
             # Should not create new subprocess

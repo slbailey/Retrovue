@@ -5,6 +5,7 @@ Tests the enricher command group against the documented CLI contract in docs/ope
 """
 
 import pytest
+
 from .utils import run_cli
 
 

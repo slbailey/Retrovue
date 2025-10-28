@@ -5,13 +5,13 @@ This module tests the new assets select command when selecting from a series
 with random mode, ensuring it returns the correct JSON structure.
 """
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app
-from retrovue.domain.entities import Asset, ProviderRef, EntityType, Provider
+from retrovue.domain.entities import Asset, Provider, ProviderRef
 from retrovue.shared.types import EntityType as EntityTypeEnum
 
 

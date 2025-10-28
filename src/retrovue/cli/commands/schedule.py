@@ -2,9 +2,10 @@
 Schedule management commands for RetroVue infrastructure.
 """
 import json
+
 import typer
-from rich.console import Console
 from rich import print as rprint
+from rich.console import Console
 
 from ...infra.admin_services import ScheduleAdminService
 

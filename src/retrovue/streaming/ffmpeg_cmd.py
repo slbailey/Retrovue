@@ -7,9 +7,9 @@ and copy modes for different performance requirements.
 """
 
 from __future__ import annotations
-import os
+
 import pathlib
-from typing import Literal, Optional
+from typing import Literal
 
 
 def validate_input_files(concat_path: str) -> dict[str, any]:
@@ -48,7 +48,7 @@ def validate_input_files(concat_path: str) -> dict[str, any]:
     
     # Read and validate concat file contents
     try:
-        with open(concat_file, 'r', encoding='utf-8') as f:
+        with open(concat_file, encoding='utf-8') as f:
             lines = f.readlines()
     except Exception as e:
         result["valid"] = False

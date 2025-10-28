@@ -6,9 +6,9 @@ It provides UUID-based access to catalog assets and enforces business rules for
 asset management in the broadcast domain.
 """
 
-from typing import List, Dict, Any, Optional
 import uuid
-from sqlalchemy.orm import Session
+from typing import Any
+
 from sqlalchemy import select
 
 from ..infra.uow import session
@@ -24,7 +24,7 @@ class CatalogAssetService:
     """
     
     @staticmethod
-    def get_asset_by_uuid(asset_uuid: uuid.UUID) -> Optional[Dict[str, Any]]:
+    def get_asset_by_uuid(asset_uuid: uuid.UUID) -> dict[str, Any] | None:
         """
         Return full details for one CatalogAsset by UUID.
         
@@ -54,7 +54,7 @@ class CatalogAssetService:
             }
     
     @staticmethod
-    def list_canonical_assets() -> List[Dict[str, Any]]:
+    def list_canonical_assets() -> list[dict[str, Any]]:
         """
         Return a list of all canonical (approved-for-air) CatalogAssets.
         
@@ -64,7 +64,7 @@ class CatalogAssetService:
         """
         with session() as db:
             assets = db.execute(
-                select(CatalogAsset).where(CatalogAsset.canonical == True)
+                select(CatalogAsset).where(CatalogAsset.canonical)
             ).scalars().all()
             
             result = []
@@ -83,7 +83,7 @@ class CatalogAssetService:
             return result
     
     @staticmethod
-    def list_all_assets() -> List[Dict[str, Any]]:
+    def list_all_assets() -> list[dict[str, Any]]:
         """
         Return a list of all CatalogAssets (both canonical and non-canonical).
         

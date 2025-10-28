@@ -5,18 +5,14 @@ According to the identity model documentation, all persisted entities should hav
 both id (INTEGER PK) and uuid (stable external identity) columns for cross-domain
 lineage tracking.
 """
-import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 
-from retrovue.infra.db import Base
 from retrovue.schedule_manager.models import (
-    BroadcastChannel, 
-    BroadcastTemplate, 
-    BroadcastTemplateBlock,
+    BroadcastChannel,
+    BroadcastPlaylogEvent,
     BroadcastScheduleDay,
+    BroadcastTemplate,
+    BroadcastTemplateBlock,
     CatalogAsset,
-    BroadcastPlaylogEvent
 )
 
 

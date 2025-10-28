@@ -5,9 +5,9 @@ Test runner for MasterClock tests.
 This script runs all MasterClock tests and provides detailed output.
 """
 
-import sys
-import subprocess
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 

@@ -6,13 +6,13 @@ review status, and lifecycle management. It provides UUID-based access to assets
 and supports both internal operations and external integrations.
 """
 
-from typing import List, Dict, Any, Optional
 import uuid
-from sqlalchemy.orm import Session
+from typing import Any
+
 from sqlalchemy import select
 
-from ..infra.uow import session
 from ..domain.entities import Asset, Marker, ReviewQueue
+from ..infra.uow import session
 
 
 class AssetService:
@@ -25,7 +25,7 @@ class AssetService:
     """
     
     @staticmethod
-    def get_asset_by_uuid(asset_uuid: uuid.UUID) -> Optional[Dict[str, Any]]:
+    def get_asset_by_uuid(asset_uuid: uuid.UUID) -> dict[str, Any] | None:
         """
         Return full details for one Asset by UUID.
         
@@ -82,7 +82,7 @@ class AssetService:
             }
     
     @staticmethod
-    def list_assets() -> List[Dict[str, Any]]:
+    def list_assets() -> list[dict[str, Any]]:
         """
         Return a list of all Assets (excluding deleted ones by default).
         
@@ -92,7 +92,7 @@ class AssetService:
         """
         with session() as db:
             assets = db.execute(
-                select(Asset).where(Asset.is_deleted == False)
+                select(Asset).where(not Asset.is_deleted)
             ).scalars().all()
             
             result = []
@@ -111,7 +111,7 @@ class AssetService:
             return result
     
     @staticmethod
-    def list_canonical_assets() -> List[Dict[str, Any]]:
+    def list_canonical_assets() -> list[dict[str, Any]]:
         """
         Return a list of all canonical (approved) Assets.
         
@@ -121,7 +121,7 @@ class AssetService:
         """
         with session() as db:
             assets = db.execute(
-                select(Asset).where(Asset.canonical == True, Asset.is_deleted == False)
+                select(Asset).where(Asset.canonical, not Asset.is_deleted)
             ).scalars().all()
             
             result = []
@@ -140,7 +140,7 @@ class AssetService:
             return result
     
     @staticmethod
-    def list_deleted_assets() -> List[Dict[str, Any]]:
+    def list_deleted_assets() -> list[dict[str, Any]]:
         """
         Return a list of all deleted Assets.
         
@@ -150,7 +150,7 @@ class AssetService:
         """
         with session() as db:
             assets = db.execute(
-                select(Asset).where(Asset.is_deleted == True)
+                select(Asset).where(Asset.is_deleted)
             ).scalars().all()
             
             result = []

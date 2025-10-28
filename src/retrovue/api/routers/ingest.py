@@ -63,12 +63,9 @@ async def run_ingest(
     """
     try:
         # Extract parameters from request body
-        library_ids = None
-        enrichers = None
         
         if request:
-            library_ids = request.library_ids
-            enrichers = request.enrichers
+            pass
         
         # Run the ingest using the new orchestrator
         orchestrator = IngestOrchestrator(db)
@@ -92,7 +89,7 @@ async def run_ingest(
 
 
 @router.get("/sources/{source_id}/collections")
-async def get_source_collections(source_id: str) -> dict[str, Any]:
+async def get_source_collections(source_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     """
     Get collections for a specific source.
     
@@ -135,7 +132,8 @@ async def update_source_collection(
     source_id: str,
     external_id: str,
     enabled: bool | None = None,
-    mapping_pairs: list[tuple[str, str]] | None = None
+    mapping_pairs: list[tuple[str, str]] | None = None,
+    db: Session = Depends(get_db)
 ) -> dict[str, Any]:
     """
     Update a source collection configuration.

@@ -1,8 +1,10 @@
+from collections.abc import Generator
+
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
-from sqlalchemy.schema import MetaData
 from sqlalchemy.engine import Engine
-from typing import Generator
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.schema import MetaData
+
 from retrovue.infra.settings import settings
 
 # Deterministic constraint/index names (prevents Alembic churn)

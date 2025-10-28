@@ -6,15 +6,14 @@ All tests use the same database configuration as the application to ensure consi
 """
 
 import os
+from collections.abc import Generator
+
 import pytest
-import uuid
-from typing import Generator
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
+
 from alembic import command
 from alembic.config import Config
-
-from retrovue.infra.db import Base, get_engine, get_sessionmaker
 from retrovue.infra.settings import settings
 
 
@@ -58,7 +57,6 @@ def setup_test_database(test_engine, test_database_url):
     This fixture runs once per test session and applies all Alembic migrations
     to ensure the database schema is up to date.
     """
-    import os
     
     # Get the project root directory (where alembic.ini is located)
     current_dir = os.getcwd()

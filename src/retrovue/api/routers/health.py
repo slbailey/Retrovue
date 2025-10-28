@@ -7,22 +7,21 @@ This module provides health check endpoints for monitoring and load balancer hea
 from __future__ import annotations
 
 import time
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from ...infra.uow import get_db
-from ...infra.settings import settings
 from ...infra.logging import get_logger
+from ...infra.uow import get_db
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 
 @router.get("/healthz")
-async def health_check(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def health_check(db: Session = Depends(get_db)) -> dict[str, Any]:
     """
     Health check endpoint.
     

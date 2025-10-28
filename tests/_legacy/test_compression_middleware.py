@@ -5,10 +5,8 @@ Tests that GZip middleware excludes .ts routes and that Content-Encoding
 header is properly set for IPTV streaming endpoints.
 """
 
-import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
-from retrovue.web.server import run_server
 
 
 class TestCompressionMiddleware:
@@ -17,7 +15,6 @@ class TestCompressionMiddleware:
     def test_gzip_excludes_ts_routes(self):
         """Test that GZip middleware excludes .ts routes."""
         # Create a test app with compression middleware
-        from fastapi import FastAPI
         from retrovue.web.server import ConditionalGZipMiddleware
         
         app = FastAPI()
@@ -52,7 +49,8 @@ class TestCompressionMiddleware:
     
     def test_content_encoding_identity_for_ts_routes(self):
         """Test that .ts routes have Content-Encoding: identity header."""
-        from fastapi import FastAPI, Request, Response
+        from fastapi import Request
+
         from retrovue.web.server import ConditionalGZipMiddleware
         
         app = FastAPI()
@@ -85,7 +83,6 @@ class TestCompressionMiddleware:
     
     def test_compression_middleware_integration(self):
         """Integration test for compression middleware with real server setup."""
-        from fastapi import FastAPI
         from retrovue.web.server import ConditionalGZipMiddleware
         
         app = FastAPI(title="Test IPTV Server")
@@ -95,7 +92,6 @@ class TestCompressionMiddleware:
         
         @app.middleware("http")
         async def streaming_headers(request: Request, call_next):
-            from fastapi import Response
             resp: Response = await call_next(request)
             if request.url.path.endswith('.ts'):
                 resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -134,7 +130,6 @@ class TestCompressionMiddleware:
     
     def test_multiple_ts_routes_excluded(self):
         """Test that multiple .ts route patterns are excluded from compression."""
-        from fastapi import FastAPI
         from retrovue.web.server import ConditionalGZipMiddleware
         
         app = FastAPI()
@@ -144,7 +139,6 @@ class TestCompressionMiddleware:
         
         @app.middleware("http")
         async def streaming_headers(request: Request, call_next):
-            from fastapi import Response
             resp: Response = await call_next(request)
             if request.url.path.endswith('.ts'):
                 resp.headers["Content-Encoding"] = "identity"
@@ -187,7 +181,8 @@ class TestIPTVStreamingHeaders:
     
     def test_ts_route_headers(self):
         """Test that .ts routes have proper streaming headers."""
-        from fastapi import FastAPI, Request, Response
+        from fastapi import Request
+
         from retrovue.web.server import ConditionalGZipMiddleware
         
         app = FastAPI()
@@ -226,7 +221,6 @@ class TestIPTVStreamingHeaders:
     
     def test_no_compression_for_ts_files(self):
         """Test that .ts files are never compressed regardless of size."""
-        from fastapi import FastAPI
         from retrovue.web.server import ConditionalGZipMiddleware
         
         app = FastAPI()
@@ -236,7 +230,6 @@ class TestIPTVStreamingHeaders:
         
         @app.middleware("http")
         async def streaming_headers(request: Request, call_next):
-            from fastapi import Response
             resp: Response = await call_next(request)
             if request.url.path.endswith('.ts'):
                 resp.headers["Content-Encoding"] = "identity"

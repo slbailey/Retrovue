@@ -7,11 +7,12 @@ This module tests the FFprobe enricher functionality.
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from retrovue.adapters.enrichers.ffprobe_enricher import FFprobeEnricher
+from retrovue.adapters.enrichers.base import EnricherError
 from retrovue.adapters.importers.base import DiscoveredItem
 
 
@@ -56,7 +57,7 @@ class TestFFprobeEnricher:
             raw_labels=["test_label"]
         )
         
-        with pytest.raises(Exception):  # Should raise an error
+        with pytest.raises(EnricherError):  # Should raise an error
             enricher.enrich(original_item)
     
     @patch('subprocess.run')
@@ -150,7 +151,7 @@ class TestFFprobeEnricher:
             raw_labels=["original_label"]
         )
         
-        with pytest.raises(Exception):  # Should raise an error
+        with pytest.raises(EnricherError):  # Should raise an error
             enricher.enrich(original_item)
     
     @patch('subprocess.run')
@@ -166,7 +167,7 @@ class TestFFprobeEnricher:
             raw_labels=["original_label"]
         )
         
-        with pytest.raises(Exception):  # Should raise an error
+        with pytest.raises(EnricherError):  # Should raise an error
             enricher.enrich(original_item)
     
     @patch('subprocess.run')
@@ -186,7 +187,7 @@ class TestFFprobeEnricher:
             raw_labels=["original_label"]
         )
         
-        with pytest.raises(Exception):  # Should raise an error
+        with pytest.raises(EnricherError):  # Should raise an error
             enricher.enrich(original_item)
     
     def test_run_ffprobe_success(self):
@@ -234,7 +235,7 @@ class TestFFprobeEnricher:
                 mock_result.stderr = "FFprobe error"
                 mock_run.return_value = mock_result
                 
-                with pytest.raises(Exception):  # Should raise an error
+                with pytest.raises(EnricherError):  # Should raise an error
                     enricher._run_ffprobe(Path(temp_file.name))
     
     def test_run_ffprobe_timeout(self):
@@ -249,5 +250,5 @@ class TestFFprobeEnricher:
             with patch('subprocess.run') as mock_run:
                 mock_run.side_effect = TimeoutError("FFprobe timed out")
                 
-                with pytest.raises(Exception):  # Should raise an error
+                with pytest.raises(EnricherError):  # Should raise an error
                     enricher._run_ffprobe(Path(temp_file.name))

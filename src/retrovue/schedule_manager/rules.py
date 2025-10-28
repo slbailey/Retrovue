@@ -19,10 +19,10 @@ Design Principles:
 - Content decisions are deterministic and auditable
 """
 
-from typing import List, Optional, Dict, Any, Union
-from datetime import datetime, time
 from dataclasses import dataclass
+from datetime import datetime, time
 from enum import Enum
+from typing import Any, Optional
 
 
 class DayOfWeek(Enum):
@@ -66,7 +66,7 @@ class TimeWindow:
     """Time window for rule application"""
     start_time: time
     end_time: time
-    days_of_week: List[DayOfWeek]
+    days_of_week: list[DayOfWeek]
     
     def applies_to(self, timestamp: datetime) -> bool:
         """
@@ -106,8 +106,8 @@ class BlockRule:
     name: str
     description: str
     time_window: TimeWindow
-    content_type: Optional[ContentType] = None
-    tone_rating: Optional[ToneRating] = None
+    content_type: ContentType | None = None
+    tone_rating: ToneRating | None = None
     rotation_rule: Optional['RotationRule'] = None
     enabled: bool = True
     priority: int = 0
@@ -134,7 +134,7 @@ class BlockRule:
         # - Return True/False
         pass
     
-    def allows_content(self, content: Dict[str, Any]) -> bool:
+    def allows_content(self, content: dict[str, Any]) -> bool:
         """
         Check if this rule allows the given content.
         
@@ -167,11 +167,11 @@ class RotationRule:
     min_hours_between_airings: int
     max_airings_per_day: int
     max_airings_per_week: int
-    content_types: List[ContentType]
+    content_types: list[ContentType]
     enabled: bool = True
     
     def can_air_content(self, content_id: str, timestamp: datetime, 
-                       recent_airings: List[datetime]) -> bool:
+                       recent_airings: list[datetime]) -> bool:
         """
         Check if content can air at the given time based on rotation rules.
         
@@ -204,7 +204,7 @@ class BlockPolicy:
     name: str
     description: str
     channel_id: str
-    rules: List[BlockRule]
+    rules: list[BlockRule]
     priority: int = 0
     enabled: bool = True
     
@@ -225,7 +225,7 @@ class BlockPolicy:
         # - Return True/False
         pass
     
-    def get_applicable_rules(self, channel_id: str, timestamp: datetime) -> List[BlockRule]:
+    def get_applicable_rules(self, channel_id: str, timestamp: datetime) -> list[BlockRule]:
         """
         Get all rules that apply to a given situation.
         
@@ -242,7 +242,7 @@ class BlockPolicy:
         # - Return ordered list
         pass
     
-    def evaluate_content(self, content: Dict[str, Any], 
+    def evaluate_content(self, content: dict[str, Any], 
                         channel_id: str, timestamp: datetime) -> bool:
         """
         Evaluate if content passes all applicable rules in this policy.

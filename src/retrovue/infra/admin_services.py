@@ -3,15 +3,18 @@ Admin services for RetroVue infrastructure management.
 These services handle CRUD operations for channels, templates, schedules, and assets.
 """
 import json
-from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
+from typing import Any
+
 from sqlalchemy.exc import IntegrityError
 
-from .db import get_session
-from ..domain.entities import BroadcastChannel
-from ..schedule_manager.models import BroadcastTemplate, BroadcastTemplateBlock, BroadcastScheduleDay
 from ..domain.catalog_asset import CatalogAsset
-from ..domain.entities import Asset
+from ..domain.entities import Asset, BroadcastChannel
+from ..schedule_manager.models import (
+    BroadcastScheduleDay,
+    BroadcastTemplate,
+    BroadcastTemplateBlock,
+)
+from .db import get_session
 
 
 class ChannelAdminService:
@@ -24,7 +27,7 @@ class ChannelAdminService:
         grid_size_minutes: int,
         grid_offset_minutes: int,
         rollover_minutes: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a new channel."""
         session = get_session()()
         try:
@@ -60,7 +63,7 @@ class TemplateAdminService:
     """Service for managing templates and template blocks."""
     
     @staticmethod
-    def create_template(name: str, description: Optional[str] = None) -> Dict[str, Any]:
+    def create_template(name: str, description: str | None = None) -> dict[str, Any]:
         """Create a new template."""
         session = get_session()()
         try:
@@ -90,9 +93,9 @@ class TemplateAdminService:
         template_id: int,
         start_time: str,
         end_time: str,
-        tags: List[str],
+        tags: list[str],
         episode_policy: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Add a block to a template."""
         session = get_session()()
         try:
@@ -132,7 +135,7 @@ class ScheduleAdminService:
         channel_name: str,
         template_name: str,
         schedule_date: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Assign a template to a channel for a specific day."""
         session = get_session()()
         try:
@@ -185,10 +188,10 @@ class AssetAdminService:
     def add_asset(
         title: str,
         duration_seconds: int,
-        tags: List[str],
+        tags: list[str],
         file_path: str,
         canonical: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Add a new asset."""
         session = get_session()()
         try:
@@ -224,12 +227,12 @@ class AssetAdminService:
     @staticmethod
     def update_asset(
         asset_id: int,
-        title: Optional[str] = None,
-        duration_seconds: Optional[int] = None,
-        tags: Optional[List[str]] = None,
-        file_path: Optional[str] = None,
-        canonical: Optional[bool] = None
-    ) -> Dict[str, Any]:
+        title: str | None = None,
+        duration_seconds: int | None = None,
+        tags: list[str] | None = None,
+        file_path: str | None = None,
+        canonical: bool | None = None
+    ) -> dict[str, Any]:
         """Update an existing asset."""
         session = get_session()()
         try:
@@ -269,7 +272,7 @@ class AssetAdminService:
         title: str,
         tags: list[str],
         canonical: bool,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Promote a library asset to the broadcast catalog.
         
@@ -339,9 +342,9 @@ class AssetAdminService:
     
     @staticmethod
     def list_assets(
-        canonical_only: Optional[bool] = None,
-        tag: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        canonical_only: bool | None = None,
+        tag: str | None = None
+    ) -> list[dict[str, Any]]:
         """List assets with optional filtering."""
         session = get_session()()
         try:

@@ -23,7 +23,6 @@ All operations went through BroadcastChannelService for business logic enforceme
 import argparse
 import json
 import sys
-from typing import Optional
 
 from ..schedule_manager.broadcast_channel_service import BroadcastChannelService
 
@@ -86,7 +85,7 @@ def create_channel(
     grid_size_minutes: int,
     grid_offset_minutes: int,
     rollover_minutes: int,
-    is_active: Optional[bool] = None
+    is_active: bool | None = None
 ) -> None:
     """Create a new BroadcastChannel."""
     try:
@@ -120,12 +119,12 @@ def create_channel(
 
 def update_channel(
     channel_id: int,
-    name: Optional[str] = None,
-    timezone: Optional[str] = None,
-    grid_size_minutes: Optional[int] = None,
-    grid_offset_minutes: Optional[int] = None,
-    rollover_minutes: Optional[int] = None,
-    is_active: Optional[bool] = None
+    name: str | None = None,
+    timezone: str | None = None,
+    grid_size_minutes: int | None = None,
+    grid_offset_minutes: int | None = None,
+    rollover_minutes: int | None = None,
+    is_active: bool | None = None
 ) -> None:
     """Update an existing BroadcastChannel."""
     try:

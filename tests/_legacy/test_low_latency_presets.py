@@ -2,8 +2,7 @@
 Unit tests for low latency streaming presets.
 """
 
-import pytest
-from src.retrovue.presets.low_latency import apply_low_latency_video, apply_low_latency_audio
+from src.retrovue.presets.low_latency import apply_low_latency_audio, apply_low_latency_video
 
 
 class TestLowLatencyVideo:

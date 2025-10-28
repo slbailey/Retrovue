@@ -27,9 +27,9 @@ Design Principles:
 - Schedule state is always consistent and valid
 """
 
-from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta, date
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from typing import Any
 
 
 @dataclass
@@ -37,7 +37,7 @@ class ScheduleQuery:
     """Query parameters for schedule lookups"""
     channel_id: str
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     include_playlog: bool = True
     include_epg: bool = True
 
@@ -51,8 +51,8 @@ class ProgrammingInfo:
     title: str
     description: str
     content_type: str
-    asset_id: Optional[str] = None
-    episode_id: Optional[str] = None
+    asset_id: str | None = None
+    episode_id: str | None = None
 
 
 class ScheduleService:
@@ -79,7 +79,7 @@ class ScheduleService:
         # TODO: Initialize database session, content manager integration
         pass
     
-    def get_current_programming(self, channel_id: str, timestamp: Optional[datetime] = None) -> Optional[ProgrammingInfo]:
+    def get_current_programming(self, channel_id: str, timestamp: datetime | None = None) -> ProgrammingInfo | None:
         """
         Get what's currently airing on a channel at a given timestamp.
         
@@ -96,7 +96,7 @@ class ScheduleService:
         # - Handle timezone conversion for channel
         pass
     
-    def get_upcoming_programming(self, channel_id: str, hours_ahead: int = 3) -> List[ProgrammingInfo]:
+    def get_upcoming_programming(self, channel_id: str, hours_ahead: int = 3) -> list[ProgrammingInfo]:
         """
         Get upcoming programming for a channel.
         
@@ -113,7 +113,7 @@ class ScheduleService:
         # - Ensure EPG horizon is maintained (≥ 2 days)
         pass
     
-    def get_playlog_events(self, channel_id: str, start_time: datetime, end_time: datetime) -> List[Dict[str, Any]]:
+    def get_playlog_events(self, channel_id: str, start_time: datetime, end_time: datetime) -> list[dict[str, Any]]:
         """
         Get precise playlog events for a time range.
         
@@ -133,7 +133,7 @@ class ScheduleService:
     
     def create_epg_entry(self, channel_id: str, title: str, description: str, 
                         start_time: datetime, end_time: datetime, 
-                        content_type: str, asset_id: Optional[str] = None) -> str:
+                        content_type: str, asset_id: str | None = None) -> str:
         """
         Create a new EPG entry.
         
@@ -159,7 +159,7 @@ class ScheduleService:
     
     def create_playlog_event(self, channel_id: str, asset_id: str, 
                            absolute_start: datetime, absolute_end: datetime,
-                           segment_type: str, epg_entry_id: Optional[str] = None) -> str:
+                           segment_type: str, epg_entry_id: str | None = None) -> str:
         """
         Create a new playlog event.
         
@@ -248,7 +248,7 @@ class ScheduleService:
         # - Return count of new events
         pass
     
-    def apply_block_rules(self, channel_id: str, content_candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def apply_block_rules(self, channel_id: str, content_candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Apply block rules and content policies to filter content.
         
@@ -311,7 +311,7 @@ class ScheduleService:
         else:
             return (local_time.date() - timedelta(days=1))
     
-    def broadcast_day_window(self, channel_id: str, when_utc: datetime) -> Tuple[datetime, datetime]:
+    def broadcast_day_window(self, channel_id: str, when_utc: datetime) -> tuple[datetime, datetime]:
         """
         Return (start_local, end_local) for the broadcast day that contains when_utc,
         in channel-local tz, tz-aware datetimes.
@@ -345,7 +345,6 @@ class ScheduleService:
         # 4. Calculate broadcast day window
         
         # Stub implementation - will be replaced with real logic
-        local_time = when_utc  # Placeholder
         broadcast_day = self.broadcast_day_for(channel_id, when_utc)
         
         # Calculate start and end of broadcast day
@@ -354,7 +353,7 @@ class ScheduleService:
         
         return (start_local, end_local)
     
-    def active_segment_spanning_rollover(self, channel_id: str, rollover_start_utc: datetime) -> Optional[Dict[str, Any]]:
+    def active_segment_spanning_rollover(self, channel_id: str, rollover_start_utc: datetime) -> dict[str, Any] | None:
         """
         Given the UTC timestamp for rollover boundary (which is local 06:00:00),
         return info about any scheduled content that STARTED BEFORE rollover

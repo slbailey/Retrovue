@@ -6,15 +6,13 @@ that will be exposed via CLI commands.
 """
 
 import time
-import json
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Tuple
-import zoneinfo
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from retrovue.runtime.clock import MasterClock, TimePrecision
+from retrovue.runtime.clock import MasterClock
 
 
-def test_masterclock_monotonic(iterations: int = 1000) -> Dict[str, Any]:
+def test_masterclock_monotonic(iterations: int = 1000) -> dict[str, Any]:
     """
     Test that time doesn't "run backward" and seconds_since() is never negative.
     
@@ -67,7 +65,7 @@ def test_masterclock_monotonic(iterations: int = 1000) -> Dict[str, Any]:
     return results
 
 
-def test_masterclock_timezone_resolution(timezones: List[str] = None) -> Dict[str, Any]:
+def test_masterclock_timezone_resolution(timezones: list[str] = None) -> dict[str, Any]:
     """
     Test timezone mapping is safe and handles invalid timezones gracefully.
     
@@ -109,7 +107,7 @@ def test_masterclock_timezone_resolution(timezones: List[str] = None) -> Dict[st
             # If exception, check if it falls back to UTC
             try:
                 local_time = clock.now_local(tz)
-                if local_time.tzinfo == timezone.utc:
+                if local_time.tzinfo == UTC:
                     results["fallback_to_utc"].append(tz)
                 else:
                     results["failed_timezones"].append(tz)
@@ -120,7 +118,7 @@ def test_masterclock_timezone_resolution(timezones: List[str] = None) -> Dict[st
     valid_tz = "America/New_York"  # Known to have DST
     try:
         # Test around DST transition (March 10, 2024 2:00 AM)
-        dst_time = datetime(2024, 3, 10, 1, 30, 0, tzinfo=timezone.utc)
+        dst_time = datetime(2024, 3, 10, 1, 30, 0, tzinfo=UTC)
         local_dst = clock.to_channel_time(dst_time, valid_tz)
         results["dst_boundary_tests"].append({
             "timezone": valid_tz,
@@ -142,7 +140,7 @@ def test_masterclock_timezone_resolution(timezones: List[str] = None) -> Dict[st
     return results
 
 
-def test_masterclock_logging() -> Dict[str, Any]:
+def test_masterclock_logging() -> dict[str, Any]:
     """
     Test timestamps for AsRunLogger are correct and consistent.
     
@@ -211,7 +209,7 @@ def test_masterclock_logging() -> Dict[str, Any]:
     return results
 
 
-def test_masterclock_scheduler_alignment() -> Dict[str, Any]:
+def test_masterclock_scheduler_alignment() -> dict[str, Any]:
     """
     Test schedule lookup logic won't give off-by-one bugs at slot boundaries.
     Also detects any component using raw datetime.now() / datetime.utcnow() instead of MasterClock.
@@ -230,7 +228,7 @@ def test_masterclock_scheduler_alignment() -> Dict[str, Any]:
     }
     
     # Create a fake grid
-    def resolve_block_for_timestamp(grid: List[Tuple[datetime, datetime, str]], ts: datetime) -> str:
+    def resolve_block_for_timestamp(grid: list[tuple[datetime, datetime, str]], ts: datetime) -> str:
         """Stub function to resolve block for timestamp."""
         # Reject naive timestamps
         if ts.tzinfo is None:
@@ -242,7 +240,7 @@ def test_masterclock_scheduler_alignment() -> Dict[str, Any]:
         return "unknown"
     
     # Test grid: 00:00:00–00:30:00 → Block A, 00:30:00–01:00:00 → Block B
-    base_time = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    base_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     grid = [
         (base_time, base_time + timedelta(minutes=30), "Block A"),
         (base_time + timedelta(minutes=30), base_time + timedelta(hours=1), "Block B")
@@ -295,7 +293,7 @@ def test_masterclock_scheduler_alignment() -> Dict[str, Any]:
             pass
         
         # Test that MasterClock timestamps work correctly
-        masterclock_block = resolve_block_for_timestamp(grid, masterclock_time)
+        resolve_block_for_timestamp(grid, masterclock_time)
         
         # If we get here without exceptions, MasterClock is being used correctly
         results["uses_masterclock_only"] = True
@@ -308,7 +306,7 @@ def test_masterclock_scheduler_alignment() -> Dict[str, Any]:
     # Test DST edge case
     try:
         # Simulate DST transition
-        dst_transition = datetime(2024, 3, 10, 6, 0, 0, tzinfo=timezone.utc)  # 2 AM EST -> 3 AM EDT
+        dst_transition = datetime(2024, 3, 10, 6, 0, 0, tzinfo=UTC)  # 2 AM EST -> 3 AM EDT
         dst_grid = [
             (dst_transition - timedelta(hours=1), dst_transition, "Pre-DST"),
             (dst_transition, dst_transition + timedelta(hours=1), "Post-DST")
@@ -337,7 +335,7 @@ def test_masterclock_scheduler_alignment() -> Dict[str, Any]:
     return results
 
 
-def test_masterclock_stability(iterations: int = 10000, minutes: int = None) -> Dict[str, Any]:
+def test_masterclock_stability(iterations: int = 10000, minutes: int = None) -> dict[str, Any]:
     """
     Stress-test that repeated tz conversion doesn't leak memory or fall off a performance cliff.
     Captures detailed performance metrics to detect regressions.
@@ -415,7 +413,7 @@ def test_masterclock_stability(iterations: int = 10000, minutes: int = None) -> 
     return results
 
 
-def test_masterclock_consistency() -> Dict[str, Any]:
+def test_masterclock_consistency() -> dict[str, Any]:
     """
     Test that different high-level components would see the "same now," not different shapes of time.
     Also validates that timestamps serialize and round-trip correctly.
@@ -437,7 +435,7 @@ def test_masterclock_consistency() -> Dict[str, Any]:
     
     # Simulate multiple components asking for time in rapid succession
     timestamps = []
-    for i in range(100):
+    for _i in range(100):
         # Simulate ProgramDirector and ChannelManager asking for time
         pd_time = clock.now_utc()
         cm_time = clock.now_utc()
@@ -453,13 +451,13 @@ def test_masterclock_consistency() -> Dict[str, Any]:
             results["tzinfo_ok"] = False
         
         # Check for maximum skew
-        for j, other_ts in enumerate(timestamps[i+1:], i+1):
+        for _j, other_ts in enumerate(timestamps[i+1:], i+1):
             skew = abs((ts - other_ts).total_seconds())
             results["max_skew_seconds"] = max(results["max_skew_seconds"], skew)
     
     # Test serialization and round-trip for sample timestamps
     sample_timestamps = timestamps[:5]  # Test first 5 for brevity
-    for i, ts in enumerate(sample_timestamps):
+    for _i, ts in enumerate(sample_timestamps):
         try:
             # Serialize to ISO 8601
             serialized = ts.isoformat()
@@ -500,7 +498,7 @@ def test_masterclock_consistency() -> Dict[str, Any]:
     return results
 
 
-def test_masterclock_serialization() -> Dict[str, Any]:
+def test_masterclock_serialization() -> dict[str, Any]:
     """
     Test that we can safely serialize timestamps and round-trip them.
     
@@ -568,7 +566,7 @@ def test_masterclock_serialization() -> Dict[str, Any]:
     return results
 
 
-def run_all_masterclock_tests() -> Dict[str, Any]:
+def run_all_masterclock_tests() -> dict[str, Any]:
     """
     Run all MasterClock validation tests.
     
@@ -577,7 +575,7 @@ def run_all_masterclock_tests() -> Dict[str, Any]:
     """
     all_results = {
         "test_suite": "masterclock-validation",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "tests": {}
     }
     

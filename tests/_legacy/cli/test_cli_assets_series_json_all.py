@@ -5,9 +5,9 @@ This module tests the JSON format when no specific series is requested,
 ensuring it returns {"series": [...]} format.
 """
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app

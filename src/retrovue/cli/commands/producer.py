@@ -7,9 +7,6 @@ Surfaces producer management capabilities including listing, configuration, and 
 from __future__ import annotations
 
 import typer
-from typing import Optional
-
-from ...infra.uow import session
 
 app = typer.Typer(name="producer", help="Producer management operations")
 
@@ -45,8 +42,8 @@ def list_producer_types(
 
 @app.command("add")
 def add_producer(
-    type: Optional[str] = typer.Option(None, "--type", help="Producer type"),
-    name: Optional[str] = typer.Option(None, "--name", help="Human-readable label"),
+    type: str | None = typer.Option(None, "--type", help="Producer type"),
+    name: str | None = typer.Option(None, "--name", help="Human-readable label"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
     help_type: bool = typer.Option(False, "--help", help="Show help for the specified producer type"),
 ):

@@ -1,6 +1,5 @@
 """Copy mode validation for video streaming."""
 
-from typing import Set
 
 
 class CopyModeUnsupportedError(Exception):
@@ -35,12 +34,12 @@ def can_copy(video_codec: str, audio_codec: str) -> bool:
     audio_codec_lower = audio_codec.lower().strip()
     
     # Supported video codecs for copy mode
-    supported_video_codecs: Set[str] = {
+    supported_video_codecs: set[str] = {
         'h264', 'h.264', 'avc', 'x264'
     }
     
     # Supported audio codecs for copy mode
-    supported_audio_codecs: Set[str] = {
+    supported_audio_codecs: set[str] = {
         'aac', 'mp2'
     }
     

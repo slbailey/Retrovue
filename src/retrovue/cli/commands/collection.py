@@ -7,17 +7,20 @@ Surfaces collection management capabilities including listing, configuration, an
 from __future__ import annotations
 
 import json
-import typer
-from typing import Optional
 
+import typer
+
+from ...infra.exceptions import ValidationError
 from ...infra.uow import session
 from ...infra.validation import (
-    validate_collection_exists, validate_no_conflicting_operations,
-    validate_wipe_prerequisites, validate_no_orphaned_records,
-    validate_collection_preserved, validate_path_mappings_preserved,
-    validate_database_consistency
+    validate_collection_exists,
+    validate_collection_preserved,
+    validate_database_consistency,
+    validate_no_conflicting_operations,
+    validate_no_orphaned_records,
+    validate_path_mappings_preserved,
+    validate_wipe_prerequisites,
 )
-from ...infra.exceptions import WipeError, ValidationError
 
 app = typer.Typer(name="collection", help="Collection management operations")
 
@@ -40,9 +43,10 @@ def list_collections(
         retrovue collection list --source plex-5063d926 --json
     """
     with session() as db:
-        from ...content_manager.source_service import SourceService
-        from ...domain.entities import SourceCollection, PathMapping, Source
         import os
+
+        from ...content_manager.source_service import SourceService
+        from ...domain.entities import PathMapping, SourceCollection
         
         try:
             source_service = SourceService(db)
@@ -103,7 +107,6 @@ def list_collections(
                 # Display as Rich table
                 from rich.console import Console
                 from rich.table import Table
-                from rich.panel import Panel
                 
                 console = Console()
                 
@@ -162,12 +165,13 @@ def list_all_collections(
         retrovue collection list-all --json
     """
     with session() as db:
-        from ...content_manager.source_service import SourceService
-        from ...domain.entities import SourceCollection, PathMapping, Source
         import os
+
+        from ...content_manager.source_service import SourceService
+        from ...domain.entities import PathMapping, Source, SourceCollection
         
         try:
-            source_service = SourceService(db)
+            SourceService(db)
             
             # Get all collections across all sources
             collections = db.query(SourceCollection).join(Source).all()
@@ -236,8 +240,8 @@ def list_all_collections(
 @app.command("update")
 def update_collection(
     collection_id: str = typer.Argument(..., help="Collection ID, external ID, or name to update"),
-    sync_enabled: Optional[bool] = typer.Option(None, "--sync-enabled", help="Enable or disable collection sync"),
-    local_path: Optional[str] = typer.Option(None, "--local-path", help="Override local path mapping"),
+    sync_enabled: bool | None = typer.Option(None, "--sync-enabled", help="Enable or disable collection sync"),
+    local_path: str | None = typer.Option(None, "--local-path", help="Override local path mapping"),
     # TODO: Add --map flag for path mapping like --map "/mnt/media/Horror=Z:\Horror"
     # map_paths: Optional[str] = typer.Option(None, "--map", help="Path mapping in format 'plex_path=local_path'"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
@@ -258,12 +262,13 @@ def update_collection(
         retrovue collection update 2a3cd8d1-2345-6789-abcd-ef1234567890 --sync-enabled true
     """
     with session() as db:
-        from ...content_manager.source_service import SourceService
-        from ...domain.entities import SourceCollection, PathMapping
         import os
+
+        from ...content_manager.source_service import SourceService
+        from ...domain.entities import PathMapping, SourceCollection
         
         try:
-            source_service = SourceService(db)
+            SourceService(db)
             
             # Find the collection by ID (try UUID first, then external_id, then name)
             import uuid
@@ -493,7 +498,7 @@ def delete_collection(
     """
     with session() as db:
         from ...content_manager.source_service import SourceService
-        from ...domain.entities import SourceCollection, PathMapping
+        from ...domain.entities import PathMapping, SourceCollection
         
         try:
             source_service = SourceService(db)
@@ -577,15 +582,20 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     Returns:
         Wipe result
     """
-    from ...content_manager.source_service import SourceService
     from ...content_manager.library_service import LibraryService
+    from ...content_manager.source_service import SourceService
     from ...domain.entities import (
-        SourceCollection, PathMapping, Asset, Episode, Season, Title, 
-        EpisodeAsset, ReviewQueue
+        Asset,
+        Episode,
+        EpisodeAsset,
+        PathMapping,
+        ReviewQueue,
+        Season,
+        Title,
     )
     
-    source_service = SourceService(db)
-    library_service = LibraryService(db)
+    SourceService(db)
+    LibraryService(db)
     
     # Get collection info for reporting
     collection_info = {
@@ -818,12 +828,6 @@ def wipe_collection(
         retrovue collection wipe "Movies" --dry-run --json
     """
     with session() as db:
-        from ...content_manager.source_service import SourceService
-        from ...content_manager.library_service import LibraryService
-        from ...domain.entities import (
-            SourceCollection, PathMapping, Asset, Episode, Season, Title, 
-            EpisodeAsset, ReviewQueue
-        )
         
         try:
             # Phase 1: Pre-flight validation
@@ -856,9 +860,9 @@ def wipe_collection(
 @app.command("ingest")
 def collection_ingest(
     collection_id: str = typer.Argument(..., help="Collection ID, external ID, or name to ingest"),
-    title: Optional[str] = typer.Option(None, "--title", help="Specific title to ingest (movie/show name)"),
-    season: Optional[int] = typer.Option(None, "--season", help="Season number (for TV shows)"),
-    episode: Optional[int] = typer.Option(None, "--episode", help="Episode number (requires --season)"),
+    title: str | None = typer.Option(None, "--title", help="Specific title to ingest (movie/show name)"),
+    season: int | None = typer.Option(None, "--season", help="Season number (for TV shows)"),
+    episode: int | None = typer.Option(None, "--episode", help="Episode number (requires --season)"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be ingested without actually ingesting"),
 ):
@@ -884,13 +888,14 @@ def collection_ingest(
         raise typer.Exit(1)
     
     with session() as db:
-        from ...content_manager.source_service import SourceService
-        from ...domain.entities import SourceCollection, PathMapping
-        from ...content_manager.ingest_orchestrator import IngestOrchestrator
         import os
+
+        from ...content_manager.ingest_orchestrator import IngestOrchestrator
+        from ...content_manager.source_service import SourceService
+        from ...domain.entities import PathMapping, SourceCollection
         
         try:
-            source_service = SourceService(db)
+            SourceService(db)
             
             # Find the collection by ID (try UUID first, then external_id, then name)
             import uuid

@@ -5,15 +5,19 @@ This module provides validation functions that ensure operations follow
 the Unit of Work paradigm with proper pre-flight and post-operation validation.
 """
 
-from typing import List, Optional
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from ..domain.entities import (
-    SourceCollection, Asset, Episode, Season, Title, 
-    EpisodeAsset, PathMapping, ReviewQueue
+    Asset,
+    Episode,
+    EpisodeAsset,
+    PathMapping,
+    Season,
+    SourceCollection,
+    Title,
 )
-from ..infra.exceptions import ValidationError, OperationError
+from ..infra.exceptions import ValidationError
 
 
 def validate_collection_exists(db: Session, collection_id: str) -> SourceCollection:
@@ -399,7 +403,7 @@ def validate_no_duplicates(db: Session, asset: Asset) -> None:
         raise ValidationError(f"Duplicate asset found with URI: {asset.uri}")
 
 
-def validate_all_relationships(db: Session, entities: List) -> None:
+def validate_all_relationships(db: Session, entities: list) -> None:
     """
     Validate all entities have proper relationships.
     

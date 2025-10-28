@@ -4,21 +4,22 @@ Tests for identity model validation across persisted entities.
 These tests validate the dual-key approach: id (INTEGER PK) + uuid (stable external identity)
 and ensure cross-domain lineage tracking works correctly.
 """
-import pytest
 import uuid
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import IntegrityError
+from datetime import UTC
 
-from retrovue.infra.db import Base
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from retrovue.domain.entities import Asset
+from retrovue.infra.db import Base
 from retrovue.schedule_manager.models import (
-    BroadcastChannel, 
-    BroadcastTemplate, 
-    BroadcastTemplateBlock,
+    BroadcastChannel,
+    BroadcastPlaylogEvent,
     BroadcastScheduleDay,
+    BroadcastTemplate,
+    BroadcastTemplateBlock,
     CatalogAsset,
-    BroadcastPlaylogEvent
 )
 
 
@@ -179,12 +180,12 @@ class TestIdentityModel:
         db_session.commit()
         
         # Create a playlog event
-        from datetime import datetime, timezone
+        from datetime import datetime
         playlog_event = BroadcastPlaylogEvent(
             channel_id=channel.id,  # INTEGER FK
             asset_id=catalog_asset.id,  # INTEGER FK
-            start_utc=datetime.now(timezone.utc),
-            end_utc=datetime.now(timezone.utc),
+            start_utc=datetime.now(UTC),
+            end_utc=datetime.now(UTC),
             broadcast_day="2024-01-01"
         )
         db_session.add(playlog_event)
@@ -302,12 +303,12 @@ class TestCrossDomainLineage:
         db_session.commit()
         
         # Create a playlog event
-        from datetime import datetime, timezone
+        from datetime import datetime
         playlog_event = BroadcastPlaylogEvent(
             channel_id=channel.id,
             asset_id=catalog_asset.id,
-            start_utc=datetime.now(timezone.utc),
-            end_utc=datetime.now(timezone.utc),
+            start_utc=datetime.now(UTC),
+            end_utc=datetime.now(UTC),
             broadcast_day="2024-01-01"
         )
         db_session.add(playlog_event)

@@ -5,11 +5,11 @@ This module tests the REST API endpoints for asset deletion and restoration,
 including proper HTTP status codes, error handling, and response formats.
 """
 
-import pytest
-from fastapi.testclient import TestClient
 from uuid import uuid4
 
-from retrovue.api.main import app
+import pytest
+from fastapi.testclient import TestClient
+
 from retrovue.domain.entities import Asset
 
 

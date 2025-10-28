@@ -5,8 +5,9 @@ Provides database session fixtures and other common test utilities
 for contract-based testing.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.fixture

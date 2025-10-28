@@ -84,7 +84,7 @@ def get_importer(name: str, **kwargs) -> Importer:
         cls = SOURCES[key]
     except KeyError:
         raise UnsupportedSource(f"Unsupported source: {name}. "
-                                f"Available: {', '.join(sorted(SOURCES.keys()))}")
+                                f"Available: {', '.join(sorted(SOURCES.keys()))}") from None
     return cls(**kwargs)
 
 
@@ -106,7 +106,7 @@ def get_importer_help(name: str) -> dict[str, any]:
         cls = SOURCES[key]
     except KeyError:
         raise UnsupportedSource(f"Unsupported source: {name}. "
-                                f"Available: {', '.join(sorted(SOURCES.keys()))}")
+                                f"Available: {', '.join(sorted(SOURCES.keys()))}") from None
     
     # Create a minimal instance to get help (with minimal required parameters)
     try:

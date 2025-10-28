@@ -7,13 +7,11 @@ This module tests the ingest pipeline API functionality.
 import uuid
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from retrovue.api.routers.ingest import router
-from retrovue.domain.entities import Asset, Base
-from retrovue.adapters.importers.base import DiscoveredItem
+from retrovue.domain.entities import Asset
 
 
 class TestIngestAPI:
@@ -207,7 +205,6 @@ class TestIngestPipeline:
     def test_confidence_score(self):
         """Test confidence score calculation."""
         from retrovue.content_manager.ingest_pipeline import confidence_score
-        from retrovue.domain.entities import Asset
         
         # Test asset with duration
         asset = Asset(

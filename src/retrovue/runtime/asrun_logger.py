@@ -25,9 +25,9 @@ Broadcast Day Behavior:
   "everything that aired on 2025-10-24 broadcast day" and get the correct partial segment.
 """
 
-from typing import Dict, Any, Optional, List
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -42,7 +42,7 @@ class AsRunEvent:
     broadcast_day: str  # Date label for the broadcast day
     segment_type: str  # "content", "commercial", "bumper", etc.
     duration_seconds: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class AsRunLogger:
@@ -75,11 +75,11 @@ class AsRunLogger:
             schedule_service: ScheduleService instance for broadcast day lookups
         """
         self.schedule_service = schedule_service
-        self.events: List[AsRunEvent] = []
+        self.events: list[AsRunEvent] = []
     
     def log_playout_start(self, channel_id: str, program_id: str, asset_id: str, 
                          start_time_utc: datetime, segment_type: str = "content",
-                         metadata: Optional[Dict[str, Any]] = None) -> str:
+                         metadata: dict[str, Any] | None = None) -> str:
         """
         Log the start of a playout event.
         
@@ -169,7 +169,7 @@ class AsRunLogger:
         # 3. Ensuring both records have correct broadcast day labels
         pass
     
-    def get_events_for_broadcast_day(self, channel_id: str, broadcast_day: str) -> List[AsRunEvent]:
+    def get_events_for_broadcast_day(self, channel_id: str, broadcast_day: str) -> list[AsRunEvent]:
         """
         Get all as-run events for a specific broadcast day.
         
@@ -186,7 +186,7 @@ class AsRunLogger:
         ]
     
     def get_events_for_time_range(self, channel_id: str, start_time_utc: datetime, 
-                                 end_time_utc: datetime) -> List[AsRunEvent]:
+                                 end_time_utc: datetime) -> list[AsRunEvent]:
         """
         Get all as-run events in a time range.
         
@@ -209,7 +209,7 @@ class AsRunLogger:
         ]
     
     def get_continuous_playout_spanning_rollover(self, channel_id: str, 
-                                               rollover_time_utc: datetime) -> Optional[AsRunEvent]:
+                                               rollover_time_utc: datetime) -> AsRunEvent | None:
         """
         Get any continuous playout that spans the broadcast day rollover.
         

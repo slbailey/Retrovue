@@ -21,9 +21,9 @@ Design Principles:
 - Maintains schedule continuity across time boundaries
 """
 
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -34,8 +34,8 @@ class HorizonStatus:
     playlog_adequate: bool
     epg_days_ahead: float
     playlog_hours_ahead: float
-    last_epg_time: Optional[datetime]
-    last_playlog_time: Optional[datetime]
+    last_epg_time: datetime | None
+    last_playlog_time: datetime | None
 
 
 @dataclass
@@ -45,7 +45,7 @@ class OrchestrationResult:
     epg_entries_created: int
     playlog_events_created: int
     content_rules_applied: int
-    errors: List[str]
+    errors: list[str]
 
 
 class ScheduleOrchestrator:
@@ -84,7 +84,7 @@ class ScheduleOrchestrator:
         self.schedule_service = schedule_service
         self.content_manager_service = content_manager_service
     
-    def orchestrate_horizons(self, channel_ids: Optional[List[str]] = None) -> List[OrchestrationResult]:
+    def orchestrate_horizons(self, channel_ids: list[str] | None = None) -> list[OrchestrationResult]:
         """
         Orchestrate horizon maintenance for specified channels.
         
@@ -155,7 +155,7 @@ class ScheduleOrchestrator:
         # - Return count of new events
         pass
     
-    def apply_content_rules(self, channel_id: str, content_candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def apply_content_rules(self, channel_id: str, content_candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Apply content rules and policies to filter content.
         
@@ -175,7 +175,7 @@ class ScheduleOrchestrator:
         pass
     
     def get_eligible_content(self, channel_id: str, content_type: str, 
-                           time_slot: datetime, duration_minutes: int) -> List[Dict[str, Any]]:
+                           time_slot: datetime, duration_minutes: int) -> list[dict[str, Any]]:
         """
         Get eligible content from Content Manager for a time slot.
         
@@ -196,7 +196,7 @@ class ScheduleOrchestrator:
         pass
     
     def fill_time_boundaries(self, channel_id: str, start_time: datetime, 
-                           end_time: datetime) -> List[Dict[str, Any]]:
+                           end_time: datetime) -> list[dict[str, Any]]:
         """
         Fill time boundaries with ads, bumpers, and promotional content.
         
@@ -215,7 +215,7 @@ class ScheduleOrchestrator:
         # - Return list of boundary content
         pass
     
-    def handle_schedule_corrections(self, channel_id: str, corrections: List[Dict[str, Any]]) -> bool:
+    def handle_schedule_corrections(self, channel_id: str, corrections: list[dict[str, Any]]) -> bool:
         """
         Handle schedule corrections and last-minute changes.
         

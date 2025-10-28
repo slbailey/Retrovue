@@ -8,26 +8,20 @@ Calls SourceService, LibraryService, IngestOrchestrator, and PathResolverService
 from __future__ import annotations
 
 import json
-import uuid
-from pathlib import Path
-from typing import Any, Optional
 
 import typer
-from sqlalchemy.orm import Session
 
-from ...infra.uow import session
-from ...adapters.importers.plex_importer import PlexClient
-from ...content_manager.source_service import SourceService
-from ...content_manager.library_service import LibraryService
 from ...adapters.enrichers.ffprobe_enricher import FFprobeEnricher
+from ...adapters.importers.plex_importer import PlexClient
+from ...content_manager.path_service import PathResolutionError, PathResolverService
+from ...content_manager.source_service import SourceService
+from ...infra.uow import session
 from ...shared.path_utils import get_file_hash, get_file_size
-from ...content_manager.path_service import PathResolverService, PathResolutionError
-from ...domain.entities import Asset, Episode, Title, Season, ProviderRef, EntityType, Provider, Source, PathMapping, SourceCollection, EpisodeAsset
 
 app = typer.Typer(name="plex", help="Plex server operations using SourceService, LibraryService, and IngestOrchestrator")
 
 
-def get_active_plex_server(server_name: Optional[str] = None) -> tuple[str, str]:
+def get_active_plex_server(server_name: str | None = None) -> tuple[str, str]:
     """
     Get the active Plex server configuration using SourceService.
     
@@ -76,7 +70,7 @@ def get_active_plex_server(server_name: Optional[str] = None) -> tuple[str, str]
         return base_url, token
 
 
-def get_plex_client(server_name: Optional[str] = None) -> PlexClient:
+def get_plex_client(server_name: str | None = None) -> PlexClient:
     """
     Create a Plex client using the active server configuration.
     
@@ -139,7 +133,7 @@ def resolve_plex_path(plex_path: str) -> str:
 
 @app.command("verify")
 def verify_plex_connection(
-    server_name: Optional[str] = typer.Option(None, "--server-name", help="Specific server name to use"),
+    server_name: str | None = typer.Option(None, "--server-name", help="Specific server name to use"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
@@ -183,11 +177,11 @@ def verify_plex_connection(
 
 @app.command("get-episode")
 def get_episode_info(
-    rating_key: Optional[int] = typer.Argument(None, help="Plex rating key for the episode (fast path)"),
-    series: Optional[str] = typer.Option(None, "--series", help="Series title (required if not using --rating-key)"),
-    season: Optional[int] = typer.Option(None, "--season", help="Season number (required if not using --rating-key)"),
-    episode: Optional[int] = typer.Option(None, "--episode", help="Episode number (required if not using --rating-key)"),
-    server_name: Optional[str] = typer.Option(None, "--server-name", help="Specific server name to use"),
+    rating_key: int | None = typer.Argument(None, help="Plex rating key for the episode (fast path)"),
+    series: str | None = typer.Option(None, "--series", help="Series title (required if not using --rating-key)"),
+    season: int | None = typer.Option(None, "--season", help="Season number (required if not using --rating-key)"),
+    episode: int | None = typer.Option(None, "--episode", help="Episode number (required if not using --rating-key)"),
+    server_name: str | None = typer.Option(None, "--server-name", help="Specific server name to use"),
     dry_run: bool = typer.Option(True, "--dry-run", help="Show what would be done without making changes"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
@@ -249,20 +243,17 @@ def get_episode_info(
         
         # Extract metadata from enriched item
         duration_ms = None
-        video_codec = None
-        audio_codec = None
-        container = None
         
         if enriched_item.raw_labels:
             for label in enriched_item.raw_labels:
                 if label.startswith("duration_ms:"):
                     duration_ms = int(label.split(":", 1)[1])
                 elif label.startswith("video_codec:"):
-                    video_codec = label.split(":", 1)[1]
+                    label.split(":", 1)[1]
                 elif label.startswith("audio_codec:"):
-                    audio_codec = label.split(":", 1)[1]
+                    label.split(":", 1)[1]
                 elif label.startswith("container:"):
-                    container = label.split(":", 1)[1]
+                    label.split(":", 1)[1]
         
         # Prepare summary in the specified format
         summary = {
@@ -307,11 +298,11 @@ def get_episode_info(
 
 @app.command("ingest-episode")
 def ingest_episode(
-    rating_key: Optional[int] = typer.Argument(None, help="Plex rating key for the episode (fast path)"),
-    series: Optional[str] = typer.Option(None, "--series", help="Series title (required if not using --rating-key)"),
-    season: Optional[int] = typer.Option(None, "--season", help="Season number (required if not using --rating-key)"),
-    episode: Optional[int] = typer.Option(None, "--episode", help="Episode number (required if not using --rating-key)"),
-    server_name: Optional[str] = typer.Option(None, "--server-name", help="Specific server name to use"),
+    rating_key: int | None = typer.Argument(None, help="Plex rating key for the episode (fast path)"),
+    series: str | None = typer.Option(None, "--series", help="Series title (required if not using --rating-key)"),
+    season: int | None = typer.Option(None, "--season", help="Season number (required if not using --rating-key)"),
+    episode: int | None = typer.Option(None, "--episode", help="Episode number (required if not using --rating-key)"),
+    server_name: str | None = typer.Option(None, "--server-name", help="Specific server name to use"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):

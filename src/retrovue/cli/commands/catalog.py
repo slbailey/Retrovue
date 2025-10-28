@@ -11,11 +11,11 @@ Only entries in this catalog (canonical=true) are eligible to be scheduled.
 """
 
 import json
+
 import typer
-from typing import Optional
+from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
-from rich import print as rprint
 
 from ...infra.admin_services import AssetAdminService
 
@@ -75,11 +75,11 @@ def add(
 @app.command("update")
 def update(
     catalog_id: int = typer.Option(..., "--id", help="Catalog ID"),
-    title: Optional[str] = typer.Option(None, "--title", help="Updated title"),
-    duration: Optional[int] = typer.Option(None, "--duration", help="Updated duration in seconds"),
-    tags: Optional[str] = typer.Option(None, "--tags", help="Updated comma-separated tags"),
-    path: Optional[str] = typer.Option(None, "--path", help="Updated file path"),
-    canonical: Optional[bool] = typer.Option(None, "--canonical", help="Updated canonical status"),
+    title: str | None = typer.Option(None, "--title", help="Updated title"),
+    duration: int | None = typer.Option(None, "--duration", help="Updated duration in seconds"),
+    tags: str | None = typer.Option(None, "--tags", help="Updated comma-separated tags"),
+    path: str | None = typer.Option(None, "--path", help="Updated file path"),
+    canonical: bool | None = typer.Option(None, "--canonical", help="Updated canonical status"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """
@@ -124,12 +124,12 @@ def update(
 
 @app.command("list")
 def list_cmd(
-    canonical_only: Optional[bool] = typer.Option(
+    canonical_only: bool | None = typer.Option(
         None,
         "--canonical-only",
         help="Only show assets that are approved for scheduling",
     ),
-    tag_filter: Optional[str] = typer.Option(
+    tag_filter: str | None = typer.Option(
         None,
         "--tag",
         help="Filter by tag (e.g. sitcom)",

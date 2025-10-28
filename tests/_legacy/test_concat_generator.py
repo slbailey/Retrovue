@@ -7,13 +7,15 @@ and advertisements, including validation and file management.
 
 import os
 import tempfile
+
 import pytest
+
 from retrovue.concat.generator import (
-    generate_concat_file,
-    validate_concat_file,
-    read_concat_file,
     cleanup_concat_file,
     create_episode_with_ads,
+    generate_concat_file,
+    read_concat_file,
+    validate_concat_file,
 )
 
 
@@ -48,7 +50,7 @@ class TestConcatGenerator:
                 assert os.path.exists(concat_path)
                 
                 # Read and verify content
-                with open(concat_path, 'r') as f:
+                with open(concat_path) as f:
                     content = f.read().strip()
                     lines = content.split('\n')
                 
@@ -85,7 +87,7 @@ class TestConcatGenerator:
             
             try:
                 # Read and verify content
-                with open(concat_path, 'r') as f:
+                with open(concat_path) as f:
                     content = f.read().strip()
                     lines = content.split('\n')
                 
@@ -127,7 +129,7 @@ class TestConcatGenerator:
             
             try:
                 # Read and verify content
-                with open(concat_path, 'r') as f:
+                with open(concat_path) as f:
                     content = f.read().strip()
                     lines = content.split('\n')
                 
@@ -174,7 +176,7 @@ class TestConcatGenerator:
             
             try:
                 # Read and verify content
-                with open(concat_path, 'r') as f:
+                with open(concat_path) as f:
                     content = f.read().strip()
                     lines = content.split('\n')
                 
@@ -394,7 +396,7 @@ class TestConcatEdgeCases:
             
             try:
                 # Verify content
-                with open(concat_path, 'r') as f:
+                with open(concat_path) as f:
                     content = f.read().strip()
                     lines = content.split('\n')
                 
@@ -427,7 +429,7 @@ class TestConcatEdgeCases:
             
             try:
                 # Verify content
-                with open(concat_path, 'r') as f:
+                with open(concat_path) as f:
                     content = f.read().strip()
                     lines = content.split('\n')
                 

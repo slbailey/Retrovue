@@ -7,29 +7,27 @@ Provides test execution, performance testing, and debugging tools.
 
 from __future__ import annotations
 
-import typer
 import json
-import time
 import subprocess
 import sys
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, List
-from datetime import datetime, timezone, timedelta
+
+import typer
 
 from ...runtime.clock import MasterClock, TimePrecision
-from ...tests.runtime.test_masterclock_validation import (
-    test_masterclock_monotonic,
-    test_masterclock_timezone_resolution,
-    test_masterclock_logging,
-    test_masterclock_scheduler_alignment,
-    test_masterclock_stability,
-    test_masterclock_consistency,
-    test_masterclock_serialization,
-    run_all_masterclock_tests
-)
 from ...tests.runtime.test_broadcast_day_alignment import (
     test_broadcast_day_alignment,
-    run_broadcast_day_alignment_tests
+)
+from ...tests.runtime.test_masterclock_validation import (
+    test_masterclock_consistency,
+    test_masterclock_logging,
+    test_masterclock_monotonic,
+    test_masterclock_scheduler_alignment,
+    test_masterclock_serialization,
+    test_masterclock_stability,
+    test_masterclock_timezone_resolution,
 )
 
 app = typer.Typer(name="test", help="Testing operations for runtime components")
@@ -102,7 +100,7 @@ def test_masterclock(
         # Timezone conversion test
         typer.echo()
         typer.echo("Timezone Conversion Test:")
-        test_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        test_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
         converted_time = clock.convert_timezone(test_time, "UTC", test_timezone)
         typer.echo(f"  UTC: {test_time}")
         typer.echo(f"  {test_timezone}: {converted_time}")
@@ -480,7 +478,7 @@ def test_masterclock_scheduler_alignment_cmd(
         typer.echo("DST edge cases:")
         for case in results['dst_edge_cases']:
             if case.get('success'):
-                typer.echo(f"  [OK] DST transition handled correctly")
+                typer.echo("  [OK] DST transition handled correctly")
             else:
                 typer.echo(f"  [FAIL] DST transition error: {case.get('error', 'Unknown')}")
         

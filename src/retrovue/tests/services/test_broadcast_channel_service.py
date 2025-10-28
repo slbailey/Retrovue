@@ -8,10 +8,11 @@ These tests validate that:
 - Public API contracts are respected
 """
 
-import pytest
 import uuid
-from sqlalchemy.orm import Session
+
+import pytest
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from retrovue.schedule_manager.broadcast_channel_service import BroadcastChannelService
 from retrovue.schedule_manager.models import BroadcastChannel
@@ -190,7 +191,7 @@ class TestBroadcastChannelServiceListing:
     def test_list_channels_public_success(self, clean_db: Session, sample_broadcast_channel_data):
         """Test successful public channel listing."""
         # Create a channel
-        created = BroadcastChannelService.create_channel(**sample_broadcast_channel_data)
+        BroadcastChannelService.create_channel(**sample_broadcast_channel_data)
         
         # List channels
         result = BroadcastChannelService.list_channels_public()
@@ -393,7 +394,7 @@ class TestBroadcastChannelServiceBusinessLogic:
         # Create two channels with different names
         channel1_data = sample_broadcast_channel_data.copy()
         channel1_data["name"] = "Channel 1"
-        created1 = BroadcastChannelService.create_channel(**channel1_data)
+        BroadcastChannelService.create_channel(**channel1_data)
         
         channel2_data = sample_broadcast_channel_data.copy()
         channel2_data["name"] = "Channel 2"

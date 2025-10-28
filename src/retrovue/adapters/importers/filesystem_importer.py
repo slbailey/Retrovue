@@ -8,13 +8,12 @@ It supports glob patterns and can extract basic metadata from file system attrib
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .base import DiscoveredItem, Importer, ImporterError
+from .base import DiscoveredItem, ImporterError
 
 
 class FilesystemImporter:

@@ -10,7 +10,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 
 @dataclass
@@ -35,14 +34,14 @@ class CatalogAsset:
     """Local file system path to the asset"""
     
     # Metadata
-    tags: Optional[str] = None
+    tags: str | None = None
     """Comma-separated content tags for categorization"""
     
     canonical: bool = True
     """Approval status - only canonical assets are eligible for scheduling"""
     
     # Traceability
-    source_ingest_asset_id: Optional[int] = None
+    source_ingest_asset_id: int | None = None
     """Reference to Library Domain asset for traceability"""
     
     # Timestamps

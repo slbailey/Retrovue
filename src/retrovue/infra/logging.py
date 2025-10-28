@@ -5,13 +5,14 @@ This module configures structlog for JSON logging across the application.
 """
 
 import re
+from typing import Any
+
 import structlog
-from typing import Any, Dict
 
 from .settings import settings
 
 
-def redact_secrets(_, __, event_dict: Dict[str, Any]) -> Dict[str, Any]:
+def redact_secrets(_, __, event_dict: dict[str, Any]) -> dict[str, Any]:
     """Redact sensitive information from log events."""
     # List of keys that contain secrets
     secret_keys = [

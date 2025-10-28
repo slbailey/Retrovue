@@ -3,7 +3,6 @@ Test to ensure no Qt/PySide references remain in the codebase.
 This is a guardrail to prevent Qt from re-entering the codebase.
 """
 
-import pytest
 import subprocess
 import sys
 from pathlib import Path

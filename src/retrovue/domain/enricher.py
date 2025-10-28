@@ -4,11 +4,10 @@ Enricher domain entity for RetroVue.
 Represents a configured enricher instance with type, configuration, and metadata.
 """
 
-import json
 import hashlib
 import time
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -28,8 +27,8 @@ class Enricher:
     type: str
     scope: str
     name: str
-    config: Dict[str, Any]
-    created_at: Optional[str] = None
+    config: dict[str, Any]
+    created_at: str | None = None
     
     def __post_init__(self):
         """Validate enricher data after initialization."""
@@ -47,8 +46,8 @@ class Enricher:
         cls,
         enricher_type: str,
         name: str,
-        config: Optional[Dict[str, Any]] = None,
-        scope: Optional[str] = None
+        config: dict[str, Any] | None = None,
+        scope: str | None = None
     ) -> "Enricher":
         """
         Create a new enricher instance with generated ID.
@@ -91,7 +90,7 @@ class Enricher:
         return "ingest"
     
     @staticmethod
-    def _get_default_config(enricher_type: str) -> Dict[str, Any]:
+    def _get_default_config(enricher_type: str) -> dict[str, Any]:
         """Get default configuration for an enricher type."""
         defaults = {
             "ingest": {},
@@ -99,7 +98,7 @@ class Enricher:
         }
         return defaults.get(enricher_type, {})
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert enricher to dictionary for JSON serialization."""
         return {
             "enricher_id": self.id,

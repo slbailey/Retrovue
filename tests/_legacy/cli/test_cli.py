@@ -6,11 +6,12 @@ validating output schemas and command behavior.
 """
 
 import json
-import pytest
 import sys
 from pathlib import Path
-from typer.testing import CliRunner
 from unittest.mock import Mock, patch
+
+import pytest
+from typer.testing import CliRunner
 
 # Add src to path for imports
 src_path = Path(__file__).parent.parent.parent / "src"

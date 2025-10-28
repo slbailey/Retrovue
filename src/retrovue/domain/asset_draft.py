@@ -10,7 +10,9 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
+from .catalog_asset import CatalogAsset
 
 
 @dataclass
@@ -30,50 +32,50 @@ class AssetDraft:
     """Local file system path to the media file"""
     
     # Basic metadata
-    title: Optional[str] = None
+    title: str | None = None
     """Human-readable title of the content"""
     
-    duration_ms: Optional[int] = None
+    duration_ms: int | None = None
     """Duration in milliseconds"""
     
     # Series/episode information (for TV shows)
-    series_title: Optional[str] = None
+    series_title: str | None = None
     """Series name (for TV episodes)"""
     
-    season_number: Optional[int] = None
+    season_number: int | None = None
     """Season number (for TV episodes)"""
     
-    episode_number: Optional[int] = None
+    episode_number: int | None = None
     """Episode number (for TV episodes)"""
     
-    episode_title: Optional[str] = None
+    episode_title: str | None = None
     """Episode title (for TV episodes)"""
     
     # Technical metadata
-    file_size: Optional[int] = None
+    file_size: int | None = None
     """File size in bytes"""
     
-    video_codec: Optional[str] = None
+    video_codec: str | None = None
     """Video codec information"""
     
-    audio_codec: Optional[str] = None
+    audio_codec: str | None = None
     """Audio codec information"""
     
-    container: Optional[str] = None
+    container: str | None = None
     """Container format"""
     
     # Source information
     source_type: str = "unknown"
     """Type of source (plex, filesystem, etc.)"""
     
-    source_id: Optional[str] = None
+    source_id: str | None = None
     """Source identifier"""
     
-    collection_id: Optional[str] = None
+    collection_id: str | None = None
     """Collection identifier within the source"""
     
     # External system references
-    external_id: Optional[str] = None
+    external_id: str | None = None
     """External system identifier (e.g., Plex rating key)"""
     
     # Enrichment metadata
@@ -92,7 +94,7 @@ class AssetDraft:
         if self.raw_metadata is None:
             self.raw_metadata = {}
     
-    def to_catalog_asset(self) -> "CatalogAsset":
+    def to_catalog_asset(self) -> CatalogAsset:
         """
         Convert this AssetDraft to a CatalogAsset for the broadcast domain.
         

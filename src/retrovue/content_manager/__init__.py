@@ -5,10 +5,15 @@ This package provides the public API for content management services including
 library operations, source management, and content ingestion.
 """
 
-from .library_service import LibraryService
-from .source_service import SourceService, SourceCollectionDTO, ContentSourceDTO, CollectionUpdateDTO
 from .ingest_orchestrator import IngestOrchestrator, IngestReport
-from .path_service import PathResolverService, PathResolutionError
+from .library_service import LibraryService
+from .path_service import PathResolutionError, PathResolverService
+from .source_service import (
+    CollectionUpdateDTO,
+    ContentSourceDTO,
+    SourceCollectionDTO,
+    SourceService,
+)
 
 __all__ = [
     # Services

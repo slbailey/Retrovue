@@ -9,13 +9,11 @@ For detailed documentation, see docs/streaming/mpegts-streaming.md
 """
 
 from __future__ import annotations
+
 import asyncio
 import logging
-import pathlib
-import subprocess
-import threading
 import time
-from typing import AsyncIterator, Generator, Optional
+from collections.abc import AsyncIterator
 
 from retrovue.streaming.ffmpeg_cmd import validate_input_files
 
@@ -39,7 +37,7 @@ class MPEGTSStreamer:
             validate_inputs: Whether to validate input files before streaming
         """
         self.cmd = cmd
-        self.proc: Optional[asyncio.subprocess.Process] = None
+        self.proc: asyncio.subprocess.Process | None = None
         self._running = False
         self.validate_inputs = validate_inputs
     
@@ -190,7 +188,6 @@ class MPEGTSStreamer:
             
         try:
             start_time = time.time()
-            last_activity = start_time
             
             while self._running and self.proc and self.proc.returncode is None:
                 await asyncio.sleep(5.0)  # Check every 5 seconds
@@ -223,7 +220,7 @@ class MPEGTSStreamer:
                     # Wait for graceful termination
                     try:
                         await asyncio.wait_for(self.proc.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         # Force kill if it doesn't terminate gracefully
                         logger.warning("FFmpeg process didn't terminate gracefully, force killing")
                         self.proc.kill()

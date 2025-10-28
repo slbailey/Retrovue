@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from typing import Tuple
 
 
-def run_cli(args: list[str]) -> Tuple[int, str, str]:
+def run_cli(args: list[str]) -> tuple[int, str, str]:
     """
     Run the RetroVue CLI with the given arguments.
     
@@ -22,10 +21,10 @@ def run_cli(args: list[str]) -> Tuple[int, str, str]:
         Tuple of (exit_code, stdout, stderr)
     """
     # Import the actual CLI app
-    from retrovue.cli.main import app
-    
     # Use Typer's built-in testing mechanism
     from typer.testing import CliRunner
+
+    from retrovue.cli.main import app
     
     runner = CliRunner()
     result = runner.invoke(app, args)
@@ -33,7 +32,7 @@ def run_cli(args: list[str]) -> Tuple[int, str, str]:
     return result.exit_code, result.stdout, result.stderr
 
 
-def run_cli_subprocess(args: list[str]) -> Tuple[int, str, str]:
+def run_cli_subprocess(args: list[str]) -> tuple[int, str, str]:
     """
     Alternative CLI runner using subprocess (fallback if Typer testing fails).
     

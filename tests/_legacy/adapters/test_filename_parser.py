@@ -5,8 +5,6 @@ This module tests the pattern recognition and label extraction functionality
 for various filename formats commonly used for media files.
 """
 
-import pytest
-from pathlib import Path
 
 from retrovue.adapters.importers.filesystem_importer import FilesystemImporter
 

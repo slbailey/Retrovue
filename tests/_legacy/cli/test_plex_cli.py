@@ -6,14 +6,13 @@ with proper mocking and validation.
 """
 
 import json
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
-import tempfile
 import os
+import tempfile
+from unittest.mock import Mock, patch
+
+import pytest
 
 from retrovue.cli.commands.plex import app
-from retrovue.domain.entities import Source, Asset, Title, Season, Episode, ProviderRef, EntityType, Provider
 
 
 class TestPlexVerify:

@@ -5,10 +5,9 @@ This module provides helper functions to apply low latency settings
 for video and audio transcoding, optimized for real-time streaming.
 """
 
-from typing import List
 
 
-def apply_low_latency_video(args: List[str], gop: int) -> List[str]:
+def apply_low_latency_video(args: list[str], gop: int) -> list[str]:
     """
     Apply low latency video settings to FFmpeg arguments.
     
@@ -55,7 +54,7 @@ def apply_low_latency_video(args: List[str], gop: int) -> List[str]:
     return result_args
 
 
-def apply_low_latency_audio(args: List[str], bitrate: str = "128k") -> List[str]:
+def apply_low_latency_audio(args: list[str], bitrate: str = "128k") -> list[str]:
     """
     Apply low latency audio settings to FFmpeg arguments.
     

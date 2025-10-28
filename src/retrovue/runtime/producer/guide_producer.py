@@ -1,7 +1,7 @@
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
 
-from .base import Producer, ProducerMode, ContentSegment
+from .base import ContentSegment, Producer, ProducerMode
 
 
 class GuideProducer(Producer):
@@ -14,11 +14,11 @@ class GuideProducer(Producer):
     and guide-specific features for viewer navigation.
     """
 
-    def __init__(self, channel_id: str, configuration: Dict[str, Any]):
+    def __init__(self, channel_id: str, configuration: dict[str, Any]):
         super().__init__(channel_id, ProducerMode.GUIDE, configuration)
         # TODO: Initialize guide producer features
 
-    def start(self, playout_plan: List[Dict[str, Any]], start_at_station_time: datetime) -> bool:
+    def start(self, playout_plan: list[dict[str, Any]], start_at_station_time: datetime) -> bool:
         """Start guide producer with guide features."""
         # TODO: Implement guide producer startup
         # - Initialize guide display features
@@ -44,7 +44,7 @@ class GuideProducer(Producer):
         # - Return success status
         pass
 
-    def get_stream_endpoint(self) -> Optional[str]:
+    def get_stream_endpoint(self) -> str | None:
         """Get guide stream endpoint."""
         # TODO: Implement guide stream endpoint
         # - Return guide stream URL

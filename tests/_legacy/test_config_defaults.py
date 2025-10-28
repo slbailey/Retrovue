@@ -1,16 +1,17 @@
 """Tests for retrovue.config.defaults module."""
 
 import pytest
+
 from retrovue.config.defaults import (
+    ANALYZE_DURATION,
+    CHUNK_SIZE,
+    ENABLE_INITIAL_DISCONTINUITY,
+    ENABLE_RESEND_HEADERS,
+    PROBE_SIZE,
+    READ_FROM_FILES_LIVE,
+    get_default_streaming_flags,
     ts_mux_flags,
     validate_ffmpeg_flags,
-    get_default_streaming_flags,
-    READ_FROM_FILES_LIVE,
-    PROBE_SIZE,
-    ANALYZE_DURATION,
-    ENABLE_RESEND_HEADERS,
-    ENABLE_INITIAL_DISCONTINUITY,
-    CHUNK_SIZE
 )
 
 

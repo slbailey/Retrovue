@@ -5,9 +5,9 @@ Tests the performance characteristics of MasterClock operations,
 particularly timezone caching and conversion efficiency.
 """
 
-import pytest
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+
 from retrovue.runtime.clock import MasterClock, TimePrecision
 
 
@@ -60,7 +60,7 @@ class TestMasterClockPerformance:
     def test_bulk_event_scheduling_performance(self):
         """Test performance of scheduling many events."""
         num_events = 1000
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         
         start_time = time.time()
         
@@ -83,7 +83,7 @@ class TestMasterClockPerformance:
     def test_event_query_performance(self):
         """Test performance of querying scheduled events."""
         # Schedule many events
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         for i in range(100):
             trigger_time = base_time + timedelta(minutes=i)
             self.clock.schedule_event(f"event_{i}", trigger_time, "test", {})
@@ -163,7 +163,7 @@ class TestMasterClockPerformance:
     def test_large_event_cleanup_performance(self):
         """Test performance of cleaning up many events."""
         # Schedule many events
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         for i in range(500):
             trigger_time = base_time + timedelta(seconds=i)
             self.clock.schedule_event(f"event_{i}", trigger_time, "test", {})
@@ -240,7 +240,7 @@ class TestMasterClockScalability:
             elif i % 4 == 1:
                 self.clock.now_local("America/New_York")
             elif i % 4 == 2:
-                self.clock.seconds_since(datetime.now(timezone.utc) - timedelta(seconds=1))
+                self.clock.seconds_since(datetime.now(UTC) - timedelta(seconds=1))
             else:
                 self.clock.get_time_info()
         

@@ -2,10 +2,9 @@
 Channel management commands for RetroVue infrastructure.
 """
 import json
-import typer
-from typing import Optional
 
-from ...infra.uow import session
+import typer
+
 from ...schedule_manager.broadcast_channel_service import BroadcastChannelService
 
 app = typer.Typer(help="Channel management operations for BroadcastChannel")
@@ -122,11 +121,11 @@ def create_cmd(
 @app.command("update")
 def update_cmd(
     id: int = typer.Option(..., "--id", help="Channel ID to update"),
-    name: Optional[str] = typer.Option(None, "--name", help="New channel name"),
-    timezone: Optional[str] = typer.Option(None, "--timezone", help="New timezone"),
-    grid_size_minutes: Optional[int] = typer.Option(None, "--grid-size-minutes", help="New grid size in minutes"),
-    grid_offset_minutes: Optional[int] = typer.Option(None, "--grid-offset-minutes", help="New grid offset in minutes"),
-    rollover_minutes: Optional[int] = typer.Option(None, "--rollover-minutes", help="New rollover minutes"),
+    name: str | None = typer.Option(None, "--name", help="New channel name"),
+    timezone: str | None = typer.Option(None, "--timezone", help="New timezone"),
+    grid_size_minutes: int | None = typer.Option(None, "--grid-size-minutes", help="New grid size in minutes"),
+    grid_offset_minutes: int | None = typer.Option(None, "--grid-offset-minutes", help="New grid offset in minutes"),
+    rollover_minutes: int | None = typer.Option(None, "--rollover-minutes", help="New rollover minutes"),
     active: bool = typer.Option(False, "--active", help="Set channel as active"),
     inactive: bool = typer.Option(False, "--inactive", help="Set channel as inactive"),
 ):

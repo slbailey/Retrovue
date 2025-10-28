@@ -11,9 +11,10 @@ MUST update that contract first. Implementation must then change
 to satisfy the updated tests.
 """
 
-import pytest
 from unittest.mock import patch
 from uuid import uuid4
+
+import pytest
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app

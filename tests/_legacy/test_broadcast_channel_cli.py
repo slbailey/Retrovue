@@ -6,15 +6,10 @@ output formatting, error handling, and exit codes.
 """
 
 import json
-import subprocess
-import sys
 from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 from sqlalchemy.orm import Session
-
-from retrovue.schedule_manager.models import BroadcastChannel
 
 
 class TestBroadcastChannelCLI:

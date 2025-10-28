@@ -4,19 +4,15 @@ Tests for compliance reporting and cross-domain correlation.
 These tests validate that the identity model supports compliance reporting
 and as-run log generation through UUID-based correlation.
 """
+from datetime import UTC, datetime
+
 import pytest
-import uuid
-from datetime import datetime, timezone
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from retrovue.infra.db import Base
 from retrovue.domain.entities import Asset
-from retrovue.schedule_manager.models import (
-    BroadcastChannel, 
-    CatalogAsset,
-    BroadcastPlaylogEvent
-)
+from retrovue.infra.db import Base
+from retrovue.schedule_manager.models import BroadcastChannel, BroadcastPlaylogEvent, CatalogAsset
 
 
 class TestComplianceReporting:
@@ -106,8 +102,8 @@ class TestComplianceReporting:
         db_session.commit()
         
         # Create a playlog event
-        start_time = datetime.now(timezone.utc)
-        end_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
+        end_time = datetime.now(UTC)
         
         playlog_event = BroadcastPlaylogEvent(
             channel_id=channel.id,
@@ -186,7 +182,7 @@ class TestComplianceReporting:
         db_session.commit()
         
         # Create playlog events for the broadcast day
-        base_time = datetime(2024, 1, 1, 6, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 1, 6, 0, 0, tzinfo=UTC)
         catalog_assets = db_session.query(CatalogAsset).all()
         
         for i, catalog_asset in enumerate(catalog_assets):
@@ -227,7 +223,7 @@ class TestComplianceReporting:
         # Verify the compliance report
         assert len(results) == 3
         
-        for i, result in enumerate(results):
+        for _i, result in enumerate(results):
             assert result.channel_name == "TestChannel"
             assert result.source_uuid is not None
             assert result.source_uri is not None
@@ -279,8 +275,8 @@ class TestComplianceReporting:
         assert result.catalog_title == catalog_asset.title
         
         # Verify lineage chain
-        assert result.source_canonical == True
-        assert result.catalog_canonical == True
+        assert result.source_canonical
+        assert result.catalog_canonical
 
 
 class TestMissingUUIDCorrelation:

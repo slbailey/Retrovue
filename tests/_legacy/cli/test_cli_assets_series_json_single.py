@@ -5,13 +5,13 @@ This module tests the new explicit tree structure JSON format when requesting
 a specific series, ensuring correct numeric types and sorting.
 """
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app
-from retrovue.domain.entities import Asset, ProviderRef, EntityType
+from retrovue.domain.entities import Asset, EntityType, ProviderRef
 
 
 class TestCLIAssetsSeriesJsonSingle:
