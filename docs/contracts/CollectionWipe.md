@@ -52,3 +52,4 @@ retrovue collection wipe channels --confirm
 All CLI commands must have consistent, human-friendly syntax and appear in `CONTRIBUTING.md` under the "Operator Commands" section.
 
 
+
