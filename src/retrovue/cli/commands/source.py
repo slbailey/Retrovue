@@ -808,9 +808,25 @@ def delete_source(
     )
     
     # Production safety check
-    if not test_db:
+    if not test_db and not force:
+        import os
+
         from ...infra.settings import settings
-        if settings.database_url and "test" not in settings.database_url.lower():
+        
+        # Check if this looks like a production database
+        is_production = True
+        db_url = settings.database_url or ""
+        
+        # Consider it a test database if:
+        # 1. URL contains "test" 
+        # 2. TEST_DATABASE_URL environment variable is set
+        # 3. Database name contains "test", "dev", "local", or "sandbox"
+        if ("test" in db_url.lower() or 
+            os.getenv("TEST_DATABASE_URL") or
+            any(word in db_url.lower() for word in ["test", "dev", "local", "sandbox"])):
+            is_production = False
+        
+        if is_production:
             typer.echo("⚠️  WARNING: This appears to be a production database!", err=True)
             typer.echo("", err=True)
             typer.echo("   To delete sources from production:", err=True)
@@ -820,6 +836,10 @@ def delete_source(
             typer.echo("   4. Use --force flag to bypass this safety check", err=True)
             typer.echo("", err=True)
             typer.echo("   Example: retrovue source delete 'source-name' --force", err=True)
+            typer.echo("", err=True)
+            typer.echo("   To mark as test database:", err=True)
+            typer.echo("   - Set TEST_DATABASE_URL environment variable", err=True)
+            typer.echo("   - Use database name with 'test', 'dev', 'local', or 'sandbox'", err=True)
             raise typer.Exit(1)
     
     try:
