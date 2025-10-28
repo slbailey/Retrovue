@@ -37,7 +37,7 @@ This naming convention:
 
 | Component              | Purpose                                            | Path Pattern                                          |
 | ---------------------- | -------------------------------------------------- | ----------------------------------------------------- |
-| **Contract Document**  | Defines full behavior, inputs, and guarantees      | `docs/contracts/{Noun}{Verb}Contract.md`              |
+| **Contract Document**  | Defines full behavior, inputs, and guarantees      | `docs/contracts/resources/{Noun}{Verb}Contract.md`              |
 | **CLI Contract Test**  | Validates user-facing CLI interaction              | `tests/contracts/test_{noun}_{verb}_contract.py`      |
 | **Data Contract Test** | Validates persistence, integrity, and side effects | `tests/contracts/test_{noun}_{verb}_data_contract.py` |
 

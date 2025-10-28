@@ -29,7 +29,7 @@ This flow ensures that CLI operations maintain consistency with data state while
 
 ### CLI Domain
 
-- **Contract:** All CLI command contracts (`docs/contracts/*Contract.md`)
+- **Contract:** All CLI command contracts (`docs/contracts/resources/*Contract.md`)
 - **Interface:** Command-line interface, user interaction, output formatting
 - **Responsibilities:** Command validation, user feedback, error reporting, output formatting
 

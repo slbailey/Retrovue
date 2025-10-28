@@ -1,6 +1,6 @@
 # Cross-Domain Guarantees
 
-> This standard extends the global contract methodology defined in [docs/contracts/README.md](../../contracts/README.md), ensuring consistent governance across all domain interactions.
+> This standard extends the global contract methodology defined in [docs/contracts/resources/README.md](../README.md), ensuring consistent governance across all domain interactions.
 
 ## 📜 House Standard: Cross-Domain Guarantees
 
