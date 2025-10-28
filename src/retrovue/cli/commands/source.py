@@ -985,7 +985,6 @@ def discover_collections(
                 raise typer.Exit(1)
                     
         except Exception as e:
-            db.rollback()
             typer.echo(f"Error discovering collections: {e}", err=True)
             raise typer.Exit(1)
 

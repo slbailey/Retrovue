@@ -213,8 +213,7 @@ class TestSourceDiscoverDataContract:
                 
                 assert result.exit_code == 1
                 assert "Error discovering collections: Database error" in result.stderr
-                # Verify rollback was called
-                mock_db.rollback.assert_called_once()
+                # Note: Rollback is handled automatically by the UoW context manager
 
     def test_source_discover_duplicate_external_id_prevention(self):
         """
