@@ -17,7 +17,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from ...domain.asset_draft import AssetDraft
-from .base import ImporterError
+from .base import BaseImporter, DiscoveredItem, ImporterConfig, ImporterError, ImporterConfigurationError, ImporterConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -622,7 +622,7 @@ class PlexClient:
             raise ImporterError(f"Failed to fetch season episodes: {e}") from e
 
 
-class PlexImporter:
+class PlexImporter(BaseImporter):
     """
     Plex importer plugin following the plugin contract.
     
@@ -640,9 +640,262 @@ class PlexImporter:
             base_url: Plex server base URL
             token: Plex authentication token
         """
+        super().__init__(base_url=base_url, token=token)
         self.base_url = base_url
         self.token = token
         self.client = PlexClient(base_url, token)
+    
+    def discover(self) -> list[DiscoveredItem]:
+        """
+        Discover content items from the Plex server.
+        
+        Returns:
+            List of discovered content items
+            
+        Raises:
+            ImporterError: If discovery fails
+            ImporterConnectionError: If cannot connect to Plex server
+        """
+        try:
+            # Test connection first
+            if not self._test_connection():
+                raise ImporterConnectionError("Cannot connect to Plex server")
+            
+            discovered_items = []
+            libraries = self.client.get_libraries()
+            
+            for library in libraries:
+                try:
+                    items = self.client.get_library_items(library["key"])
+                    for item in items:
+                        discovered_item = self._create_discovered_item(item, library)
+                        if discovered_item:
+                            discovered_items.append(discovered_item)
+                except Exception as e:
+                    logger.warning(f"Failed to discover items from library {library['title']}: {e}")
+                    continue
+            
+            return discovered_items
+            
+        except Exception as e:
+            raise ImporterError(f"Failed to discover content from Plex: {str(e)}") from e
+    
+    @classmethod
+    def get_config_schema(cls) -> ImporterConfig:
+        """
+        Return the configuration schema for the Plex importer.
+        
+        Returns:
+            ImporterConfig object defining the configuration schema
+        """
+        return ImporterConfig(
+            required_params=[
+                {
+                    "name": "base_url",
+                    "description": "Base URL for the Plex server (e.g., http://192.168.1.100:32400)"
+                },
+                {
+                    "name": "token",
+                    "description": "Plex authentication token"
+                }
+            ],
+            optional_params=[],
+            description="Connect to Plex Media Server instances and discover content from their libraries"
+        )
+    
+    def _validate_parameter_types(self) -> None:
+        """
+        Validate configuration parameter types and values.
+        
+        Raises:
+            ImporterConfigurationError: If configuration parameters are invalid
+        """
+        # Validate base_url
+        base_url = self._safe_get_config("base_url")
+        if not base_url or not isinstance(base_url, str):
+            raise ImporterConfigurationError("base_url configuration parameter must be a non-empty string")
+        
+        if not base_url.startswith(("http://", "https://")):
+            raise ImporterConfigurationError("base_url configuration parameter must be a valid HTTP/HTTPS URL")
+        
+        # Validate token
+        token = self._safe_get_config("token")
+        if not token or not isinstance(token, str):
+            raise ImporterConfigurationError("token configuration parameter must be a non-empty string")
+    
+    def _get_examples(self) -> list[str]:
+        """
+        Get example usage strings for the Plex importer.
+        
+        Returns:
+            List of example usage strings
+        """
+        return [
+            'retrovue source add --type plex --name "My Plex Server" --base-url "http://192.168.1.100:32400" --token "your-plex-token"'
+        ]
+    
+    def _get_cli_params(self) -> dict[str, str]:
+        """
+        Get CLI parameter descriptions for the Plex importer.
+        
+        Returns:
+            Dictionary mapping parameter names to descriptions
+        """
+        return {
+            "name": "Friendly name for the Plex server",
+            "base_url": "Base URL for the Plex server (e.g., http://192.168.1.100:32400)",
+            "token": "Plex authentication token"
+        }
+    
+    def list_asset_groups(self) -> list[dict[str, any]]:
+        """
+        List the asset groups (libraries) available from this Plex source.
+        
+        Returns:
+            List of dictionaries containing library information
+        """
+        try:
+            libraries = self.client.get_libraries()
+            
+            asset_groups = []
+            for lib in libraries:
+                # Count items in this library
+                try:
+                    items = self.client.get_library_items(lib["key"])
+                    asset_count = len(items)
+                except Exception:
+                    asset_count = 0
+                
+                asset_groups.append({
+                    "id": lib["key"],
+                    "name": lib["title"],
+                    "path": f"plex://{lib['key']}",
+                    "enabled": True,  # Default to enabled, actual state managed by database
+                    "asset_count": asset_count,
+                    "type": lib.get("type", "unknown")
+                })
+            
+            return asset_groups
+            
+        except Exception as e:
+            raise ImporterError(f"Failed to list asset groups: {str(e)}") from e
+    
+    def enable_asset_group(self, group_id: str) -> bool:
+        """
+        Enable an asset group (library) for content discovery.
+        
+        Args:
+            group_id: Library key
+            
+        Returns:
+            True if successfully enabled, False otherwise
+        """
+        try:
+            # For Plex, we just verify the library exists
+            libraries = self.client.get_libraries()
+            return any(lib["key"] == group_id for lib in libraries)
+            
+        except Exception as e:
+            logger.warning(f"Failed to enable asset group {group_id}: {e}")
+            return False
+    
+    def disable_asset_group(self, group_id: str) -> bool:
+        """
+        Disable an asset group (library) from content discovery.
+        
+        Args:
+            group_id: Library key
+            
+        Returns:
+            True if successfully disabled, False otherwise
+        """
+        # For Plex, disabling is handled at the database level
+        # This method just confirms the operation
+        return True
+    
+    def _test_connection(self) -> bool:
+        """
+        Test connection to the Plex server.
+        
+        Returns:
+            True if connection is successful, False otherwise
+        """
+        try:
+            libraries = self.client.get_libraries()
+            return len(libraries) >= 0  # Even empty libraries list means connection works
+        except Exception:
+            return False
+    
+    def _create_discovered_item(self, item: dict[str, Any], library: dict[str, Any]) -> DiscoveredItem | None:
+        """
+        Create a DiscoveredItem from a Plex item.
+        
+        Args:
+            item: Plex item information
+            library: Library information
+            
+        Returns:
+            DiscoveredItem or None if creation fails
+        """
+        try:
+            # Extract file path
+            plex_file_path = item.get("file_path", "")
+            if not plex_file_path:
+                return None
+            
+            # Create Plex URI
+            path_uri = f"plex://{item.get('ratingKey', 'unknown')}"
+            
+            # Extract metadata
+            title = item.get("title", "Unknown Title")
+            year = item.get("year")
+            duration = item.get("duration")
+            file_size = item.get("fileSize")
+            
+            # Extract TV show hierarchy information
+            series_title = item.get("show_title")
+            season_number = item.get("season_index")
+            episode_number = item.get("episode_index")
+            
+            # Create raw labels
+            raw_labels = []
+            raw_labels.append(f"title:{title}")
+            
+            if year:
+                raw_labels.append(f"year:{year}")
+            
+            if series_title:
+                raw_labels.append(f"series:{series_title}")
+            
+            if season_number:
+                raw_labels.append(f"season:{season_number}")
+            
+            if episode_number:
+                raw_labels.append(f"episode:{episode_number}")
+            
+            raw_labels.append(f"library:{library['title']}")
+            raw_labels.append(f"type:{item.get('type', 'unknown')}")
+            
+            # Convert updatedAt to datetime if available
+            last_modified = None
+            if item.get("updatedAt"):
+                try:
+                    last_modified = datetime.fromtimestamp(int(item["updatedAt"]))
+                except (ValueError, TypeError):
+                    pass
+            
+            return DiscoveredItem(
+                path_uri=path_uri,
+                provider_key=item.get("ratingKey"),
+                raw_labels=raw_labels,
+                last_modified=last_modified,
+                size=int(file_size) if file_size else None,
+                hash_sha256=None  # Plex doesn't provide file hashes
+            )
+            
+        except Exception as e:
+            logger.warning(f"Failed to create discovered item from Plex item {item.get('ratingKey', 'unknown')}: {e}")
+            return None
     
     def list_collections(self, source_config: dict[str, Any]) -> list[dict[str, Any]]:
         """
@@ -800,34 +1053,3 @@ class PlexImporter:
             logger.warning(f"Failed to create asset draft: {e}")
             return None
     
-    def get_parameter_spec(self) -> dict[str, Any]:
-        """
-        Get parameter specification for CLI help.
-        
-        Returns:
-            Dictionary containing parameter specification
-        """
-        return {
-            "description": "Connect to Plex Media Server instances and discover content from their libraries",
-            "required_params": [
-                {
-                    "name": "base_url",
-                    "type": "string",
-                    "description": "Base URL for the Plex server (e.g., http://192.168.1.100:32400)"
-                },
-                {
-                    "name": "token",
-                    "type": "string", 
-                    "description": "Plex authentication token"
-                }
-            ],
-            "optional_params": [],
-            "examples": [
-                'retrovue source add --type plex --name "My Plex Server" --base-url "http://192.168.1.100:32400" --token "your-plex-token"'
-            ],
-            "cli_params": {
-                "name": "Friendly name for the Plex server",
-                "base_url": "Base URL for the Plex server (e.g., http://192.168.1.100:32400)",
-                "token": "Plex authentication token"
-            }
-        }

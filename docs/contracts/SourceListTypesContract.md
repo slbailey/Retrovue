@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the behavioral contract for listing available source types from the importer registry. This contract ensures consistent enumeration of source types derived from discovered importer implementations.
+Define the behavioral contract for listing available source types from the importer registry. This contract ensures consistent enumeration of source types derived from discovered importer implementations that comply with the ImporterInterface runtime contract.
 
 ---
 
@@ -26,15 +26,16 @@ retrovue source list-types [--json] [--test-db] [--dry-run]
 
 - **Non-destructive operation**: Only lists available source types
 - **Idempotent**: Safe to run multiple times
-- **Dry-run support**: Preview enumeration without external effects
+- **Dry-run support**: Preview enumeration without external effects. In --dry-run mode, the command MAY use an in-memory view of the registry state instead of re-scanning the filesystem.
 - **Test isolation**: `--test-db` prevents external system calls
 
 ### Source Type Derivation
 
-- Source types derived from importer filenames
-- Registry maintains mapping from source types to importers
-- Validation of source type uniqueness
-- Reporting of source type availability
+- Source types derived from importer filenames following `{source_type}_importer.py` pattern
+- Registry maintains mapping from source types to importer implementations
+- All importers must implement `ImporterInterface` runtime contract
+- Validation of source type uniqueness and interface compliance
+- Reporting of source type availability and interface status
 
 ---
 
@@ -72,19 +73,25 @@ Would list 3 source types from registry:
       "name": "plex",
       "importer_file": "plex_importer.py",
       "display_name": "Plex Media Server",
-      "available": true
+      "available": true,
+      "interface_compliant": true,
+      "status": "valid"
     },
     {
       "name": "filesystem",
       "importer_file": "filesystem_importer.py",
       "display_name": "Local Filesystem",
-      "available": true
+      "available": true,
+      "interface_compliant": true,
+      "status": "valid"
     },
     {
       "name": "jellyfin",
       "importer_file": "jellyfin_importer.py",
       "display_name": "Jellyfin Media Server",
-      "available": true
+      "available": true,
+      "interface_compliant": true,
+      "status": "valid"
     }
   ],
   "total": 3
@@ -106,14 +113,16 @@ Would list 3 source types from registry:
 
 1. **Source Type Discovery**:
 
-   - Registry scans discovered importers
-   - Extracts source types from importer filenames
-   - Validates source type uniqueness
+   - Registry scans discovered importers from `adapters/importers/` directory
+   - Extracts source types from importer filenames following `{source_type}_importer.py` pattern
+   - Validates source type uniqueness and interface compliance
+   - Checks `ImporterInterface` implementation for each discovered importer
 
 2. **Mapping Validation**:
    - Verifies source type to importer mapping
-   - Reports availability status
+   - Reports availability status and interface compliance
    - Maintains registry state consistency
+   - Validates configuration schema compliance
 
 ### Side Effects
 
@@ -125,25 +134,25 @@ Would list 3 source types from registry:
 
 ## Behavior Contract Rules (B-#)
 
-- **B-1:** The command MUST return source types derived from discovered importer filenames.
-- **B-2:** The command MUST validate source type uniqueness before reporting.
-- **B-3:** When `--json` is supplied, output MUST include fields `"status"`, `"source_types"`, and `"total"` with appropriate data structures.
+- **B-1:** The command MUST return source types derived from discovered importer filenames following `{source_type}_importer.py` pattern.
+- **B-2:** The command MUST validate source type uniqueness and interface compliance before reporting.
+- **B-3:** When `--json` is supplied, output MUST include fields `"status"`, `"source_types"`, and `"total"` with appropriate data structures including interface compliance status.
 - **B-4:** On enumeration failure (registry error), the command MUST exit with code `1` and print a human-readable error message.
-- **B-5:** The `--dry-run` flag MUST show what would be listed without executing external validation.
+- **B-5:** The `--dry-run` flag MUST show what would be listed without executing external validation. In --dry-run mode, the command MAY use an in-memory view of the registry state instead of re-scanning the filesystem. It MUST still produce deterministic output.
 - **B-6:** Source type enumeration MUST be deterministic - the same registry state MUST produce the same enumeration results.
-- **B-7:** The command MUST support both valid and invalid importer files, reporting availability appropriately.
+- **B-7:** The command MUST support both valid and invalid importer files, reporting availability and interface compliance appropriately.
 - **B-8:** Empty enumeration results (no source types) MUST return exit code `0` with message "No source types available".
 
 ---
 
 ## Data Contract Rules (D-#)
 
-- **D-1:** Registry MUST maintain mapping from source types to importer implementations.
-- **D-2:** Source type mapping MUST be derived automatically from importer filenames.
+- **D-1:** Registry MUST maintain mapping from source types to importer implementations that implement `ImporterInterface`.
+- **D-2:** Source type mapping MUST be derived automatically from importer filenames following `{source_type}_importer.py` pattern.
 - **D-3:** Multiple importers claiming the same source type MUST cause registration failure with clear error message.
 - **D-4:** Source type enumeration MUST NOT modify external systems or database tables.
 - **D-5:** Registry state queries MUST be read-only during enumeration.
-- **D-6:** Source type availability MUST be validated against importer implementation status.
+- **D-6:** Source type availability MUST be validated against importer implementation status and `ImporterInterface` compliance.
 - **D-7:** Enumeration operations MUST be atomic and consistent.
 - **D-8:** Source type mapping MUST be maintained atomically during registry updates.
 
@@ -167,8 +176,9 @@ Would list 3 source types from registry:
 ### Validation Errors
 
 - Duplicate source types: "Error: Multiple importers claim source type 'plex'"
-- Invalid filename pattern: "Error: Importer file 'plex.py' does not follow naming pattern"
-- Interface violation: "Error: Importer 'plex' does not implement required interface"
+- Invalid filename pattern: "Error: Importer file 'plex.py' does not follow naming pattern '{source_type}\_importer.py'"
+- Interface violation: "Error: Importer 'plex' does not implement ImporterInterface"
+- Configuration schema error: "Error: Importer 'plex' has invalid configuration schema"
 
 ---
 
@@ -231,7 +241,7 @@ retrovue source list-types
 
 ## See Also
 
-- [Importer List](ImporterList.md) - List all discovered importers
-- [Importer Show](ImporterShow.md) - Detailed importer information
-- [Importer Validate](ImporterValidate.md) - Interface validation
-- [Unit of Work](UnitOfWork.md) - Registry state management
+- [Source Add](SourceAddContract.md) - Creating sources with importer validation
+- [Source Discover](SourceDiscoverContract.md) - Discovering collections using importers
+- [Source Ingest](SourceIngestContract.md) - Ingesting content using importers
+- [Unit of Work](UnitOfWorkContract.md) - Registry state management

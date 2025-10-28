@@ -10,11 +10,11 @@ This document provides an overview of all Enricher domain testing contracts. Ind
 
 The Enricher domain is covered by the following specific contracts:
 
-- **[Enricher List Types](EnricherListTypes.md)**: Listing available enricher types
-- **[Enricher Add](EnricherAdd.md)**: Creating new enricher instances
-- **[Enricher List](EnricherList.md)**: Listing configured enricher instances
-- **[Enricher Update](EnricherUpdate.md)**: Updating enricher configurations
-- **[Enricher Remove](EnricherRemove.md)**: Removing enricher instances
+- **[Enricher List Types](EnricherListTypesContract.md)**: Listing available enricher types
+- **[Enricher Add](EnricherAddContract.md)**: Creating new enricher instances
+- **[Enricher List](EnricherListContract.md)**: Listing configured enricher instances
+- **[Enricher Update](EnricherUpdateContract.md)**: Updating enricher configurations
+- **[Enricher Remove](EnricherRemoveContract.md)**: Removing enricher instances
 
 ---
 
@@ -123,5 +123,5 @@ Each Enricher contract must have exactly two test files:
 
 - [Enricher Domain Documentation](../domain/Enricher.md) - Core domain model and operations
 - [Enricher Development Guide](../developer/Enricher.md) - Implementation details and development guide
-- [Source Contracts](Source.md) - Source-level operations that use enrichers
+- [Source Contracts](SourceContract.md) - Source-level operations that use enrichers
 - [CLI Contract](README.md) - General CLI command standards

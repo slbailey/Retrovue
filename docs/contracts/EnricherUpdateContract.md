@@ -309,7 +309,7 @@ retrovue enricher update enricher-metadata-b2c3d4e5 \
 
 ## See Also
 
-- [Enricher List Types](EnricherListTypes.md) - List available enricher types
-- [Enricher Add](EnricherAdd.md) - Create enricher instances
-- [Enricher List](EnricherList.md) - List configured enricher instances
-- [Enricher Remove](EnricherRemove.md) - Remove enricher instances
+- [Enricher List Types](EnricherListTypesContract.md) - List available enricher types
+- [Enricher Add](EnricherAddContract.md) - Create enricher instances
+- [Enricher List](EnricherListContract.md) - List configured enricher instances
+- [Enricher Remove](EnricherRemoveContract.md) - Remove enricher instances

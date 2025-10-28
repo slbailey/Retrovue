@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document provides an overview of all Source domain testing contracts. Individual Source operations are covered by specific behavioral contracts that define exact CLI syntax, safety expectations, and data effects.
+This document provides an overview of all Source domain testing contracts. Individual Source operations are covered by specific behavioral contracts that define exact CLI syntax, safety expectations, and data effects. All source operations must use importers that implement the BaseImporter interface correctly.
 
 ---
 
@@ -10,10 +10,10 @@ This document provides an overview of all Source domain testing contracts. Indiv
 
 The Source domain is covered by the following specific contracts:
 
-- **[Source Add](SourceAdd.md)**: Creating new content sources
-- **[Source Delete](SourceDelete.md)**: Deleting sources with cascade cleanup
-- **[Source Discover](SourceDiscover.md)**: Discovering collections from sources
-- **[Source Ingest](SourceIngest.md)**: Processing collections for asset discovery
+- **[Source Add](SourceAddContract.md)**: Creating new content sources
+- **[Source Delete](SourceDeleteContract.md)**: Deleting sources with cascade cleanup
+- **[Source Discover](SourceDiscoverContract.md)**: Discovering collections from sources
+- **[Source Ingest](SourceIngestContract.md)**: Processing collections for asset discovery
 - **Source Update** (planned): Updating source configurations
 - **Source Enrichers** (planned): Managing metadata enrichers
 
@@ -41,6 +41,8 @@ Each Source operation follows the standard contract pattern:
 - **Mock-first validation:** All operations must first be tested using mock/test databases
 - **Idempotent operations:** Source operations should be safely repeatable
 - **Clear error handling:** Failed operations must provide clear diagnostic information
+- **Importer interface compliance:** All source operations must use importers that implement BaseImporter interface correctly
+- **Configuration schema validation:** Source configurations must be validated against importer's get_config_schema() method
 
 ---
 
@@ -65,6 +67,7 @@ All Source contracts follow these safety patterns:
 - Destructive operations require confirmation prompts
 - `--force` flag skips confirmations (use with caution)
 - Clear indication of cascade effects and data impact
+- Importer interface compliance verification before operations
 
 ---
 
@@ -90,6 +93,6 @@ Each Source contract must have exactly two test files:
 ## See Also
 
 - [Source Domain Documentation](../domain/Source.md) - Core domain model and operations
-- [Collection Wipe](CollectionWipe.md) - Reference implementation pattern
+- [Collection Wipe](CollectionWipeContract.md) - Reference implementation pattern
 - [CLI Contract](README.md) - General CLI command standards
-- [Unit of Work](UnitOfWork.md) - Transaction management requirements
+- [Unit of Work](UnitOfWorkContract.md) - Transaction management requirements

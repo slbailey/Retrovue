@@ -13,12 +13,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .base import DiscoveredItem, ImporterError
+from .base import BaseImporter, DiscoveredItem, ImporterConfig, ImporterError, ImporterConfigurationError
 
 
-class FilesystemImporter:
+class FilesystemImporter(BaseImporter):
     """
-    Importer = Adapter. Talks to external system. Discovers content. Does not persist.
+    Filesystem importer for discovering content from local file systems.
     
     This importer scans specified directories for media files and returns them
     as discovered items with file:// URIs and basic metadata.
@@ -44,6 +44,14 @@ class FilesystemImporter:
             include_hidden: Whether to include hidden files and directories
             calculate_hash: Whether to calculate SHA-256 hash of files
         """
+        super().__init__(
+            source_name=source_name,
+            root_paths=root_paths,
+            glob_patterns=glob_patterns,
+            include_hidden=include_hidden,
+            calculate_hash=calculate_hash
+        )
+        
         self.source_name = source_name
         self.root_paths = root_paths or ["."]
         self.glob_patterns = glob_patterns or [
@@ -86,6 +94,182 @@ class FilesystemImporter:
             
         except Exception as e:
             raise ImporterError(f"Failed to discover files: {str(e)}") from e
+    
+    @classmethod
+    def get_config_schema(cls) -> ImporterConfig:
+        """
+        Return the configuration schema for the filesystem importer.
+        
+        Returns:
+            ImporterConfig object defining the configuration schema
+        """
+        return ImporterConfig(
+            required_params=[
+                {
+                    "name": "source_name",
+                    "description": "Human-readable name for this filesystem source"
+                },
+                {
+                    "name": "root_paths",
+                    "description": "List of root directories to scan"
+                }
+            ],
+            optional_params=[
+                {
+                    "name": "glob_patterns",
+                    "description": "List of glob patterns to match files",
+                    "default": "Common video extensions"
+                },
+                {
+                    "name": "include_hidden",
+                    "description": "Whether to include hidden files and directories",
+                    "default": "false"
+                },
+                {
+                    "name": "calculate_hash",
+                    "description": "Whether to calculate SHA-256 hash of files",
+                    "default": "true"
+                }
+            ],
+            description="Scan local filesystem directories for media files and discover content"
+        )
+    
+    def _validate_parameter_types(self) -> None:
+        """
+        Validate configuration parameter types and values.
+        
+        Raises:
+            ImporterConfigurationError: If configuration parameters are invalid
+        """
+        # Validate source_name
+        source_name = self._safe_get_config("source_name")
+        if not source_name or not isinstance(source_name, str):
+            raise ImporterConfigurationError("source_name configuration parameter must be a non-empty string")
+        
+        # Validate root_paths
+        root_paths = self._safe_get_config("root_paths")
+        if not root_paths or not isinstance(root_paths, list):
+            raise ImporterConfigurationError("root_paths configuration parameter must be a non-empty list")
+        
+        for path in root_paths:
+            if not isinstance(path, str):
+                raise ImporterConfigurationError("All root_paths must be strings")
+        
+        # Validate glob_patterns if provided
+        glob_patterns = self._safe_get_config("glob_patterns")
+        if glob_patterns is not None:
+            if not isinstance(glob_patterns, list):
+                raise ImporterConfigurationError("glob_patterns configuration parameter must be a list")
+            for pattern in glob_patterns:
+                if not isinstance(pattern, str):
+                    raise ImporterConfigurationError("All glob_patterns must be strings")
+        
+        # Validate include_hidden
+        include_hidden = self._safe_get_config("include_hidden", False)
+        if not isinstance(include_hidden, bool):
+            raise ImporterConfigurationError("include_hidden configuration parameter must be a boolean")
+        
+        # Validate calculate_hash
+        calculate_hash = self._safe_get_config("calculate_hash", True)
+        if not isinstance(calculate_hash, bool):
+            raise ImporterConfigurationError("calculate_hash configuration parameter must be a boolean")
+    
+    def _get_examples(self) -> list[str]:
+        """
+        Get example usage strings for the filesystem importer.
+        
+        Returns:
+            List of example usage strings
+        """
+        return [
+            'retrovue source add --type filesystem --name "My Media Library" --base-path "/media/movies"',
+            'retrovue source add --type filesystem --name "Commercials" --base-path "T:\\Commercials"',
+            'retrovue source add --type filesystem --name "Media Library" --base-path "/media" --enrichers "ffprobe"'
+        ]
+    
+    def _get_cli_params(self) -> dict[str, str]:
+        """
+        Get CLI parameter descriptions for the filesystem importer.
+        
+        Returns:
+            Dictionary mapping parameter names to descriptions
+        """
+        return {
+            "name": "Friendly name for the filesystem source",
+            "base_path": "Base filesystem path to scan"
+        }
+    
+    def list_asset_groups(self) -> list[dict[str, any]]:
+        """
+        List the asset groups (directories) available from this filesystem source.
+        
+        Returns:
+            List of dictionaries containing directory information
+        """
+        try:
+            asset_groups = []
+            
+            for root_path in self.root_paths:
+                root = Path(root_path).resolve()
+                
+                if not root.exists() or not root.is_dir():
+                    continue
+                
+                # For filesystem, each root path is an asset group
+                # Count files in this directory
+                file_count = 0
+                for pattern in self.glob_patterns:
+                    try:
+                        file_count += len([f for f in root.glob(pattern) if self._should_include_file(f)])
+                    except Exception:
+                        continue
+                
+                asset_groups.append({
+                    "id": str(root),
+                    "name": root.name,
+                    "path": str(root),
+                    "enabled": True,  # Default to enabled, actual state managed by database
+                    "asset_count": file_count,
+                    "type": "directory"
+                })
+            
+            return asset_groups
+            
+        except Exception as e:
+            raise ImporterError(f"Failed to list asset groups: {str(e)}") from e
+    
+    def enable_asset_group(self, group_id: str) -> bool:
+        """
+        Enable an asset group (directory) for content discovery.
+        
+        Args:
+            group_id: Directory path
+            
+        Returns:
+            True if successfully enabled, False otherwise
+        """
+        try:
+            # For filesystem, we just verify the directory exists
+            path = Path(group_id)
+            return path.exists() and path.is_dir()
+            
+        except Exception as e:
+            print(f"Failed to enable asset group {group_id}: {e}")
+            return False
+    
+    def disable_asset_group(self, group_id: str) -> bool:
+        """
+        Disable an asset group (directory) from content discovery.
+        
+        Args:
+            group_id: Directory path
+            
+        Returns:
+            True if successfully disabled, False otherwise
+        """
+        # For filesystem, disabling is handled at the database level
+        # This method just confirms the operation
+        return True
     
     def _should_include_file(self, file_path: Path) -> bool:
         """
@@ -174,7 +358,7 @@ class FilesystemImporter:
         
         return hash_sha256.hexdigest()
     
-    def _extract_filename_labels(self, filename: str) -> dict[str, Any]:
+    def _extract_filename_labels(self, filename: str) -> list[str]:
         """
         Extract structured labels from filename using pattern recognition.
         
@@ -182,23 +366,23 @@ class FilesystemImporter:
             filename: Name of the file
             
         Returns:
-            Dictionary of extracted labels with confidence indicators
+            List of extracted labels
         """
         # Remove extension
         name_without_ext = Path(filename).stem
         
-        # Initialize labels dictionary
-        labels = {}
+        # Initialize labels list
+        labels = []
         
         # Pattern 1: Show.Name.S02E05.*
         # Matches: Breaking.Bad.S02E05.720p.mkv
         tv_pattern1 = re.compile(r'^(.+?)\.S(\d{1,2})E(\d{1,2})(?:\.|$)', re.IGNORECASE)
         match = tv_pattern1.match(name_without_ext)
         if match:
-            labels['title_guess'] = match.group(1).replace('.', ' ').strip()
-            labels['season'] = int(match.group(2))
-            labels['episode'] = int(match.group(3))
-            labels['type'] = 'tv'
+            labels.append(f"title:{match.group(1).replace('.', ' ').strip()}")
+            labels.append(f"season:{int(match.group(2))}")
+            labels.append(f"episode:{int(match.group(3))}")
+            labels.append("type:tv")
             return labels
         
         # Pattern 2: Show Name - S2E5 - Episode Title.*
@@ -206,11 +390,11 @@ class FilesystemImporter:
         tv_pattern2 = re.compile(r'^(.+?)\s*-\s*S(\d{1,2})E(\d{1,2})\s*-\s*(.+?)(?:\s*-\s*|$)', re.IGNORECASE)
         match = tv_pattern2.match(name_without_ext)
         if match:
-            labels['title_guess'] = match.group(1).strip()
-            labels['season'] = int(match.group(2))
-            labels['episode'] = int(match.group(3))
-            labels['episode_title'] = match.group(4).strip()
-            labels['type'] = 'tv'
+            labels.append(f"title:{match.group(1).strip()}")
+            labels.append(f"season:{int(match.group(2))}")
+            labels.append(f"episode:{int(match.group(3))}")
+            labels.append(f"episode_title:{match.group(4).strip()}")
+            labels.append("type:tv")
             return labels
         
         # Pattern 3: Movie.Name.1987.*
@@ -218,9 +402,9 @@ class FilesystemImporter:
         movie_pattern = re.compile(r'^(.+?)\.(\d{4})\.', re.IGNORECASE)
         match = movie_pattern.match(name_without_ext)
         if match:
-            labels['title_guess'] = match.group(1).replace('.', ' ').strip()
-            labels['year'] = int(match.group(2))
-            labels['type'] = 'movie'
+            labels.append(f"title:{match.group(1).replace('.', ' ').strip()}")
+            labels.append(f"year:{int(match.group(2))}")
+            labels.append("type:movie")
             return labels
         
         # Pattern 4: Show Name (Year) - S01E01.*
@@ -228,11 +412,11 @@ class FilesystemImporter:
         tv_pattern3 = re.compile(r'^(.+?)\s*\((\d{4})\)\s*-\s*S(\d{1,2})E(\d{1,2})', re.IGNORECASE)
         match = tv_pattern3.match(name_without_ext)
         if match:
-            labels['title_guess'] = match.group(1).strip()
-            labels['year'] = int(match.group(2))
-            labels['season'] = int(match.group(3))
-            labels['episode'] = int(match.group(4))
-            labels['type'] = 'tv'
+            labels.append(f"title:{match.group(1).strip()}")
+            labels.append(f"year:{int(match.group(2))}")
+            labels.append(f"season:{int(match.group(3))}")
+            labels.append(f"episode:{int(match.group(4))}")
+            labels.append("type:tv")
             return labels
         
         # Pattern 5: Movie Name (Year).*
@@ -240,148 +424,22 @@ class FilesystemImporter:
         movie_pattern2 = re.compile(r'^(.+?)\s*\((\d{4})\)', re.IGNORECASE)
         match = movie_pattern2.match(name_without_ext)
         if match:
-            labels['title_guess'] = match.group(1).strip()
-            labels['year'] = int(match.group(2))
-            labels['type'] = 'movie'
+            labels.append(f"title:{match.group(1).strip()}")
+            labels.append(f"year:{int(match.group(2))}")
+            labels.append("type:movie")
             return labels
         
         # Fallback: Extract any year from the filename
         year_match = re.search(r'\b(19|20)\d{2}\b', name_without_ext)
         if year_match:
-            labels['year'] = int(year_match.group())
+            labels.append(f"year:{int(year_match.group())}")
         
         # Extract title from the beginning (before any year or episode info)
         title_part = re.split(r'\s*[\(\[].*?[\)\]]\s*|\s*-\s*S\d+E\d+|\s*\.\d{4}\.', name_without_ext)[0]
         if title_part and title_part.strip():
-            labels['title_guess'] = title_part.replace('.', ' ').replace('_', ' ').strip()
+            labels.append(f"title:{title_part.replace('.', ' ').replace('_', ' ').strip()}")
         
         return labels
-    
-    def list_asset_groups(self) -> list[dict[str, any]]:
-        """
-        List the asset groups (directories) available from this filesystem source.
-        
-        Returns:
-            List of dictionaries containing directory information
-        """
-        try:
-            asset_groups = []
-            
-            for root_path in self.root_paths:
-                root = Path(root_path).resolve()
-                
-                if not root.exists() or not root.is_dir():
-                    continue
-                
-                # For filesystem, each root path is an asset group
-                # Count files in this directory
-                file_count = 0
-                for pattern in self.glob_patterns:
-                    try:
-                        file_count += len([f for f in root.glob(pattern) if self._should_include_file(f)])
-                    except Exception:
-                        continue
-                
-                asset_groups.append({
-                    "id": str(root),
-                    "name": root.name,
-                    "path": str(root),
-                    "enabled": True,  # Default to enabled, actual state managed by database
-                    "asset_count": file_count,
-                    "type": "directory"
-                })
-            
-            return asset_groups
-            
-        except Exception as e:
-            raise ImporterError(f"Failed to list asset groups: {str(e)}") from e
-    
-    def enable_asset_group(self, group_id: str) -> bool:
-        """
-        Enable an asset group (directory) for content discovery.
-        
-        Args:
-            group_id: Directory path
-            
-        Returns:
-            True if successfully enabled, False otherwise
-        """
-        try:
-            # For filesystem, we just verify the directory exists
-            path = Path(group_id)
-            return path.exists() and path.is_dir()
-            
-        except Exception as e:
-            print(f"Failed to enable asset group {group_id}: {e}")
-            return False
-    
-    def disable_asset_group(self, group_id: str) -> bool:
-        """
-        Disable an asset group (directory) from content discovery.
-        
-        Args:
-            group_id: Directory path
-            
-        Returns:
-            True if successfully disabled, False otherwise
-        """
-        # For filesystem, disabling is handled at the database level
-        # This method just confirms the operation
-        return True
-
-    def get_help(self) -> dict[str, any]:
-        """
-        Get help information for the filesystem importer.
-        
-        Returns:
-            Dictionary containing help information
-        """
-        return {
-            "description": "Scan local filesystem directories for media files and discover content",
-            "required_params": [
-                {
-                    "name": "source_name",
-                    "type": "str",
-                    "description": "Human-readable name for this filesystem source",
-                    "example": '"My Media Library"'
-                },
-                {
-                    "name": "root_paths",
-                    "type": "list[str]",
-                    "description": "List of root directories to scan",
-                    "example": '["/media/movies", "/media/tv"]'
-                }
-            ],
-            "optional_params": [
-                {
-                    "name": "glob_patterns",
-                    "type": "list[str]",
-                    "default": "Common video extensions",
-                    "description": "List of glob patterns to match files"
-                },
-                {
-                    "name": "include_hidden",
-                    "type": "bool",
-                    "default": False,
-                    "description": "Whether to include hidden files and directories"
-                },
-                {
-                    "name": "calculate_hash",
-                    "type": "bool",
-                    "default": True,
-                    "description": "Whether to calculate SHA-256 hash of files"
-                }
-            ],
-            "examples": [
-                'retrovue source add --type filesystem --name "My Media Library" --base-path "/media/movies"',
-                'retrovue source add --type filesystem --name "Commercials" --base-path "T:\\Commercials"',
-                'retrovue source add --type filesystem --name "Media Library" --base-path "/media" --enrichers "ffprobe"'
-            ],
-            "cli_params": {
-                "name": "Friendly name for the filesystem source",
-                "base_path": "Base filesystem path to scan"
-            }
-        }
 
 
 # Note: FilesystemImporter should be registered manually when needed

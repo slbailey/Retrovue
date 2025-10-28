@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Defines the exact behavior, safety, idempotence, and data effects of the ingest operation for an entire source. This is an iterative operation that processes all enabled collections within a source, following the same pattern as Source Discover but for asset ingestion rather than collection discovery.
+Defines the exact behavior, safety, idempotence, and data effects of the ingest operation for an entire source. This is an iterative operation that processes all enabled collections within a source, following the same pattern as Source Discover but for asset ingestion rather than collection discovery. All operations must use importers that implement the BaseImporter interface correctly. Each collection ingest operates in its own transaction boundary, allowing for partial success when some collections fail.
 
-NOTE: This command operates at the source level and iterates across all enabled collections, processing each collection's ingest operation. Each collection ingest follows the exact same process defined in the Collection Ingest, but the entire source ingest operation is wrapped in a Unit of Work to ensure atomicity across all collections.
+NOTE: This command operates at the source level and iterates across all enabled collections, processing each collection's ingest operation. Each collection ingest follows the exact same process defined in the Collection Ingest, with each collection operating in its own transaction boundary to allow for partial success when some collections fail.
 
 ---
 
@@ -48,6 +48,9 @@ retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--js
 - If `--test-db` is provided, the command MUST operate solely on an isolated, non-production database
 - Partial or failed ingest operations across collections MUST NOT result in orphaned or incomplete database records
 - By design, individual collection ingest failures MUST NOT abort the entire source ingest operation unless all collections fail
+- Source's importer must be interface compliant (ImporterInterface). Implementations that subclass BaseImporter are considered compliant by construction. Non-compliant importers MUST cause the command to fail with exit code 1.
+- Asset ingestion MUST use importer's enumeration capability for content discovery
+- Interface compliance MUST be verified before ingest attempt
 
 ---
 
@@ -94,7 +97,7 @@ retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--js
 
 ## Data Effects
 
-- For each enabled collection, the ingest process follows the exact same rules as defined in the [Collection Ingest](CollectionIngest.md).
+- For each enabled collection, the ingest process follows the exact same rules as defined in the [Collection Ingest](CollectionIngestContract.md).
 - New Assets MUST be created with state = `new` or `enriching` per collection.
 - Duplicate detection logic MUST prevent the creation of duplicate Asset records within each collection.
 - Any enrichment hooks MAY run during ingest per collection, following the same per-asset failure handling.
@@ -118,6 +121,9 @@ retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--js
 - **B-7:** Output with `--json` MUST include `"status": "ok" | "partial" | "error"` and explicit per-collection results.
 - **B-8:** When run with `--test-db`, no changes may affect production or staging databases.
 - **B-9:** Individual collection ingest failures MUST NOT abort the entire source ingest operation unless all collections fail.
+- **B-10:** Source's importer must be interface compliant (ImporterInterface). Implementations that subclass BaseImporter are considered compliant by construction. Non-compliant importers MUST cause the command to fail with exit code 1.
+- **B-11:** For each eligible collection, the system MUST ask the importer to enumerate ingestable assets for that collection before ingest.
+- **B-12:** Interface compliance MUST be verified before ingest attempt.
 
 ---
 
@@ -125,19 +131,21 @@ retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--js
 
 #### Data Contract Rules (D-#)
 
-- **D-1:** The entire source ingest operation MUST be wrapped in a single Unit of Work, following Unit of Work principles.
-- **D-2:** Each collection ingest MUST execute within the same atomic database transaction as the source ingest operation.
-- **D-3:** If any collection ingest encounters a fatal error, the entire source ingest transaction MUST be rolled back.
-- **D-4:** Individual collection ingest failures (non-fatal) MUST NOT abort the entire source ingest operation.
+- **D-1:** Each collection ingest MUST execute within its own Unit of Work / transaction boundary.
+- **D-2:** A fatal error in one collection MUST roll back the ingest for that collection, but MUST NOT roll back successfully ingested sibling collections.
+- **D-3:** The overall source ingest operation MUST still report partial success (exit code 2) if any collections failed.
+- **D-4:** All per-collection ingests MUST be logged/audited with enough context to recover or retry failures.
 - **D-5:** Source ingest MUST NOT ingest any collection whose `sync_enabled` is false OR `ingestible` is false, even if the collection would otherwise be eligible.
 - **D-6:** Source ingest MUST invoke the same underlying ingestion pipeline that collection ingest uses for "full collection" mode (no `--title`/`--season`/`--episode`), but MUST call it in "full collection" scope only.
 - **D-7:** All ingest operations triggered under source ingest MUST be tracked individually per collection in ingest logs/audit trails, distinguishing between bulk source ingest and manual surgical ingest.
 - **D-8:** Duplicate detection logic MUST prevent the creation of duplicate Asset records within each collection, following the Collection Ingest.
 - **D-9:** Every new Asset MUST begin in lifecycle state `new` or `enriching` and MUST NOT be in `ready` state at creation time, per collection.
-- **D-11:** The `ingestible` field MUST be validated by calling the importer's `validate_ingestible()` method before any ingest operation.
-- **D-12:** If `ingestible=false`, the collection MUST NOT be included in bulk ingest operations, even if `sync_enabled=true`.
-- **D-13:** All operations run with `--test-db` MUST be isolated from production database storage, tables, and triggers.
-- **D-14:** Source-level ingest MUST NOT create any source-level database records; all persistence occurs at the collection level.
+- **D-10:** Importer interface compliance MUST be verified before ingest attempt.
+- **D-11:** Asset discovery MUST use the importer's enumeration capability to retrieve the assets belonging to that collection, in full-collection mode.
+- **D-12:** The ingestible field MUST be validated by calling the importer's ingestibility check before ingesting the collection.
+- **D-13:** If `ingestible=false`, the collection MUST NOT be included in bulk ingest operations, even if `sync_enabled=true`.
+- **D-14:** All operations run with `--test-db` MUST be isolated from production database storage, tables, and triggers.
+- **D-15:** Source-level ingest MUST NOT create any source-level database records; all persistence occurs at the collection level.
 
 ---
 
@@ -260,6 +268,6 @@ retrovue source ingest "Test Plex Server" --test-db
 
 ## See Also
 
-- [Unit of Work](UnitOfWork.md) - Transaction management requirements for atomic operations
-- [Source Discover](SourceDiscover.md) - Iterative collection discovery operations
-- [Collection Ingest](CollectionIngest.md) - Individual collection ingest operations
+- [Unit of Work](UnitOfWorkContract.md) - Transaction management requirements for atomic operations
+- [Source Discover](SourceDiscoverContract.md) - Iterative collection discovery operations
+- [Collection Ingest](CollectionIngestContract.md) - Individual collection ingest operations

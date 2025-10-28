@@ -1,15 +1,20 @@
 """
-Base protocols for content importers.
+Base protocols and skeleton template for content importers.
 
-This module defines the core interfaces that all importers must implement.
+This module defines the core interfaces that all importers must implement
+and provides a complete skeleton template for creating new importers.
+
 Importers are responsible for discovering content from various sources (Plex, filesystem, etc.).
+They should be stateless and operate on simple data structures.
 """
 
 from __future__ import annotations
 
+import json
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass
@@ -48,16 +53,38 @@ class DiscoveredItem:
             raise ValueError("size must be non-negative")
 
 
-class Importer(Protocol):
+class ImporterInterface(Protocol):
     """
-    Importer = Adapter. Talks to external system. Discovers content. Does not persist.
-    
-    Importers are responsible for discovering content from various sources.
-    They should be stateless and operate on simple data structures.
+    Contract for all importers.
+
+    Rules:
+    - Must be stateless / pure: discover() returns discovered items, but does not persist.
+    - Must raise ImporterError (or subclass) instead of exiting the process.
+    - Must declare configuration schema via get_config_schema() so the CLI and registry can reason about it.
+    - Must validate configuration parameters (API keys, file paths, connection settings, etc.).
     """
     
     name: str
-    """Unique name identifier for this importer"""
+    """Unique type identifier, e.g. 'plex', 'filesystem', 'jellyfin'"""
+    
+    @classmethod
+    def get_config_schema(cls) -> ImporterConfig:
+        """
+        Return the configuration schema for this importer type.
+        
+        This method defines what configuration parameters the importer accepts,
+        which are required vs optional.
+        
+        Configuration parameters are specific values needed to connect to sources:
+        - API Credentials: API keys for external service authentication
+        - File Paths: Paths to scan for local content
+        - Connection Settings: URLs, ports, timeouts
+        - Discovery Settings: Patterns, filters, options
+        
+        Returns:
+            ImporterConfig object defining the configuration schema
+        """
+        ...
     
     def discover(self) -> list[DiscoveredItem]:
         """
@@ -135,4 +162,316 @@ class ImporterNotFoundError(ImporterError):
 
 class ImporterConfigurationError(ImporterError):
     """Raised when an importer is not properly configured."""
+    pass
+
+
+class ImporterConnectionError(ImporterError):
+    """Raised when an importer cannot connect to its source."""
+    pass
+
+
+@dataclass
+class ImporterConfig:
+    """
+    Configuration schema for importer types.
+    
+    This defines the structure that importers use to declare
+    their configuration requirements to the CLI and registry.
+    
+    Configuration parameters are specific values an importer needs to connect
+    to its source (API keys, file paths, connection settings, etc.).
+    """
+    required_params: list[dict[str, str]]
+    """List of required configuration parameters with name and description"""
+    optional_params: list[dict[str, str]]
+    """List of optional configuration parameters with name, description, and default value"""
+    description: str
+    """Human-readable description of the importer and its configuration parameters"""
+
+
+class BaseImporter(ABC):
+    """
+    Abstract base class providing a complete skeleton for importer implementations.
+    
+    This class provides the foundation for creating new importers that comply
+    with RetroVue's domain model and contract specifications.
+    
+    Importers use configuration parameters - specific values needed to connect
+    to sources (API keys, file paths, connection settings, etc.).
+    
+    To create a new importer:
+    
+    1. Copy the template to a new file in adapters/importers/
+    2. Rename the class to match your importer type
+    3. Implement the abstract methods
+    4. Define your configuration schema
+    5. Register the importer type
+    
+    Example:
+    
+    ```python
+    class PlexImporter(BaseImporter):
+        name = "plex"
+        
+        def __init__(self, base_url: str, token: str):
+            super().__init__(base_url=base_url, token=token)
+            self.base_url = base_url
+            self.token = token
+        
+        def discover(self) -> list[DiscoveredItem]:
+            # Your discovery logic here
+            pass
+        
+        @classmethod
+        def get_config_schema(cls) -> ImporterConfig:
+            return ImporterConfig(
+                required_params=[
+                    {"name": "base_url", "description": "Plex server base URL"},
+                    {"name": "token", "description": "Plex authentication token"}
+                ],
+                optional_params=[],
+                description="Plex Media Server content discovery"
+            )
+    ```
+    """
+    
+    # Override these in your implementation
+    name: str = "base-importer"
+    
+    def __init__(self, **config):
+        """
+        Initialize the importer with configuration parameters.
+        
+        Args:
+            **config: Configuration parameters specific to this importer type
+                     (API keys, file paths, connection settings, etc.)
+        """
+        self.config = config
+        self._validate_config()
+    
+    @abstractmethod
+    def discover(self) -> list[DiscoveredItem]:
+        """
+        Discover content items from the source.
+        
+        This is the core method that performs the actual discovery.
+        Implement this method to scan your source and return discovered items.
+        
+        Returns:
+            List of DiscoveredItem objects representing found content
+            
+        Raises:
+            ImporterError: If discovery fails
+            ImporterConfigurationError: If importer is misconfigured
+            ImporterConnectionError: If cannot connect to source
+        """
+        pass
+    
+    @classmethod
+    @abstractmethod
+    def get_config_schema(cls) -> ImporterConfig:
+        """
+        Return the configuration schema for this importer type.
+        
+        This method defines what configuration parameters the importer accepts,
+        which are required vs optional.
+        
+        Configuration parameters are specific values needed to connect to sources:
+        - API Credentials: API keys for external service authentication
+        - File Paths: Paths to scan for local content
+        - Connection Settings: URLs, ports, timeouts
+        - Discovery Settings: Patterns, filters, options
+        
+        Returns:
+            ImporterConfig object defining the configuration schema
+        """
+        pass
+    
+    def _validate_config(self) -> None:
+        """
+        Validate the importer's configuration parameters.
+        
+        Override this method to add custom validation logic.
+        Raise ImporterConfigurationError for invalid configuration parameters.
+        
+        Raises:
+            ImporterConfigurationError: If configuration parameters are invalid
+        """
+        schema = self.get_config_schema()
+        
+        # Validate required configuration parameters
+        for param in schema.required_params:
+            param_name = param["name"]
+            if param_name not in self.config:
+                raise ImporterConfigurationError(
+                    f"Required configuration parameter '{param_name}' is missing"
+                )
+        
+        # Validate configuration parameter types and values
+        self._validate_parameter_types()
+    
+    @abstractmethod
+    def _validate_parameter_types(self) -> None:
+        """
+        Validate configuration parameter types and values.
+        
+        Override this method to add type-specific validation for configuration parameters.
+        Examples:
+        - API key format validation
+        - File path existence checks
+        - URL format validation
+        - Connection timeout range validation
+        """
+        # Default implementation - can be overridden
+        pass
+    
+    def _safe_get_config(self, key: str, default: Any = None) -> Any:
+        """
+        Safely get a configuration value with a default.
+        
+        Args:
+            key: Configuration key
+            default: Default value if key not found
+            
+        Returns:
+            Configuration value or default
+        """
+        return self.config.get(key, default)
+    
+    def get_help(self) -> dict[str, any]:
+        """
+        Get help information for this importer.
+        
+        Returns:
+            Dictionary containing help information
+        """
+        schema = self.get_config_schema()
+        return {
+            "description": schema.description,
+            "required_params": schema.required_params,
+            "optional_params": schema.optional_params,
+            "examples": self._get_examples(),
+            "cli_params": self._get_cli_params()
+        }
+    
+    def _get_examples(self) -> list[str]:
+        """
+        Get example usage strings for this importer.
+        
+        Override this method to provide specific examples.
+        
+        Returns:
+            List of example usage strings
+        """
+        return [
+            f"retrovue source add --type {self.name} --name 'My {self.name.title()} Source'"
+        ]
+    
+    def _get_cli_params(self) -> dict[str, str]:
+        """
+        Get CLI parameter descriptions for this importer.
+        
+        Override this method to provide specific CLI parameter descriptions.
+        
+        Returns:
+            Dictionary mapping parameter names to descriptions
+        """
+        params = {}
+        schema = self.get_config_schema()
+        
+        for param in schema.required_params + schema.optional_params:
+            params[param["name"]] = param["description"]
+        
+        return params
+    
+    def list_asset_groups(self) -> list[dict[str, any]]:
+        """
+        List the asset groups available from this source.
+        
+        Default implementation returns empty list.
+        Override this method to provide asset group listing.
+        
+        Returns:
+            List of asset group dictionaries
+        """
+        return []
+    
+    def enable_asset_group(self, group_id: str) -> bool:
+        """
+        Enable an asset group for content discovery.
+        
+        Default implementation always returns True.
+        Override this method to provide asset group enabling.
+        
+        Args:
+            group_id: Unique identifier for the asset group
+            
+        Returns:
+            True if successfully enabled, False otherwise
+        """
+        return True
+    
+    def disable_asset_group(self, group_id: str) -> bool:
+        """
+        Disable an asset group from content discovery.
+        
+        Default implementation always returns True.
+        Override this method to provide asset group disabling.
+        
+        Args:
+            group_id: Unique identifier for the asset group
+            
+        Returns:
+            True if successfully disabled, False otherwise
+        """
+        return True
+    
+    def __str__(self) -> str:
+        """String representation of the importer."""
+        return f"{self.__class__.__name__}(name='{self.name}')"
+    
+    def __repr__(self) -> str:
+        """Detailed string representation of the importer."""
+        config_str = json.dumps(self.config, sort_keys=True)
+        return f"{self.__class__.__name__}(name='{self.name}', config={config_str})"
+
+
+# Legacy Protocol for backward compatibility
+class Importer(ImporterInterface):
+    """
+    Legacy Protocol for backward compatibility.
+    
+    This maintains the old Protocol interface while the new BaseImporter
+    provides the concrete implementation pattern.
+    """
+    pass
+
+
+# Registration helper function
+def register_importer_type(importer_class: type) -> None:
+    """
+    Register an importer type with the RetroVue registry.
+    
+    This function should be called during application startup
+    to register new importer types.
+    
+    Args:
+        importer_class: The importer class to register
+        
+    Example:
+    
+    ```python
+    # In your importer module
+    from ..base import register_importer_type
+    
+    class MyImporter(BaseImporter):
+        # ... implementation ...
+        pass
+    
+    # Register the importer type
+    register_importer_type(MyImporter)
+    ```
+    """
+    # This would integrate with the actual registry system
+    # For now, it's a placeholder for the registration pattern
     pass

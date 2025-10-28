@@ -24,7 +24,7 @@ The interface ensures consistent behavior across all importer types while allowi
 
 ## Contract / interface
 
-### ImporterInterface
+### ImporterInterface and BaseImporter
 
 At the domain level, an Importer is defined by its ability to:
 
@@ -32,7 +32,13 @@ At the domain level, an Importer is defined by its ability to:
 - enumerate available collections,
 - and drive ingestion of a collection (full or partial).
 
-Orchestration may call these behaviors at different granularities. For the developer-facing method signatures and CLI wiring (including `param_spec()`, filtering by title/season/episode, etc.), see the [Importer Development Guide](../developer/Importer.md).
+**ImporterInterface** is the required runtime contract that RetroVue orchestration calls.
+
+**BaseImporter** is an abstract base class that implements most of that interface and enforces safety, and first-party importers MUST subclass it.
+
+Third-party importers SHOULD subclass it, but if they don't, they MUST still satisfy ImporterInterface or they'll be rejected at runtime.
+
+Orchestration may call these behaviors at different granularities. For the developer-facing method signatures and CLI wiring (including `get_config_schema()`, filtering by title/season/episode, etc.), see the [Importer Development Guide](../developer/Importer.md).
 
 All importers MUST implement the `ImporterInterface` abstract base class:
 
@@ -63,7 +69,7 @@ The `validate_ingestible()` method determines whether a collection can be ingest
 
 ### Collection Discovery
 
-The `discover_collections()` method enumerates available content libraries from external sources:
+Importers must expose a **discovery capability** that enumerates available content libraries from external sources:
 
 - **Plex Importer**: Queries Plex API for available libraries
 - **Filesystem Importer**: Scans directory structure for content collections
@@ -71,7 +77,7 @@ The `discover_collections()` method enumerates available content libraries from 
 
 ### Content Ingestion
 
-The `ingest_collection()` method extracts content metadata and returns canonicalized asset descriptions to the ingest service. The ingest service is responsible for creating Asset records in the database inside a Unit of Work. Newly ingested assets MUST enter the system in a known lifecycle state (e.g. `new`, `enriching`). Importers MUST NOT persist directly to authoritative tables.
+Importers must expose an **enumeration capability** that extracts content metadata and returns canonicalized asset descriptions to the ingest service. The ingest service is responsible for creating Asset records in the database inside a Unit of Work. Newly ingested assets MUST enter the system in a known lifecycle state (e.g. `new`, `enriching`). Importers MUST NOT persist directly to authoritative tables.
 
 - **Scope Support**: Handles full collection, title, season, or episode-level ingestion
 - **Metadata Extraction**: Extracts title, season, episode, duration, and file information
@@ -85,7 +91,7 @@ The `ingest_collection()` method extracts content metadata and returns canonical
 All importer operations are defined by behavioral contracts that specify exact CLI syntax, safety expectations, output formats, and data effects. The contracts ensure:
 
 - **Safety first**: No destructive operations run against live data during automated tests
-- **Atomicity**: All operations wrapped in Unit of Work for consistency
+- **Atomicity**: Each ingest operation for a given collection MUST run inside a transaction (Unit of Work). If ingest for that collection fails, it MUST roll back cleanly without affecting other collections in the same source ingest run.
 - **Idempotence**: Operations can be safely repeated without side effects
 - **Audit trails**: All operations tracked for debugging and compliance
 
@@ -167,7 +173,7 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 1. **Importer Discovery**: Registry scans `adapters/importers/` directory for `*_importer.py` files
 2. **Source Creation**: Source created with `type` field
 3. **Importer Selection**: Registry provides importer based on source type
-4. **Collection Discovery**: `discover_collections()` called to enumerate libraries
+4. **Collection Discovery**: Importer's discovery capability called to enumerate libraries
 5. **Prerequisites Validation**: `validate_ingestible()` called for each collection
 6. **Collection Persistence**: Collections created with `sync_enabled=false`, `ingestible=<validation_result>`
 
@@ -175,16 +181,16 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 
 1. **Collection Selection**: Collections filtered by `sync_enabled=true` AND `ingestible=true`
 2. **Prerequisites Revalidation**: `validate_ingestible()` called before ingest
-3. **Content Extraction**: `ingest_collection()` called with appropriate scope
+3. **Content Extraction**: Importer's enumeration capability called with appropriate scope
 4. **Asset Creation**: The ingest service writes Assets into the database in `new` or `enriching` state, using the normalized data returned by the importer
 5. **Audit Logging**: Ingest results tracked for debugging and compliance
 
 ### Error Handling
 
 - **Per-asset failures**: Individual asset failures do not abort collection ingest
-- **Collection failures**: Individual collection failures do not abort source ingest
-- **Fatal errors**: Fatal errors (database constraints, external system unreachable) abort entire operation
-- **Transaction rollback**: All operations wrapped in Unit of Work for atomicity
+- **Collection failures**: Individual collection failures do not abort source ingest; each collection operates in its own transaction boundary
+- **Fatal errors**: Fatal errors (database constraints, external system unreachable) abort the specific collection operation
+- **Transaction rollback**: Each collection ingest wrapped in its own Unit of Work for per-collection atomicity
 
 ## Business rules
 
@@ -214,7 +220,7 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 - **Test Mode Support**: All operations support `--dry-run` and `--test-db` modes
 - **Non-Destructive Discovery**: Discovery operations never mutate external systems
 - **Error Isolation**: Per-asset failures isolated from bulk operations
-- **Transaction Boundaries**: All persistence within controlled Unit of Work
+- **Transaction Boundaries**: Each collection ingest operates within its own Unit of Work for per-collection atomicity
 - **Importer as Infrastructure**: Importers are infrastructure components; ingest service owns persistence authority
 
 ## Cross-references
@@ -233,10 +239,10 @@ The list of valid `--type` values is provided at runtime by the Importer registr
 All importer operations MUST have comprehensive test coverage following the contract test responsibilities in [README.md](../contracts/README.md). Tests MUST:
 
 - **Validate prerequisites**: Test `validate_ingestible()` for each importer type
-- **Test discovery**: Verify `discover_collections()` returns expected results
-- **Test ingestion**: Verify `ingest_collection()` returns normalized asset data that results in correct Asset records being created by the ingest service
+- **Test discovery**: Verify importer's discovery capability returns expected results
+- **Test ingestion**: Verify importer's enumeration capability returns normalized asset data that results in correct Asset records being created by the ingest service
 - **Test error handling**: Verify graceful handling of external system failures
-- **Test atomicity**: Verify Unit of Work behavior for all operations
+- **Test atomicity**: Verify per-collection Unit of Work behavior for all operations
 - **Test idempotence**: Verify operations can be safely repeated
 
 Each test MUST reference specific contract rule IDs to provide bidirectional traceability between contracts and implementation.

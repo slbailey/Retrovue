@@ -245,7 +245,7 @@ retrovue enricher add --type playout --name "Test Playout" \
 
 ## See Also
 
-- [Enricher List Types](EnricherListTypes.md) - List available enricher types
-- [Enricher List](EnricherList.md) - List configured enricher instances
-- [Enricher Update](EnricherUpdate.md) - Update enricher configurations
-- [Enricher Remove](EnricherRemove.md) - Remove enricher instances
+- [Enricher List Types](EnricherListTypesContract.md) - List available enricher types
+- [Enricher List](EnricherListContract.md) - List configured enricher instances
+- [Enricher Update](EnricherUpdateContract.md) - Update enricher configurations
+- [Enricher Remove](EnricherRemoveContract.md) - Remove enricher instances

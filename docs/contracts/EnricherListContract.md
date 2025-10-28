@@ -265,7 +265,7 @@ retrovue enricher list
 
 ## See Also
 
-- [Enricher List Types](EnricherListTypes.md) - List available enricher types
-- [Enricher Add](EnricherAdd.md) - Create enricher instances
-- [Enricher Update](EnricherUpdate.md) - Update enricher configurations
-- [Enricher Remove](EnricherRemove.md) - Remove enricher instances
+- [Enricher List Types](EnricherListTypesContract.md) - List available enricher types
+- [Enricher Add](EnricherAddContract.md) - Create enricher instances
+- [Enricher Update](EnricherUpdateContract.md) - Update enricher configurations
+- [Enricher Remove](EnricherRemoveContract.md) - Remove enricher instances

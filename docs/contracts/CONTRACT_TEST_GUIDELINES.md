@@ -4,7 +4,7 @@
 
 All contract tests verify both **command behavior** and **data integrity** for Retrovue operations.
 
-For every contract (e.g., `EnricherAdd`, `ScheduleCreate`, `ChannelUpdate`), two tests must exist:
+For every contract (e.g., `EnricherAddContract`, `ScheduleCreateContract`, `ChannelUpdateContract`), two tests must exist:
 
 1. `<command>_contract.py`
 

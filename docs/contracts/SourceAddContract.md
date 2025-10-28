@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the behavioral contract for adding new content sources to RetroVue. This contract ensures safe, consistent source creation with proper validation and configuration handling.
+Define the behavioral contract for adding new content sources to RetroVue. This contract ensures safe, consistent source creation with proper validation, configuration handling, and importer interface compliance verification.
 
 ---
 
@@ -48,11 +48,13 @@ retrovue source add --type <type> --name <name> [options] [--discover] [--test-d
 
 ### Validation Requirements
 
-- Source type must be valid ("plex" or "filesystem")
-- Required parameters must be provided for each source type
+- Source type must be valid and correspond to a discovered importer
+- Importer must be interface compliant (ImporterInterface). Implementations that subclass BaseImporter are considered compliant by construction. Non-compliant importers MUST cause the command to fail with exit code 1.
+- Required parameters must be provided for each source type according to importer's configuration schema
+- Configuration must be validated against importer's `get_config_schema()` method
 - External ID must be unique (format: "type-hash")
 - Configuration must be valid before database operations
-- `--discover` option only applies to Plex sources (filesystem sources have no collections to discover)
+- `--discover` option only applies to sources with discoverable collections (as declared by the importer)
 
 ---
 
@@ -67,9 +69,10 @@ Successfully created plex source: My Plex Server
   ID: 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
   External ID: plex-5063d926
   Type: plex
-  Importer: PlexImporter
+  Importer: PlexImporter (ImporterInterface compliant)
   Enrichers: ffprobe,metadata
   Configuration: {"servers": [{"base_url": "https://plex.example.com", "token": "***REDACTED***"}]}
+  Interface Status: Valid ✓
 ```
 
 **With `--discover`:**
@@ -79,9 +82,10 @@ Successfully created plex source: My Plex Server
   ID: 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
   External ID: plex-5063d926
   Type: plex
-  Importer: PlexImporter
+  Importer: PlexImporter (ImporterInterface compliant)
   Enrichers: ffprobe,metadata
   Configuration: {"servers": [{"base_url": "https://plex.example.com", "token": "***REDACTED***"}]}
+  Interface Status: Valid ✓
 
 Successfully discovered 3 collections:
   • Movies (ID: 1) - Disabled by default
@@ -92,6 +96,8 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 ```
 
 ### JSON Output
+
+**Note:** The `ingestible` field is not included in source creation output because ingestibility is determined at the collection level, not the source level. Source creation only validates that the importer interface is compliant and configuration is valid.
 
 **Without `--discover`:**
 
@@ -107,8 +113,7 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
     ]
   },
   "enrichers": ["ffprobe", "metadata"],
-  "importer_name": "PlexImporter",
-  "ingestible": true
+  "importer_name": "PlexImporter"
 }
 ```
 
@@ -127,7 +132,6 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
   },
   "enrichers": ["ffprobe", "metadata"],
   "importer_name": "PlexImporter",
-  "ingestible": true,
   "collections_discovered": 3,
   "collections": [
     {
@@ -189,12 +193,15 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 - **B-1:** The command MUST validate source type against available importers before proceeding.
 - **B-2:** Required parameters MUST be validated before any database operations.
 - **B-3:** External ID MUST be generated in format "type-hash" and MUST be unique.
-- **B-4:** When `--json` is supplied, output MUST include fields `"id"`, `"external_id"`, `"name"`, `"type"`, `"config"`, `"enrichers"`, `"importer_name"`, and `"ingestible"`.
+- **B-4:** When `--json` is supplied, output MUST include fields `"id"`, `"external_id"`, `"name"`, `"type"`, `"config"`, `"enrichers"`, and `"importer_name"`.
 - **B-5:** On validation failure, the command MUST exit with code `1` and print a human-readable error message.
 - **B-6:** The `--dry-run` flag MUST show configuration validation and external ID generation without executing.
-- **B-7:** The `--discover` flag MUST trigger collection discovery for Plex sources only. Filesystem sources MUST ignore this flag.
+- **B-7:** The `--discover` flag MUST trigger immediate collection discovery if (and only if) the importer for this source type declares that it supports discovery. If discovery is not supported, the flag MUST be ignored with a warning, not treated as an error.
 - **B-8:** When `--discover` is provided with `--json`, output MUST include `"collections_discovered"` and `"collections"` fields.
 - **B-9:** Collection discovery MUST NOT occur unless `--discover` is explicitly provided.
+- **B-10:** Source type MUST correspond to a discovered importer that implements `ImporterInterface`.
+- **B-11:** Configuration parameters MUST be validated against importer's `get_config_schema()` method.
+- **B-12:** Interface compliance MUST be verified before source creation.
 
 ---
 
@@ -209,13 +216,15 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 - **D-7:** Source configuration MUST be validated before database persistence.
 - **D-8:** Enricher validation MUST occur before source creation.
 - **D-9:** Collection discovery MUST NOT occur unless `--discover` is explicitly provided.
+- **D-10:** Importer interface compliance MUST be verified before source creation.
+- **D-11:** Configuration schema validation MUST be performed using importer's `get_config_schema()` method.
 
 ---
 
 ## Test Coverage Mapping
 
-- `B-1..B-9` → `test_source_add_contract.py`
-- `D-1..D-9` → `test_source_add_data_contract.py`
+- `B-1..B-12` → `test_source_add_contract.py`
+- `D-1..D-11` → `test_source_add_data_contract.py`
 
 ---
 
@@ -226,6 +235,8 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 - Invalid source type: "Unknown source type 'invalid'. Available types: plex, filesystem"
 - Missing required parameters: "Error: --base-url is required for Plex sources"
 - Invalid configuration: "Error: Path does not exist: /invalid/path"
+- Interface violation: "Error: Importer 'plex' does not implement ImporterInterface"
+- Configuration schema error: "Error: Invalid configuration schema for importer 'plex'"
 
 ### Database Errors
 
@@ -289,6 +300,6 @@ retrovue source add --type filesystem --name "Test Media" \
 
 ## See Also
 
-- [Unit of Work](UnitOfWork.md) - Transaction management requirements for atomic operations
-- [Source Discover](SourceDiscover.md) - Standalone collection discovery operations
-- [Collection Ingest](CollectionIngest.md) - Collection-level ingest operations
+- [Unit of Work](UnitOfWorkContract.md) - Transaction management requirements for atomic operations
+- [Source Discover](SourceDiscoverContract.md) - Standalone collection discovery operations
+- [Collection Ingest](CollectionIngestContract.md) - Collection-level ingest operations

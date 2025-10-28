@@ -213,7 +213,7 @@ retrovue enricher remove enricher-metadata-b2c3d4e5 --test-db
 
 ## See Also
 
-- [Enricher List Types](EnricherListTypes.md) - List available enricher types
-- [Enricher Add](EnricherAdd.md) - Create enricher instances
-- [Enricher List](EnricherList.md) - List configured enricher instances
-- [Enricher Update](EnricherUpdate.md) - Update enricher configurations
+- [Enricher List Types](EnricherListTypesContract.md) - List available enricher types
+- [Enricher Add](EnricherAddContract.md) - Create enricher instances
+- [Enricher List](EnricherListContract.md) - List configured enricher instances
+- [Enricher Update](EnricherUpdateContract.md) - Update enricher configurations

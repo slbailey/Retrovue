@@ -315,9 +315,9 @@ with session() as db:
 
 ## See Also
 
-- [Collection Wipe](CollectionWipe.md)
-- [Ingest Pipeline Documentation](../domain/IngestPipeline.md)
-- [Database Schema](../developer/database-schema.md)
+- [Collection Wipe](CollectionWipeContract.md)
+- [Ingest Pipeline Documentation](../domain/IngestPipelineContract.md)
+- [Database Schema](../developer/database-schemaContract.md)
 - [Unit of Work Implementation](../../src/retrovue/infra/uow.py)
 
 

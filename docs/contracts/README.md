@@ -15,11 +15,29 @@ Contracts define _what must be true_ before any code exists, ensuring consistenc
 
 ---
 
+## Contract Naming Convention
+
+All contract documents MUST follow the `{Noun}{Verb}Contract.md` naming pattern:
+
+- **Source contracts**: `SourceAddContract.md`, `SourceDiscoverContract.md`, `SourceIngestContract.md`
+- **Collection contracts**: `CollectionIngestContract.md`, `CollectionWipeContract.md`
+- **Enricher contracts**: `EnricherAddContract.md`, `EnricherListContract.md`
+- **Asset contracts**: `AssetsDeleteContract.md`, `AssetsSelectContract.md`
+
+This naming convention:
+
+- **Distinguishes contracts from domain docs**: Domain docs use `{Domain}.md` (e.g., `Source.md`), contracts use `{Noun}{Verb}Contract.md`
+- **Prevents confusion**: Clear separation between conceptual domain documentation and behavioral contracts
+- **Enables systematic discovery**: Easy to identify all contract files with `*Contract.md` pattern
+- **Supports tooling**: Automated tools can reliably identify contract files vs domain files
+
+---
+
 ## Contract Structure
 
 | Component              | Purpose                                            | Path Pattern                                          |
 | ---------------------- | -------------------------------------------------- | ----------------------------------------------------- |
-| **Contract Document**  | Defines full behavior, inputs, and guarantees      | `docs/contracts/{Noun}{Verb}.md`                      |
+| **Contract Document**  | Defines full behavior, inputs, and guarantees      | `docs/contracts/{Noun}{Verb}Contract.md`              |
 | **CLI Contract Test**  | Validates user-facing CLI interaction              | `tests/contracts/test_{noun}_{verb}_contract.py`      |
 | **Data Contract Test** | Validates persistence, integrity, and side effects | `tests/contracts/test_{noun}_{verb}_data_contract.py` |
 
@@ -61,7 +79,7 @@ retrovue <noun> <verb> [options]
 
 ## Contract Document Format
 
-Each `{Noun}{Verb}.md` contract must include the following sections:
+Each `{Noun}{Verb}Contract.md` contract must include the following sections:
 
 1. **Command Shape** — Syntax, verbs, flags, and usage examples
 2. **Safety Expectations** — Prompts, confirmation, dry-run behavior

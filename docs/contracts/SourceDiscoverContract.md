@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the behavioral contract for discovering collections from content sources. This contract ensures safe collection discovery with proper validation and persistence handling.
+Define the behavioral contract for discovering collections from content sources. This contract ensures safe collection discovery with proper validation, persistence handling, and importer interface compliance verification.
 
 ---
 
@@ -39,6 +39,8 @@ retrovue source discover <source_id> [--json] [--test-db] [--dry-run]
 - Existing collections are updated with current metadata
 - Duplicate collections are skipped with notification
 - Path mappings created with empty `local_path` values
+- Importer must be interface compliant (ImporterInterface). Implementations that subclass BaseImporter are considered compliant by construction. Non-compliant importers MUST cause the command to fail with exit code 1.
+- Collection discovery uses importer's discovery capability to enumerate collections
 
 ---
 
@@ -142,7 +144,10 @@ Would discover 3 collections from 'My Plex Server':
 - **B-4:** On validation failure (source not found), the command MUST exit with code `1` and print "Error: Source 'X' not found".
 - **B-5:** Empty discovery results MUST return exit code `0` with message "No collections found for source 'X'".
 - **B-6:** Duplicate collections MUST be skipped with notification message.
-- **B-7:** The command MUST support both Plex and filesystem source types (filesystem returns empty).
+- **B-7:** For any source type whose importer does not expose a discovery capability, the command MUST succeed with exit code 0, MUST NOT modify the database, and MUST clearly report that no collections are discoverable for that source type.
+- **B-8:** The command MUST obtain the importer for the Source's type.
+- **B-9:** The importer MUST expose a discovery capability that returns all collections (libraries, sections, folders, etc.) visible to that Source.
+- **B-10:** If the importer claims to support discovery but fails interface compliance (missing required discovery capability, raises interface violation), the command MUST exit with code 1 and emit a human-readable error.
 
 ---
 
@@ -155,13 +160,15 @@ Would discover 3 collections from 'My Plex Server':
 - **D-5:** On transaction failure, ALL changes MUST be rolled back with no partial persistence.
 - **D-6:** Duplicate external ID checking MUST prevent duplicate collection creation.
 - **D-7:** Collection metadata MUST be updated for existing collections.
+- **D-8:** Collection discovery MUST use the importer-provided discovery capability to enumerate collections.
+- **D-9:** Interface compliance MUST be verified before discovery begins.
 
 ---
 
 ## Test Coverage Mapping
 
-- `B-1..B-7` → `test_source_discover_contract.py`
-- `D-1..D-7` → `test_source_discover_data_contract.py`
+- `B-1..B-10` → `test_source_discover_contract.py`
+- `D-1..D-9` → `test_source_discover_data_contract.py`
 
 ---
 
@@ -172,6 +179,8 @@ Would discover 3 collections from 'My Plex Server':
 - Source not found: "Error: Source 'invalid-source' not found"
 - Unsupported source type: "Error: Source type 'filesystem' not supported for discovery"
 - Missing configuration: "Error: Plex source 'My Plex' missing base_url or token"
+- Interface violation: "Error: Source's importer does not implement ImporterInterface"
+- Discovery capability failure: "Error: Importer claims to support discovery but failed interface compliance"
 
 ### Discovery Errors
 

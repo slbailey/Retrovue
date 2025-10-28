@@ -141,7 +141,7 @@ Successfully detached enricher 'metadata' from channel 'Channel 1'
 - `B-1..B-6` → `test_channel_contract.py`
 - `D-1..D-6` → `test_channel_data_contract.py`
 
-Each rule above MUST have explicit test coverage in its respective test file, following the contract test responsibilities in [README.md](./README.md).  
+Each rule above MUST have explicit test coverage in its respective test file, following the contract test responsibilities in [README.md](./READMEContract.md).  
 Each test file MUST reference these rule IDs in docstrings or comments to provide bidirectional traceability.
 
 Future related tests (integration or scenario-level) MAY reference these same rule IDs for coverage mapping but must not redefine behavior.
