@@ -35,7 +35,7 @@ This flow ensures that source operations maintain consistency with collection st
 
 ### Collection Domain
 
-- **Contract:** `docs/contracts/CollectionContract.md`, `docs/contracts/resources/CollectionIngestContract.md`
+- **Contract:** `docs/contracts/resources/CollectionContract.md`, `docs/contracts/resources/CollectionIngestContract.md`
 - **Interface:** Collection management, ingestion, and lifecycle operations
 - **Responsibilities:** Collection persistence, ingestibility validation, sync management
 
@@ -241,7 +241,7 @@ retrovue source ingest "My Plex"
 - [SourceAddContract](../contracts/SourceAddContract.md) - Source creation contract
 - [SourceDiscoverContract](../contracts/SourceDiscoverContract.md) - Source discovery contract
 - [SourceIngestContract](../contracts/SourceIngestContract.md) - Source ingestion contract
-- [CollectionContract](../contracts/CollectionContract.md) - Collection management contract
+- [CollectionContract](../CollectionContract.md) - Collection management contract
 - [CollectionIngestContract](../contracts/CollectionIngestContract.md) - Collection ingestion contract
 - [UnitOfWorkContract](../contracts/UnitOfWorkContract.md) - Transaction management contract
 

@@ -254,7 +254,7 @@ retrovue source ingest "My Plex"
 - [SourceAddContract](../contracts/SourceAddContract.md) - Source creation contract
 - [SourceDiscoverContract](../contracts/SourceDiscoverContract.md) - Source discovery contract
 - [SourceIngestContract](../contracts/SourceIngestContract.md) - Source ingestion contract
-- [CollectionContract](../contracts/CollectionContract.md) - Collection management contract
+- [CollectionContract](../CollectionContract.md) - Collection management contract
 - [CLI_CHANGE_POLICY.md](../contracts/CLI_CHANGE_POLICY.md) - CLI governance policy
 
 ---
