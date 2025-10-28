@@ -812,8 +812,14 @@ def delete_source(
         from ...infra.settings import settings
         if settings.database_url and "test" not in settings.database_url.lower():
             typer.echo("⚠️  WARNING: This appears to be a production database!", err=True)
-            typer.echo("   Use --test-db flag only for test databases", err=True)
-            typer.echo("   Production source deletion requires additional safety measures", err=True)
+            typer.echo("", err=True)
+            typer.echo("   To delete sources from production:", err=True)
+            typer.echo("   1. Use --test-db flag for test databases only", err=True)
+            typer.echo("   2. For production: backup your database first", err=True)
+            typer.echo("   3. Consider using --dry-run to preview changes", err=True)
+            typer.echo("   4. Use --force flag to bypass this safety check", err=True)
+            typer.echo("", err=True)
+            typer.echo("   Example: retrovue source delete 'source-name' --force", err=True)
             raise typer.Exit(1)
     
     try:
