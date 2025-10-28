@@ -784,6 +784,8 @@ def update_source(
 def delete_source(
     source_id: str = typer.Argument(..., help="Source ID, external ID, or name to delete"),
     force: bool = typer.Option(False, "--force", help="Force deletion without confirmation"),
+    test_db: bool = typer.Option(False, "--test-db", help="Direct command to test database environment"),
+    confirm: bool = typer.Option(False, "--confirm", help="Required flag to proceed with deletion"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
@@ -829,7 +831,7 @@ def delete_source(
             
             if json_output:
                 import json
-                result = {"deleted": True, "source_id": source_id, "name": source.name}
+                result = {"deleted": True, "source_id": str(source.id), "name": source.name, "type": source.type}
                 typer.echo(json.dumps(result, indent=2))
             else:
                 typer.echo(f"Successfully deleted source: {source.name}")
