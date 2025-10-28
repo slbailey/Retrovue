@@ -324,7 +324,12 @@ def add_source(
         # Parse enrichers
         enricher_list = []
         if enrichers:
-            available_enrichers = [e.name for e in list_enrichers()]
+            try:
+                available_enrichers = [e.name for e in list_enrichers()]
+            except Exception as e:
+                typer.echo(f"Error: Failed to load enricher registry: {e}", err=True)
+                raise typer.Exit(1)
+            
             enricher_list = [e.strip() for e in enrichers.split(",") if e.strip()]
             unknown_enrichers = []
             for enricher in enricher_list:
@@ -342,7 +347,6 @@ def add_source(
         # Handle dry-run mode
         if dry_run:
             # Generate external ID for preview
-            import uuid
             external_id = f"{type}-{uuid.uuid4().hex[:8]}"
             
             if json_output:
@@ -381,8 +385,6 @@ def add_source(
             source_service = SourceService(db)
             
             # Create the source entity
-            import uuid
-
             from ...domain.entities import Source
             
             external_id = f"{type}-{uuid.uuid4().hex[:8]}"
