@@ -16,8 +16,8 @@ retrovue source delete <source_selector> [--force] [--test-db] [--confirm] [--js
 
 - `source_selector`: One of:
   - a single source identifier (UUID, external ID, or exact name)
-  - a wildcard pattern (e.g. "test-*" or "plex-temp-*"), which may match multiple sources by name or external_id
-  - the special token "*" meaning "all sources"
+  - a wildcard pattern (e.g. "test-_" or "plex-temp-_"), which may match multiple sources by name or external_id
+  - the special token "\*" meaning "all sources"
 
 The command MUST evaluate source_selector to a concrete list of candidate sources before performing any deletion. Each candidate source is then validated and (if eligible) deleted under the normal safety rules.
 
@@ -50,6 +50,7 @@ The command MUST evaluate source_selector to a concrete list of candidate source
 **Wildcard / multi-delete confirmation behavior:**
 
 When `<source_selector>` resolves to more than one source and `--force` is NOT provided, the confirmation prompt MUST summarize:
+
 - how many sources are targeted,
 - how many collections and path mappings would be deleted in total,
 - and MUST require typing "yes" to continue.
@@ -160,13 +161,15 @@ Successfully deleted source: My Plex Server
 - **D-6:** Deletion MUST be logged with source details, collection count, and path mapping count.
 - **D-7:** The command MUST verify source existence before attempting deletion.
 - **D-8:** For wildcard or multi-source deletion, each source MUST be deleted using the same transactional guarantees defined in D-1..D-4. Partial success is allowed across the set (one source can delete successfully while another is blocked by production safety), but each individual source delete MUST remain atomic.
+- **D-9:** Deleting a Source MUST also delete all Collections that belong to that Source. This cascade MUST occur in the same transaction boundary as the Source deletion. If the transaction fails, no partial state is allowed (the Source MUST still exist and all of its Collections MUST still exist).
+- **D-10:** Collections are the boundary that will eventually own Assets. Once Asset persistence and Asset metadata tables (technical metadata, enrichments, segment markers, etc.) are finalized, Collection deletion will be responsible for removing: all Assets in that Collection, and all per-Asset metadata rows, in a single transaction. This deeper cascade is not yet enforced and MUST NOT block Source deletion at this stage, but it is considered part of the intended lifecycle model.
 
 ---
 
 ## Test Coverage Mapping
 
 - `B-1..B-8` → `test_source_delete_contract.py`
-- `D-1..D-8` → `test_source_delete_data_contract.py`
+- `D-1..D-10` → `test_source_delete_data_contract.py`
 
 ---
 

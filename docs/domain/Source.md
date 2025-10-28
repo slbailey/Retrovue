@@ -165,8 +165,8 @@ Operators MAY issue bulk actions against multiple sources using wildcard-style i
 The source_id argument in destructive commands (such as `retrovue source delete`) MAY be:
 
 - a specific source identifier (UUID, external_id, or exact name)
-- a wildcard pattern (e.g. "test-*" or "*_temp")
-- the special token "*" meaning "all matching sources"
+- a wildcard pattern (e.g. "test-_" or "_\_temp")
+- the special token "\*" meaning "all matching sources"
 
 Wildcard matching is performed against name and external_id. It does not guess or fuzzy-match. Pattern rules MUST be documented in the contract for that command.
 
@@ -177,9 +177,24 @@ Wildcard deletion is primarily intended for cleanup of non-production / test dat
 A bulk delete that partially succeeds MUST still run inside a transaction per source (not one global transaction across all matches). Each source delete is atomic, consistent with the normal single-source delete contract.
 
 **Operational intent:**
+
 - Wildcards are allowed to accelerate cleanup of safe / disposable sources.
 - Wildcards do not grant new powers to violate production safety guarantees.
 - In production, protected sources MUST survive, even if other matched sources are removed.
+
+## Ownership and Destructive Removal
+
+A Source is the root of authority for its Collections.
+
+Every Collection belongs to exactly one Source.
+
+A Source MAY be deleted by an operator (including via wildcard).
+
+When a Source is deleted, all Collections that belong to that Source MUST also be deleted as part of the same operation.
+
+Collections are, in turn, the owner of ingested Assets. Long-term, deleting a Collection will also delete all of its Assets and any Asset-related metadata rows. That rule will be enforced at the Collection boundary.
+
+Today, Source-level deletion is responsible for removing its Collections. Collection → Asset cascade will be enforced as the Asset schema and metadata tables stabilize.
 
 ## Naming rules
 
