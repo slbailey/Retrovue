@@ -43,10 +43,10 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                        {% if source.kind == 'plex' %}bg-blue-100 text-blue-800
-                                        {% elif source.kind == 'filesystem' %}bg-green-100 text-green-800
+                                        {% if source.type == 'plex' %}bg-blue-100 text-blue-800
+                                        {% elif source.type == 'filesystem' %}bg-green-100 text-green-800
                                         {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                        {{ source.kind.title() }}
+                                        {{ source.type.title() }}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -63,7 +63,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex justify-end space-x-2">
                                         <a href="/sources/{{ source.id }}" class="text-blue-600 hover:text-blue-900">View</a>
-                                        {% if source.kind == 'plex' %}
+                                        {% if source.type == 'plex' %}
                                         <button onclick="discoverLibraries('{{ source.id }}')" class="text-green-600 hover:text-green-900">Discover</button>
                                         {% endif %}
                                     </div>

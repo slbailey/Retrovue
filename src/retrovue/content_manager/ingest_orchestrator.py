@@ -212,7 +212,7 @@ class IngestOrchestrator:
         
         return collections
     
-    def _process_collection(self, collection: SourceCollectionDTO, dry_run: bool, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> IngestReport:
+    def _process_collection(self, collection: SourceCollectionDTO, dry_run: bool, title_filter: str | None = None, season_filter: int | None = None, episode_filter: int | None = None) -> IngestReport:
         """Process a single collection."""
         report = IngestReport()
         
@@ -237,7 +237,7 @@ class IngestOrchestrator:
         
         return report
     
-    def _discover_from_collection(self, importer, collection: SourceCollectionDTO, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> list:
+    def _discover_from_collection(self, importer, collection: SourceCollectionDTO, title_filter: str | None = None, season_filter: int | None = None, episode_filter: int | None = None) -> list:
         """Discover items from a collection using the appropriate importer."""
         if collection.source_type == "plex":
             # For Plex, use collection-specific discovery
@@ -475,7 +475,7 @@ class IngestOrchestrator:
     
     def _get_importer_for_source(self, source: Source):
         """Get importer for a source."""
-        if source.kind == "plex":
+        if source.type == "plex":
             # Build server configuration from source
             config = source.config or {}
             servers = [{
@@ -484,13 +484,13 @@ class IngestOrchestrator:
             }]
             return get_importer("plex", servers=servers)
         else:
-            return get_importer(source.kind)
+            return get_importer(source.type)
     
     def _get_importer_for_collection(self, collection: SourceCollectionDTO):
         """Get importer for a collection."""
         if collection.source_type == "plex":
             # Get Plex sources from database
-            plex_sources = self.db.query(Source).filter(Source.kind == "plex").all()
+            plex_sources = self.db.query(Source).filter(Source.type == "plex").all()
             if not plex_sources:
                 raise ValueError("No Plex sources configured")
             
@@ -610,7 +610,7 @@ class IngestOrchestrator:
             return "File size too small"
         return "Manual review required"
     
-    def ingest_collection(self, collection_id: str, dry_run: bool = False, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> dict:
+    def ingest_collection(self, collection_id: str, dry_run: bool = False, title_filter: str | None = None, season_filter: int | None = None, episode_filter: int | None = None) -> dict:
         """
         Ingest a single collection by ID.
         
@@ -668,9 +668,9 @@ class IngestOrchestrator:
             collection_dto = SourceCollectionDTO(
                 external_id=collection.external_id,
                 name=collection.name,
-                enabled=collection.enabled,
+                sync_enabled=collection.sync_enabled,
                 mapping_pairs=mapping_pairs,
-                source_type=source.kind if source else "unknown",
+                source_type=source.type if source else "unknown",
                 config=collection.config
             )
             

@@ -6,9 +6,9 @@ This module provides the main FastAPI application with web routes for the admin 
 
 from __future__ import annotations
 
+import os
 import time
 import uuid
-import os
 from collections.abc import Callable
 
 from fastapi import FastAPI, Request, Response

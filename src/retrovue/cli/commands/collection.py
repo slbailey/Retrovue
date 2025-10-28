@@ -43,7 +43,6 @@ def list_collections(
         retrovue collection list --source plex-5063d926 --json
     """
     with session() as db:
-        import os
 
         from ...content_manager.source_service import SourceService
         from ...domain.entities import PathMapping, SourceCollection
@@ -82,20 +81,15 @@ def list_collections(
                         "local_path": mapping.local_path
                     })
                 
-                # Determine if ingestable (at least one valid local path, independent of sync status)
-                ingestable = False
-                if mapping_pairs:
-                    for mapping in path_mappings:
-                        if mapping.local_path and os.path.exists(mapping.local_path) and os.access(mapping.local_path, os.R_OK):
-                            ingestable = True
-                            break
+                # Use persisted ingestible field
+                ingestable = collection.ingestible
                 
                 collection_data.append({
                     "collection_id": str(collection.id),
                     "external_id": collection.external_id,
                     "display_name": collection.name,
                     "source_path": collection.config.get("plex_section_ref", "") if collection.config else "",
-                    "sync_enabled": collection.enabled,
+                    "sync_enabled": collection.sync_enabled,
                     "ingestable": ingestable,
                     "mapping_pairs": mapping_pairs
                 })
@@ -165,10 +159,9 @@ def list_all_collections(
         retrovue collection list-all --json
     """
     with session() as db:
-        import os
 
         from ...content_manager.source_service import SourceService
-        from ...domain.entities import PathMapping, Source, SourceCollection
+        from ...domain.entities import Source, SourceCollection
         
         try:
             SourceService(db)
@@ -178,25 +171,15 @@ def list_all_collections(
             
             collection_data = []
             for collection in collections:
-                # Get path mappings
-                path_mappings = db.query(PathMapping).filter(
-                    PathMapping.collection_id == collection.id
-                ).all()
-                
-                # Determine if ingestable (at least one valid local path, independent of sync status)
-                ingestable = False
-                if path_mappings:
-                    for mapping in path_mappings:
-                        if mapping.local_path and os.path.exists(mapping.local_path) and os.access(mapping.local_path, os.R_OK):
-                            ingestable = True
-                            break
+                # Use persisted ingestible field
+                ingestable = collection.ingestible
                 
                 collection_data.append({
                     "collection_id": str(collection.id),
                     "name": collection.name,
                     "source_name": collection.source.name,
-                    "source_type": collection.source.kind,
-                    "sync_enabled": collection.enabled,
+                    "source_type": collection.source.type,
+                    "sync_enabled": collection.sync_enabled,
                     "ingestible": ingestable
                 })
             
@@ -311,29 +294,9 @@ def update_collection(
                 
                 # If enabling sync, check if collection is ingestible
                 if sync_enabled:
-                    # Check if collection is ingestible (has valid local paths)
-                    existing_mappings = db.query(PathMapping).filter(PathMapping.collection_id == collection.id).all()
-                    ingestible = False
-                    
-                    if local_path:
-                        # Validate the provided path
-                        if os.path.exists(local_path) and os.path.isdir(local_path) and os.access(local_path, os.R_OK):
-                            ingestible = True
-                        else:
-                            validation_errors.append(f"Provided local path is not accessible: {local_path}")
-                    else:
-                        # Check existing path mappings
-                        if existing_mappings:
-                            for mapping in existing_mappings:
-                                if mapping.local_path and os.path.exists(mapping.local_path) and os.path.isdir(mapping.local_path) and os.access(mapping.local_path, os.R_OK):
-                                    ingestible = True
-                                    break
-                    
-                    if not ingestible:
-                        if not existing_mappings:
-                            validation_errors.append("Cannot enable sync: collection is not ingestible (no valid local path mappings)")
-                        else:
-                            validation_errors.append("Cannot enable sync: collection is not ingestible (no accessible local paths)")
+                    # Check if collection is ingestible using persisted field
+                    if not collection.ingestible:
+                        validation_errors.append("Cannot enable sync: collection is not ingestible (no valid local path mappings)")
             
             if local_path is not None:
                 updates["local_path"] = local_path
@@ -367,7 +330,7 @@ def update_collection(
             # Apply updates in a transaction
             try:
                 if "sync_enabled" in updates:
-                    collection.enabled = updates["sync_enabled"]
+                    collection.sync_enabled = updates["sync_enabled"]
                 
                 if "local_path" in updates:
                     # Update or create path mapping
@@ -888,11 +851,10 @@ def collection_ingest(
         raise typer.Exit(1)
     
     with session() as db:
-        import os
 
         from ...content_manager.ingest_orchestrator import IngestOrchestrator
         from ...content_manager.source_service import SourceService
-        from ...domain.entities import PathMapping, SourceCollection
+        from ...domain.entities import SourceCollection
         
         try:
             SourceService(db)
@@ -930,20 +892,12 @@ def collection_ingest(
                 raise typer.Exit(1)
             
             # Validate collection is ready for ingest
-            if not collection.enabled:
+            if not collection.sync_enabled:
                 typer.echo(f"Error: Collection '{collection.name}' is not enabled for sync", err=True)
                 raise typer.Exit(1)
             
-            # Check if collection is ingestible
-            path_mappings = db.query(PathMapping).filter(PathMapping.collection_id == collection.id).all()
-            ingestible = False
-            if path_mappings:
-                for mapping in path_mappings:
-                    if mapping.local_path and os.path.exists(mapping.local_path) and os.access(mapping.local_path, os.R_OK):
-                        ingestible = True
-                        break
-            
-            if not ingestible:
+            # Check if collection is ingestible using persisted field
+            if not collection.ingestible:
                 typer.echo(f"Error: Collection '{collection.name}' is not ingestible (no valid local paths)", err=True)
                 raise typer.Exit(1)
             

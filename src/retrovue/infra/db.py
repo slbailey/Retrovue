@@ -43,7 +43,7 @@ SessionLocal = sessionmaker(
 
 
 # Additional functions for bootstrap infrastructure
-def get_engine(db_url: str = None) -> Engine:
+def get_engine(db_url: str | None = None) -> Engine:
     """Get or create the database engine."""
     if db_url:
         # Create a new engine with the specified URL

@@ -56,8 +56,8 @@ class CollectionUpdateDTO:
     external_id: str
     """External identifier for the collection"""
     
-    enabled: bool
-    """Whether the collection is enabled"""
+    sync_enabled: bool
+    """Whether the collection is enabled for sync"""
     
     mapping_pairs: list[tuple[str, str]]
     """Path mapping pairs [(source_prefix, local_prefix), ...]"""
@@ -78,7 +78,7 @@ class SourceCollectionDTO:
     name: str
     """Human-readable name of the collection"""
     
-    enabled: bool
+    sync_enabled: bool
     """Whether this collection is enabled for ingestion"""
     
     mapping_pairs: list[tuple[str, str]]
@@ -139,7 +139,7 @@ class SourceService:
             ContentSourceDTO(
                 id=str(source.id),
                 external_id=source.external_id,
-                kind=source.kind,
+                kind=source.type,
                 name=source.name,
                 status="connected",  # TODO: Implement actual status checking
                 base_url=source.config.get("base_url") if source.config else None,
@@ -245,7 +245,7 @@ class SourceService:
                     return ContentSourceDTO(
                         id=str(source.id),
                         external_id=source.external_id,
-                        kind=source.kind,
+                        kind=source.type,
                         name=source.name,
                         status="connected",
                         base_url=source.config.get("base_url") if source.config else None,
@@ -260,7 +260,7 @@ class SourceService:
             return ContentSourceDTO(
                 id=str(source.id),
                 external_id=source.external_id,
-                kind=source.kind,
+                kind=source.type,
                 name=source.name,
                 status="connected",
                 base_url=source.config.get("base_url") if source.config else None,
@@ -273,7 +273,7 @@ class SourceService:
             return ContentSourceDTO(
                 id=str(source.id),
                 external_id=source.external_id,
-                kind=source.kind,
+                kind=source.type,
                 name=source.name,
                 status="connected",
                 base_url=source.config.get("base_url") if source.config else None,
@@ -327,7 +327,7 @@ class SourceService:
         return ContentSourceDTO(
             id=str(source.id),
             external_id=source.external_id,
-            kind=source.kind,
+            kind=source.type,
             name=source.name,
             status="connected",
             base_url=source.config.get("base_url") if source.config else None,
@@ -388,7 +388,7 @@ class SourceService:
             "source_deleted",
             source_id=str(source.id),
             source_name=source.name,
-            source_kind=source.kind,
+            source_kind=source.type,
             collections_deleted=collections_count,
             path_mappings_deleted=path_mappings_count
         )
@@ -412,7 +412,7 @@ class SourceService:
         
         collections = self.db.query(SourceCollection).filter(
             SourceCollection.source_id == source.id,
-            SourceCollection.enabled
+            SourceCollection.sync_enabled
         ).all()
         
         result = []
@@ -427,15 +427,15 @@ class SourceService:
             result.append(SourceCollectionDTO(
                 external_id=collection.external_id,
                 name=collection.name,
-                enabled=collection.enabled,
+                sync_enabled=collection.sync_enabled,
                 mapping_pairs=mapping_pairs,
-                source_type=source.kind,
+                source_type=source.type,
                 config=collection.config
             ))
         
         return result
     
-    def list_all_collections(self, source_id: str = None) -> list[SourceCollectionDTO]:
+    def list_all_collections(self, source_id: str | None = None) -> list[SourceCollectionDTO]:
         """
         List all collections, optionally filtered by source.
         
@@ -468,22 +468,22 @@ class SourceService:
             result.append(SourceCollectionDTO(
                 external_id=collection.external_id,
                 name=collection.name,
-                enabled=collection.enabled,
+                sync_enabled=collection.sync_enabled,
                 mapping_pairs=mapping_pairs,
-                source_type=collection.source.kind,
+                source_type=collection.source.type,
                 config=collection.config or {}
             ))
         
         return result
     
-    def update_collection_enabled(self, source_type: str, external_id: str, enabled: bool) -> bool:
+    def update_collection_sync_enabled(self, source_type: str, external_id: str, sync_enabled: bool) -> bool:
         """
         Update the enabled status of a collection.
         
         Args:
             source_type: The source type (e.g., 'plex')
             external_id: The collection external ID
-            enabled: Whether to enable or disable the collection
+            sync_enabled: Whether to enable or disable the collection
             
         Returns:
             True if successful, False otherwise
@@ -491,14 +491,14 @@ class SourceService:
         try:
             # Find the collection by external_id across all sources of this type
             collection = self.db.query(SourceCollection).join(Source).filter(
-                Source.kind == source_type,
+                Source.type == source_type,
                 SourceCollection.external_id == external_id
             ).first()
             
             if not collection:
                 return False
             
-            collection.enabled = enabled
+            collection.sync_enabled = sync_enabled
             self.db.commit()
             return True
             
@@ -632,7 +632,7 @@ class SourceService:
         # Create the source entity
         source = Source(
             external_id=external_id,
-            kind="plex",
+            type="plex",
             name=name,
             config={"base_url": base_url, "token": token}
         )
@@ -644,7 +644,7 @@ class SourceService:
         return ContentSourceDTO(
             id=source.external_id,
             external_id=source.external_id,
-            kind=source.kind,
+            kind=source.type,
             name=source.name,
             status="connected",
             base_url=base_url,
@@ -678,7 +678,7 @@ class SourceService:
         # Create the source entity
         source = Source(
             external_id=external_id,
-            kind="filesystem",
+            type="filesystem",
             name=name,
             config={"base_path": base_path}
         )
@@ -690,7 +690,7 @@ class SourceService:
         return ContentSourceDTO(
             id=source.external_id,
             external_id=source.external_id,
-            kind=source.kind,
+            kind=source.type,
             name=source.name,
             status="connected",
             base_url=base_path,
@@ -747,9 +747,9 @@ class SourceService:
                 collections.append(SourceCollectionDTO(
                     external_id=lib.get("key", ""),
                     name=lib.get("title", ""),
-                    enabled=False,  # Newly discovered collections start disabled
+                    sync_enabled=False,  # Newly discovered collections start disabled
                     mapping_pairs=[],  # No mappings by default
-                    source_type=source.kind,
+                    source_type=source.type,
                     config={
                         "plex_path": f"/plex/{lib.get('title', '').lower().replace(' ', '_')}",
                         "type": lib.get("type", "movie")
@@ -799,7 +799,7 @@ class SourceService:
                         source_id=source.id,
                         external_id=collection_dto.external_id,
                         name=collection_dto.name,
-                        enabled=collection_dto.enabled,
+                        sync_enabled=collection_dto.sync_enabled,
                         config=collection_dto.config
                     )
                     self.db.add(collection)
@@ -917,14 +917,14 @@ class SourceService:
                         source_id=source.id,
                         external_id=update.external_id,
                         name=update.external_id,  # Use external_id as name if not provided
-                        enabled=update.enabled
+                        sync_enabled=update.sync_enabled
                     )
                     self.db.add(collection)
                     self.db.flush()
                     self.db.refresh(collection)
                 else:
                     # Update existing collection
-                    collection.enabled = update.enabled
+                    collection.sync_enabled = update.sync_enabled
                 
                 # Update path mappings
                 # Delete existing mappings

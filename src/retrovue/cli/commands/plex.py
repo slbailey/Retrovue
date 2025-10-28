@@ -39,7 +39,7 @@ def get_active_plex_server(server_name: str | None = None) -> tuple[str, str]:
         
         # Get all Plex sources using the service
         sources = source_service.list_sources()
-        plex_sources = [s for s in sources if s.kind == "plex"]
+        plex_sources = [s for s in sources if s.type == "plex"]
         
         if not plex_sources:
             typer.echo("Error: No Plex servers configured. Please add a Plex server first.", err=True)

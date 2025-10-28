@@ -77,7 +77,7 @@ def validate_collection_enabled(collection: SourceCollection) -> None:
     Raises:
         ValidationError: If collection is not enabled
     """
-    if not collection.enabled:
+    if not collection.sync_enabled:
         raise ValidationError(f"Collection '{collection.name}' is not enabled")
 
 

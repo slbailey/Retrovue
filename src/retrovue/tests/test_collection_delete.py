@@ -34,7 +34,7 @@ class TestCollectionDelete:
         source = Source(
             external_id="test-source-1",
             name="Test Source",
-            kind="plex",
+            type="plex",
             config={"base_url": "http://test", "token": "test"}
         )
         clean_db.add(source)
@@ -45,7 +45,7 @@ class TestCollectionDelete:
             source_id=source.id,
             external_id="18",
             name="Test Collection",
-            enabled=False,
+            sync_enabled=False,
             config={"type": "movie", "plex_section_ref": "plex://18"}
         )
         clean_db.add(collection)
@@ -100,7 +100,7 @@ class TestCollectionList:
         source = Source(
             external_id="test-source-list",
             name="Test Source for List",
-            kind="plex",
+            type="plex",
             config={"base_url": "http://test", "token": "test"}
         )
         clean_db.add(source)
@@ -111,14 +111,14 @@ class TestCollectionList:
             source_id=source.id,
             external_id="18",
             name="Movies",
-            enabled=True,
+            sync_enabled=True,
             config={"type": "movie", "plex_section_ref": "plex://18"}
         )
         collection2 = SourceCollection(
             source_id=source.id,
             external_id="19",
             name="TV Shows",
-            enabled=False,
+            sync_enabled=False,
             config={"type": "show", "plex_section_ref": "plex://19"}
         )
         clean_db.add(collection1)
@@ -163,7 +163,7 @@ class TestCollectionList:
         source = Source(
             external_id="test-source-empty",
             name="Empty Source",
-            kind="plex",
+            type="plex",
             config={"base_url": "http://test", "token": "test"}
         )
         clean_db.add(source)
@@ -189,7 +189,7 @@ class TestCollectionList:
         source = Source(
             external_id="test-source-2",
             name="Test Source 2",
-            kind="plex",
+            type="plex",
             config={"base_url": "http://test", "token": "test"}
         )
         clean_db.add(source)
@@ -200,7 +200,7 @@ class TestCollectionList:
             source_id=source.id,
             external_id="19",
             name="Test Collection 2",
-            enabled=False,
+            sync_enabled=False,
             config={"type": "show", "plex_section_ref": "plex://19"}
         )
         clean_db.add(collection)
@@ -228,7 +228,7 @@ class TestCollectionWipe:
         source = Source(
             external_id="test-source-wipe",
             name="Test Source for Wipe",
-            kind="plex",
+            type="plex",
             config={"base_url": "http://test", "token": "test"}
         )
         clean_db.add(source)
@@ -239,7 +239,7 @@ class TestCollectionWipe:
             source_id=source.id,
             external_id="20",
             name="TV Shows",
-            enabled=True,
+            sync_enabled=True,
             config={"type": "show", "plex_section_ref": "plex://20"}
         )
         clean_db.add(collection)
@@ -445,13 +445,13 @@ class TestCollectionWipe:
         source1 = Source(
             external_id="test-source-1",
             name="Test Source 1",
-            kind="plex",
+            type="plex",
             config={"base_url": "http://test1", "token": "test1"}
         )
         source2 = Source(
             external_id="test-source-2", 
             name="Test Source 2",
-            kind="plex",
+            type="plex",
             config={"base_url": "http://test2", "token": "test2"}
         )
         clean_db.add_all([source1, source2])
@@ -461,14 +461,14 @@ class TestCollectionWipe:
             source_id=source1.id,
             external_id="21",
             name="Movies",
-            enabled=False,
+            sync_enabled=False,
             config={"type": "movie"}
         )
         collection2 = SourceCollection(
             source_id=source2.id,
             external_id="22", 
             name="Movies",
-            enabled=False,
+            sync_enabled=False,
             config={"type": "movie"}
         )
         clean_db.add_all([collection1, collection2])

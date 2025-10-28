@@ -65,7 +65,7 @@ def test_masterclock_monotonic(iterations: int = 1000) -> dict[str, Any]:
     return results
 
 
-def test_masterclock_timezone_resolution(timezones: list[str] = None) -> dict[str, Any]:
+def test_masterclock_timezone_resolution(timezones: list[str] | None = None) -> dict[str, Any]:
     """
     Test timezone mapping is safe and handles invalid timezones gracefully.
     
@@ -335,7 +335,7 @@ def test_masterclock_scheduler_alignment() -> dict[str, Any]:
     return results
 
 
-def test_masterclock_stability(iterations: int = 10000, minutes: int = None) -> dict[str, Any]:
+def test_masterclock_stability(iterations: int = 10000, minutes: int | None = None) -> dict[str, Any]:
     """
     Stress-test that repeated tz conversion doesn't leak memory or fall off a performance cliff.
     Captures detailed performance metrics to detect regressions.

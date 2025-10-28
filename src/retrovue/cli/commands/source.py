@@ -7,16 +7,17 @@ Calls SourceService under the hood for all source operations.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import typer
 
 from ...adapters.registry import (
+    SOURCES,
     get_importer,
     get_importer_help,
     list_enrichers,
     list_importers,
-    SOURCES,
 )
 from ...content_manager.source_service import SourceService
 from ...domain.entities import PathMapping, SourceCollection
@@ -526,7 +527,7 @@ def list_source_types(
                 
                 source_types.append(source_type_info)
                 
-            except Exception as e:
+            except Exception:
                 # Handle individual importer validation errors
                 source_type_info = {
                     "type": importer_name,
@@ -608,7 +609,7 @@ def _check_interface_compliance(importer_class) -> bool:
         
         # Verify the name attribute is accessible
         try:
-            name_value = getattr(importer_class, 'name')
+            name_value = importer_class.name
             if not name_value:
                 return False
         except Exception:
@@ -918,7 +919,7 @@ def discover_collections(
                         source_id=source.id,
                         external_id=collection["external_id"],
                         name=collection["name"],
-                        enabled=False,  # Newly discovered collections start disabled
+                        sync_enabled=False,  # Newly discovered collections start disabled
                         config={
                             "plex_section_ref": collection.get("plex_section_ref", ""),
                             "type": collection.get("type", "unknown")
@@ -929,7 +930,7 @@ def discover_collections(
                     collection_dtos.append(SourceCollectionDTO(
                         external_id=collection["external_id"],
                         name=collection["name"],
-                        enabled=False,
+                        sync_enabled=False,
                         mapping_pairs=[],
                         source_type=source.type,
                         config=new_collection.config
@@ -952,7 +953,7 @@ def discover_collections(
                             {
                                 "external_id": col.external_id,
                                 "name": col.name,
-                                "enabled": col.enabled,
+                                "sync_enabled": col.sync_enabled,
                                 "source_type": col.source_type
                             } for col in collection_dtos
                         ]
@@ -991,7 +992,6 @@ def source_ingest(
         retrovue source "My Plex Server" ingest --json
     """
     with session() as db:
-        import os
         source_service = SourceService(db)
         
         try:
@@ -1004,7 +1004,7 @@ def source_ingest(
             # Get sync-enabled, ingestible collections for this source
             collections = db.query(SourceCollection).filter(
                 SourceCollection.source_id == source.id,
-                SourceCollection.enabled
+                SourceCollection.sync_enabled
             ).all()
             
             if not collections:
@@ -1012,22 +1012,10 @@ def source_ingest(
                 typer.echo("Use 'retrovue collection update <name> --sync-enabled true' to enable collections")
                 return
             
-            # Filter to only ingestible collections
+            # Filter to only ingestible collections using persisted field
             ingestible_collections = []
             for collection in collections:
-                # Check if collection is ingestible (has valid local paths)
-                path_mappings = db.query(PathMapping).filter(
-                    PathMapping.collection_id == collection.id
-                ).all()
-                
-                ingestible = False
-                if path_mappings:
-                    for mapping in path_mappings:
-                        if mapping.local_path and os.path.exists(mapping.local_path) and os.access(mapping.local_path, os.R_OK):
-                            ingestible = True
-                            break
-                
-                if ingestible:
+                if collection.ingestible:
                     ingestible_collections.append(collection)
                 else:
                     typer.echo(f"  Skipping '{collection.name}' - not ingestible (no valid local paths)")

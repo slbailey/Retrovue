@@ -6,7 +6,7 @@ This module defines all configuration settings for Retrovue using Pydantic BaseS
 
 from __future__ import annotations
 
-from pydantic import Field, ConfigDict
+from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 

@@ -10,9 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, ConfigDict
-
-from .types import AssetType, PackageType
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # Base schemas
@@ -107,13 +105,13 @@ class PackageList(BaseModel):
 class PackageItemBulkCreate(BaseModel):
     """Schema for bulk creating package items."""
     
-    items: list[PackageItemCreate] = Field(..., min_items=1, description="List of items to create")
+    items: list[PackageItemCreate] = Field(..., min_length=1, description="List of items to create")
 
 
 class PackageItemBulkUpdate(BaseModel):
     """Schema for bulk updating package items."""
     
-    items: list[PackageItemUpdate] = Field(..., min_items=1, description="List of items to update")
+    items: list[PackageItemUpdate] = Field(..., min_length=1, description="List of items to update")
 
 
 # Response schemas
@@ -139,11 +137,11 @@ class PackageTypeValidation(BaseModel):
     """Schema for validating package types."""
     
     type: Literal[
-        PackageType.BLOCK.value,
-        PackageType.MOVIE.value,
-        PackageType.SPECIAL.value,
-        PackageType.BUMPER.value,
-        PackageType.CUSTOM.value
+        "block",
+        "movie", 
+        "special",
+        "bumper",
+        "custom"
     ]
 
 
@@ -151,11 +149,11 @@ class AssetTypeValidation(BaseModel):
     """Schema for validating asset types."""
     
     asset_type: Literal[
-        AssetType.EPISODE.value,
-        AssetType.MOVIE.value,
-        AssetType.BUMPER.value,
-        AssetType.COMMERCIAL.value,
-        AssetType.INTRO.value,
-        AssetType.OUTRO.value,
-        AssetType.CREDITS.value
+        "episode",
+        "movie",
+        "bumper",
+        "commercial",
+        "intro",
+        "outro",
+        "credits"
     ]

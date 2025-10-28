@@ -45,7 +45,7 @@ class CatalogAsset:
     """Reference to Library Domain asset for traceability"""
     
     # Timestamps
-    created_at: datetime = None
+    created_at: datetime | None = None
     """Record creation timestamp"""
     
     def __post_init__(self):

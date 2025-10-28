@@ -37,7 +37,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     canonical_assets = db.query(Asset).filter(Asset.canonical.is_(True)).count()
     pending_assets = db.query(Asset).filter(Asset.canonical.is_(False)).count()
     total_sources = db.query(Source).count()
-    enabled_collections = db.query(SourceCollection).filter(SourceCollection.enabled.is_(True)).count()
+    enabled_collections = db.query(SourceCollection).filter(SourceCollection.sync_enabled.is_(True)).count()
     
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -64,7 +64,7 @@ async def sources_list(request: Request, db: Session = Depends(get_db)):
     for source in db_sources:
         sources.append({
             "id": source.external_id,
-            "kind": source.kind,
+            "kind": source.type,
             "name": source.name,
             "status": "active",  # Default status since Source model doesn't have status
             "base_url": source.config.get("base_url", "") if source.config else ""
@@ -131,7 +131,7 @@ async def source_detail(request: Request, source_id: str, db: Session = Depends(
     else:
         source = {
             "id": source_entity.external_id,
-            "kind": source_entity.kind,
+            "kind": source_entity.type,
             "name": source_entity.name,
             "base_url": source_entity.config.get("base_url", "") if source_entity.config else "",
             "status": "active"  # Default status since Source model doesn't have status
@@ -157,7 +157,7 @@ async def discover_libraries(request: Request, source_id: str, db: Session = Dep
             collections.append({
                 "external_id": collection.external_id,
                 "name": collection.name,
-                "enabled": collection.enabled,
+                "enabled": collection.sync_enabled,
                 "mapping_pairs": collection.mapping_pairs,
                 "source_type": collection.source_type,
                 "config": collection.config
@@ -192,7 +192,7 @@ async def source_collections(request: Request, source_id: str, db: Session = Dep
             collections.append({
                 "external_id": collection.external_id,
                 "name": collection.name,
-                "enabled": collection.enabled,
+                "enabled": collection.sync_enabled,
                 "mapping_pairs": collection.mapping_pairs,
                 "source_type": collection.source_type,
                 "config": collection.config
@@ -261,7 +261,8 @@ async def assets_list(request: Request, search: str = "", db: Session = Depends(
 @router.post("/play")
 async def play_asset(
     request: Request,
-    asset_id: str = Form(...)
+    asset_id: str = Form(...),
+    db: Session = Depends(get_db)
 ):
     """Play an asset by launching it with the OS."""
     library_service = LibraryService(db)
@@ -315,7 +316,7 @@ async def update_collection(
     try:
         # Parse form data
         form_data = await request.form()
-        enabled = form_data.get("enabled") == "true"
+        sync_enabled = form_data.get("sync_enabled") == "true"
         mapping_pairs = form_data.get("mapping_pairs", "[]")
         
         # Parse mapping pairs if provided
@@ -330,8 +331,8 @@ async def update_collection(
         # Use source service to update collection
         source_service = SourceService(db)
         
-        # Update enabled status
-        success = source_service.update_collection_enabled(source_id, external_id, enabled)
+        # Update sync enabled status
+        success = source_service.update_collection_sync_enabled(source_id, external_id, sync_enabled)
         if not success:
             raise Exception(f"Failed to update collection {external_id}")
         
@@ -353,7 +354,7 @@ async def update_collection(
             "collection": {
                 "external_id": collection_dto.external_id,
                 "name": collection_dto.name,
-                "enabled": collection_dto.enabled,
+                "sync_enabled": collection_dto.sync_enabled,
                 "mapping_pairs": collection_dto.mapping_pairs,
                 "source_type": collection_dto.source_type,
                 "config": collection_dto.config

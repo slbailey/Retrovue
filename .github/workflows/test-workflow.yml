@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
 
     services:
       postgres:
@@ -57,8 +57,12 @@ jobs:
 
       - name: Run linting
         run: |
-          ruff check src/ tests/ || true
-          mypy src/ --ignore-missing-imports || true
+          echo "🔍 Running ruff check with strict configuration..."
+          ruff check .
+          echo "✅ Ruff check passed"
+          echo "🔍 Running mypy type checking..."
+          mypy src/ --ignore-missing-imports
+          echo "✅ MyPy check passed"
 
       - name: Run contract tests
         run: |

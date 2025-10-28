@@ -20,32 +20,11 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from ..shared.types import PackageType
 from .entities import Base
 
 if TYPE_CHECKING:
     pass
-
-
-class PackageType:
-    """Package type constants."""
-    
-    BLOCK = "block"  # TV show block with episodes
-    MOVIE = "movie"  # Movie presentation
-    SPECIAL = "special"  # Special event or holiday programming
-    BUMPER = "bumper"  # Short bumper content
-    CUSTOM = "custom"  # Custom package type
-
-
-class AssetType:
-    """Asset type constants for package items."""
-    
-    EPISODE = "episode"
-    MOVIE = "movie"
-    BUMPER = "bumper"
-    COMMERCIAL = "commercial"
-    INTRO = "intro"
-    OUTRO = "outro"
-    CREDITS = "credits"
 
 
 class Package(Base):
@@ -65,7 +44,7 @@ class Package(Base):
     # Basic package information
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    type: Mapped[str] = mapped_column(String(50), nullable=False, default=PackageType.BLOCK)
+    type: Mapped[str] = mapped_column(String(50), nullable=False, default=PackageType.BLOCK.value)
     
     # Duration information (in milliseconds)
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -17,7 +17,14 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from ...domain.asset_draft import AssetDraft
-from .base import BaseImporter, DiscoveredItem, ImporterConfig, ImporterError, ImporterConfigurationError, ImporterConnectionError
+from .base import (
+    BaseImporter,
+    DiscoveredItem,
+    ImporterConfig,
+    ImporterConfigurationError,
+    ImporterConnectionError,
+    ImporterError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +110,7 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch libraries: {e}") from e
     
-    def get_library_items(self, library_key: str, title_filter: str = None, season_filter: int = None, episode_filter: int = None) -> list[dict[str, Any]]:
+    def get_library_items(self, library_key: str, title_filter: str | None = None, season_filter: int | None = None, episode_filter: int | None = None) -> list[dict[str, Any]]:
         """
         Get all items from a specific library.
         
@@ -849,7 +856,6 @@ class PlexImporter(BaseImporter):
             # Extract metadata
             title = item.get("title", "Unknown Title")
             year = item.get("year")
-            duration = item.get("duration")
             file_size = item.get("fileSize")
             
             # Extract TV show hierarchy information
@@ -931,9 +937,9 @@ class PlexImporter(BaseImporter):
         source_config: dict[str, Any], 
         collection_descriptor: dict[str, Any], 
         local_path: str,
-        title_filter: str = None,
-        season_filter: int = None,
-        episode_filter: int = None
+        title_filter: str | None = None,
+        season_filter: int | None = None,
+        episode_filter: int | None = None
     ) -> list[AssetDraft]:
         """
         Return AssetDraft objects for that collection.

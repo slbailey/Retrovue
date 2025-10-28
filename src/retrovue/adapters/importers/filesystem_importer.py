@@ -11,9 +11,14 @@ import hashlib
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-from .base import BaseImporter, DiscoveredItem, ImporterConfig, ImporterError, ImporterConfigurationError
+from .base import (
+    BaseImporter,
+    DiscoveredItem,
+    ImporterConfig,
+    ImporterConfigurationError,
+    ImporterError,
+)
 
 
 class FilesystemImporter(BaseImporter):

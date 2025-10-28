@@ -111,7 +111,7 @@ async def get_source_collections(source_id: str, db: Session = Depends(get_db)) 
                 {
                     "external_id": collection.external_id,
                     "name": collection.name,
-                    "enabled": collection.enabled,
+                    "enabled": collection.sync_enabled,
                     "mapping_pairs": collection.mapping_pairs,
                     "source_type": collection.source_type,
                     "config": collection.config
@@ -131,7 +131,7 @@ async def get_source_collections(source_id: str, db: Session = Depends(get_db)) 
 async def update_source_collection(
     source_id: str,
     external_id: str,
-    enabled: bool | None = None,
+    sync_enabled: bool | None = None,
     mapping_pairs: list[tuple[str, str]] | None = None,
     db: Session = Depends(get_db)
 ) -> dict[str, Any]:
@@ -141,7 +141,7 @@ async def update_source_collection(
     Args:
         source_id: Source identifier
         external_id: Collection external ID
-        enabled: New enabled status
+        sync_enabled: New sync enabled status
         mapping_pairs: New mapping pairs
         
     Returns:
@@ -152,8 +152,8 @@ async def update_source_collection(
         
         source_service = SourceService(db=db)
         
-        if enabled is not None:
-            success = source_service.update_collection_enabled(source_id, external_id, enabled)
+        if sync_enabled is not None:
+            success = source_service.update_collection_sync_enabled(source_id, external_id, sync_enabled)
             if not success:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

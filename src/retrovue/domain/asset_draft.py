@@ -79,11 +79,11 @@ class AssetDraft:
     """External system identifier (e.g., Plex rating key)"""
     
     # Enrichment metadata
-    raw_metadata: dict[str, Any] = None
+    raw_metadata: dict[str, Any] | None = None
     """Raw metadata from the source system"""
     
     # Timestamps
-    discovered_at: datetime = None
+    discovered_at: datetime | None = None
     """When this asset was discovered"""
     
     def __post_init__(self):
