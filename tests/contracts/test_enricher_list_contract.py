@@ -153,10 +153,20 @@ class TestEnricherListContract:
         """
         Contract: The --test-db flag MUST work for testing in isolated environment.
         """
-        result = self.runner.invoke(app, ["enricher", "list", "--test-db"])
-        
-        assert result.exit_code == 0
-        assert "Configured enricher instances:" in result.stdout
+        with patch("retrovue.cli.commands.enricher.session") as mock_session:
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+            
+            # Mock empty enricher instances for test database
+            mock_query = MagicMock()
+            mock_query.all.return_value = []
+            mock_db.query.return_value.order_by.return_value = mock_query
+            
+            result = self.runner.invoke(app, ["enricher", "list", "--test-db"])
+            
+            assert result.exit_code == 0
+            assert "Using test database environment..." in result.stdout
+            assert "No enricher instances configured" in result.stdout
 
     def test_enricher_list_deterministic_output(self):
         """
