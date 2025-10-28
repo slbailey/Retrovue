@@ -122,13 +122,13 @@ Successfully removed enricher: Video Analysis
 
 ## Behavior Contract Rules (B-#)
 
-- **B-1:** The command MUST require interactive confirmation unless `--force` is provided. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
-- **B-2:** Interactive confirmation MUST require the user to type "yes" exactly to proceed. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
-- **B-3:** The confirmation prompt MUST show enricher details and cascade impact count. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-1:** The command MUST require interactive confirmation unless `--force` is provided. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
+- **B-2:** Interactive confirmation MUST require the user to type "yes" exactly to proceed. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
+- **B-3:** The confirmation prompt MUST show enricher details and cascade impact count. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
 - **B-4:** When `--json` is supplied, output MUST include fields `"removed"`, `"enricher_id"`, `"name"`, and `"type"`.
 - **B-5:** On validation failure (enricher not found), the command MUST exit with code `1` and print "Error: Enricher 'X' not found".
-- **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Removal cancelled". Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
-- **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Removal cancelled". Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
+- **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
 
 ---
 
@@ -138,7 +138,7 @@ Successfully removed enricher: Video Analysis
 - **D-2:** Enricher removal MUST cascade delete all associated channel attachment records.
 - **D-3:** All removal operations MUST occur within a single transaction boundary.
 - **D-4:** On transaction failure, ALL changes MUST be rolled back with no partial deletions.
-- **D-5:** **PRODUCTION SAFETY**: This command MUST comply with ProductionSafety (PS-1 through PS-4). An enricher MUST be considered unsafe to remove in production if removal would cause harm to running or future operations. Harm is defined as: (1) it is actively in use by a running ingest or playout process, OR (2) it is marked `protected_from_removal = true`. `--force` MUST NOT override this safeguard. **Production is determined by environment configuration (e.g. `env.is_production() == true`). This check MUST be enforced by the removal command before performing any destructive action.**
+- **D-5:** **PRODUCTION SAFETY**: This command MUST comply with [\_ops/ProductionSafety.md](_ops/ProductionSafety.md) (PS-1 through PS-4). An enricher MUST be considered unsafe to remove in production if removal would cause harm to running or future operations. Harm is defined as: (1) it is actively in use by a running ingest or playout process, OR (2) it is marked `protected_from_removal = true`. `--force` MUST NOT override this safeguard. **Production is determined by environment configuration (e.g. `env.is_production() == true`). This check MUST be enforced by the removal command before performing any destructive action.**
 - **D-6:** Removal MUST be logged with enricher details, collection count, and channel count.
 - **D-7:** The command MUST verify enricher existence before attempting removal.
 
@@ -205,10 +205,13 @@ retrovue enricher remove enricher-metadata-b2c3d4e5 --test-db
 ## Global Contract Compliance
 
 ### Confirmation Flow
-If the enricher is eligible for removal, interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+
+If the enricher is eligible for removal, interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
 
 ### Production Safety
-This command MUST comply with ProductionSafety (PS-1 through PS-4). An enricher MUST be considered unsafe to remove in production if removal would cause harm to running or future operations. Harm is defined as:
+
+This command MUST comply with [\_ops/ProductionSafety.md](_ops/ProductionSafety.md) (PS-1 through PS-4). An enricher MUST be considered unsafe to remove in production if removal would cause harm to running or future operations. Harm is defined as:
+
 - it is actively in use by a running ingest or playout process, OR
 - it is marked `protected_from_removal = true`
 

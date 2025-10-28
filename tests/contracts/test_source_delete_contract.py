@@ -20,6 +20,70 @@ class TestSourceDeleteContract:
     def setup_method(self):
         """Set up test fixtures."""
         self.runner = CliRunner()
+    
+    def _setup_mock_database(self, mock_db, mock_source):
+        """Set up database mocking for source delete operations."""
+        # Track deleted sources for post-operation validation
+        deleted_sources = set()
+        
+        def mock_query_factory(model_class):
+            if model_class.__name__ == 'Source':
+                # For Source queries (resolve_source_selector and post-operation validation)
+                mock_query = MagicMock()
+                filter_mock = MagicMock()
+                mock_query.filter.return_value = filter_mock
+                
+                # For resolve_source_selector: return the source
+                order_by_mock = MagicMock()
+                filter_mock.order_by.return_value = order_by_mock
+                order_by_mock.all.return_value = [mock_source]
+                
+                # For post-operation validation: return None if source was deleted
+                def mock_first():
+                    if str(mock_source.id) in deleted_sources:
+                        return None
+                    return mock_source
+                
+                filter_mock.first.side_effect = mock_first
+                return mock_query
+            elif model_class.__name__ == 'SourceCollection':
+                # For SourceCollection queries (build_pending_delete_summary and post-operation validation)
+                mock_query = MagicMock()
+                filter_mock = MagicMock()
+                mock_query.filter.return_value = filter_mock
+                
+                # For build_pending_delete_summary: return count
+                def mock_count():
+                    if str(mock_source.id) in deleted_sources:
+                        return 0
+                    return 3
+                
+                filter_mock.count.side_effect = mock_count
+                return mock_query
+            elif model_class.__name__ == 'PathMapping':
+                # For PathMapping queries (build_pending_delete_summary)
+                mock_query = MagicMock()
+                join_mock = MagicMock()
+                mock_query.join.return_value = join_mock
+                filter_mock = MagicMock()
+                join_mock.filter.return_value = filter_mock
+                filter_mock.count.return_value = 12
+                return mock_query
+            else:
+                # Default mock for other queries
+                mock_query = MagicMock()
+                filter_mock = MagicMock()
+                mock_query.filter.return_value = filter_mock
+                filter_mock.count.return_value = 0
+                return mock_query
+        
+        # Track when delete is called
+        def mock_delete(obj):
+            if hasattr(obj, 'id') and str(obj.id) == str(mock_source.id):
+                deleted_sources.add(str(obj.id))
+        
+        mock_db.delete.side_effect = mock_delete
+        mock_db.query.side_effect = mock_query_factory
 
     def test_source_delete_help_flag_exits_zero(self):
         """
@@ -59,17 +123,14 @@ class TestSourceDeleteContract:
             mock_source_service.delete_source.return_value = True
             mock_source_service_class.return_value = mock_source_service
             
-            # Mock database queries for collections and path mappings
-            mock_query = MagicMock()
-            mock_query.filter.return_value.count.return_value = 3
-            mock_query.filter.return_value.all.return_value = []
-            mock_db.query.return_value = mock_query
+            # Set up database mocking
+            self._setup_mock_database(mock_db, mock_source)
             
             # Mock user input "no" to cancel
             result = self.runner.invoke(app, ["delete", "test-source"], input="no\n")
             
             assert result.exit_code == 0
-            assert "Are you sure you want to delete source" in result.stdout
+            assert "WARNING: This will permanently delete the following:" in result.stdout
             assert "Test Plex Server" in result.stdout
             assert "Deletion cancelled" in result.stdout
 
@@ -95,11 +156,8 @@ class TestSourceDeleteContract:
             mock_source_service.delete_source.return_value = True
             mock_source_service_class.return_value = mock_source_service
             
-            # Mock database queries
-            mock_query = MagicMock()
-            mock_query.filter.return_value.count.return_value = 3
-            mock_query.filter.return_value.all.return_value = []
-            mock_db.query.return_value = mock_query
+            # Set up database mocking
+            self._setup_mock_database(mock_db, mock_source)
             
             # Mock user input "y" (not "yes")
             result = self.runner.invoke(app, ["delete", "test-source"], input="y\n")
@@ -129,11 +187,8 @@ class TestSourceDeleteContract:
             mock_source_service.delete_source.return_value = True
             mock_source_service_class.return_value = mock_source_service
             
-            # Mock database queries
-            mock_query = MagicMock()
-            mock_query.filter.return_value.count.return_value = 3
-            mock_query.filter.return_value.all.return_value = []
-            mock_db.query.return_value = mock_query
+            # Set up database mocking
+            self._setup_mock_database(mock_db, mock_source)
             
             result = self.runner.invoke(app, ["delete", "test-source"], input="no\n")
             
@@ -161,8 +216,8 @@ class TestSourceDeleteContract:
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
             
-            # Mock collections count
-            mock_db.query.return_value.filter.return_value.count.return_value = 3
+            # Set up database mocking
+            self._setup_mock_database(mock_db, mock_source)
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
                 result = self.runner.invoke(app, ["delete", "test-source", "--force", "--json"])
@@ -190,15 +245,25 @@ class TestSourceDeleteContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock source service to return None (source not found)
-            mock_source_service = MagicMock()
-            mock_source_service.get_source_by_id.return_value = None
+            # Mock database to return no sources (source not found)
+            def mock_query_factory(model_class):
+                if model_class.__name__ == 'Source':
+                    # For Source queries (resolve_source_selector) - return empty list
+                    mock_query = MagicMock()
+                    mock_query.filter.return_value.order_by.return_value.all.return_value = []
+                    return mock_query
+                else:
+                    # Default mock for other queries
+                    mock_query = MagicMock()
+                    mock_query.filter.return_value.count.return_value = 0
+                    return mock_query
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
-                result = self.runner.invoke(app, ["delete", "nonexistent-source"])
-                
-                assert result.exit_code == 1
-                assert "Error: Source 'nonexistent-source' not found" in result.stderr
+            mock_db.query.side_effect = mock_query_factory
+            
+            result = self.runner.invoke(app, ["delete", "nonexistent-source"])
+            
+            assert result.exit_code == 1
+            assert "Error: Source 'nonexistent-source' not found" in result.stderr
 
     def test_source_delete_cancellation_exit_code_zero(self):
         """
@@ -222,11 +287,8 @@ class TestSourceDeleteContract:
             mock_source_service.delete_source.return_value = True
             mock_source_service_class.return_value = mock_source_service
             
-            # Mock database queries
-            mock_query = MagicMock()
-            mock_query.filter.return_value.count.return_value = 3
-            mock_query.filter.return_value.all.return_value = []
-            mock_db.query.return_value = mock_query
+            # Set up database mocking
+            self._setup_mock_database(mock_db, mock_source)
             
             result = self.runner.invoke(app, ["delete", "test-source"], input="no\n")
             
@@ -251,8 +313,8 @@ class TestSourceDeleteContract:
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
             
-            # Mock collections count
-            mock_db.query.return_value.filter.return_value.count.return_value = 3
+            # Set up database mocking
+            self._setup_mock_database(mock_db, mock_source)
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
                 result = self.runner.invoke(app, ["delete", "test-source", "--force"])
@@ -261,7 +323,6 @@ class TestSourceDeleteContract:
                 assert "Successfully deleted source" in result.stdout
                 assert "Are you sure" not in result.stdout  # No confirmation prompt
 
-    @pytest.mark.skip(reason="Wildcard functionality not yet implemented")
     def test_source_delete_wildcard_selection(self):
         """
         Contract B-8: The source_selector argument MAY be a wildcard. Wildcard selection MUST resolve to a deterministic list of matching sources before any deletion occurs.
@@ -279,17 +340,82 @@ class TestSourceDeleteContract:
             mock_source_service = MagicMock()
             mock_source_service.get_sources_by_pattern.return_value = mock_sources
             
-            # Mock collections count for each source
-            mock_db.query.return_value.filter.return_value.count.return_value = 2
+            # Set up database mocking for multiple sources using the helper
+            # Track deleted sources for post-operation validation
+            deleted_sources = set()
+            
+            def mock_query_factory(model_class):
+                if model_class.__name__ == 'Source':
+                    # For Source queries (resolve_source_selector and post-operation validation)
+                    mock_query = MagicMock()
+                    filter_mock = MagicMock()
+                    mock_query.filter.return_value = filter_mock
+                    
+                    # For resolve_source_selector: return multiple sources
+                    order_by_mock = MagicMock()
+                    filter_mock.order_by.return_value = order_by_mock
+                    order_by_mock.all.return_value = mock_sources
+                    
+                    # For post-operation validation: return None if source was deleted
+                    def mock_first():
+                        # This is called for each individual source validation
+                        # We need to check which specific source is being validated
+                        # For simplicity, return None if any source was deleted
+                        if deleted_sources:
+                            return None
+                        return mock_sources[0]  # Return first source for initial validation
+                    
+                    filter_mock.first.side_effect = mock_first
+                    return mock_query
+                elif model_class.__name__ == 'SourceCollection':
+                    # For SourceCollection queries (build_pending_delete_summary and post-operation validation)
+                    mock_query = MagicMock()
+                    filter_mock = MagicMock()
+                    mock_query.filter.return_value = filter_mock
+                    
+                    # For build_pending_delete_summary: return count
+                    def mock_count():
+                        if deleted_sources:
+                            return 0
+                        return 2
+                    
+                    filter_mock.count.side_effect = mock_count
+                    return mock_query
+                elif model_class.__name__ == 'PathMapping':
+                    # For PathMapping queries (build_pending_delete_summary)
+                    mock_query = MagicMock()
+                    join_mock = MagicMock()
+                    mock_query.join.return_value = join_mock
+                    filter_mock = MagicMock()
+                    join_mock.filter.return_value = filter_mock
+                    filter_mock.count.return_value = 8
+                    return mock_query
+                else:
+                    # Default mock for other queries
+                    mock_query = MagicMock()
+                    filter_mock = MagicMock()
+                    mock_query.filter.return_value = filter_mock
+                    filter_mock.count.return_value = 0
+                    return mock_query
+            
+            # Track when delete is called
+            def mock_delete(obj):
+                if hasattr(obj, 'id'):
+                    deleted_sources.add(str(obj.id))
+            
+            mock_db.delete.side_effect = mock_delete
+            mock_db.query.side_effect = mock_query_factory
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
                 result = self.runner.invoke(app, ["delete", "test-*", "--force"])
                 
                 assert result.exit_code == 0
-                # Verify wildcard resolution was called
-                mock_source_service.get_sources_by_pattern.assert_called_once_with("test-*")
+                # Verify wildcard resolution worked (multiple sources were processed)
+                assert "Successfully deleted source" in result.stdout
+                # Should show multiple sources in output
+                assert "source-1" in result.stdout
+                assert "source-2" in result.stdout
 
-    @pytest.mark.skip(reason="Wildcard functionality not yet implemented")
     def test_source_delete_wildcard_confirmation_prompt(self):
         """
         Contract B-8: If multiple sources are selected and --force is not provided, the command MUST present a single aggregated confirmation prompt.
@@ -307,16 +433,39 @@ class TestSourceDeleteContract:
             mock_source_service = MagicMock()
             mock_source_service.get_sources_by_pattern.return_value = mock_sources
             
-            # Mock collections count for each source
-            mock_db.query.return_value.filter.return_value.count.return_value = 2
+            # Set up database mocking for multiple sources
+            def mock_query_factory(model_class):
+                if model_class.__name__ == 'Source':
+                    # For Source queries (resolve_source_selector)
+                    mock_query = MagicMock()
+                    mock_query.filter.return_value.order_by.return_value.all.return_value = mock_sources
+                    return mock_query
+                elif model_class.__name__ == 'SourceCollection':
+                    # For SourceCollection queries (build_pending_delete_summary)
+                    mock_query = MagicMock()
+                    mock_query.filter.return_value.count.return_value = 2
+                    return mock_query
+                elif model_class.__name__ == 'PathMapping':
+                    # For PathMapping queries (build_pending_delete_summary)
+                    mock_query = MagicMock()
+                    mock_query.join.return_value.filter.return_value.count.return_value = 8
+                    return mock_query
+                else:
+                    # Default mock for other queries
+                    mock_query = MagicMock()
+                    mock_query.filter.return_value.count.return_value = 0
+                    return mock_query
+            
+            mock_db.query.side_effect = mock_query_factory
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
                 result = self.runner.invoke(app, ["delete", "test-*"], input="no\n")
                 
                 assert result.exit_code == 0
-                assert "2 sources" in result.stdout  # Aggregated count
+                assert "WARNING: This will permanently delete 2 sources:" in result.stdout  # Aggregated count
                 assert "4 collections" in result.stdout  # Total collections (2 sources * 2 collections each)
-                assert "Are you sure" in result.stdout
+                assert "16 path mappings" in result.stdout  # Total path mappings (2 sources * 8 path mappings each)
+                assert "Deletion cancelled" in result.stdout
 
     def test_source_delete_wildcard_force_skips_confirmation(self):
         """
@@ -335,8 +484,71 @@ class TestSourceDeleteContract:
             mock_source_service = MagicMock()
             mock_source_service.get_sources_by_pattern.return_value = mock_sources
             
-            # Mock collections count for each source
-            mock_db.query.return_value.filter.return_value.count.return_value = 2
+            # Set up database mocking for multiple sources using the helper
+            # Track deleted sources for post-operation validation
+            deleted_sources = set()
+            
+            def mock_query_factory(model_class):
+                if model_class.__name__ == 'Source':
+                    # For Source queries (resolve_source_selector and post-operation validation)
+                    mock_query = MagicMock()
+                    filter_mock = MagicMock()
+                    mock_query.filter.return_value = filter_mock
+                    
+                    # For resolve_source_selector: return multiple sources
+                    order_by_mock = MagicMock()
+                    filter_mock.order_by.return_value = order_by_mock
+                    order_by_mock.all.return_value = mock_sources
+                    
+                    # For post-operation validation: return None if source was deleted
+                    def mock_first():
+                        # This is called for each individual source validation
+                        # We need to check which specific source is being validated
+                        # For simplicity, return None if any source was deleted
+                        if deleted_sources:
+                            return None
+                        return mock_sources[0]  # Return first source for initial validation
+                    
+                    filter_mock.first.side_effect = mock_first
+                    return mock_query
+                elif model_class.__name__ == 'SourceCollection':
+                    # For SourceCollection queries (build_pending_delete_summary and post-operation validation)
+                    mock_query = MagicMock()
+                    filter_mock = MagicMock()
+                    mock_query.filter.return_value = filter_mock
+                    
+                    # For build_pending_delete_summary: return count
+                    def mock_count():
+                        if deleted_sources:
+                            return 0
+                        return 2
+                    
+                    filter_mock.count.side_effect = mock_count
+                    return mock_query
+                elif model_class.__name__ == 'PathMapping':
+                    # For PathMapping queries (build_pending_delete_summary)
+                    mock_query = MagicMock()
+                    join_mock = MagicMock()
+                    mock_query.join.return_value = join_mock
+                    filter_mock = MagicMock()
+                    join_mock.filter.return_value = filter_mock
+                    filter_mock.count.return_value = 8
+                    return mock_query
+                else:
+                    # Default mock for other queries
+                    mock_query = MagicMock()
+                    filter_mock = MagicMock()
+                    mock_query.filter.return_value = filter_mock
+                    filter_mock.count.return_value = 0
+                    return mock_query
+            
+            # Track when delete is called
+            def mock_delete(obj):
+                if hasattr(obj, 'id'):
+                    deleted_sources.add(str(obj.id))
+            
+            mock_db.delete.side_effect = mock_delete
+            mock_db.query.side_effect = mock_query_factory
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
                 result = self.runner.invoke(app, ["delete", "test-*", "--force"])
@@ -363,8 +575,8 @@ class TestSourceDeleteContract:
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
             
-            # Mock collections count
-            mock_db.query.return_value.filter.return_value.count.return_value = 3
+            # Set up database mocking
+            self._setup_mock_database(mock_db, mock_source)
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
                 result = self.runner.invoke(app, ["delete", "test-source", "--test-db", "--force"])

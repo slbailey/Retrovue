@@ -140,14 +140,14 @@ Successfully deleted source: My Plex Server
 
 ## Behavior Contract Rules (B-#)
 
-- **B-1:** The command MUST require interactive confirmation unless `--force` is provided. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
-- **B-2:** Interactive confirmation MUST require the user to type "yes" exactly to proceed. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
-- **B-3:** The confirmation prompt MUST show source details and cascade impact count. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-1:** The command MUST require interactive confirmation unless `--force` is provided. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
+- **B-2:** Interactive confirmation MUST require the user to type "yes" exactly to proceed. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
+- **B-3:** The confirmation prompt MUST show source details and cascade impact count. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
 - **B-4:** When `--json` is supplied, output MUST include fields `"deleted"`, `"source_id"`, `"name"`, and `"type"`.
 - **B-5:** On validation failure (source not found), the command MUST exit with code `1` and print "Error: Source 'X' not found".
-- **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Deletion cancelled". Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
-- **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
-- **B-8:** The source_selector argument MAY be a wildcard. Wildcard selection MUST resolve to a deterministic list of matching sources before any deletion occurs. If multiple sources are selected and `--force` is not provided, the command MUST present a single aggregated confirmation prompt summarizing impact across all matched sources and require the operator to type "yes". If `--force` is provided, the command MUST skip confirmation and attempt deletion of each matched source. Interactive confirmation MUST follow DestructiveOperationConfirmation (C-1 through C-14).
+- **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Deletion cancelled". Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
+- **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
+- **B-8:** The source_selector argument MAY be a wildcard. Wildcard selection MUST resolve to a deterministic list of matching sources before any deletion occurs. If multiple sources are selected and `--force` is not provided, the command MUST present a single aggregated confirmation prompt summarizing impact across all matched sources and require the operator to type "yes". If `--force` is provided, the command MUST skip confirmation and attempt deletion of each matched source. Interactive confirmation MUST follow [\_ops/DestructiveOperationConfirmation.md](_ops/DestructiveOperationConfirmation.md) (C-1 through C-14).
 
 ---
 
@@ -157,7 +157,7 @@ Successfully deleted source: My Plex Server
 - **D-2:** Source deletion MUST cascade delete all associated PathMapping records.
 - **D-3:** All deletion operations MUST occur within a single transaction boundary.
 - **D-4:** On transaction failure, ALL changes MUST be rolled back with no partial deletions.
-- **D-5:** **PRODUCTION SAFETY**: A Source MUST NOT be deleted in production if any Asset from that Source has appeared in a PlaylogEvent or AsRunLog. `--force` MUST NOT override this rule. In a wildcard or multi-source delete, this safety rule MUST be applied independently per source. Protected sources MUST be skipped and reported, and unprotected sources MAY still be deleted in the same run. Production is determined by environment configuration (e.g. `env.is_production() == true`). The command MUST evaluate this before performing any destructive action.
+- **D-5:** **PRODUCTION SAFETY**: A Source MUST NOT be deleted in production if any Asset from that Source has appeared in a PlaylogEvent or AsRunLog. `--force` MUST NOT override this rule. In a wildcard or multi-source delete, this safety rule MUST be applied independently per source. Protected sources MUST be skipped and reported, and unprotected sources MAY still be deleted in the same run. Production is determined by environment configuration (e.g. `env.is_production() == true`). The command MUST evaluate this before performing any destructive action. This command MUST comply with [\_ops/ProductionSafety.md](_ops/ProductionSafety.md) (PS-1 through PS-4).
 - **D-6:** Deletion MUST be logged with source details, collection count, and path mapping count.
 - **D-7:** The command MUST verify source existence before attempting deletion.
 - **D-8:** For wildcard or multi-source deletion, each source MUST be deleted using the same transactional guarantees defined in D-1..D-4. Partial success is allowed across the set (one source can delete successfully while another is blocked by production safety), but each individual source delete MUST remain atomic.

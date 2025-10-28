@@ -8,16 +8,16 @@ This document tracks the migration from legacy tests to contract-based testing a
 
 ## Current Enforcement Status
 
-| Status        | Count | Notes                                                                                         |
-| ------------- | ----- | --------------------------------------------------------------------------------------------- |
-| ENFORCED      | 9     | All Enricher commands + SourceListTypes + SourceAdd + SourceList + SourceDiscover              |
-| TESTS CREATED | 0     | All tests moved to ENFORCED                                                                   |
-| PLANNED       | 10    | Source, Collection, Assets, Channel, System                                                   |
-| CROSS-DOMAIN  | 4     | Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests) |
+| Status        | Count | Notes                                                                                            |
+| ------------- | ----- | ------------------------------------------------------------------------------------------------ |
+| ENFORCED      | 10    | All Enricher commands + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete |
+| TESTS CREATED | 0     | All tests moved to ENFORCED                                                                      |
+| PLANNED       | 9     | Source, Collection, Assets, Channel, System                                                      |
+| CROSS-DOMAIN  | 4     | Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests)    |
 
-**9 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover  
+**10 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete  
 **0 Contracts with Tests:** All tests moved to ENFORCED  
-**10 Contracts Planned:** Source, Collection, Assets, Channel, and System operations  
+**9 Contracts Planned:** Source, Collection, Assets, Channel, and System operations  
 **4 Cross-Domain Guarantees:** Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests)
 
 ## Migration Status Legend
@@ -131,6 +131,17 @@ This document tracks the migration from legacy tests to contract-based testing a
   **CI:** YES  
   **Notes:** All 24 contract tests passing (13 behavioral + 11 data contract tests). Complete implementation with --dry-run and --test-db support, proper transaction handling with rollback, duplicate collection prevention, and comprehensive error handling.
 
+### SourceDelete
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/SourceDeleteContract.md  
+**Tests:**
+
+- tests/contracts/test_source_delete_contract.py
+- tests/contracts/test_source_delete_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 27 contract tests passing (13 behavioral + 14 data contract tests). Complete implementation with wildcard support, production safety checks, confirmation prompts, cascade deletion, and transactional guarantees. Includes compliance with DestructiveOperationConfirmation (C-1 through C-14) and ProductionSafety (PS-1 through PS-4) contracts.
+
 ---
 
 ## Cross-Domain Guarantees
@@ -178,7 +189,6 @@ _None - all tests moved to ENFORCED_
 
 ### Planned Contracts
 
-- ⏳ SourceDiscover
 - ⏳ SourceIngest
 - ⏳ CollectionIngest
 - ⏳ CollectionWipe
@@ -186,7 +196,6 @@ _None - all tests moved to ENFORCED_
 - ⏳ AssetsDelete
 - ⏳ Channel
 - ⏳ Collection
-- ⏳ SourceDelete
 - ⏳ SyncIdempotency
 - ⏳ UnitOfWork
 
@@ -200,7 +209,7 @@ All previous test implementations have been moved to `tests/_legacy/` for refere
 
 **Enforced Contracts:** CI runs contract tests for all ENFORCED contracts plus minimal unit tests that don't contradict contracts.
 
-**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover
+**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete
 
 **Command:** `pytest tests/contracts --maxfail=1 --disable-warnings -q`
 
