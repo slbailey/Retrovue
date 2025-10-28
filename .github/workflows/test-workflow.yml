@@ -71,6 +71,14 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
+      - name: Enforce SourceList contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: SourceList contract tests must pass"
+          pytest tests/contracts/test_source_list_contract.py tests/contracts/test_source_list_data_contract.py -v --tb=short
+          echo "✅ SourceList contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+
       - name: Enforce EnricherAdd contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: EnricherAdd contract tests must pass"

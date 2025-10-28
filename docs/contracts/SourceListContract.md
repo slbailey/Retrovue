@@ -2,7 +2,7 @@
 
 > **This document is part of the RetroVue Contract System.**  
 > Changes to this command MUST follow [CLI_CHANGE_POLICY.md](CLI_CHANGE_POLICY.md).  
-> **Status: DRAFT (not yet ENFORCED)**
+> **Status: ENFORCED**
 
 ## Purpose
 
