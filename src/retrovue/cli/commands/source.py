@@ -463,8 +463,7 @@ def list_source_types(
             typer.echo("Available source types:")
             for source_type in source_types:
                 status_indicator = "[OK]" if source_type["interface_compliant"] else "[ERROR]"
-                compliance_text = "compliant" if source_type["interface_compliant"] else "non-compliant"
-                typer.echo(f"  - {source_type['type']} {status_indicator} ({compliance_text})")
+                typer.echo(f"  - {source_type['type']} {status_indicator}")
             
             typer.echo(f"\nTotal: {len(source_types)} source types available")
                 

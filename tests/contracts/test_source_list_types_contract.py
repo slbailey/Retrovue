@@ -222,7 +222,7 @@ class TestSourceListTypesContract:
         assert "Total:" in result.stdout and "source types available" in result.stdout
         
         # Check that interface compliance is displayed
-        assert "Interface Status:" in result.stdout or "compliant" in result.stdout
+        assert "[OK]" in result.stdout or "[ERROR]" in result.stdout
 
     def test_source_list_types_validation_compliance(self):
         """
@@ -238,7 +238,7 @@ class TestSourceListTypesContract:
         assert "filesystem" in result.stdout
         
         # Verify interface compliance is checked and reported
-        assert "Interface Status:" in result.stdout or "compliant" in result.stdout
+        assert "[OK]" in result.stdout or "[ERROR]" in result.stdout
 
     def test_source_list_types_interface_compliance_reporting(self):
         """
