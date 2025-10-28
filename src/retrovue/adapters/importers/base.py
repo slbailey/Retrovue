@@ -44,7 +44,7 @@ class DiscoveredItem:
     hash_sha256: str | None = None
     """SHA-256 hash of the content"""
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate the discovered item after initialization."""
         if not self.path_uri:
             raise ValueError("path_uri is required")
@@ -86,6 +86,7 @@ class ImporterInterface(Protocol):
         """
         ...
     
+    @abstractmethod
     def discover(self) -> list[DiscoveredItem]:
         """
         Discover content items from the source.
@@ -98,7 +99,8 @@ class ImporterInterface(Protocol):
         """
         ...
     
-    def get_help(self) -> dict[str, any]:
+    @abstractmethod
+    def get_help(self) -> dict[str, Any]:
         """
         Get help information for this importer.
         
@@ -111,7 +113,8 @@ class ImporterInterface(Protocol):
         """
         ...
     
-    def list_asset_groups(self) -> list[dict[str, any]]:
+    @abstractmethod
+    def list_asset_groups(self) -> list[dict[str, Any]]:
         """
         List the asset groups (collections, directories, etc.) available from this source.
         
@@ -213,7 +216,7 @@ class BaseImporter(ABC):
     class PlexImporter(BaseImporter):
         name = "plex"
         
-        def __init__(self, base_url: str, token: str):
+        def __init__(self, base_url: str, token: str) -> None:
             super().__init__(base_url=base_url, token=token)
             self.base_url = base_url
             self.token = token
@@ -238,7 +241,7 @@ class BaseImporter(ABC):
     # Override these in your implementation
     name: str = "base-importer"
     
-    def __init__(self, **config):
+    def __init__(self, **config) -> None:
         """
         Initialize the importer with configuration parameters.
         
@@ -338,7 +341,7 @@ class BaseImporter(ABC):
         """
         return self.config.get(key, default)
     
-    def get_help(self) -> dict[str, any]:
+    def get_help(self) -> dict[str, Any]:
         """
         Get help information for this importer.
         
@@ -384,7 +387,7 @@ class BaseImporter(ABC):
         
         return params
     
-    def list_asset_groups(self) -> list[dict[str, any]]:
+    def list_asset_groups(self) -> list[dict[str, Any]]:
         """
         List the asset groups available from this source.
         

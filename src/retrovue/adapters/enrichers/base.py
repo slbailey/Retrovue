@@ -138,7 +138,7 @@ class BaseEnricher(ABC):
         name = "tvdb"
         scope = "ingest"
         
-        def __init__(self, api_key: str, language: str = "en-US"):
+        def __init__(self, api_key: str, language: str = "en-US") -> None:
             super().__init__(api_key=api_key, language=language)
             self.api_key = api_key
             self.language = language
@@ -166,7 +166,7 @@ class BaseEnricher(ABC):
     name: str = "base-enricher"
     scope: str = "ingest"  # or "playout"
     
-    def __init__(self, **config):
+    def __init__(self, **config) -> None:
         """
         Initialize the enricher with enrichment parameters.
         
@@ -318,7 +318,7 @@ class ExampleEnricher(BaseEnricher):
     name = "example"
     scope = "ingest"
     
-    def __init__(self, api_endpoint: str, api_key: str, timeout: int = 30):
+    def __init__(self, api_endpoint: str, api_key: str, timeout: int = 30) -> None:
         """
         Initialize the example enricher with enrichment parameters.
         

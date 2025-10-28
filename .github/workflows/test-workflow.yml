@@ -61,7 +61,7 @@ jobs:
           ruff check .
           echo "✅ Ruff check passed"
           echo "🔍 Running mypy type checking..."
-          mypy src/ --ignore-missing-imports
+          mypy
           echo "✅ MyPy check passed"
 
       - name: Run contract tests

@@ -34,7 +34,7 @@ class YourImporterName(BaseImporter):
     # Change these to your importer type name
     name = "your-importer-type"
     
-    def __init__(self, **config):
+    def __init__(self, **config) -> None:
         """
         Initialize your importer with configuration parameters.
         
@@ -174,7 +174,7 @@ class YourImporterName(BaseImporter):
         
         return super()._get_examples()
     
-    def list_asset_groups(self) -> list[dict[str, any]]:
+    def list_asset_groups(self) -> list[dict[str, Any]]:
         """
         List the asset groups available from this source.
         
@@ -459,7 +459,7 @@ class ExampleAPIImporter(BaseImporter):
     
     name = "example-api"
     
-    def __init__(self, api_key: str, base_url: str, timeout: int = 30):
+    def __init__(self, api_key: str, base_url: str, timeout: int = 30) -> None:
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
         self.api_key = api_key
         self.base_url = base_url
@@ -494,7 +494,7 @@ class ExampleFileImporter(BaseImporter):
     
     name = "example-file"
     
-    def __init__(self, file_path: str, include_hidden: bool = False, glob_pattern: str = "**/*"):
+    def __init__(self, file_path: str, include_hidden: bool = False, glob_pattern: str = "**/*") -> None:
         super().__init__(file_path=file_path, include_hidden=include_hidden, glob_pattern=glob_pattern)
         self.file_path = file_path
         self.include_hidden = include_hidden
@@ -529,7 +529,7 @@ class ExampleSystemImporter(BaseImporter):
     
     name = "example-system"
     
-    def __init__(self, **config):
+    def __init__(self, **config) -> None:
         super().__init__(**config)
         # No configuration parameters needed - uses system defaults
     

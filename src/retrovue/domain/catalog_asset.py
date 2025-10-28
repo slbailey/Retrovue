@@ -48,7 +48,7 @@ class CatalogAsset:
     created_at: datetime | None = None
     """Record creation timestamp"""
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize default values after dataclass creation."""
         if self.created_at is None:
             self.created_at = datetime.utcnow()

@@ -148,7 +148,7 @@ class PlexClient:
                     show_title = show.get('title')
                     
                     # Apply title filter if specified
-                    if title_filter and title_filter.lower() not in show_title.lower():
+                    if title_filter is not None and show_title is not None and title_filter.lower() not in show_title.lower():
                         continue
                     
                     # Get seasons for this show
@@ -170,7 +170,7 @@ class PlexClient:
                             continue
                         
                         # Apply season filter if specified
-                        if season_filter is not None and int(season_index) != season_filter:
+                        if season_filter is not None and season_index is not None and int(season_index) != season_filter:
                             continue
                         
                         # Get episodes for this season
@@ -190,7 +190,7 @@ class PlexClient:
                             episode_index = episode.get('index')
                             
                             # Apply episode filter if specified
-                            if episode_filter is not None and int(episode_index) != episode_filter:
+                            if episode_filter is not None and episode_index is not None and int(episode_index) != episode_filter:
                                 continue
                             
                             # Get file information
@@ -296,7 +296,7 @@ class PlexClient:
                 raise ImporterError(f"No video found for rating key {rating_key}")
             
             # Extract metadata
-            metadata = {
+            metadata: dict[str, Any] = {
                 "ratingKey": video.get('ratingKey'),
                 "title": video.get('title'),
                 "grandparentTitle": video.get('grandparentTitle'),
@@ -310,7 +310,7 @@ class PlexClient:
             
             # Extract Media information
             for media in video.findall('Media'):
-                media_info = {
+                media_info: dict[str, Any] = {
                     "duration": media.get('duration'),
                     "videoCodec": media.get('videoCodec'),
                     "audioCodec": media.get('audioCodec'),
@@ -586,7 +586,7 @@ class PlexClient:
             import xml.etree.ElementTree as ET
             root = ET.fromstring(response.content)
             
-            episodes = []
+            episodes: list[dict[str, Any]] = []
             for video in root.findall('Video'):
                 if video.get('type') == 'episode':
                     episodes.append({
@@ -603,7 +603,7 @@ class PlexClient:
                     
                     # Extract Media information
                     for media in video.findall('Media'):
-                        media_info = {
+                        media_info: dict[str, Any] = {
                             "duration": media.get('duration'),
                             "videoCodec": media.get('videoCodec'),
                             "audioCodec": media.get('audioCodec'),
@@ -754,7 +754,7 @@ class PlexImporter(BaseImporter):
             "token": "Plex authentication token"
         }
     
-    def list_asset_groups(self) -> list[dict[str, any]]:
+    def list_asset_groups(self) -> list[dict[str, Any]]:
         """
         List the asset groups (libraries) available from this Plex source.
         

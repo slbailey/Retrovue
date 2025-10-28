@@ -30,7 +30,7 @@ class Enricher:
     config: dict[str, Any]
     created_at: str | None = None
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate enricher data after initialization."""
         if not self.id.startswith(f"enricher-{self.type}-"):
             raise ValueError(f"Invalid enricher ID format: {self.id}")
@@ -92,7 +92,7 @@ class Enricher:
     @staticmethod
     def _get_default_config(enricher_type: str) -> dict[str, Any]:
         """Get default configuration for an enricher type."""
-        defaults = {
+        defaults: dict[str, Any] = {
             "ingest": {},
             "playout": {}
         }

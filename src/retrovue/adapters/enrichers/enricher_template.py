@@ -31,7 +31,7 @@ class YourEnricherName(BaseEnricher):
     name = "your-enricher-type"
     scope = "ingest"  # or "playout"
     
-    def __init__(self, **config):
+    def __init__(self, **config) -> None:
         """
         Initialize your enricher with enrichment parameters.
         
@@ -210,7 +210,7 @@ class YourEnricherName(BaseEnricher):
         Returns:
             List of labels in "key:value" format
         """
-        labels = []
+        labels: list[str] = []
         
         # TODO: Implement your label conversion logic
         
@@ -244,7 +244,7 @@ class ExampleAPIEnricher(BaseEnricher):
     name = "example-api"
     scope = "ingest"
     
-    def __init__(self, api_key: str, api_endpoint: str, timeout: int = 30):
+    def __init__(self, api_key: str, api_endpoint: str, timeout: int = 30) -> None:
         super().__init__(api_key=api_key, api_endpoint=api_endpoint, timeout=timeout)
         self.api_key = api_key
         self.api_endpoint = api_endpoint
@@ -281,7 +281,7 @@ class ExampleFileEnricher(BaseEnricher):
     name = "example-file"
     scope = "playout"
     
-    def __init__(self, overlay_path: str, position: str = "top-right", opacity: float = 0.8):
+    def __init__(self, overlay_path: str, position: str = "top-right", opacity: float = 0.8) -> None:
         super().__init__(overlay_path=overlay_path, position=position, opacity=opacity)
         self.overlay_path = overlay_path
         self.position = position
@@ -318,7 +318,7 @@ class ExampleSystemEnricher(BaseEnricher):
     name = "example-system"
     scope = "ingest"
     
-    def __init__(self, **config):
+    def __init__(self, **config) -> None:
         super().__init__(**config)
         # No enrichment parameters needed - uses system defaults
     

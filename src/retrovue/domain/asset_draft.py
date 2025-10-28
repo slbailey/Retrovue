@@ -86,7 +86,7 @@ class AssetDraft:
     discovered_at: datetime | None = None
     """When this asset was discovered"""
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize default values after dataclass creation."""
         if self.discovered_at is None:
             self.discovered_at = datetime.utcnow()

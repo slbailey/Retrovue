@@ -12,6 +12,7 @@ that have already been imported and enriched.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import structlog
 from sqlalchemy.orm import Session
@@ -242,7 +243,7 @@ class IngestOrchestrator:
         if collection.source_type == "plex":
             # For Plex, use collection-specific discovery
             # Build source config and collection descriptor
-            source_config = {}  # PlexImporter doesn't need source config
+            source_config: dict[str, Any] = {}  # PlexImporter doesn't need source config
             collection_descriptor = {
                 "id": collection.external_id,
                 "name": collection.name

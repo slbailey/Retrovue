@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .enrichers.base import Enricher, EnricherNotFoundError
+from .enrichers.base import Enricher, EnricherNotFoundError, EnricherConfig
 from .enrichers.ffprobe_enricher import FFprobeEnricher
-from .importers.base import Importer, ImporterNotFoundError
+from .importers.base import Importer, ImporterNotFoundError, DiscoveredItem
 from .importers.filesystem_importer import FilesystemImporter
 from .importers.plex_importer import PlexImporter
 
@@ -65,7 +65,7 @@ def register_importer(importer: Importer) -> None:
     _importers[importer.name] = importer
 
 
-def get_importer(name: str, **kwargs) -> Importer:
+def get_importer(name: str, **kwargs: Any) -> Importer:
     """
     Get an importer by name.
     
@@ -88,7 +88,7 @@ def get_importer(name: str, **kwargs) -> Importer:
     return cls(**kwargs)
 
 
-def get_importer_help(name: str) -> dict[str, any]:
+def get_importer_help(name: str) -> dict[str, Any]:
     """
     Get help information for an importer without creating an instance.
     
@@ -202,7 +202,7 @@ def list_enrichers() -> list[Enricher]:
         List of all registered enrichers
     """
     # Return enricher instances from the ENRICHERS dictionary
-    enricher_instances = []
+    enricher_instances: list[Enricher] = []
     for name, enricher_class in ENRICHERS.items():
         try:
             # Create an instance of the enricher
@@ -210,9 +210,19 @@ def list_enrichers() -> list[Enricher]:
             enricher_instances.append(instance)
         except Exception:
             # If we can't create an instance, create a mock enricher with just the name
-            class MockEnricher:
-                def __init__(self, name):
+            class MockEnricher(Enricher):
+                def __init__(self, name: str) -> None:
                     self.name = name
+                    self.config: dict[str, Any] = {}
+                    self.scope = "ingest"
+                
+                def enrich(self, discovered_item: DiscoveredItem) -> DiscoveredItem:
+                    return discovered_item
+                
+                @classmethod
+                def get_config_schema(cls) -> EnricherConfig:
+                    return EnricherConfig(required_params=[], optional_params=[], scope="ingest", description="Mock enricher for testing")
+            
             enricher_instances.append(MockEnricher(name))
     return enricher_instances
 
@@ -244,7 +254,7 @@ def clear_registries() -> None:
     _enrichers.clear()
 
 
-def _register_builtin_enrichers():
+def _register_builtin_enrichers() -> None:
     """Register built-in enrichers."""
     # Note: Enrichers need to be instantiated with their required parameters
     # For now, we'll register them as classes and let the CLI handle instantiation

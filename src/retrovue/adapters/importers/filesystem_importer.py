@@ -11,6 +11,7 @@ import hashlib
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from .base import (
     BaseImporter,
@@ -204,7 +205,7 @@ class FilesystemImporter(BaseImporter):
             "base_path": "Base filesystem path to scan"
         }
     
-    def list_asset_groups(self) -> list[dict[str, any]]:
+    def list_asset_groups(self) -> list[dict[str, Any]]:
         """
         List the asset groups (directories) available from this filesystem source.
         
