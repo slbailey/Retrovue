@@ -348,7 +348,7 @@ See the `ExampleEnricher` class in `base.py` for a complete working example that
 
 For questions about enricher development:
 
-1. Check the contract documentation in `docs/contracts/EnricherAdd.md`
+1. Check the contract documentation in `docs/contracts/resources/EnricherAddContract.md`
 2. Review the domain model in `docs/domain/Enricher.md`
 3. Look at existing implementations like `ffprobe_enricher.py`
 4. Run the contract tests to verify compliance

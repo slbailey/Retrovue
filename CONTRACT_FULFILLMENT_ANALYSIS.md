@@ -23,7 +23,7 @@ RetroVue has **15 major contracts** defined across CLI, Domain, Testing, and Run
 
 ### 2. Collection Wipe Contract - **COMPLETE** ✅
 
-- **File:** `docs/contracts/CollectionWipe.md`
+- **File:** `docs/contracts/resources/CollectionWipeContract.md`
 - **Implementation:** `src/retrovue/cli/commands/collection.py` (wipe command)
 - **Status:** Fully implemented and tested
 - **Features:**

@@ -2,7 +2,7 @@
 Data contract tests for `retrovue source list-types` command.
 
 Tests data-layer consistency, registry state, and entity retrievability
-as specified in docs/contracts/SourceListTypesContract.md.
+as specified in docs/contracts/resources/SourceListTypesContract.md.
 
 This test enforces the data contract rules (D-#) for the source list-types command.
 """

@@ -2,7 +2,7 @@
 Contract tests for `retrovue enricher remove` command.
 
 Tests CLI behavior, validation, output formats, and error handling
-as specified in docs/contracts/EnricherRemove.md.
+as specified in docs/contracts/resources/EnricherRemoveContract.md.
 
 This test enforces the CLI contract rules (B-#) for the enricher remove command.
 """

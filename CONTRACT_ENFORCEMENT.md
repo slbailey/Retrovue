@@ -15,7 +15,7 @@ def add_enricher(...):
 
 **✅ DO THIS INSTEAD:**
 
-1. Edit `docs/contracts/EnricherAdd.md`
+1. Edit `docs/contracts/resources/EnricherAddContract.md`
 2. Update `tests/contracts/test_enricher_add_contract.py`
 3. Update `tests/contracts/test_enricher_add_data_contract.py`
 4. Update implementation to match contract
@@ -25,7 +25,7 @@ def add_enricher(...):
 
 | Command                 | Status       | Contract                        | Tests                                                                                                   |
 | ----------------------- | ------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `retrovue enricher add` | **ENFORCED** | `docs/contracts/EnricherAdd.md` | `tests/contracts/test_enricher_add_contract.py`<br>`tests/contracts/test_enricher_add_data_contract.py` |
+| `retrovue enricher add` | **ENFORCED** | `docs/contracts/resources/EnricherAddContract.md` | `tests/contracts/test_enricher_add_contract.py`<br>`tests/contracts/test_enricher_add_data_contract.py` |
 
 ### CI Enforcement
 

@@ -2,7 +2,7 @@
 Data contract tests for Source Discover command.
 
 Tests the data persistence and transaction aspects of the source discover command as defined in
-docs/contracts/SourceDiscoverContract.md (D-1 through D-9).
+docs/contracts/resources/SourceDiscoverContract.md (D-1 through D-9).
 """
 
 import json

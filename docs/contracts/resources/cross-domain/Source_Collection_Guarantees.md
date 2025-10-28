@@ -29,13 +29,13 @@ This flow ensures that source operations maintain consistency with collection st
 
 ### Source Domain
 
-- **Contract:** `docs/contracts/SourceAddContract.md`, `docs/contracts/SourceDiscoverContract.md`, `docs/contracts/SourceIngestContract.md`
+- **Contract:** `docs/contracts/resources/SourceAddContract.md`, `docs/contracts/resources/SourceDiscoverContract.md`, `docs/contracts/resources/SourceIngestContract.md`
 - **Interface:** Source creation, discovery, and ingestion operations
 - **Responsibilities:** Source persistence, collection discovery, external ID generation
 
 ### Collection Domain
 
-- **Contract:** `docs/contracts/CollectionContract.md`, `docs/contracts/CollectionIngestContract.md`
+- **Contract:** `docs/contracts/CollectionContract.md`, `docs/contracts/resources/CollectionIngestContract.md`
 - **Interface:** Collection management, ingestion, and lifecycle operations
 - **Responsibilities:** Collection persistence, ingestibility validation, sync management
 

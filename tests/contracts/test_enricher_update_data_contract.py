@@ -2,7 +2,7 @@
 Data contract tests for `retrovue enricher update` command.
 
 Tests data-layer consistency, database operations, and enrichment parameter updates
-as specified in docs/contracts/EnricherUpdate.md.
+as specified in docs/contracts/resources/EnricherUpdateContract.md.
 
 This test enforces the data contract rules (D-#) for the enricher update command.
 Focuses on enrichment parameter validation and persistence - specific values an 

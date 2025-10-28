@@ -17,13 +17,13 @@ The Source-Enricher relationship is critical because:
 
 ### Source Domain
 
-- **Contract:** `docs/contracts/SourceAddContract.md`
+- **Contract:** `docs/contracts/resources/SourceAddContract.md`
 - **Interface:** Source creation, validation, and lifecycle management
 - **Responsibilities:** Source persistence, configuration validation, external ID generation
 
 ### Enricher Domain
 
-- **Contract:** `docs/contracts/EnricherAddContract.md`, `docs/contracts/EnricherListTypesContract.md`
+- **Contract:** `docs/contracts/resources/EnricherAddContract.md`, `docs/contracts/resources/EnricherListTypesContract.md`
 - **Interface:** Enricher discovery, validation, and lifecycle management
 - **Responsibilities:** Enricher registry, capability validation, metadata processing
 

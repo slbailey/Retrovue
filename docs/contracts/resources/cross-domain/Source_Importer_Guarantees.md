@@ -28,7 +28,7 @@ This flow ensures that source operations maintain consistency with importer capa
 
 ### Source Domain
 
-- **Contract:** `docs/contracts/SourceAddContract.md`, `docs/contracts/SourceDiscoverContract.md`, `docs/contracts/SourceIngestContract.md`
+- **Contract:** `docs/contracts/resources/SourceAddContract.md`, `docs/contracts/resources/SourceDiscoverContract.md`, `docs/contracts/resources/SourceIngestContract.md`
 - **Interface:** Source creation, discovery, and ingestion operations
 - **Responsibilities:** Source persistence, configuration validation, external ID generation
 

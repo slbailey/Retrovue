@@ -12,7 +12,7 @@ This document defines the quality gates and cultural principles for the Retrovue
 
 ## Cross-Domain Boundaries
 
-- **Defined in `docs/cross-domain/`** - Inter-module interactions follow documented boundaries
+- **Defined in `docs/contracts/resources/cross-domain/`** - Inter-module interactions follow documented boundaries
 
 ## Enforcement Standard
 

@@ -35,7 +35,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### SourceAdd
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/SourceAddContract.md  
+**Contracts:** docs/contracts/resources/SourceAddContract.md  
 **Tests:**
 
 - tests/contracts/test_source_add_contract.py
@@ -46,7 +46,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### EnricherAdd
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/EnricherAddContract.md  
+**Contracts:** docs/contracts/resources/EnricherAddContract.md  
 **Tests:**
 
 - tests/contracts/test_enricher_add_contract.py
@@ -57,7 +57,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### EnricherListTypes
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/EnricherListTypesContract.md  
+**Contracts:** docs/contracts/resources/EnricherListTypesContract.md  
 **Tests:**
 
 - tests/contracts/test_enricher_list_types_contract.py
@@ -68,7 +68,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### EnricherList
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/EnricherListContract.md  
+**Contracts:** docs/contracts/resources/EnricherListContract.md  
 **Tests:**
 
 - tests/contracts/test_enricher_list_contract.py
@@ -79,7 +79,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### EnricherUpdate
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/EnricherUpdateContract.md  
+**Contracts:** docs/contracts/resources/EnricherUpdateContract.md  
 **Tests:**
 
 - tests/contracts/test_enricher_update_contract.py
@@ -90,7 +90,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### EnricherRemove
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/EnricherRemoveContract.md  
+**Contracts:** docs/contracts/resources/EnricherRemoveContract.md  
 **Tests:**
 
 - tests/contracts/test_enricher_remove_contract.py
@@ -101,7 +101,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### SourceListTypes
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/SourceListTypesContract.md  
+**Contracts:** docs/contracts/resources/SourceListTypesContract.md  
 **Tests:**
 
 - tests/contracts/test_source_list_types_contract.py
@@ -112,7 +112,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### SourceList
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/SourceListContract.md  
+**Contracts:** docs/contracts/resources/SourceListContract.md  
 **Tests:**
 
 - tests/contracts/test_source_list_contract.py
@@ -123,7 +123,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### SourceDiscover
 
 **Status:** ENFORCED  
-**Contracts:** docs/contracts/SourceDiscoverContract.md  
+**Contracts:** docs/contracts/resources/SourceDiscoverContract.md  
 **Tests:**
 
 - tests/contracts/test_source_discover_contract.py
@@ -135,13 +135,13 @@ This document tracks the migration from legacy tests to contract-based testing a
 
 ## Cross-Domain Guarantees
 
-> **Cross-Domain Guarantees are governed by the House Standard defined in `docs/cross-domain/README.md`.**  
+> **Cross-Domain Guarantees are governed by the House Standard defined in `docs/contracts/resources/cross-domain/README.md`.**  
 > All domain interactions that cross boundaries must have explicit guarantee documents and test suites.
 
 ### Source ↔ Enricher Guarantees
 
 **Status:** CROSS-DOMAIN  
-**Document:** docs/cross-domain/Source_Enricher_Guarantees.md  
+**Document:** docs/contracts/resources/cross-domain/Source_Enricher_Guarantees.md  
 **Tests:** tests/contracts/cross-domain/test_source_enricher_guarantees.py  
 **CI:** YES  
 **Notes:** Defines guarantees for source-enricher interactions, validation, and transactional integrity. G-1 through G-4 enforced, G-5 planned (requires SourceRemoveContract and SourceUpdateContract).
@@ -149,7 +149,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### Source ↔ Importer Guarantees
 
 **Status:** CROSS-DOMAIN  
-**Document:** docs/cross-domain/Source_Importer_Guarantees.md  
+**Document:** docs/contracts/resources/cross-domain/Source_Importer_Guarantees.md  
 **Tests:** tests/contracts/cross-domain/test_source_importer_guarantees.py  
 **CI:** YES  
 **Notes:** Defines guarantees for source-importer interactions, interface compliance, and capability validation. All 9 tests passing (G-1 through G-6 + error standards + transaction boundaries + ID correlation).
@@ -157,7 +157,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### Source ↔ Collection Guarantees
 
 **Status:** CROSS-DOMAIN  
-**Document:** docs/cross-domain/Source_Collection_Guarantees.md  
+**Document:** docs/contracts/resources/cross-domain/Source_Collection_Guarantees.md  
 **Tests:** tests/contracts/cross-domain/test_source_collection_guarantees.py  
 **CI:** YES  
 **Notes:** Defines guarantees for source-collection interactions, discovery coordination, and lifecycle synchronization. All 9 tests passing (G-1 through G-6 + exit code semantics + error standards + transaction boundaries).
@@ -165,7 +165,7 @@ This document tracks the migration from legacy tests to contract-based testing a
 ### CLI ↔ Data Guarantees
 
 **Status:** CROSS-DOMAIN  
-**Document:** docs/cross-domain/CLI_Data_Guarantees.md  
+**Document:** docs/contracts/resources/cross-domain/CLI_Data_Guarantees.md  
 **Tests:** tests/contracts/cross-domain/test_cli_data_guarantees.py  
 **CI:** YES  
 **Notes:** Defines guarantees for CLI-data interactions, transaction management, and error handling consistency. All 8 tests passing (G-1 through G-6 + error standards + transaction boundaries).

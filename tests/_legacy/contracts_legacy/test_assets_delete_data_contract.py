@@ -2,7 +2,7 @@
 Data contract tests for `retrovue assets delete` / `retrovue assets restore`.
 
 This suite enforces the persistence guarantees in:
-docs/contracts/AssetsDelete.md
+docs/contracts/resources/AssetsDeleteContract.md
 
 These tests MUST use a real test database fixture (e.g. `db_session`)
 and MUST assert on actual persisted state after running the CLI.

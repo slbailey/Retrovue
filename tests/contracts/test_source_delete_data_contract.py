@@ -2,7 +2,7 @@
 Data contract tests for Source Delete command.
 
 Tests the data persistence and transaction aspects of the source delete command as defined in
-docs/contracts/SourceDeleteContract.md (D-1 through D-10).
+docs/contracts/resources/SourceDeleteContract.md (D-1 through D-10).
 """
 
 import json

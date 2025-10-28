@@ -3,7 +3,7 @@ Contract tests for `retrovue assets delete` and `retrovue assets restore`
 (operator-facing behavior, prompts, flags, dry-run, JSON output, and exit codes).
 
 This suite enforces the CLI contract defined in:
-docs/contracts/AssetsDelete.md
+docs/contracts/resources/AssetsDeleteContract.md
 
 Any change to CLI syntax, required flags, confirmation rules,
 error messages, exit codes, or `--json` / `--dry-run` output
@@ -217,25 +217,25 @@ class TestAssetsDeleteContract:
             assert result.exit_code == 0
             assert "hard deleted successfully" in result.output
 
-    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/AssetsDelete.md")
+    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/resources/AssetsDeleteContract.md")
     def test_delete_asset_confirmation_prompt(self, db_session):
         """Test interactive confirmation when --yes is not provided."""
         # TODO: define and enforce exact interactive prompt text/behavior in AssetsDelete.md
         pass
 
-    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/AssetsDelete.md")
+    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/resources/AssetsDeleteContract.md")
     def test_delete_asset_confirmation_cancelled(self, db_session):
         """Test behavior when user cancels confirmation prompt."""
         # TODO: define and enforce exact interactive prompt text/behavior in AssetsDelete.md
         pass
 
-    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/AssetsDelete.md")
+    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/resources/AssetsDeleteContract.md")
     def test_delete_asset_mixed_selectors_error(self, db_session):
         """Test error when combining incompatible selectors (e.g., --uuid with --show)."""
         # TODO: define and enforce exact interactive prompt text/behavior in AssetsDelete.md
         pass
 
-    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/AssetsDelete.md")
+    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/resources/AssetsDeleteContract.md")
     def test_delete_asset_show_bulk_operation(self, db_session):
         """Test deletion of multiple assets for a TV show."""
         # TODO: define and enforce exact bulk operation behavior in AssetsDelete.md
@@ -330,7 +330,7 @@ class TestAssetsRestoreContract:
             assert result.exit_code == 1
             assert "Asset not found or not soft-deleted" in result.output
 
-    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/AssetsDelete.md")
+    @pytest.mark.xfail(reason="Not implemented yet per CLI contract in docs/contracts/resources/AssetsDeleteContract.md")
     def test_restore_asset_show_bulk_operation(self, db_session):
         """Test restoration of multiple soft-deleted assets for a TV show."""
         # TODO: Update README.md to specify bulk restore behavior

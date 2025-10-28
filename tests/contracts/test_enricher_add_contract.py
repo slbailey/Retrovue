@@ -2,7 +2,7 @@
 Contract tests for `retrovue enricher add` command.
 
 Tests CLI behavior, validation, output formats, and error handling
-as specified in docs/contracts/EnricherAdd.md.
+as specified in docs/contracts/resources/EnricherAddContract.md.
 
 This test enforces the CLI contract rules (B-#) for the enricher add command.
 Focuses on enrichment parameter validation - specific values an enricher needs to 

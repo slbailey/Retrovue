@@ -2,7 +2,7 @@
 Behavioral contract tests for Source Delete command.
 
 Tests the behavioral aspects of the source delete command as defined in
-docs/contracts/SourceDeleteContract.md (B-1 through B-8).
+docs/contracts/resources/SourceDeleteContract.md (B-1 through B-8).
 """
 
 import json

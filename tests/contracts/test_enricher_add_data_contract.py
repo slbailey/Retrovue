@@ -2,7 +2,7 @@
 Data contract tests for `retrovue enricher add` command.
 
 Tests data-layer consistency, database state, entity retrievability, and enrichment parameter persistence
-as specified in docs/contracts/EnricherAdd.md.
+as specified in docs/contracts/resources/EnricherAddContract.md.
 
 This test enforces the data contract rules (D-#) for the enricher add command.
 Focuses on enrichment parameter validation and persistence - specific values an 

@@ -2,7 +2,7 @@
 Data contract tests for `retrovue enricher remove` command.
 
 Tests data-layer consistency, database operations, and cascade deletion
-as specified in docs/contracts/EnricherRemove.md.
+as specified in docs/contracts/resources/EnricherRemoveContract.md.
 
 This test enforces the data contract rules (D-#) for the enricher remove command.
 """

@@ -2,7 +2,7 @@
 Behavioral contract tests for Source Discover command.
 
 Tests the behavioral aspects of the source discover command as defined in
-docs/contracts/SourceDiscoverContract.md (B-1 through B-10).
+docs/contracts/resources/SourceDiscoverContract.md (B-1 through B-10).
 """
 
 import json

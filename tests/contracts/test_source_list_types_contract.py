@@ -2,7 +2,7 @@
 Contract tests for `retrovue source list-types` command.
 
 Tests CLI behavior, validation, output formats, and error handling
-as specified in docs/contracts/SourceListTypesContract.md.
+as specified in docs/contracts/resources/SourceListTypesContract.md.
 
 This test enforces the CLI contract rules (B-#) for the source list-types command.
 """

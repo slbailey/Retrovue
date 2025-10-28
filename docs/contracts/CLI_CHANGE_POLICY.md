@@ -79,7 +79,7 @@ def add_enricher(...):
 
 ### ✅ REQUIRED: Contract-First Changes
 
-1. Update `docs/contracts/EnricherAdd.md`:
+1. Update `docs/contracts/resources/EnricherAddContract.md`:
 
    ```markdown
    ## Behavior Rules

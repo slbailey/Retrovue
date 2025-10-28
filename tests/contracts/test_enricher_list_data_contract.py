@@ -2,7 +2,7 @@
 Data contract tests for `retrovue enricher list` command.
 
 Tests data-layer consistency, database queries, and entity retrievability
-as specified in docs/contracts/EnricherList.md.
+as specified in docs/contracts/resources/EnricherListContract.md.
 
 This test enforces the data contract rules (D-#) for the enricher list command.
 """

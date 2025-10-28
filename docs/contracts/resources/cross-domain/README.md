@@ -19,7 +19,7 @@ This ensures that multi-domain operations remain deterministic, reversible, and 
 ### File Placement
 
 ```
-docs/cross-domain/<DomainA>_<DomainB>_Guarantees.md
+docs/contracts/resources/cross-domain/<DomainA>_<DomainB>_Guarantees.md
 tests/contracts/cross-domain/test_<domain_a>_<domain_b>_guarantees.py
 ```
 
