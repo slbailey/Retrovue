@@ -10,12 +10,12 @@ This document tracks the migration from legacy tests to contract-based testing a
 
 | Status        | Count | Notes                                                                                         |
 | ------------- | ----- | --------------------------------------------------------------------------------------------- |
-| ENFORCED      | 8     | All Enricher commands + SourceListTypes + SourceAdd + SourceList                              |
+| ENFORCED      | 9     | All Enricher commands + SourceListTypes + SourceAdd + SourceList + SourceDiscover              |
 | TESTS CREATED | 0     | All tests moved to ENFORCED                                                                   |
 | PLANNED       | 10    | Source, Collection, Assets, Channel, System                                                   |
 | CROSS-DOMAIN  | 4     | Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests) |
 
-**8 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList  
+**9 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover  
 **0 Contracts with Tests:** All tests moved to ENFORCED  
 **10 Contracts Planned:** Source, Collection, Assets, Channel, and System operations  
 **4 Cross-Domain Guarantees:** Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests)
@@ -120,6 +120,17 @@ This document tracks the migration from legacy tests to contract-based testing a
   **CI:** YES  
   **Notes:** All 28 contract tests passing (16 behavioral + 12 data contract tests). Complete implementation with consistent read snapshot guarantee (G-7), proper type validation using SourceListTypesContract registry, and accurate collection counting from persisted data.
 
+### SourceDiscover
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/SourceDiscoverContract.md  
+**Tests:**
+
+- tests/contracts/test_source_discover_contract.py
+- tests/contracts/test_source_discover_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 24 contract tests passing (13 behavioral + 11 data contract tests). Complete implementation with --dry-run and --test-db support, proper transaction handling with rollback, duplicate collection prevention, and comprehensive error handling.
+
 ---
 
 ## Cross-Domain Guarantees
@@ -189,7 +200,7 @@ All previous test implementations have been moved to `tests/_legacy/` for refere
 
 **Enforced Contracts:** CI runs contract tests for all ENFORCED contracts plus minimal unit tests that don't contradict contracts.
 
-**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList
+**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover
 
 **Command:** `pytest tests/contracts --maxfail=1 --disable-warnings -q`
 

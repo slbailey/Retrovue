@@ -845,6 +845,8 @@ def delete_source(
 def discover_collections(
     source_id: str = typer.Argument(..., help="Source ID, external ID, or name to discover collections from"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Direct command to test database environment"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be discovered without persisting"),
 ):
     """
     Discover and add collections (libraries) from a source to the repository.
@@ -910,35 +912,43 @@ def discover_collections(
                     ).first()
                     
                     if existing:
-                        typer.echo(f"  Collection '{collection['name']}' already exists, skipping")
+                        if dry_run:
+                            typer.echo(f"  Collection '{collection['name']}' already exists, would skip")
+                        else:
+                            typer.echo(f"  Collection '{collection['name']}' already exists, skipping")
                         continue
                     
-                    # Create new collection
-                    new_collection = SourceCollection(
-                        id=uuid.uuid4(),
-                        source_id=source.id,
-                        external_id=collection["external_id"],
-                        name=collection["name"],
-                        sync_enabled=False,  # Newly discovered collections start disabled
-                        config={
-                            "plex_section_ref": collection.get("plex_section_ref", ""),
-                            "type": collection.get("type", "unknown")
-                        }
-                    )
-                    
-                    db.add(new_collection)
-                    collection_dtos.append(SourceCollectionDTO(
+                    # Create collection DTO for output
+                    collection_dto = SourceCollectionDTO(
                         external_id=collection["external_id"],
                         name=collection["name"],
                         sync_enabled=False,
                         mapping_pairs=[],
                         source_type=source.type,
-                        config=new_collection.config
-                    ))
+                        config={
+                            "plex_section_ref": collection.get("plex_section_ref", ""),
+                            "type": collection.get("type", "unknown")
+                        }
+                    )
+                    collection_dtos.append(collection_dto)
                     added_count += 1
+                    
+                    # Only persist to database if not in dry-run mode
+                    if not dry_run:
+                        # Create new collection
+                        new_collection = SourceCollection(
+                            id=uuid.uuid4(),
+                            source_id=source.id,
+                            external_id=collection["external_id"],
+                            name=collection["name"],
+                            sync_enabled=False,  # Newly discovered collections start disabled
+                            config=collection_dto.config
+                        )
+                        db.add(new_collection)
                 
-                # Commit all new collections
-                db.commit()
+                # Commit all new collections (only if not dry-run)
+                if not dry_run:
+                    db.commit()
                 
                 if json_output:
                     import json
@@ -960,16 +970,22 @@ def discover_collections(
                     }
                     typer.echo(json.dumps(result, indent=2))
                 else:
-                    typer.echo(f"Successfully added {added_count} collections from '{source.name}':")
-                    for collection in collection_dtos:
-                        typer.echo(f"  • {collection.name} (ID: {collection.external_id}) - Disabled by default")
-                    typer.echo()
-                    typer.echo("Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync")
+                    if dry_run:
+                        typer.echo(f"Would discover {added_count} collections from '{source.name}':")
+                        for collection in collection_dtos:
+                            typer.echo(f"  • {collection.name} (ID: {collection.external_id}) - Would be created")
+                    else:
+                        typer.echo(f"Successfully added {added_count} collections from '{source.name}':")
+                        for collection in collection_dtos:
+                            typer.echo(f"  • {collection.name} (ID: {collection.external_id}) - Disabled by default")
+                        typer.echo()
+                        typer.echo("Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync")
             else:
                 typer.echo(f"Error: Source type '{source.type}' not supported for discovery", err=True)
                 raise typer.Exit(1)
                     
         except Exception as e:
+            db.rollback()
             typer.echo(f"Error discovering collections: {e}", err=True)
             raise typer.Exit(1)
 
