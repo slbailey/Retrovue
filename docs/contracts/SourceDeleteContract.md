@@ -9,12 +9,17 @@ Define the behavioral contract for deleting content sources from RetroVue. This 
 ## Command Shape
 
 ```
-retrovue source delete <source_id> [--force] [--test-db] [--confirm] [--json]
+retrovue source delete <source_selector> [--force] [--test-db] [--confirm] [--json]
 ```
 
 ### Required Parameters
 
-- `source_id`: Source identifier (UUID, external ID, or name)
+- `source_selector`: One of:
+  - a single source identifier (UUID, external ID, or exact name)
+  - a wildcard pattern (e.g. "test-*" or "plex-temp-*"), which may match multiple sources by name or external_id
+  - the special token "*" meaning "all sources"
+
+The command MUST evaluate source_selector to a concrete list of candidate sources before performing any deletion. Each candidate source is then validated and (if eligible) deleted under the normal safety rules.
 
 ### Optional Parameters
 
@@ -41,6 +46,17 @@ retrovue source delete <source_id> [--force] [--test-db] [--confirm] [--json]
 - No confirmation prompts
 - Immediate deletion execution
 - Use with extreme caution
+
+**Wildcard / multi-delete confirmation behavior:**
+
+When `<source_selector>` resolves to more than one source and `--force` is NOT provided, the confirmation prompt MUST summarize:
+- how many sources are targeted,
+- how many collections and path mappings would be deleted in total,
+- and MUST require typing "yes" to continue.
+
+When `<source_selector>` resolves to more than one source and `--force` IS provided, the command MUST proceed with deletion of all eligible sources without interactive prompts.
+
+In production, any source that fails safety validation (see D-5) MUST be skipped and reported, even under `--force`. The presence of a protected source MUST NOT abort deletion of other safe sources unless the operator cancels.
 
 ### Cascade Deletion
 
@@ -130,6 +146,7 @@ Successfully deleted source: My Plex Server
 - **B-5:** On validation failure (source not found), the command MUST exit with code `1` and print "Error: Source 'X' not found".
 - **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Deletion cancelled".
 - **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately.
+- **B-8:** The source_selector argument MAY be a wildcard. Wildcard selection MUST resolve to a deterministic list of matching sources before any deletion occurs. If multiple sources are selected and `--force` is not provided, the command MUST present a single aggregated confirmation prompt summarizing impact across all matched sources and require the operator to type "yes". If `--force` is provided, the command MUST skip confirmation and attempt deletion of each matched source.
 
 ---
 
@@ -139,16 +156,17 @@ Successfully deleted source: My Plex Server
 - **D-2:** Source deletion MUST cascade delete all associated PathMapping records.
 - **D-3:** All deletion operations MUST occur within a single transaction boundary.
 - **D-4:** On transaction failure, ALL changes MUST be rolled back with no partial deletions.
-- **D-5:** **PRODUCTION SAFETY**: A Source MUST NOT be deleted in production if any Asset from that Source has appeared in a PlaylogEvent or AsRunLog. `--force` MUST NOT override this rule.
+- **D-5:** **PRODUCTION SAFETY**: A Source MUST NOT be deleted in production if any Asset from that Source has appeared in a PlaylogEvent or AsRunLog. `--force` MUST NOT override this rule. In a wildcard or multi-source delete, this safety rule MUST be applied independently per source. Protected sources MUST be skipped and reported, and unprotected sources MAY still be deleted in the same run. Production is determined by environment configuration (e.g. `env.is_production() == true`). The command MUST evaluate this before performing any destructive action.
 - **D-6:** Deletion MUST be logged with source details, collection count, and path mapping count.
 - **D-7:** The command MUST verify source existence before attempting deletion.
+- **D-8:** For wildcard or multi-source deletion, each source MUST be deleted using the same transactional guarantees defined in D-1..D-4. Partial success is allowed across the set (one source can delete successfully while another is blocked by production safety), but each individual source delete MUST remain atomic.
 
 ---
 
 ## Test Coverage Mapping
 
-- `B-1..B-7` → `test_source_delete_contract.py`
-- `D-1..D-7` → `test_source_delete_data_contract.py`
+- `B-1..B-8` → `test_source_delete_contract.py`
+- `D-1..D-8` → `test_source_delete_data_contract.py`
 
 ---
 
@@ -199,6 +217,21 @@ retrovue source delete "Test Plex Server" --test-db --force
 
 # Test confirmation flow
 retrovue source delete "Test Source" --test-db
+```
+
+### Wildcard Operations
+
+```bash
+# Delete all sources whose name or external_id starts with "test-"
+retrovue source delete "test-*" --force --test-db
+
+# Delete all disposable sources in a staging DB (will prompt once to confirm)
+retrovue source delete "*" --test-db
+
+# Attempt wildcard delete in production:
+# - Safe sources are removed
+# - Any source tied to on-air / logged assets is skipped and reported
+retrovue source delete "*" --force
 ```
 
 ---

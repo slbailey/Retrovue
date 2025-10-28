@@ -158,6 +158,29 @@ retrovue source add --type filesystem --name "Media Library" \
 
 All operations support identification by name, UUID, or external ID. The CLI provides both human-readable and JSON output formats. All operations support `--test-db` for isolated testing and `--dry-run` for preview operations.
 
+## Bulk / wildcard operations on Sources
+
+Operators MAY issue bulk actions against multiple sources using wildcard-style identifiers.
+
+The source_id argument in destructive commands (such as `retrovue source delete`) MAY be:
+
+- a specific source identifier (UUID, external_id, or exact name)
+- a wildcard pattern (e.g. "test-*" or "*_temp")
+- the special token "*" meaning "all matching sources"
+
+Wildcard matching is performed against name and external_id. It does not guess or fuzzy-match. Pattern rules MUST be documented in the contract for that command.
+
+Wildcard deletion is primarily intended for cleanup of non-production / test data sets (for example, tearing down dozens of throwaway sources created during development or automated testing). It exists to prevent operator fatigue and manual loops.
+
+**PRODUCTION SAFETY**: Production safety rules still apply. A source that cannot be deleted under production rules (for example, any source whose assets appear in PlaylogEvent or AsRunLog) MUST NOT be deleted even if it matches a wildcard. `--force` MUST NOT override this behavior.
+
+A bulk delete that partially succeeds MUST still run inside a transaction per source (not one global transaction across all matches). Each source delete is atomic, consistent with the normal single-source delete contract.
+
+**Operational intent:**
+- Wildcards are allowed to accelerate cleanup of safe / disposable sources.
+- Wildcards do not grant new powers to violate production safety guarantees.
+- In production, protected sources MUST survive, even if other matched sources are removed.
+
 ## Naming rules
 
 The canonical name for this concept in code and documentation is Source.
