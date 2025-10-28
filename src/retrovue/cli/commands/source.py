@@ -946,7 +946,7 @@ def discover_collections(
             from ...adapters.importers.plex_importer import PlexImporter
             
             # Create importer with source config
-            if source.type == "plex":
+            if source.kind == "plex":
                 # Extract Plex configuration
                 config = source.config or {}
                 if "servers" in config and config["servers"]:
@@ -997,7 +997,7 @@ def discover_collections(
                         name=collection["name"],
                         sync_enabled=False,
                         mapping_pairs=[],
-                        source_type=source.type,
+                        source_type=source.kind,
                         config={
                             "plex_section_ref": collection.get("plex_section_ref", ""),
                             "type": collection.get("type", "unknown")
@@ -1029,7 +1029,7 @@ def discover_collections(
                         "source": {
                             "id": str(source.id),
                             "name": source.name,
-                            "type": source.type
+                            "type": source.kind
                         },
                         "collections_added": added_count,
                         "collections": [
@@ -1054,7 +1054,7 @@ def discover_collections(
                         typer.echo()
                         typer.echo("Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync")
             else:
-                typer.echo(f"Error: Source type '{source.type}' not supported for discovery", err=True)
+                typer.echo(f"Error: Source type '{source.kind}' not supported for discovery", err=True)
                 raise typer.Exit(1)
                     
         except Exception as e:
