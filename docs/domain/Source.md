@@ -22,6 +22,32 @@ The table is named `sources` (plural). Schema migration is handled through Alemb
 
 Source has relationships with SourceCollection through foreign key constraints with cascade deletion.
 
+## Operational State and Readiness
+
+Each `Source` owns zero or more `Collection` records.
+
+Two boolean fields on each Collection define ingest readiness:
+
+- `sync_enabled`:
+
+  - Meaning: Operator intent.
+  - `true` means "this Collection should be synchronized / ingested by the system."
+  - `false` means "this Collection is known to the system but not currently scheduled for ingestion."
+
+- `ingestible`:
+  - Meaning: System safety/eligibility.
+  - `true` means "this Collection is currently safe/eligible to ingest (prereqs satisfied, path mappings valid, credentials valid, etc.)."
+  - `false` means "do not attempt ingest for this Collection."
+
+A Source's ingest posture can be summarized by counting its Collections:
+
+- `enabled_collections`: Number of Collections for that Source where `sync_enabled == true`.
+- `ingestible_collections`: Number of Collections for that Source where `ingestible == true`.
+
+These counts are reported by operator-facing commands such as `retrovue source list`. Those commands MAY read and summarize these values but MUST NOT silently change them. Only the appropriate lifecycle commands are allowed to mutate `sync_enabled` or `ingestible`.
+
+These fields are authoritative system state. They are not derived heuristics at display time; they are persisted on each Collection.
+
 ## Contract / interface
 
 SourceCollection represents individual content libraries within a source (e.g., Plex libraries, filesystem directories). Collections are automatically discovered when Plex sources are created and can be enabled/disabled individually.

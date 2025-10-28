@@ -148,6 +148,82 @@ class SourceService:
             for source in sources
         ]
     
+    def list_sources_with_collection_counts(self, source_type: str | None = None) -> list[dict[str, Any]]:
+        """
+        List all content sources with collection counts for contract compliance.
+        
+        Implements consistent read snapshot guarantee (G-7) by using a single transaction
+        to ensure all data comes from the same consistent state.
+        
+        Args:
+            source_type: Optional filter by source type
+            
+        Returns:
+            List of dictionaries with source data and collection counts
+        """
+        from ..domain.entities import Source, SourceCollection
+        
+        # Use a single transaction to ensure consistent read snapshot
+        # First, get all sources in one query
+        sources_query = self.db.query(Source)
+        if source_type:
+            sources_query = sources_query.filter(Source.type == source_type)
+        
+        sources = sources_query.all()
+        
+        # Then get all collection counts in a single query to maintain consistency
+        if sources:
+            source_ids = [source.id for source in sources]
+            
+            # Get all collection counts for all sources in one query
+            collection_counts = self.db.query(
+                SourceCollection.source_id,
+                SourceCollection.sync_enabled,
+                SourceCollection.ingestible
+            ).filter(SourceCollection.source_id.in_(source_ids)).all()
+            
+            # Build counts dictionary for efficient lookup
+            counts_by_source = {}
+            for count_row in collection_counts:
+                source_id = count_row.source_id
+                if source_id not in counts_by_source:
+                    counts_by_source[source_id] = {'enabled': 0, 'ingestible': 0}
+                
+                if count_row.sync_enabled:
+                    counts_by_source[source_id]['enabled'] += 1
+                if count_row.ingestible:
+                    counts_by_source[source_id]['ingestible'] += 1
+        else:
+            counts_by_source = {}
+        
+        # Format results
+        result = []
+        for source in sources:
+            source_counts = counts_by_source.get(source.id, {'enabled': 0, 'ingestible': 0})
+            
+            # Format timestamps as ISO 8601 strings
+            if isinstance(source.created_at, str):
+                created_at = source.created_at
+            else:
+                created_at = source.created_at.isoformat() + "Z" if source.created_at else None
+                
+            if isinstance(source.updated_at, str):
+                updated_at = source.updated_at
+            else:
+                updated_at = source.updated_at.isoformat() + "Z" if source.updated_at else None
+            
+            result.append({
+                "id": str(source.id),
+                "name": source.name,
+                "type": source.type,
+                "enabled_collections": source_counts['enabled'],
+                "ingestible_collections": source_counts['ingestible'],
+                "created_at": created_at,
+                "updated_at": updated_at
+            })
+        
+        return result
+    
     def get_source_by_id(self, source_id: str) -> ContentSourceDTO | None:
         """
         Get a content source by its ID.

@@ -60,7 +60,9 @@ app = typer.Typer(name="source", help="Source and collection management operatio
 
 @app.command("list")
 def list_sources(
+    source_type: str | None = typer.Option(None, "--type", help="Filter by source type"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Query test database"),
 ):
     """
     List all configured sources.
@@ -68,37 +70,69 @@ def list_sources(
     Examples:
         retrovue source list
         retrovue source list --json
+        retrovue source list --type plex
+        retrovue source list --test-db --json
     """
-    with session() as db:
-        source_service = SourceService(db)
-        
-        try:
-            sources = source_service.list_sources()
+    # Validate source type if provided
+    if source_type:
+        available_types = list_importers()
+        if source_type not in available_types:
+            typer.echo(f"Unknown source type '{source_type}'. Available types: {', '.join(available_types)}", err=True)
+            raise typer.Exit(1)
+    
+    try:
+        with session() as db:
+            source_service = SourceService(db)
+            
+            # Get sources with collection counts
+            sources_data = source_service.list_sources_with_collection_counts(source_type)
             
             if json_output:
                 import json
-                # Redact sensitive information in JSON output
-                redacted_sources = []
-                for source in sources:
-                    source_dict = source.__dict__.copy()
-                    if source_dict.get('config'):
-                        source_dict['config'] = _redact_sensitive_config(source_dict['config'])
-                    redacted_sources.append(source_dict)
-                typer.echo(json.dumps(redacted_sources, indent=2))
+                # Sort sources by name (case-insensitive), then by id
+                sorted_sources = sorted(sources_data, key=lambda s: (s['name'].lower(), s['id']))
+                
+                response = {
+                    "status": "ok",
+                    "total": len(sorted_sources),
+                    "sources": sorted_sources
+                }
+                typer.echo(json.dumps(response, indent=2))
             else:
-                typer.echo(f"Found {len(sources)} configured sources:")
-                for source in sources:
-                    typer.echo(f"  - {source.name} ({source.type})")
-                    typer.echo(f"    External ID: {source.external_id}")
-                    if source.config:
-                        # Redact sensitive information like tokens
-                        redacted_config = _redact_sensitive_config(source.config)
-                        typer.echo(f"    Config: {redacted_config}")
-                    typer.echo()
+                # Human-readable output
+                if not sources_data:
+                    typer.echo("No sources configured")
+                else:
+                    # Sort sources by name (case-insensitive), then by id
+                    sorted_sources = sorted(sources_data, key=lambda s: (s['name'].lower(), s['id']))
                     
-        except Exception as e:
-            typer.echo(f"Error listing sources: {e}", err=True)
-            raise typer.Exit(1)
+                    if source_type:
+                        typer.echo(f"{source_type.title()} sources:")
+                    else:
+                        typer.echo("Configured sources:")
+                    
+                    for source in sorted_sources:
+                        typer.echo(f"  ID: {source['id']}")
+                        typer.echo(f"  Name: {source['name']}")
+                        typer.echo(f"  Type: {source['type']}")
+                        typer.echo(f"  Enabled Collections: {source['enabled_collections']}")
+                        typer.echo(f"  Ingestible Collections: {source['ingestible_collections']}")
+                        typer.echo(f"  Created: {source['created_at']}")
+                        typer.echo(f"  Updated: {source['updated_at']}")
+                        typer.echo()
+                
+                # Show total
+                total_text = f"Total: {len(sources_data)}"
+                if source_type:
+                    total_text += f" {source_type} source" if len(sources_data) == 1 else f" {source_type} sources"
+                else:
+                    total_text += " source" if len(sources_data) == 1 else " sources"
+                total_text += " configured"
+                typer.echo(total_text)
+                    
+    except Exception as e:
+        typer.echo(f"Error listing sources: {e}", err=True)
+        raise typer.Exit(1)
 
 
 # Create a sub-app for asset groups (collections/directories)
@@ -292,9 +326,15 @@ def add_source(
         if enrichers:
             available_enrichers = [e.name for e in list_enrichers()]
             enricher_list = [e.strip() for e in enrichers.split(",") if e.strip()]
+            unknown_enrichers = []
             for enricher in enricher_list:
                 if enricher not in available_enrichers:
-                    typer.echo(f"Warning: Unknown enricher '{enricher}'. Available: {', '.join(available_enrichers)}", err=True)
+                    unknown_enrichers.append(enricher)
+            
+            if unknown_enrichers:
+                for enricher in unknown_enrichers:
+                    typer.echo(f"Error: Unknown enricher '{enricher}'. Available: {', '.join(available_enrichers)}", err=True)
+                raise typer.Exit(1)
         
         # Create the importer instance to validate configuration
         importer = get_importer(type, **importer_params)
@@ -1322,9 +1362,15 @@ def update_enrichers(
             
             # Validate enrichers
             available_enrichers = [e.name for e in list_enrichers()]
+            unknown_enrichers = []
             for enricher in enricher_list:
                 if enricher not in available_enrichers:
-                    typer.echo(f"Warning: Unknown enricher '{enricher}'. Available: {', '.join(available_enrichers)}", err=True)
+                    unknown_enrichers.append(enricher)
+            
+            if unknown_enrichers:
+                for enricher in unknown_enrichers:
+                    typer.echo(f"Error: Unknown enricher '{enricher}'. Available: {', '.join(available_enrichers)}", err=True)
+                raise typer.Exit(1)
             
             # Update enrichers
             success = source_service.update_source_enrichers(source_id, enricher_list)

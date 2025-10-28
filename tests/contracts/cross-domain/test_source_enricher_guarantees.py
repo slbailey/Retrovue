@@ -35,7 +35,7 @@ class TestSourceEnricherGuarantees:
         ])
         
         assert result.exit_code == 1
-        assert "Warning: Unknown enricher 'unknown-enricher'" in result.stderr
+        assert "Error: Unknown enricher 'unknown-enricher'" in result.stderr
 
     def test_g1_enricher_registry_validation_multiple(self):
         """
@@ -51,8 +51,8 @@ class TestSourceEnricherGuarantees:
         ])
         
         assert result.exit_code == 1
-        assert "Warning: Unknown enricher 'unknown1'" in result.stderr
-        assert "Warning: Unknown enricher 'unknown2'" in result.stderr
+        assert "Error: Unknown enricher 'unknown1'" in result.stderr
+        assert "Error: Unknown enricher 'unknown2'" in result.stderr
 
     def test_g1_enricher_registry_validation_mixed(self):
         """
@@ -74,7 +74,7 @@ class TestSourceEnricherGuarantees:
             ])
             
             # Should show warning for unknown enricher
-            assert "Warning: Unknown enricher 'unknown'" in result.stderr
+            assert "Error: Unknown enricher 'unknown'" in result.stderr
 
     def test_g2_enricher_source_compatibility(self):
         """
@@ -172,7 +172,7 @@ class TestSourceEnricherGuarantees:
         ])
         
         # Verify error message format follows guarantee standards
-        assert "Warning: Unknown enricher" in result.stderr
+        assert "Error: Unknown enricher" in result.stderr
         assert "Available:" in result.stderr
 
     def test_cross_domain_transaction_boundaries(self):

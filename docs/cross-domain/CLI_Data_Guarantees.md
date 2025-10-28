@@ -97,6 +97,25 @@ This flow ensures that CLI operations maintain consistency with data state while
 - State inconsistencies MUST be detected and reported
 - CLI MUST provide mechanisms for state verification
 
+### G-7: Consistent Read Snapshot (CROSS-DOMAIN GUARANTEE)
+
+**Any read-only CLI command that summarizes persisted state across more than one table MUST operate over a consistent read snapshot.**
+
+Requirements:
+
+- The command MUST build its entire response from a single transactional / repeatable-read snapshot of the database session.
+- The reported aggregate values (like per-source collection counts) MUST match the entities returned in that same response.
+- The reported `total` count MUST equal the number of returned objects in that snapshot.
+- The command MUST NOT mix partially committed pre-transaction data with post-transaction updates in a single response.
+- The command MUST NOT "requery" mid-output to fill in extra data if doing so would cross a transaction boundary.
+
+This guarantee applies directly to:
+
+- `retrovue source list`
+- Any future `retrovue collection list`, `retrovue source status`, or similar inspection commands.
+
+This guarantee exists to support operator trust: output MUST be internally consistent and explainable as "a view of the system at one moment in time," even under concurrent changes.
+
 ---
 
 ## Failure & Rollback Policy
@@ -131,7 +150,7 @@ This flow ensures that CLI operations maintain consistency with data state while
 ### Test Coverage
 
 - **Test File**: `tests/contracts/cross-domain/test_cli_data_guarantees.py`
-- **Coverage**: All guarantees G-1 through G-6
+- **Coverage**: All guarantees G-1 through G-7
 - **Test Types**: Unit tests, integration tests, failure scenario tests
 - **Mocking**: Database operations, transaction management, error conditions
 

@@ -40,6 +40,7 @@ The Source-Enricher relationship is critical because:
 - Unknown enrichers MUST cause source creation to fail with exit code 1
 - Enricher validation MUST occur before any database operations
 - CLI MUST emit clear error message: "Error: Unknown enricher '{name}'. Available: {list}"
+- **Multiple unknown enrichers MUST all be reported before failing** - the command MUST NOT fail fast on the first unknown enricher, but MUST validate all enrichers and report all unknown ones
 
 ### G-2: Enricher-Source Compatibility
 

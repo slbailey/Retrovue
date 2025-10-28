@@ -304,8 +304,8 @@ class TestSourceAddContract:
                     "--enrichers", "ffprobe,invalid"
                 ])
                 
-                assert result.exit_code == 0
-                assert "Warning: Unknown enricher 'invalid'" in result.stderr
+                assert result.exit_code == 1
+                assert "Error: Unknown enricher 'invalid'" in result.stderr
 
     def test_source_add_plex_collection_discovery(self):
         """

@@ -13,6 +13,21 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: retrovue_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,6 +52,8 @@ jobs:
           pip install pytest pytest-asyncio ruff mypy types-requests
           # Install the retrovue package in development mode
           pip install -e .
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Run linting
         run: |
@@ -47,51 +64,77 @@ jobs:
         run: |
           # Run all contract tests with enforcement for ENFORCED contracts
           pytest tests/contracts --maxfail=1 --disable-warnings -q
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce SourceAdd contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: SourceAdd contract tests must pass"
           pytest tests/contracts/test_source_add_contract.py tests/contracts/test_source_add_data_contract.py -v --tb=short
           echo "✅ SourceAdd contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherAdd contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: EnricherAdd contract tests must pass"
           pytest tests/contracts/test_enricher_add_contract.py tests/contracts/test_enricher_add_data_contract.py -v --tb=short
           echo "✅ EnricherAdd contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherListTypes contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: EnricherListTypes contract tests must pass"
           pytest tests/contracts/test_enricher_list_types_contract.py tests/contracts/test_enricher_list_types_data_contract.py -v --tb=short
           echo "✅ EnricherListTypes contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherList contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: EnricherList contract tests must pass"
           pytest tests/contracts/test_enricher_list_contract.py tests/contracts/test_enricher_list_data_contract.py -v --tb=short
           echo "✅ EnricherList contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherUpdate contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: EnricherUpdate contract tests must pass"
           pytest tests/contracts/test_enricher_update_contract.py tests/contracts/test_enricher_update_data_contract.py -v --tb=short
           echo "✅ EnricherUpdate contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherRemove contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: EnricherRemove contract tests must pass"
           pytest tests/contracts/test_enricher_remove_contract.py tests/contracts/test_enricher_remove_data_contract.py -v --tb=short
           echo "✅ EnricherRemove contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce SourceListTypes contract (ENFORCED)
         run: |
           echo "🔒 ENFORCED: SourceListTypes contract tests must pass"
           pytest tests/contracts/test_source_list_types_contract.py tests/contracts/test_source_list_types_data_contract.py -v --tb=short
           echo "✅ SourceListTypes contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce SourceList contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: SourceList contract tests must pass"
+          pytest tests/contracts/test_source_list_contract.py tests/contracts/test_source_list_data_contract.py -v --tb=short
+          echo "✅ SourceList contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce Cross-Domain Guarantees (CROSS-DOMAIN)
         run: |
           echo "🔗 CROSS-DOMAIN: Cross-domain guarantee tests must pass"
           pytest tests/contracts/cross-domain/ -v --tb=short
           echo "✅ Cross-domain guarantees enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test

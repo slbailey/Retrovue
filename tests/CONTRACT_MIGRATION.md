@@ -10,14 +10,14 @@ This document tracks the migration from legacy tests to contract-based testing a
 
 | Status        | Count | Notes                                                                                         |
 | ------------- | ----- | --------------------------------------------------------------------------------------------- |
-| ENFORCED      | 7     | All Enricher commands + SourceListTypes + SourceAdd                                           |
+| ENFORCED      | 8     | All Enricher commands + SourceListTypes + SourceAdd + SourceList                              |
 | TESTS CREATED | 0     | All tests moved to ENFORCED                                                                   |
-| PLANNED       | 11    | Source, Collection, Assets, Channel, System                                                   |
+| PLANNED       | 10    | Source, Collection, Assets, Channel, System                                                   |
 | CROSS-DOMAIN  | 4     | Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests) |
 
-**7 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd  
+**8 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList  
 **0 Contracts with Tests:** All tests moved to ENFORCED  
-**11 Contracts Planned:** Source, Collection, Assets, Channel, and System operations  
+**10 Contracts Planned:** Source, Collection, Assets, Channel, and System operations  
 **4 Cross-Domain Guarantees:** Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests)
 
 ## Migration Status Legend
@@ -109,6 +109,17 @@ This document tracks the migration from legacy tests to contract-based testing a
   **CI:** YES  
   **Notes:** This command is considered stable. Any change to behavior must update the contract first. Architecture clarified: Registry returns importer names only; CLI is responsible for validation, compliance checking, and output shaping. All 28 contract tests passing (15 CLI + 13 data contract tests).
 
+### SourceList
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/SourceListContract.md  
+**Tests:**
+
+- tests/contracts/test_source_list_contract.py
+- tests/contracts/test_source_list_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 28 contract tests passing (16 behavioral + 12 data contract tests). Complete implementation with consistent read snapshot guarantee (G-7), proper type validation using SourceListTypesContract registry, and accurate collection counting from persisted data.
+
 ---
 
 ## Cross-Domain Guarantees
@@ -178,11 +189,11 @@ All previous test implementations have been moved to `tests/_legacy/` for refere
 
 **Enforced Contracts:** CI runs contract tests for all ENFORCED contracts plus minimal unit tests that don't contradict contracts.
 
-**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd
+**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList
 
 **Command:** `pytest tests/contracts --maxfail=1 --disable-warnings -q`
 
-**Special Enforcement:** SourceListTypes contract tests run with explicit enforcement in CI workflow with detailed output.
+**Special Enforcement:** SourceListTypes and SourceList contract tests run with explicit enforcement in CI workflow with detailed output.
 
 **Excluded:** `tests/_legacy/` is reference material and not included in CI.
 
