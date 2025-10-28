@@ -246,4 +246,4 @@ retrovue source list-types
 - [Source Add](SourceAddContract.md) - Creating sources with importer validation
 - [Source Discover](SourceDiscoverContract.md) - Discovering collections using importers
 - [Source Ingest](SourceIngestContract.md) - Ingesting content using importers
-- [Unit of Work](UnitOfWorkContract.md) - Registry state management
+- [Unit of Work](../_ops/UnitOfWorkContract.md) - Registry state management

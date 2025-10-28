@@ -238,7 +238,7 @@ retrovue source add --type filesystem --name "My Files" \
 - [SourceDiscoverContract](../contracts/SourceDiscoverContract.md) - Source discovery contract
 - [SourceIngestContract](../contracts/SourceIngestContract.md) - Source ingestion contract
 - [Importer.md](../domain/Importer.md) - Importer domain documentation
-- [UnitOfWorkContract](../contracts/UnitOfWorkContract.md) - Transaction management contract
+- [UnitOfWorkContract](../../_ops/UnitOfWorkContract.md) - Transaction management contract
 
 ---
 

@@ -205,4 +205,4 @@ retrovue source add --type filesystem --name "My Files" \
 - [SourceAddContract](../contracts/SourceAddContract.md) - Source creation contract
 - [EnricherAddContract](../contracts/EnricherAddContract.md) - Enricher creation contract
 - [EnricherListTypesContract](../contracts/EnricherListTypesContract.md) - Enricher discovery contract
-- [UnitOfWorkContract](../contracts/UnitOfWorkContract.md) - Transaction management contract
+- [UnitOfWorkContract](../../_ops/UnitOfWorkContract.md) - Transaction management contract

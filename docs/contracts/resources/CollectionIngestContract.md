@@ -267,7 +267,7 @@ retrovue collection ingest "TV Shows" --title "Non-existent Show"
 
 ## See Also
 
-- [Unit of Work](UnitOfWorkContract.md) - Transaction management requirements for atomic operations
+- [Unit of Work](../_ops/UnitOfWorkContract.md) - Transaction management requirements for atomic operations
 - [Source Ingest](SourceIngestContract.md) - Source-level orchestration of multiple collection ingests
 - [Source Discover](SourceDiscoverContract.md) - Collection discovery operations
 

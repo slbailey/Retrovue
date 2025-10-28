@@ -35,7 +35,7 @@ This flow ensures that CLI operations maintain consistency with data state while
 
 ### Data Domain
 
-- **Contract:** `docs/contracts/UnitOfWorkContract.md`, database schema contracts
+- **Contract:** `docs/contracts/_ops/UnitOfWorkContract.md`, database schema contracts
 - **Interface:** Database operations, transaction management, data persistence
 - **Responsibilities:** Data persistence, transaction integrity, rollback management
 
@@ -250,7 +250,7 @@ retrovue source ingest "My Plex"
 
 ## See Also
 
-- [UnitOfWorkContract](../contracts/UnitOfWorkContract.md) - Transaction management contract
+- [UnitOfWorkContract](../../_ops/UnitOfWorkContract.md) - Transaction management contract
 - [SourceAddContract](../contracts/SourceAddContract.md) - Source creation contract
 - [SourceDiscoverContract](../contracts/SourceDiscoverContract.md) - Source discovery contract
 - [SourceIngestContract](../contracts/SourceIngestContract.md) - Source ingestion contract
@@ -262,5 +262,5 @@ retrovue source ingest "My Plex"
 ## Traceability
 
 - **Linked Tests:** `tests/contracts/cross-domain/test_cli_data_guarantees.py`
-- **Dependencies:** All CLI command contracts (`docs/contracts/*Contract.md`), `UnitOfWorkContract.md`, database schema contracts
+- **Dependencies:** All CLI command contracts (`docs/contracts/resources/*Contract.md`), `docs/contracts/_ops/UnitOfWorkContract.md`, database schema contracts
 - **Last Audit:** 2025-10-28

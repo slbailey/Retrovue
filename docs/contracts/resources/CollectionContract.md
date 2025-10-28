@@ -139,4 +139,4 @@ Collections follow a specific lifecycle pattern:
 - [Collection Domain Documentation](../domain/Collection.md) - Core domain model and operations
 - [Source Contracts](SourceContract.md) - Source-level operations that manage collections
 - [CLI Contract](README.md) - General CLI command standards
-- [Unit of Work](UnitOfWorkContract.md) - Transaction management requirements
+- [Unit of Work](../_ops/UnitOfWorkContract.md) - Transaction management requirements

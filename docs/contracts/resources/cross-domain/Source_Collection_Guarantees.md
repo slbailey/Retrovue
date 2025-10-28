@@ -243,7 +243,7 @@ retrovue source ingest "My Plex"
 - [SourceIngestContract](../contracts/SourceIngestContract.md) - Source ingestion contract
 - [CollectionContract](../CollectionContract.md) - Collection management contract
 - [CollectionIngestContract](../contracts/CollectionIngestContract.md) - Collection ingestion contract
-- [UnitOfWorkContract](../contracts/UnitOfWorkContract.md) - Transaction management contract
+- [UnitOfWorkContract](../../_ops/UnitOfWorkContract.md) - Transaction management contract
 
 ---
 
