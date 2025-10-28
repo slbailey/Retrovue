@@ -451,13 +451,11 @@ def add_source(
                 typer.echo(json.dumps(result, indent=2))
             else:
                 typer.echo(f"Successfully created {type} source: {name}")
+                typer.echo(f"  Name: {name}")
                 typer.echo(f"  ID: {source.id}")
-                typer.echo(f"  External ID: {source.external_id}")
-                typer.echo(f"  Type: {type}")
                 typer.echo(f"  Importer: {importer.name}")
                 if enricher_list:
                     typer.echo(f"  Enrichers: {', '.join(enricher_list)}")
-                typer.echo(f"  Configuration: {source.config}")
                 
     except Exception as e:
         typer.echo(f"Error adding source: {e}", err=True)
