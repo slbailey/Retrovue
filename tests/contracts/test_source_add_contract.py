@@ -507,16 +507,53 @@ class TestSourceAddContract:
         """
         Contract: --test-db flag MUST be supported.
         """
-        result = self.runner.invoke(app, [
-            "source", "add",
-            "--type", "plex",
-            "--name", "Test Plex",
-            "--base-url", "http://test",
-            "--token", "test-token",
-            "--test-db"
-        ])
-        
-        # Should succeed with exit code 0 and show test-db message
-        assert result.exit_code == 0
-        assert "Using test database environment" in result.stderr
-        assert "Successfully created plex source: Test Plex" in result.stdout
+        with patch("retrovue.cli.commands.source.session") as mock_session, \
+             patch("retrovue.cli.commands.source.uuid.uuid4") as mock_uuid:
+            
+            # Mock UUID to ensure predictable external ID
+            mock_uuid_instance = MagicMock()
+            mock_uuid_instance.hex = "1234567890abcdef"
+            mock_uuid.return_value = mock_uuid_instance
+            
+            # Mock database session to avoid actual database operations
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+            
+            # Mock the Source entity creation
+            mock_source = MagicMock()
+            mock_source.id = "test-id-123"
+            mock_source.external_id = "plex-12345678"
+            mock_source.name = "Test Plex"
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+            
+            # Mock database operations
+            mock_db.add.return_value = None
+            mock_db.commit.return_value = None
+            mock_db.refresh.return_value = None
+            
+            # Mock SourceService
+            mock_source_service = MagicMock()
+            mock_source_service.discover_collections.return_value = []
+            
+            # Mock importer
+            mock_importer = MagicMock()
+            mock_importer.name = "PlexImporter"
+            
+            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+                 patch("retrovue.domain.entities.Source", return_value=mock_source), \
+                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
+                
+                result = self.runner.invoke(app, [
+                    "source", "add",
+                    "--type", "plex",
+                    "--name", "Test Plex",
+                    "--base-url", "http://test",
+                    "--token", "test-token",
+                    "--test-db"
+                ])
+                
+                # Should succeed with exit code 0 and show test-db message
+                assert result.exit_code == 0
+                assert "Using test database environment" in result.stderr
+                assert "Successfully created plex source: Test Plex" in result.stdout
