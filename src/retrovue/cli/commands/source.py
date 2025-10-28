@@ -838,6 +838,9 @@ def delete_source(
                 typer.echo(f"  ID: {source.id}")
                 typer.echo(f"  Type: {source.type}")
                     
+        except typer.Exit:
+            # Re-raise typer.Exit exceptions (including cancellation)
+            raise
         except Exception as e:
             typer.echo(f"Error deleting source: {e}", err=True)
             raise typer.Exit(1)
