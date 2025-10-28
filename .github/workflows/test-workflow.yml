@@ -134,3 +134,20 @@ jobs:
           echo "✅ SourceDiscover contract enforcement passed"
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Cleanup test database
+        run: |
+          echo "🧹 Cleaning up test database..."
+          python -c "
+          from retrovue.infra.uow import session
+          from retrovue.domain.entities import Source
+          with session() as db:
+              sources = db.query(Source).all()
+              print(f'Found {len(sources)} sources to clean up')
+              for source in sources:
+                  db.delete(source)
+              db.commit()
+              print('✅ Test database cleaned up')
+          "
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test

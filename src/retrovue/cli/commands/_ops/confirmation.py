@@ -16,7 +16,6 @@ The CLI wrapper will handle IO; tests will call these helpers directly.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
@@ -55,19 +54,19 @@ def build_confirmation_prompt(summary: PendingDeleteSummary) -> str:
     if summary.total_sources == 1:
         # Single-source delete: prompt must include that source's name, ID, and its cascade counts
         source = summary.sources[0]
-        prompt = f"""⚠️  WARNING: This will permanently delete the following:
-   • Source: "{source.source_name}" (ID: {source.source_id})
-   • Collections: {source.collections_count} collections will be deleted
-   • Path mappings: {source.path_mappings_count} path mappings will be deleted
+        prompt = f"""WARNING: This will permanently delete the following:
+   - Source: "{source.source_name}" (ID: {source.source_id})
+   - Collections: {source.collections_count} collections will be deleted
+   - Path mappings: {source.path_mappings_count} path mappings will be deleted
 
 This action cannot be undone. Type 'yes' to confirm:"""
     else:
         # Multi-source deletes (wildcard): prompt must summarize total sources, total collections, and total path mappings
-        prompt = f"""⚠️  WARNING: This will permanently delete {summary.total_sources} sources:"""
+        prompt = f"""WARNING: This will permanently delete {summary.total_sources} sources:"""
         
         for source in summary.sources:
             prompt += f"""
-   • Source: "{source.source_name}" (ID: {source.source_id}) - {source.collections_count} collections, {source.path_mappings_count} path mappings"""
+   - Source: "{source.source_name}" (ID: {source.source_id}) - {source.collections_count} collections, {source.path_mappings_count} path mappings"""
         
         prompt += f"""
 

@@ -18,10 +18,9 @@ This module MUST NOT read from stdin or write to stdout. All IO stays in the CLI
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ....domain.entities import PathMapping, Source, SourceCollection
@@ -46,8 +45,8 @@ def resolve_source_selector(db: Session, source_selector: str) -> list[Source]:
         sources = db.query(Source).order_by(Source.name, Source.id).all()
         return sources
     
-    # Check if selector contains wildcard characters (* or ?)
-    if "*" in source_selector or "?" in source_selector:
+    # Check if selector contains wildcard characters (*, ?, or %)
+    if "*" in source_selector or "?" in source_selector or "%" in source_selector:
         # Match against source name and external_id using SQL LIKE semantics
         like_pattern = source_selector.replace("*", "%").replace("?", "_")
         sources = (
@@ -269,6 +268,7 @@ def delete_one_source_transactionally(db: Session, source_id: str) -> dict[str, 
         # Phase 2: Execute operation
         # Delete the source (cascade will handle collections and path mappings)
         db.delete(source)
+        db.flush()  # Ensure the deletion is visible within the transaction
         
         # Phase 3: Post-operation validation
         # Verify source is actually deleted

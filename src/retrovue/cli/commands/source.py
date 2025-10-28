@@ -20,7 +20,7 @@ from ...adapters.registry import (
     list_importers,
 )
 from ...content_manager.source_service import SourceService
-from ...domain.entities import PathMapping, SourceCollection
+from ...domain.entities import SourceCollection
 from ...infra.uow import session
 
 
@@ -780,7 +780,7 @@ def update_source(
             raise typer.Exit(1)
 
 
-@app.command("delete")
+@app.command("delete", no_args_is_help=True)
 def delete_source(
     source_selector: str = typer.Argument(..., help="Source ID, external ID, name, or wildcard pattern to delete"),
     force: bool = typer.Option(False, "--force", help="Force deletion without confirmation"),
@@ -795,19 +795,28 @@ def delete_source(
         retrovue source delete "My Plex Server"
         retrovue source delete filesystem-4807c63e --force
         retrovue source delete 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
-        retrovue source delete "plex-*" --confirm
+        retrovue source delete "plex-%" --confirm
     """
-    from ._ops.source_delete_ops import (
-        resolve_source_selector,
-        build_pending_delete_summary,
-        perform_source_deletions,
-        format_json_output,
-        format_human_output,
-    )
     from ._ops.confirmation import evaluate_confirmation
+    from ._ops.source_delete_ops import (
+        build_pending_delete_summary,
+        format_human_output,
+        format_json_output,
+        perform_source_deletions,
+        resolve_source_selector,
+    )
     
-    with session() as db:
-        try:
+    # Production safety check
+    if not test_db:
+        from ...infra.settings import settings
+        if settings.database_url and "test" not in settings.database_url.lower():
+            typer.echo("⚠️  WARNING: This appears to be a production database!", err=True)
+            typer.echo("   Use --test-db flag only for test databases", err=True)
+            typer.echo("   Production source deletion requires additional safety measures", err=True)
+            raise typer.Exit(1)
+    
+    try:
+        with session() as db:
             # Call resolve_source_selector(...)
             sources = resolve_source_selector(db, source_selector)
             
@@ -866,16 +875,16 @@ def delete_source(
                 # Else: Render human-readable output with the output helper from source_delete_ops
                 human_output = format_human_output(results)
                 typer.echo(human_output)
-            
-            # Exit code 0
-            raise typer.Exit(0)
+        
+        # Exit code 0 - transaction has been committed
+        raise typer.Exit(0)
                     
-        except typer.Exit:
-            # Re-raise typer.Exit exceptions (including cancellation)
-            raise
-        except Exception as e:
-            typer.echo(f"Error deleting source: {e}", err=True)
-            raise typer.Exit(1)
+    except typer.Exit:
+        # Re-raise typer.Exit exceptions (including cancellation)
+        raise
+    except Exception as e:
+        typer.echo(f"Error deleting source: {e}", err=True)
+        raise typer.Exit(1)
 
 
 @app.command("discover")
