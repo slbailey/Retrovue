@@ -69,11 +69,11 @@ class TestEnricherListTypesContract:
         # Verify values
         assert output_data["status"] == "ok"
         assert isinstance(output_data["enricher_types"], list)
-        assert output_data["total"] == 2
+        assert output_data["total"] == 9
         
         # Verify enricher type structure
         enricher_types = output_data["enricher_types"]
-        assert len(enricher_types) == 2
+        assert len(enricher_types) == 9
         
         # Check that both ingest and playout are present
         type_names = [et["type"] for et in enricher_types]
@@ -214,7 +214,7 @@ class TestEnricherListTypesContract:
         
         # Check for expected format elements
         assert "Available enricher types:" in result.stdout
-        assert "Total: 2 enricher types available" in result.stdout
+        assert "Total: 9 enricher types available" in result.stdout
         
         # Check that scope information is NOT displayed (per refactoring)
         assert "Scope:" not in result.stdout
