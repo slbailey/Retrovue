@@ -732,8 +732,13 @@ def check_enricher_removal_safety(enricher: EnricherModel, db_session) -> tuple[
     """
     import os
     
-    # Non-production environments are always permissive
-    if os.getenv('ENV') != 'production' and 'production' not in os.getenv('DATABASE_URL', ''):
+    # Contract D-5: Production is determined by environment configuration
+    # This check MUST be enforced by the removal command before performing any destructive action
+    is_production = (os.getenv('ENV') == 'production' or 
+                    'production' in os.getenv('DATABASE_URL', ''))
+    
+    # Non-production environments are always permissive (Contract D-5)
+    if not is_production:
         return True, ""
     
     # Check if enricher is explicitly protected from removal
