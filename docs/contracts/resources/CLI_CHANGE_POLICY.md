@@ -15,7 +15,7 @@ This document establishes the governance policy for RetroVue CLI interfaces. Onc
 
 Any change to a governed interface MUST follow this process:
 
-1. **Contract First**: Edit the contract document in `docs/contracts/`
+1. **Contract First**: Edit the contract document in `docs/contracts/resources/`
 2. **Update Tests**: Modify both contract test files to match the new contract
 3. **Verify**: Ensure all contract tests pass
 4. **Update Status**: Update `tests/CONTRACT_MIGRATION.md` if needed
@@ -118,7 +118,7 @@ def add_enricher(...):
 
 To add a new governed interface:
 
-1. Create contract document in `docs/contracts/`
+1. Create contract document in `docs/contracts/resources/`
 2. Create contract tests in `tests/contracts/`
 3. Implement the command to pass all tests
 4. Update `tests/CONTRACT_MIGRATION.md` to mark as **ENFORCED**
