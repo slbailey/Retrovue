@@ -9,7 +9,8 @@ from sqlalchemy.exc import IntegrityError
 
 from .db import get_session
 from ..domain.entities import BroadcastChannel
-from ..schedule_manager.models import BroadcastTemplate, BroadcastTemplateBlock, BroadcastScheduleDay, CatalogAsset
+from ..schedule_manager.models import BroadcastTemplate, BroadcastTemplateBlock, BroadcastScheduleDay
+from ..domain.catalog_asset import CatalogAsset
 from ..domain.entities import Asset
 
 

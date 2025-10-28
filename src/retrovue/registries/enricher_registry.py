@@ -8,19 +8,49 @@ def list_enricher_types():
     """List all available enricher types."""
     return [
         {
+            "type": "ingest",
+            "description": "Enrichers that run during content ingestion to add value to assets",
+            "available": True
+        },
+        {
+            "type": "playout", 
+            "description": "Enrichers that run during playout to add value to content being broadcast",
+            "available": True
+        },
+        {
+            "type": "tvdb",
+            "description": "TheTVDB metadata enrichment for TV shows and episodes",
+            "available": True
+        },
+        {
+            "type": "tmdb",
+            "description": "TMDB metadata enrichment for movies and TV shows",
+            "available": True
+        },
+        {
+            "type": "watermark",
+            "description": "Watermark overlay enricher for adding logos to content",
+            "available": True
+        },
+        {
+            "type": "crossfade",
+            "description": "Crossfade transition enricher for smooth content transitions",
+            "available": True
+        },
+        {
+            "type": "llm",
+            "description": "LLM-based enrichment for AI-powered content analysis",
+            "available": True
+        },
+        {
+            "type": "ffmpeg",
+            "description": "FFmpeg-based video analysis and processing",
+            "available": True
+        },
+        {
             "type": "ffprobe",
-            "description": "Video/audio analysis using FFprobe",
-            "scope": "ingest"
-        },
-        {
-            "type": "metadata",
-            "description": "Metadata extraction and enrichment",
-            "scope": "ingest"
-        },
-        {
-            "type": "playout-enricher",
-            "description": "Playout-scope enricher for channel processing",
-            "scope": "playout"
+            "description": "FFprobe-based media analysis and metadata extraction",
+            "available": True
         }
     ]
 
@@ -28,48 +58,8 @@ def list_enricher_types():
 def get_enricher_help(enricher_type):
     """Get help information for a specific enricher type."""
     help_info = {
-        "ffprobe": {
-            "description": "Video/audio analysis using FFprobe",
-            "required_params": [
-                {
-                    "name": "name",
-                    "description": "Human-readable label for this enricher"
-                }
-            ],
-            "optional_params": [
-                {
-                    "name": "timeout",
-                    "description": "Timeout in seconds for FFprobe operations",
-                    "default": "30"
-                }
-            ],
-            "examples": [
-                "retrovue enricher add --type ffprobe --name 'Video Analysis'",
-                "retrovue enricher add --type ffprobe --name 'Fast Analysis' --timeout 10"
-            ]
-        },
-        "metadata": {
-            "description": "Metadata extraction and enrichment",
-            "required_params": [
-                {
-                    "name": "name",
-                    "description": "Human-readable label for this enricher"
-                }
-            ],
-            "optional_params": [
-                {
-                    "name": "sources",
-                    "description": "Comma-separated list of metadata sources",
-                    "default": "imdb,tmdb"
-                }
-            ],
-            "examples": [
-                "retrovue enricher add --type metadata --name 'Movie Metadata'",
-                "retrovue enricher add --type metadata --name 'TV Metadata' --sources 'tvdb,imdb'"
-            ]
-        },
-        "playout-enricher": {
-            "description": "Playout-scope enricher for channel processing",
+        "ingest": {
+            "description": "Enrichers that run during content ingestion to add value to assets",
             "required_params": [
                 {
                     "name": "name",
@@ -84,7 +74,28 @@ def get_enricher_help(enricher_type):
                 }
             ],
             "examples": [
-                "retrovue enricher add --type playout-enricher --name 'Channel Branding'"
+                "retrovue enricher add --type ingest --name 'Video Analysis'",
+                "retrovue enricher add --type ingest --name 'Metadata Enrichment' --config '{\"sources\": [\"imdb\", \"tmdb\"]}'"
+            ]
+        },
+        "playout": {
+            "description": "Enrichers that run during playout to add value to content being broadcast",
+            "required_params": [
+                {
+                    "name": "name",
+                    "description": "Human-readable label for this enricher"
+                }
+            ],
+            "optional_params": [
+                {
+                    "name": "config",
+                    "description": "JSON configuration for the enricher",
+                    "default": "{}"
+                }
+            ],
+            "examples": [
+                "retrovue enricher add --type playout --name 'Channel Branding'",
+                "retrovue enricher add --type playout --name 'Overlay Processing' --config '{\"overlay_type\": \"watermark\"}'"
             ]
         }
     }

@@ -32,7 +32,7 @@ retrovue enricher list [--json] [--test-db] [--dry-run]
 ### Display Behavior
 
 - Shows all configured enricher instances
-- Displays enricher type, scope, and configuration
+- Displays enricher type and configuration
 - Reports attachment status to collections/channels
 - Shows availability status
 
@@ -46,17 +46,17 @@ retrovue enricher list [--json] [--test-db] [--dry-run]
 
 ```
 Configured enricher instances:
-  enricher-ffprobe-a1b2c3d4    - Video Analysis (ffprobe, ingest)
+  enricher-ffprobe-a1b2c3d4    - Video Analysis (ffprobe)
     Configuration: {"ffprobe_path": "ffprobe", "timeout": 30}
     Attached to: 2 collections, 0 channels
     Status: Available
 
-  enricher-metadata-b2c3d4e5  - Movie Metadata (metadata, ingest)
+  enricher-metadata-b2c3d4e5  - Movie Metadata (metadata)
     Configuration: {"sources": "imdb,tmdb", "api_key": "***REDACTED***"}
     Attached to: 1 collection, 0 channels
     Status: Available
 
-  enricher-playout-c3d4e5f6   - Channel Branding (playout-enricher, playout)
+  enricher-playout-c3d4e5f6   - Channel Branding (playout)
     Configuration: {"overlay_path": "/path/to/overlay.png"}
     Attached to: 0 collections, 1 channel
     Status: Available
@@ -68,9 +68,9 @@ Total: 3 enricher instances configured
 
 ```
 Would list 3 enricher instances from database:
-  • enricher-ffprobe-a1b2c3d4 - Video Analysis (ffprobe, ingest)
-  • enricher-metadata-b2c3d4e5 - Movie Metadata (metadata, ingest)
-  • enricher-playout-c3d4e5f6 - Channel Branding (playout-enricher, playout)
+  • enricher-ffprobe-a1b2c3d4 - Video Analysis (ffprobe)
+  • enricher-metadata-b2c3d4e5 - Movie Metadata (metadata)
+  • enricher-playout-c3d4e5f6 - Channel Branding (playout)
 ```
 
 ### JSON Output
@@ -82,7 +82,6 @@ Would list 3 enricher instances from database:
     {
       "enricher_id": "enricher-ffprobe-a1b2c3d4",
       "type": "ffprobe",
-      "scope": "ingest",
       "name": "Video Analysis",
       "config": {
         "ffprobe_path": "ffprobe",
@@ -97,7 +96,6 @@ Would list 3 enricher instances from database:
     {
       "enricher_id": "enricher-metadata-b2c3d4e5",
       "type": "metadata",
-      "scope": "ingest",
       "name": "Movie Metadata",
       "config": {
         "sources": "imdb,tmdb",
@@ -111,8 +109,7 @@ Would list 3 enricher instances from database:
     },
     {
       "enricher_id": "enricher-playout-c3d4e5f6",
-      "type": "playout-enricher",
-      "scope": "playout",
+      "type": "playout",
       "name": "Channel Branding",
       "config": {
         "overlay_path": "/path/to/overlay.png"
@@ -163,7 +160,7 @@ Would list 3 enricher instances from database:
 ## Behavior Contract Rules (B-#)
 
 - **B-1:** The command MUST list all configured enricher instances from the database.
-- **B-2:** The command MUST display enricher type, scope, name, and configuration for each instance.
+- **B-2:** The command MUST display enricher type, name, and configuration for each instance.
 - **B-3:** When `--json` is supplied, output MUST include fields `"status"`, `"enrichers"`, and `"total"` with appropriate data structures.
 - **B-4:** On listing failure (database access error), the command MUST exit with code `1` and print a human-readable error message.
 - **B-5:** The `--dry-run` flag MUST show what would be listed without executing database queries.
@@ -250,9 +247,9 @@ retrovue enricher list
 
 ## Supported Enricher Types
 
-- **ffprobe**: Video/audio analysis using FFprobe (ingest scope)
-- **metadata**: Metadata extraction and enrichment (ingest scope)
-- **playout-enricher**: Playout-scope enricher for channel processing (playout scope)
+- **ffprobe**: Video/audio analysis using FFprobe (ingest type)
+- **metadata**: Metadata extraction and enrichment (ingest type)
+- **playout**: Playout enricher for channel processing (playout type)
 - **Custom**: Third-party enricher implementations
 
 ---

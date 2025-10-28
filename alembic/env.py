@@ -27,6 +27,13 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """Exclude alembic_version table from autogenerate comparisons."""
+    if type_ == "table" and name == "alembic_version":
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = settings.database_url  # <-- ALWAYS use app's DB URL (Postgres)
@@ -39,6 +46,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         version_table="alembic_version",
         version_table_schema="public",
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -64,6 +72,7 @@ def run_migrations_online() -> None:
             compare_server_default=True,
             version_table="alembic_version",
             version_table_schema="public",
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

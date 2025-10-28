@@ -33,7 +33,7 @@ retrovue enricher list-types [--json] [--test-db] [--dry-run]
 
 - Scans registry for available enricher types
 - Validates enricher type compliance
-- Reports scope information (ingest or playout)
+- Reports type information (ingest or playout)
 - Displays configuration requirements
 
 ---
@@ -46,20 +46,18 @@ retrovue enricher list-types [--json] [--test-db] [--dry-run]
 
 ```
 Available enricher types:
-  ffprobe           - Video/audio analysis using FFprobe (ingest)
-  metadata          - Metadata extraction and enrichment (ingest)
-  playout-enricher  - Playout-scope enricher for channel processing (playout)
+  ingest            - Enrichers that run during content ingestion to add value to assets
+  playout           - Enrichers that run during playout to add value to content being broadcast
 
-Total: 3 enricher types available
+Total: 2 enricher types available
 ```
 
 **Dry-run Output:**
 
 ```
-Would list 3 enricher types from registry:
-  • ffprobe - Video/audio analysis using FFprobe (ingest)
-  • metadata - Metadata extraction and enrichment (ingest)
-  • playout-enricher - Playout-scope enricher for channel processing (playout)
+Would list 2 enricher types from registry:
+  • ingest - Enrichers that run during content ingestion to add value to assets
+  • playout - Enrichers that run during playout to add value to content being broadcast
 ```
 
 ### JSON Output
@@ -69,25 +67,17 @@ Would list 3 enricher types from registry:
   "status": "ok",
   "enricher_types": [
     {
-      "type": "ffprobe",
-      "description": "Video/audio analysis using FFprobe",
-      "scope": "ingest",
+      "type": "ingest",
+      "description": "Enrichers that run during content ingestion to add value to assets",
       "available": true
     },
     {
-      "type": "metadata",
-      "description": "Metadata extraction and enrichment",
-      "scope": "ingest",
-      "available": true
-    },
-    {
-      "type": "playout-enricher",
-      "description": "Playout-scope enricher for channel processing",
-      "scope": "playout",
+      "type": "playout",
+      "description": "Enrichers that run during playout to add value to content being broadcast",
       "available": true
     }
   ],
-  "total": 3
+  "total": 2
 }
 ```
 
@@ -108,13 +98,13 @@ Would list 3 enricher types from registry:
 
    - Registry scans for available enricher types
    - Validates enricher type compliance
-   - Checks scope declarations
+   - Checks type declarations
    - Updates internal registry state
 
-2. **Scope Validation**:
-   - Validates scope declarations (ingest or playout)
-   - Reports scope information
-   - Maintains scope-based filtering
+2. **Type Validation**:
+   - Validates type declarations (ingest or playout)
+   - Reports type information
+   - Maintains type-based filtering
 
 ### Side Effects
 
@@ -127,7 +117,7 @@ Would list 3 enricher types from registry:
 ## Behavior Contract Rules (B-#)
 
 - **B-1:** The command MUST scan registry for available enricher types and display all discovered types.
-- **B-2:** The command MUST validate enricher type compliance and scope declarations.
+- **B-2:** The command MUST validate enricher type compliance and type declarations.
 - **B-3:** When `--json` is supplied, output MUST include fields `"status"`, `"enricher_types"`, and `"total"` with appropriate data structures.
 - **B-4:** On discovery failure (registry access error), the command MUST exit with code `1` and print a human-readable error message.
 - **B-5:** The `--dry-run` flag MUST show what would be discovered without executing external validation.
@@ -140,8 +130,8 @@ Would list 3 enricher types from registry:
 ## Data Contract Rules (D-#)
 
 - **D-1:** Registry MUST scan for available enricher types.
-- **D-2:** Registry MUST validate enricher type compliance and scope declarations.
-- **D-3:** Scope validation MUST be performed for each discovered enricher type.
+- **D-2:** Registry MUST validate enricher type compliance and type declarations.
+- **D-3:** Type validation MUST be performed for each discovered enricher type.
 - **D-4:** Enricher type discovery MUST NOT modify external systems or database tables.
 - **D-5:** Registry state queries MUST be read-only during discovery.
 - **D-6:** Enricher type availability MUST be validated against implementation status.
@@ -168,7 +158,7 @@ Would list 3 enricher types from registry:
 ### Validation Errors
 
 - Invalid enricher type: "Error: Enricher type 'invalid' does not implement required interface"
-- Missing scope: "Error: Enricher type 'ffprobe' missing scope declaration"
+- Missing type: "Error: Enricher type 'ffprobe' missing type declaration"
 - Interface violation: "Error: Enricher type 'metadata' does not implement Enricher protocol"
 
 ---
@@ -214,9 +204,8 @@ retrovue enricher list-types
 
 ## Supported Enricher Types
 
-- **ffprobe**: Video/audio analysis using FFprobe (ingest scope)
-- **metadata**: Metadata extraction and enrichment (ingest scope)
-- **playout-enricher**: Playout-scope enricher for channel processing (playout scope)
+- **ingest**: Enrichers that run during content ingestion to add value to assets
+- **playout**: Enrichers that run during playout to add value to content being broadcast
 - **Custom**: Third-party enricher implementations
 
 ---

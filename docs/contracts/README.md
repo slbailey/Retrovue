@@ -199,6 +199,8 @@ Write the contract first. Test the contract second. Implement last.
 
 ## See Also
 
+- [CLI Change Policy](CLI_CHANGE_POLICY.md) - Governance rules for enforced interfaces
+- [Contract Test Guidelines](CONTRACT_TEST_GUIDELINES.md) - Testing standards
 - [Architecture Overview](../architecture/ArchitectureOverview.md)
 - [Domain: Source](../domain/Source.md)
 - [Domain: Enricher](../domain/Enricher.md)

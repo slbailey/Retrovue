@@ -77,11 +77,12 @@ An Enricher is responsible for:
 - Return enriched versions without modifying originals
 - Handle enrichment failures gracefully
 
-### Configuration Management
+### Enrichment Parameter Management
 
-- Define configuration schema for the enricher type
-- Validate configuration parameters
-- Support both required and optional parameters
+- Define enrichment parameter schema for the enricher type
+- Validate enrichment parameters (API keys, file paths, timing values, etc.)
+- Support both required and optional enrichment parameters
+- Handle parameter updates through the `enricher update` command
 
 ### Error Handling
 
@@ -150,9 +151,9 @@ For different scopes, enrichers may work with different object types:
 - Output: Modified playout plan with overlays, transitions, etc.
 - Examples: Channel branding, crossfades, emergency crawls
 
-### Configuration Schema
+### Enrichment Parameter Schema
 
-Each enricher type declares its configuration requirements:
+Each enricher type declares its enrichment parameter requirements. These are the specific values the enricher needs to perform its enrichment tasks:
 
 ```python
 @classmethod
@@ -167,6 +168,20 @@ def param_spec(cls) -> dict:
         }
     }
 ```
+
+**Enrichment Parameter Types:**
+
+- **API Credentials**: `--api-key` for external service authentication
+- **File Paths**: `--overlay-path`, `--template-path` for file-based resources
+- **Timing Values**: `--duration`, `--timeout` for temporal parameters
+- **Configuration Values**: `--model`, `--language`, `--pattern` for behavior settings
+- **No Parameters**: Some enrichers (e.g., FFmpeg) require no parameters and use system defaults
+
+**Parameter Update Behavior:**
+
+- The `enricher update` command allows modification of these enrichment parameters
+- Some enrichers may not require updates (inform user that updates are not necessary)
+- Others may need frequent updates (e.g., API keys for external services)
 
 ---
 
@@ -212,6 +227,57 @@ class FFprobeEnricher:
 ENRICHER_REGISTRY.register(FFprobeEnricher)
 ```
 
+**Enrichment Parameter Examples by Enricher Type:**
+
+```python
+# TheTVDB Enricher - requires API key
+class TheTVDBEnricher:
+    name = "tvdb"
+    scope = "ingest"
+
+    @classmethod
+    def param_spec(cls) -> dict:
+        return {
+            "required": {
+                "--name": "Human-readable label",
+                "--api-key": "TheTVDB API key for authentication"
+            },
+            "optional": {
+                "--language": "Language preference (default: en-US)"
+            }
+        }
+
+# Watermark Enricher - requires file path
+class WatermarkEnricher:
+    name = "watermark"
+    scope = "playout"
+
+    @classmethod
+    def param_spec(cls) -> dict:
+        return {
+            "required": {
+                "--name": "Human-readable label",
+                "--overlay-path": "Path to watermark image file"
+            },
+            "optional": {
+                "--position": "Watermark position (default: top-right)",
+                "--opacity": "Watermark opacity 0.0-1.0 (default: 0.8)"
+            }
+        }
+
+# FFmpeg Enricher - no parameters needed
+class FFmpegEnricher:
+    name = "ffmpeg"
+    scope = "ingest"
+
+    @classmethod
+    def param_spec(cls) -> dict:
+        return {
+            "required": {"--name": "Human-readable label"},
+            "optional": {}  # No enrichment parameters needed
+        }
+```
+
 **Key rules:**
 
 - `name` must be unique across all enricher types.
@@ -234,12 +300,32 @@ retrovue enricher add \
   --timeout 30
 ```
 
-- CLI calls your enricher's `param_spec()` to know what flags are required.
-- CLI validates that all required params are present.
+- CLI calls your enricher's `param_spec()` to know what enrichment parameters are required.
+- CLI validates that all required enrichment parameters are present.
 - RetroVue persists a new Enricher Instance row in the DB with:
   - `enricher_id` (e.g. `enricher-ffprobe-a1b2c3d4`)
   - `type` = "ffprobe"
   - `config` (FFprobe path, timeout, etc.)
+
+### Update Enrichment Parameters
+
+```bash
+# Update API key for TheTVDB enricher
+retrovue enricher update enricher-tvdb-b2c3d4e5 \
+  --api-key "new-tvdb-api-key"
+
+# Update watermark path for playout enricher
+retrovue enricher update enricher-watermark-c3d4e5f6 \
+  --overlay-path "/new/path/to/watermark.png"
+
+# FFmpeg enricher requires no updates
+retrovue enricher update enricher-ffmpeg-a1b2c3d4
+# Output: "FFmpeg enricher requires no parameter updates"
+```
+
+- CLI validates enrichment parameters against the enricher's `param_spec()`.
+- Some enrichers may not require updates (inform user that updates are not necessary).
+- RetroVue updates the persisted configuration with new enrichment parameter values.
 
 ### Attach to Collections (Ingest Scope)
 
@@ -279,7 +365,7 @@ Your enricher must behave like infrastructure, not like a script.
 
 ### You MUST raise typed, enricher-specific errors for:
 
-- bad configuration,
+- bad enrichment parameters (invalid API key format, file not found, etc.),
 - unreachable external services,
 - malformed responses,
 - "file not found," etc.
@@ -326,6 +412,13 @@ class FFprobeEnricher:
     scope = "ingest"
 
     def __init__(self, ffprobe_path: str = "ffprobe", timeout: int = 30):
+        """
+        Initialize FFprobe enricher with enrichment parameters.
+
+        Args:
+            ffprobe_path: Path to FFprobe executable (enrichment parameter)
+            timeout: Timeout in seconds for FFprobe operations (enrichment parameter)
+        """
         self.ffprobe_path = ffprobe_path
         self.timeout = timeout
 
@@ -481,6 +574,13 @@ class MetadataEnricher:
     scope = "ingest"
 
     def __init__(self, sources: str = "imdb,tmdb", api_key: str = None):
+        """
+        Initialize metadata enricher with enrichment parameters.
+
+        Args:
+            sources: Comma-separated list of metadata sources (enrichment parameter)
+            api_key: API key for external services (enrichment parameter)
+        """
         self.sources = sources.split(",")
         self.api_key = api_key
 
@@ -572,6 +672,12 @@ class PlayoutEnricher:
     scope = "playout"
 
     def __init__(self, config: Dict[str, Any] = None):
+        """
+        Initialize playout enricher with enrichment parameters.
+
+        Args:
+            config: Dictionary of enrichment parameters (overlay_path, crossfade_duration, etc.)
+        """
         self.config = config or {}
 
     def enrich(self, playout_plan: Any) -> Any:
@@ -629,8 +735,8 @@ Before you send a PR for a new enricher:
 - [ ] `name` attribute
 - [ ] `scope` attribute (ingest or playout)
 - [ ] `enrich()` method with proper signature
-- [ ] `param_spec()` class method for configuration
-- [ ] proper error handling
+- [ ] `param_spec()` class method for enrichment parameters
+- [ ] proper error handling for enrichment parameter validation
 
 ### Registers with the Enricher Registry
 
@@ -647,10 +753,11 @@ Before you send a PR for a new enricher:
 ### Has tests
 
 - [ ] Enrichment behavior
-- [ ] Configuration validation
-- [ ] Error handling paths
+- [ ] Enrichment parameter validation
+- [ ] Error handling paths for invalid parameters
 - [ ] Graceful failure scenarios
 - [ ] Deterministic output for same input
+- [ ] Parameter update behavior (for enrichers that support updates)
 
 See [TestingPlugins.md](TestingPlugins.md) for expectations on enricher tests, and integration smoke tests across Source → Collection → Enricher → Producer.
 
@@ -659,8 +766,9 @@ See [TestingPlugins.md](TestingPlugins.md) for expectations on enricher tests, a
 ## Summary
 
 - **Enricher Type** = runtime plugin that knows how to add value to objects.
-- **Enricher Instance** = persisted configuration of that enricher type with real settings and operator intent.
-- **Runtime registry** wires enricher types into the CLI (`enricher list-types`, `enricher add`, etc.).
+- **Enricher Instance** = persisted configuration of that enricher type with real enrichment parameters and operator intent.
+- **Enrichment Parameters** = specific values an enricher needs to perform its enrichment tasks (API keys, file paths, timing values, etc.).
+- **Runtime registry** wires enricher types into the CLI (`enricher list-types`, `enricher add`, `enricher update`, etc.).
 - **Your enricher** feeds enrichment, but does not own persistence, policy, or orchestration.
 
 If your enricher follows this contract, RetroVue can safely treat your enrichment logic like first-class internal processing.

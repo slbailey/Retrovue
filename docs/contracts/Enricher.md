@@ -35,7 +35,7 @@ Each Enricher operation follows the standard contract pattern:
 
 ## Design Principles
 
-- **Scope-based operation**: Enrichers operate in either ingest or playout scope
+- **Type-based operation**: Enrichers operate as either ingest or playout types
 - **Stateless design**: Enrichers are pure functions that don't maintain state
 - **Priority ordering**: Enrichers are applied in priority order to resolve conflicts
 - **Graceful failure**: Enricher failures don't block ingestion or playout
@@ -47,11 +47,11 @@ Each Enricher operation follows the standard contract pattern:
 
 All Enricher contracts follow these safety patterns:
 
-### Scope Validation
+### Type Validation
 
-- Enrichers declare their scope (ingest or playout)
-- Scope validation prevents misconfiguration
-- Different scopes have different attachment targets
+- Enrichers are identified by their type (ingest or playout)
+- Type validation prevents misconfiguration
+- Different types have different attachment targets
 
 ### Configuration Management
 
@@ -83,7 +83,7 @@ class Enricher(Protocol):
 ### Method Responsibilities
 
 - **enrich()**: Transforms input objects by adding metadata
-- **Scope Declaration**: Enrichers declare whether they operate in ingest or playout scope
+- **Type Declaration**: Enrichers are identified by their type (ingest or playout)
 - **Configuration Schema**: Each enricher type defines its configuration requirements
 
 ### Configuration Schema

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the behavioral contract for updating enricher instance configurations. This contract ensures safe, consistent enricher updates with proper validation and configuration handling.
+Define the behavioral contract for updating enricher enrichment parameters. This contract ensures safe, consistent enricher updates with proper validation and parameter handling. Enrichment parameters are the specific values an enricher needs to perform its enrichment tasks (e.g., API keys, file paths, timing values).
 
 ---
 
@@ -16,21 +16,49 @@ retrovue enricher update <enricher_id> [options] [--test-db] [--dry-run] [--json
 
 - `enricher_id`: Enricher instance identifier (UUID or enricher ID)
 
-### Type-Specific Parameters
+### Type-Specific Enrichment Parameters
 
-**FFprobe Enrichers:**
+**FFmpeg/FFprobe Enrichers:**
 
-- `--ffprobe-path`: Path to FFprobe executable
-- `--timeout`: Timeout in seconds for FFprobe operations
+- Typically require no parameters (use system defaults)
+- If parameters are provided, the command should inform the user that updates are not necessary
 
-**Metadata Enrichers:**
+**TheTVDB Enrichers:**
 
-- `--sources`: Comma-separated list of metadata sources
-- `--api-key`: API key for metadata services
+- `--api-key`: New API key for TheTVDB authentication
+- `--language`: Language preference for metadata retrieval
 
-**Playout Enrichers:**
+**TMDB Enrichers:**
 
-- `--config`: JSON configuration for the enricher
+- `--api-key`: New API key for TMDB authentication
+- `--language`: Language preference for metadata retrieval
+
+**File Parser Enrichers:**
+
+- `--pattern`: Updated filename parsing pattern
+- `--field-mapping`: Updated field mapping rules
+
+**LLM Enrichers:**
+
+- `--api-key`: New API key for LLM service
+- `--model`: Updated model identifier
+- `--prompt-template`: Updated prompt template
+
+**Watermark Enrichers:**
+
+- `--overlay-path`: Updated path to watermark image
+- `--position`: Updated watermark position
+- `--opacity`: Updated watermark opacity
+
+**Crossfade Enrichers:**
+
+- `--duration`: Updated transition duration
+- `--curve`: Updated transition curve type
+
+**Lower-Third Enrichers:**
+
+- `--template-path`: Updated template file path
+- `--data-source`: Updated data source configuration
 
 ### Optional Parameters
 
@@ -67,7 +95,6 @@ retrovue enricher update <enricher_id> [options] [--test-db] [--dry-run] [--json
 Successfully updated enricher: Video Analysis
   ID: enricher-ffprobe-a1b2c3d4
   Type: ffprobe
-  Scope: ingest
   Name: Video Analysis
   Configuration: {"ffprobe_path": "/usr/bin/ffprobe", "timeout": 60}
   Updated: 2024-01-15 10:30:00
@@ -79,7 +106,6 @@ Successfully updated enricher: Video Analysis
 Would update enricher: Video Analysis
   ID: enricher-ffprobe-a1b2c3d4
   Type: ffprobe
-  Scope: ingest
   Name: Video Analysis
   Current Configuration: {"ffprobe_path": "ffprobe", "timeout": 30}
   New Configuration: {"ffprobe_path": "/usr/bin/ffprobe", "timeout": 60}
@@ -91,7 +117,6 @@ Would update enricher: Video Analysis
 {
   "enricher_id": "enricher-ffprobe-a1b2c3d4",
   "type": "ffprobe",
-  "scope": "ingest",
   "name": "Video Analysis",
   "config": {
     "ffprobe_path": "/usr/bin/ffprobe",
@@ -137,33 +162,37 @@ Would update enricher: Video Analysis
 ## Behavior Contract Rules (B-#)
 
 - **B-1:** The command MUST validate enricher instance existence before attempting updates.
-- **B-2:** Configuration validation MUST be performed against the enricher type's schema.
-- **B-3:** When `--json` is supplied, output MUST include fields `"enricher_id"`, `"type"`, `"scope"`, `"name"`, `"config"`, `"status"`, and `"updated_at"`.
+- **B-2:** Enrichment parameter validation MUST be performed against the enricher type's parameter schema.
+- **B-3:** When `--json` is supplied, output MUST include fields `"enricher_id"`, `"type"`, `"name"`, `"config"`, `"status"`, and `"updated_at"`.
 - **B-4:** On validation failure (enricher not found), the command MUST exit with code `1` and print "Error: Enricher 'X' not found".
-- **B-5:** The `--dry-run` flag MUST show configuration validation and update preview without executing.
-- **B-6:** Configuration updates MUST preserve enricher type and scope.
-- **B-7:** The command MUST support partial configuration updates (only specified parameters).
+- **B-5:** The `--dry-run` flag MUST show enrichment parameter validation and update preview without executing.
+- **B-6:** Enrichment parameter updates MUST preserve enricher type and core functionality.
+- **B-7:** The command MUST support partial enrichment parameter updates (only specified parameters).
 - **B-8:** Update operations MUST be atomic and consistent.
+- **B-9:** For enrichers that require no parameters (e.g., FFmpeg), the command MUST inform the user that updates are not necessary.
+- **B-10:** The command MUST validate enrichment parameters against the enricher's specific requirements (e.g., API key format, file path existence).
 
 ---
 
 ## Data Contract Rules (D-#)
 
 - **D-1:** Enricher updates MUST occur within a single transaction boundary.
-- **D-2:** Configuration validation MUST occur before database persistence.
+- **D-2:** Enrichment parameter validation MUST occur before database persistence.
 - **D-3:** On transaction failure, ALL changes MUST be rolled back with no partial updates.
-- **D-4:** Enricher type and scope MUST NOT be changed during updates.
+- **D-4:** Enricher type and core functionality MUST NOT be changed during updates.
 - **D-5:** Registry updates MUST occur within the same transaction as enricher updates.
-- **D-6:** Configuration schema validation MUST be performed against the enricher type.
+- **D-6:** Enrichment parameter schema validation MUST be performed against the enricher type.
 - **D-7:** Update operations MUST preserve enricher instance identity.
-- **D-8:** Configuration updates MUST maintain backward compatibility where possible.
+- **D-8:** Enrichment parameter updates MUST maintain backward compatibility where possible.
+- **D-9:** Enrichment parameters MUST be validated for correctness (e.g., API key format, file existence).
+- **D-10:** Parameter updates MUST preserve the enricher's ability to perform its enrichment tasks.
 
 ---
 
 ## Test Coverage Mapping
 
-- `B-1..B-8` → `test_enricher_update_contract.py`
-- `D-1..D-8` → `test_enricher_update_data_contract.py`
+- `B-1..B-10` → `test_enricher_update_contract.py`
+- `D-1..D-10` → `test_enricher_update_data_contract.py`
 
 ---
 
@@ -172,8 +201,11 @@ Would update enricher: Video Analysis
 ### Validation Errors
 
 - Enricher not found: "Error: Enricher 'enricher-ffprobe-a1b2c3d4' not found"
-- Invalid configuration: "Error: Invalid configuration for enricher type 'ffprobe'"
-- Missing parameters: "Error: No configuration parameters provided for update"
+- Invalid enrichment parameters: "Error: Invalid enrichment parameters for enricher type 'tvdb'"
+- Missing required parameters: "Error: Required enrichment parameter '--api-key' not provided"
+- No parameters needed: "Info: FFmpeg enricher requires no parameter updates"
+- Invalid parameter format: "Error: API key format is invalid"
+- File not found: "Error: Watermark file '/path/to/watermark.png' not found"
 
 ### Database Errors
 
@@ -185,40 +217,56 @@ Would update enricher: Video Analysis
 
 ## Examples
 
-### FFprobe Enricher Update
+### FFmpeg Enricher Update (No Parameters Needed)
 
 ```bash
-# Update FFprobe path
-retrovue enricher update enricher-ffprobe-a1b2c3d4 \
-  --ffprobe-path "/usr/bin/ffprobe"
+# FFmpeg enrichers typically don't need parameter updates
+retrovue enricher update enricher-ffmpeg-a1b2c3d4
+# Output: "FFmpeg enricher requires no parameter updates"
 
-# Update timeout
-retrovue enricher update enricher-ffprobe-a1b2c3d4 \
-  --timeout 60
+# Dry run shows no changes needed
+retrovue enricher update enricher-ffmpeg-a1b2c3d4 --dry-run
+# Output: "No enrichment parameters to update for FFmpeg enricher"
+```
+
+### TheTVDB Enricher Update
+
+```bash
+# Update API key for TheTVDB authentication
+retrovue enricher update enricher-tvdb-b2c3d4e5 \
+  --api-key "new-tvdb-api-key"
+
+# Update language preference
+retrovue enricher update enricher-tvdb-b2c3d4e5 \
+  --language "en-US"
 
 # Update multiple parameters
-retrovue enricher update enricher-ffprobe-a1b2c3d4 \
-  --ffprobe-path "/usr/bin/ffprobe" --timeout 60
+retrovue enricher update enricher-tvdb-b2c3d4e5 \
+  --api-key "new-tvdb-api-key" --language "en-US"
 ```
 
-### Metadata Enricher Update
+### Watermark Enricher Update
 
 ```bash
-# Update metadata sources
-retrovue enricher update enricher-metadata-b2c3d4e5 \
-  --sources "tvdb,imdb,tmdb"
+# Update watermark image path
+retrovue enricher update enricher-watermark-c3d4e5f6 \
+  --overlay-path "/new/path/to/watermark.png"
 
-# Update API key
-retrovue enricher update enricher-metadata-b2c3d4e5 \
-  --api-key "new-api-key"
+# Update watermark position and opacity
+retrovue enricher update enricher-watermark-c3d4e5f6 \
+  --position "top-right" --opacity 0.7
 ```
 
-### Playout Enricher Update
+### LLM Enricher Update
 
 ```bash
-# Update playout configuration
-retrovue enricher update enricher-playout-c3d4e5f6 \
-  --config '{"overlay_path": "/new/path/to/overlay.png", "opacity": 0.8}'
+# Update API key for LLM service
+retrovue enricher update enricher-llm-d4e5f6g7 \
+  --api-key "new-openai-api-key"
+
+# Update model and prompt template
+retrovue enricher update enricher-llm-d4e5f6g7 \
+  --model "gpt-4" --prompt-template "/path/to/new/template.txt"
 ```
 
 ### Test Environment Usage
@@ -237,9 +285,16 @@ retrovue enricher update enricher-metadata-b2c3d4e5 \
 
 ## Supported Enricher Types
 
-- **ffprobe**: Video/audio analysis using FFprobe (ingest scope)
-- **metadata**: Metadata extraction and enrichment (ingest scope)
-- **playout-enricher**: Playout-scope enricher for channel processing (playout scope)
+- **ffmpeg**: Video/audio analysis using FFmpeg (typically no parameters needed)
+- **ffprobe**: Video/audio metadata extraction using FFprobe (typically no parameters needed)
+- **tvdb**: Metadata extraction from TheTVDB (requires `--api-key`)
+- **tmdb**: Metadata extraction from TMDB (requires `--api-key`)
+- **file-parser**: Filename parsing for metadata extraction (may require `--pattern`)
+- **llm**: LLM-based metadata generation (requires `--api-key`, `--model`)
+- **watermark**: Video watermark overlay (requires `--overlay-path`)
+- **crossfade**: Video transition effects (requires `--duration`)
+- **lower-third**: Lower-third graphics overlay (requires `--template-path`)
+- **emergency-crawl**: Emergency text crawl overlay (requires `--message`)
 
 ---
 

@@ -32,6 +32,35 @@ class Enricher(Protocol):
 3. **Error handling**: Graceful handling of enrichment failures
 4. **Non-destructive**: Should not modify original items in place
 
+## Creating new enrichers
+
+### Development skeleton
+
+RetroVue provides a complete skeleton template for creating new enrichers:
+
+- **Base class**: `src/retrovue/adapters/enrichers/base.py` - Contains `BaseEnricher` abstract class and `ExampleEnricher` implementation
+- **Template file**: `src/retrovue/adapters/enrichers/enricher_template.py` - Copy this file to start your implementation
+- **Development guide**: `src/retrovue/adapters/enrichers/README.md` - Comprehensive guide with patterns and best practices
+
+### Quick start
+
+1. Copy `enricher_template.py` to `{your_type}_enricher.py`
+2. Rename the class and implement the abstract methods
+3. Define your configuration schema
+4. Register your enricher type
+5. Test with contract compliance
+
+### Contract compliance
+
+All enrichers must comply with the RetroVue contract system:
+
+- **Configuration**: Define parameters using `EnricherConfig`
+- **Validation**: Implement proper error handling and validation
+- **Testing**: Ensure compatibility with contract tests
+- **Documentation**: Follow the established patterns
+
+See [Contract Enforcement](../../CONTRACT_ENFORCEMENT.md) for details on governed interfaces.
+
 ## Built-in enrichers
 
 ### FFprobe enricher

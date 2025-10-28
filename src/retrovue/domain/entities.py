@@ -367,18 +367,48 @@ class BroadcastChannel(Base):
 
     __tablename__ = "broadcast_channels"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    timezone: Mapped[str] = mapped_column(String(255), nullable=False)  # IANA timezone string
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(255), nullable=False)
     grid_size_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     grid_offset_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     rollover_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("true"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_broadcast_channels_name"),
+    )
 
     def __repr__(self) -> str:
-        return f"<BroadcastChannel(id={self.id}, name='{self.name}', timezone='{self.timezone}')>"
+        return f"<BroadcastChannel(id={self.id}, name={self.name}, timezone={self.timezone})>"
+
+
+class Enricher(Base):
+    """Enricher model for storing configured enricher instances."""
+
+    __tablename__ = "enrichers"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    enricher_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # Format: "enricher-{type}-{hash}"
+    type: Mapped[str] = mapped_column(String(50), nullable=False)  # "ingest" or "playout"
+    scope: Mapped[str] = mapped_column(String(50), nullable=False)  # "ingest" or "playout"
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_enrichers_type", "type"),
+        Index("ix_enrichers_scope", "scope"),
+        Index("ix_enrichers_enricher_id", "enricher_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Enricher(id={self.id}, enricher_id={self.enricher_id}, type={self.type}, scope={self.scope}, name={self.name})>"
+
+
 
 
 

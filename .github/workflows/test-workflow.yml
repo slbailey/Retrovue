@@ -33,3 +33,7 @@ jobs:
         run: |
           ruff check src/ tests/
           mypy src/
+
+      - name: Run contract tests
+        run: |
+          pytest tests/contracts --maxfail=1 --disable-warnings -q

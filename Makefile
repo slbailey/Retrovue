@@ -1,7 +1,7 @@
 # Retrovue Development Makefile
 # Web-first development with FastAPI
 
-.PHONY: help dev dev-all install test lint clean
+.PHONY: help dev dev-all install test test-contracts test-enricher-contracts lint clean
 
 # Default target
 help:
@@ -10,6 +10,8 @@ help:
 	@echo "  dev-all    - Start API + any frontend dev servers"
 	@echo "  install    - Install dependencies"
 	@echo "  test       - Run tests"
+	@echo "  test-contracts - Run contract tests only"
+	@echo "  test-enricher-contracts - Run enricher contract tests only"
 	@echo "  lint       - Run linting"
 	@echo "  clean      - Clean build artifacts"
 
@@ -32,6 +34,14 @@ install:
 # Run tests
 test:
 	pytest -v
+
+# Run contract tests only
+test-contracts:
+	pytest tests/contracts -v
+
+# Run enricher contract tests only
+test-enricher-contracts:
+	pytest tests/contracts/ -k "enricher" -v
 
 # Run linting
 lint:

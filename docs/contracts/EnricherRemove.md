@@ -73,7 +73,6 @@ Type 'yes' to confirm:
 Successfully removed enricher: Video Analysis
   ID: enricher-ffprobe-a1b2c3d4
   Type: ffprobe
-  Scope: ingest
 ```
 
 ### JSON Output
@@ -84,7 +83,6 @@ Successfully removed enricher: Video Analysis
   "enricher_id": "enricher-ffprobe-a1b2c3d4",
   "name": "Video Analysis",
   "type": "ffprobe",
-  "scope": "ingest",
   "collection_attachments_removed": 2,
   "channel_attachments_removed": 0
 }
@@ -127,7 +125,7 @@ Successfully removed enricher: Video Analysis
 - **B-1:** The command MUST require interactive confirmation unless `--force` is provided.
 - **B-2:** Interactive confirmation MUST require the user to type "yes" exactly to proceed.
 - **B-3:** The confirmation prompt MUST show enricher details and cascade impact count.
-- **B-4:** When `--json` is supplied, output MUST include fields `"removed"`, `"enricher_id"`, `"name"`, `"type"`, and `"scope"`.
+- **B-4:** When `--json` is supplied, output MUST include fields `"removed"`, `"enricher_id"`, `"name"`, and `"type"`.
 - **B-5:** On validation failure (enricher not found), the command MUST exit with code `1` and print "Error: Enricher 'X' not found".
 - **B-6:** Cancellation of confirmation MUST return exit code `0` with message "Removal cancelled".
 - **B-7:** The `--force` flag MUST skip all confirmation prompts and proceed immediately.

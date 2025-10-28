@@ -6,20 +6,20 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 Enricher defines a pluggable module that adds value to an object and returns the improved object. Enrichers are stateless pure functions: they receive an object and return the updated object; they do not persist and they do not own orchestration. Enrichers are optional and may be applied in sequence.
 
-## Core model / scope
+## Core model
 
-Enrichers declare their scope so the system knows where they are allowed to run.
+Enrichers are identified by their type, which determines both their functionality and when they are allowed to run.
 
-**scope=ingest**
-Input: AssetDraft generated during ingest.
-Output: AssetDraft with richer metadata.
+**type=ingest**
+Input: Asset generated during ingest.
+Output: Asset with richer metadata.
 Examples:
 
 - Parse .nfo / .jpg sidecar files (tinyMediaManager style).
 - Pull metadata from TheTVDB / TMDB.
 - Use an LLM to generate synopsis, parental guidance tags, and ad-break markers.
 
-**scope=playout**
+**type=playout**
 Input: a playout plan for a channel (the assembled "what to stream now" structure before ffmpeg is launched).
 Output: a modified playout plan.
 Examples:
@@ -34,13 +34,35 @@ Examples:
 
 Each enricher must implement:
 
-- a unique type identifier (e.g. nfo-file, thetvdb, fade-transition, channel-bug)
-- a parameter spec describing its configuration (for CLI help)
-- apply(input) -> output, where input and output types depend on scope
+- a unique type identifier (e.g. ingest, playout)
+- a parameter spec describing its enrichment parameters (for CLI help)
+- apply(input) -> output, where input and output types depend on the enricher type
 
 Enrichers must be pure in the sense that they receive an object and return a new or updated version of that object. Enrichers do not perform persistence themselves.
 
 Enrichers must tolerate being skipped. The system is allowed to run zero enrichers.
+
+## Enrichment Parameters
+
+Enrichers require specific parameters to perform their enrichment tasks. These parameters vary by enricher type and implementation:
+
+**Ingest Enrichers:**
+
+- **FFmpeg/FFprobe enrichers**: Typically require no parameters (use system defaults)
+- **TheTVDB enrichers**: Require `--api-key` for API authentication
+- **TMDB enrichers**: Require `--api-key` for API authentication
+- **File parser enrichers**: May require `--pattern` for filename parsing rules
+- **LLM enrichers**: Require `--model`, `--api-key`, and `--prompt-template`
+
+**Playout Enrichers:**
+
+- **Watermark enrichers**: Require `--overlay-path` for watermark image location
+- **Crossfade enrichers**: Require `--duration` for transition timing
+- **Lower-third enrichers**: Require `--template-path` and `--data-source`
+- **Emergency crawl enrichers**: Require `--message` and `--speed`
+
+**Parameter Updates:**
+The `enricher update` command allows modification of these enrichment parameters without recreating the enricher instance. Some enrichers may not require updates (e.g., FFmpeg enrichers using system defaults), while others may need frequent updates (e.g., API keys for external services).
 
 ## Execution model
 
@@ -48,15 +70,15 @@ Enrichers run under orchestration, not autonomously.
 
 **Ingest orchestration:**
 
-After an importer produces AssetDraft objects for a Collection, RetroVue looks up which ingest-scope enrichers are attached to that Collection.
+After an importer produces Asset objects for a Collection, RetroVue looks up which ingest-type enrichers are attached to that Collection.
 
 RetroVue runs those enrichers in priority order.
 
-The final enriched AssetDraft is then stored in the RetroVue catalog.
+The final enriched Asset is then stored in the RetroVue catalog.
 
 **Playout orchestration:**
 
-After a Producer generates a base playout plan for a Channel, RetroVue looks up which playout-scope enrichers are attached to that Channel.
+After a Producer generates a base playout plan for a Channel, RetroVue looks up which playout-type enrichers are attached to that Channel.
 
 RetroVue runs those enrichers in priority order.
 
@@ -80,7 +102,7 @@ This resolves conflicts such as:
 
 Enrichers are not permitted to block ingestion or playout by default.
 
-If an enricher fails on a single AssetDraft during ingest, that error is logged and ingest continues with the partially enriched asset.
+If an enricher fails on a single Asset during ingest, that error is logged and ingest continues with the partially enriched asset.
 
 If a playout enricher fails when assembling the playout plan for a channel, RetroVue falls back to the most recent successful version of the plan without that enricher's mutation.
 
@@ -93,7 +115,7 @@ Fatal stop conditions (skip entirely) are defined outside the enricher layer:
 ## Operator workflows
 
 **retrovue enricher list-types**
-List known enricher types available in this build (both ingest and playout scopes).
+List known enricher types available in this build.
 
 **retrovue enricher add --type <type> --name <label> [config...]**
 Create an enricher instance. Stores configuration values such as API keys, fade duration, watermark asset path.
@@ -101,25 +123,30 @@ Create an enricher instance. Stores configuration values such as API keys, fade 
 **retrovue enricher list**
 Show configured enricher instances.
 
-**retrovue enricher update <enricher_id> ...**
-Modify configuration.
+**retrovue enricher update <enricher_id> [enrichment-parameters...]**
+Update enrichment parameters for an enricher instance. The specific parameters depend on the enricher type:
+
+- **FFmpeg enrichers**: No parameters needed (informs user updates are not necessary)
+- **TheTVDB enrichers**: `--api-key <new-key>` to update API credentials
+- **Metadata enrichers**: `--sources <comma-separated-list>` to update data sources
+- **Custom enrichers**: Type-specific parameters as defined by the enricher implementation
 
 **retrovue enricher remove <enricher_id>**
 Remove configuration.
 
 **retrovue source <source_id> attach-enricher <enricher_id> --priority <n>**
-Attach an ingest-scope enricher to all Collections in a Source.
+Attach an ingest-type enricher to all Collections in a Source.
 
 **retrovue source <source_id> detach-enricher <enricher_id>**
-Detach an ingest-scope enricher from all Collections in a Source.
+Detach an ingest-type enricher from all Collections in a Source.
 
 **retrovue collection attach-enricher <collection_id> <enricher_id> --priority <n>**
-Attach an ingest-scope enricher to a Collection.
+Attach an ingest-type enricher to a Collection.
 
 **retrovue collection detach-enricher <collection_id> <enricher_id>**
 
 **retrovue channel attach-enricher <channel_id> <enricher_id> --priority <n>**
-Attach a playout-scope enricher to a Channel.
+Attach a playout-type enricher to a Channel.
 
 **retrovue channel detach-enricher <channel_id> <enricher_id>**
 
@@ -127,9 +154,9 @@ Attach a playout-scope enricher to a Channel.
 
 The word "enricher" is universal. We do not use "enhancer," "overlay stage," or "post-processor."
 
-- "ingest enricher" means an enricher with scope=ingest.
-- "playout enricher" means an enricher with scope=playout.
-- "AssetDraft" is the ingest-time object before catalog promotion.
+- "ingest enricher" means an enricher with type=ingest.
+- "playout enricher" means an enricher with type=playout.
+- "Asset" is the ingest-time object before catalog promotion.
 - "Playout plan" is the channel's assembled output plan prior to ffmpeg launch.
 
 ## See also
