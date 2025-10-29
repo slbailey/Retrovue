@@ -61,6 +61,7 @@ retrovue source add --type <type> --name <name> [options] [--discover] [--test-d
 - In `--dry-run` mode, no database writes MAY occur
 - On valid input, exit code MUST be 0 and output MUST match the normal `--json` shape
 - On invalid input, exit code MUST be 1 and MUST emit the same human-readable error used in non-dry-run mode
+- Dry-run human-readable output includes External ID for validation purposes (unlike normal output)
 
 ### Test Database Behavior
 
@@ -80,31 +81,23 @@ retrovue source add --type <type> --name <name> [options] [--discover] [--test-d
 
 ```
 Successfully created plex source: My Plex Server
+  Name: My Plex Server
   ID: 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
-  External ID: plex-5063d926
   Type: plex
-  Importer: PlexImporter (ImporterInterface compliant)
   Enrichers: ffprobe,metadata
-  Configuration: {"servers": [{"base_url": "https://plex.example.com", "token": "***REDACTED***"}]}
-  Interface Status: Valid ✓
 ```
 
 **With `--discover`:**
 
 ```
 Successfully created plex source: My Plex Server
+  Name: My Plex Server
   ID: 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
-  External ID: plex-5063d926
   Type: plex
-  Importer: PlexImporter (ImporterInterface compliant)
   Enrichers: ffprobe,metadata
-  Configuration: {"servers": [{"base_url": "https://plex.example.com", "token": "***REDACTED***"}]}
-  Interface Status: Valid ✓
 
-Successfully discovered 3 collections:
-  • Movies (ID: 1) - Sync disabled by default
-  • TV Shows (ID: 2) - Sync disabled by default
-  • Music (ID: 3) - Sync disabled by default
+Discovering collections from Plex server...
+  Discovered and persisted 3 collections (all disabled by default)
 
 Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync
 ```
@@ -206,7 +199,7 @@ Use 'retrovue collection update <name> --sync-enabled true' to enable collection
 
 - **B-1:** The command MUST validate source type against available importers before proceeding.
 - **B-2:** Required parameters MUST be validated before any database operations.
-- **B-3:** External ID MUST be generated in format "type-hash" and MUST be unique.
+- **B-3:** External ID MUST be generated in format "type-hash" and MUST be unique. External ID is stored internally and available in JSON output but is not displayed in human-readable output.
 - **B-4:** When `--json` is supplied, output MUST include fields `"id"`, `"external_id"`, `"name"`, `"type"`, `"config"`, `"enrichers"`, and `"importer_name"`.
 - **B-5:** On validation failure, the command MUST exit with code `1` and print a human-readable error message.
 - **B-5a:** On discovery failure (when `--discover` is provided), the command MUST exit with code `1` and rollback all changes, including source creation.

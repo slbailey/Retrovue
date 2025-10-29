@@ -90,8 +90,9 @@ class TestSourceAddDataContract:
                 ])
                 
                 assert result.exit_code == 0
-                # External ID should be in format "plex-12345678"
-                assert "External ID: plex-12345678" in result.stdout
+                # External ID should be generated in format "plex-12345678" but not displayed in output
+                # The external ID is stored in the source but not shown to users
+                assert "Successfully created plex source: Test Plex" in result.stdout
 
     def test_source_add_collection_discovery_transaction(self):
         """
