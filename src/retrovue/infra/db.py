@@ -27,6 +27,7 @@ engine = create_engine(
     pool_size=settings.pool_size,
     max_overflow=settings.max_overflow,
     pool_timeout=settings.pool_timeout,
+    connect_args={"connect_timeout": settings.connect_timeout} if "postgresql" in settings.database_url else {},
 )
 
 @event.listens_for(engine, "connect")
@@ -47,10 +48,18 @@ def get_engine(db_url: str | None = None) -> Engine:
     """Get or create the database engine."""
     if db_url:
         # Create a new engine with the specified URL
+        connect_args = {}
+        if "sqlite" in db_url:
+            connect_args["check_same_thread"] = False
+        elif "postgresql" in db_url:
+            connect_args["connect_timeout"] = settings.connect_timeout
+        
         return create_engine(
             db_url,
             echo=False,
-            connect_args={"check_same_thread": False} if "sqlite" in db_url else {}
+            pool_pre_ping=True,
+            future=True,
+            connect_args=connect_args
         )
     return engine
 

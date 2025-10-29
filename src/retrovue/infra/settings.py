@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     pool_size: int = Field(default=5, alias="DB_POOL_SIZE")
     max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW")
     pool_timeout: int = Field(default=30, alias="DB_POOL_TIMEOUT")
+    connect_timeout: int = Field(default=30, alias="DB_CONNECT_TIMEOUT")
     
     # New settings
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

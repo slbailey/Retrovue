@@ -139,15 +139,75 @@ jobs:
         run: |
           echo "🧹 Cleaning up test database..."
           python -c "
-          from retrovue.infra.uow import session
-          from retrovue.domain.entities import Source
-          with session() as db:
-              sources = db.query(Source).all()
-              print(f'Found {len(sources)} sources to clean up')
-              for source in sources:
-                  db.delete(source)
-              db.commit()
-              print('✅ Test database cleaned up')
+          import os
+          import time
+          from sqlalchemy import create_engine, text
+          from sqlalchemy.exc import OperationalError
+
+          # Use TEST_DATABASE_URL if available, otherwise use default
+          db_url = os.getenv('TEST_DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/retrovue_test')
+
+          # Create engine with longer timeout and retry logic
+          engine = create_engine(
+              db_url,
+              pool_pre_ping=True,
+              pool_timeout=60,  # Increased timeout
+              connect_args={'connect_timeout': 30}  # Connection timeout
+          )
+
+          # Retry connection with exponential backoff
+          max_retries = 3
+          for attempt in range(max_retries):
+              try:
+                  with engine.connect() as conn:
+                      # Check if database is accessible
+                      result = conn.execute(text('SELECT 1'))
+                      print(f'✅ Database connection successful (attempt {attempt + 1})')
+                      
+                      # Clean up test data
+                      tables_to_clean = [
+                          'broadcast_playlog_event',
+                          'broadcast_schedule_day', 
+                          'broadcast_template_block',
+                          'broadcast_template',
+                          'catalog_asset',
+                          'broadcast_channel',
+                          'path_mappings',
+                          'source_collections',
+                          'sources',
+                          'provider_refs',
+                          'review_queue',
+                          'markers',
+                          'episode_assets',
+                          'assets',
+                          'episodes',
+                          'seasons',
+                          'titles'
+                      ]
+                      
+                      for table in tables_to_clean:
+                          try:
+                              conn.execute(text(f'DELETE FROM {table}'))
+                              print(f'  Cleaned table: {table}')
+                          except Exception as e:
+                              print(f'  Warning: Could not clean table {table}: {e}')
+                      
+                      conn.commit()
+                      print('✅ Test database cleaned up successfully')
+                      break
+                      
+              except OperationalError as e:
+                  print(f'❌ Database connection failed (attempt {attempt + 1}/{max_retries}): {e}')
+                  if attempt < max_retries - 1:
+                      wait_time = 2 ** attempt  # Exponential backoff
+                      print(f'⏳ Waiting {wait_time} seconds before retry...')
+                      time.sleep(wait_time)
+                  else:
+                      print('❌ All connection attempts failed, skipping cleanup')
+                      exit(0)  # Don't fail the workflow for cleanup issues
+              except Exception as e:
+                  print(f'❌ Unexpected error during cleanup: {e}')
+                  exit(0)  # Don't fail the workflow for cleanup issues
           "
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
