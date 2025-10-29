@@ -1,13 +1,52 @@
-# 📺 Retrovue - Retro IPTV Simulation Project
+# 📺 Retrovue
+
+_A Retro IPTV Simulation Project_
+
+> “Here, something is always on.”
+
+Retrovue is more than software — it’s a love letter to broadcast television.  
+In an age where streaming platforms bury us in endless menus and algorithmic sameness, Retrovue restores what we’ve lost: **the art of timing, surprise, and shared experience.**
+
+It recreates the magic of flipping through channels and stumbling onto something wonderful — a movie halfway through, a forgotten cartoon, or a local station ID you haven’t seen since childhood. Every frame is driven by a living schedule, every break perfectly timed, every bumper and commercial right where it belongs.
+
+## ❤️ Why It Exists
+
+We live in an on-demand world — but constant choice can be exhausting.  
+Old television had rhythm. You didn’t scroll, you _tuned in_. You let the world surprise you. Retrovue exists to bring that rhythm back — not through nostalgia alone, but through **precision engineering**.
+
+What began as a hobby project to repurpose an old iPad screen during lockdown evolved into a full-fledged system: a network-grade, modular IPTV engine that behaves like a real broadcast backend. Every minute on every channel follows the rules of a genuine TV network — because _authenticity comes from structure._
+
+## 🧠 The Philosophy
+
+Retrovue is built on a simple belief:
+
+> **Structure is how we build trust — in code, and in community.**
+
+Every module — ingest, schedule, playout, or analytics — obeys strict contracts.  
+Those contracts define _what must be true_, not _how it’s done_.  
+They make the system testable, modular, and expandable — a living ecosystem of cooperating parts, just like a real broadcast operation.
+
+This discipline makes Retrovue different from hobbyist “shuffle players.” It doesn’t _fake_ live TV; it _becomes_ it.
+
+## ⚙️ The Vision
+
+Imagine building your own cable network — with real channels, daily schedules, commercials, and bumpers — powered entirely by your media collection.  
+That’s Retrovue’s heart:
+
+- 📡 Channels that run 24/7 with realistic pacing
+- 🧩 Commercial breaks aligned to chapter markers
+- 🎬 Intros, IDs, and sign-offs
+- 📊 As-run logs, guide channels, and promos
+- 🧠 A Program Director that knows what’s airing and when
+
+It’s not just about _what_ plays — it’s about _when._
+
+---
 
 [![CI](https://github.com/slbailey/Retrovue/actions/workflows/ci.yml/badge.svg)](https://github.com/slbailey/Retrovue/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
-## 🎬 What is Retrovue?
-
-Retrovue is a **network-grade IPTV system** that simulates a realistic broadcast TV station experience. Instead of just watching your media files one at a time, Retrovue creates **24/7 TV channels** that play your movies and TV shows on a schedule, insert commercials and station bumpers, and run multiple channels simultaneously.
 
 ## 🚀 Quick Start
 
@@ -22,432 +61,97 @@ Retrovue is a **network-grade IPTV system** that simulates a realistic broadcast
 **Windows (PowerShell):**
 
 ```powershell
-# Clone and setup
 git clone https://github.com/slbailey/Retrovue.git
 cd Retrovue
 python -m venv venv
-.\venv\Scripts\Activate.ps1
+.
+env\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-# Launch the CLI tools
 python -m retrovue.cli.main --help
 ```
 
 **macOS/Linux (bash):**
 
 ```bash
-# Clone and setup
 git clone https://github.com/slbailey/Retrovue.git
 cd Retrovue
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-
-# Launch the CLI tools
 python -m retrovue.cli.main --help
 ```
 
-### Channel Management CLI
+## 🧭 Channel Management CLI
 
-**New in 2025**: Retrovue now includes a comprehensive CLI for channel management!
+**New in 2025:** Retrovue now includes a comprehensive CLI for channel management!
 
 ```bash
-# List all channels
 retrovue channel list
-
-# Create a new channel
-retrovue channel create --name "RetroToons" --timezone "America/New_York" \
-  --grid-size-minutes 30 --grid-offset-minutes 0 --rollover-minutes 360 --active
-
-# Show channel details
+retrovue channel create --name "RetroToons" --timezone "America/New_York"   --grid-size-minutes 30 --grid-offset-minutes 0 --rollover-minutes 360 --active
 retrovue channel show --id 1
-
-# Update a channel
 retrovue channel update --id 1 --name "NewName" --inactive
-
-# Delete a channel
 retrovue channel delete --id 1
 ```
 
-### Source Management CLI
+## 📦 Source Management CLI
 
-**New in 2025**: Retrovue now includes modular source management for content discovery!
+**New in 2025:** Modular source management for content discovery!
 
 ```bash
-# List all sources
 retrovue source list
-
-# List available source types and enrichers
 retrovue source list-types
-
-# Get help for the add command (shows available types)
-retrovue source add --help
-
-# Get help for specific source types
 retrovue source add --type plex --help
 retrovue source add --type filesystem --help
-
-# Add a Plex source (automatically discovers collections)
-retrovue source add --type plex --name "My Plex Server" --base-url "http://192.168.1.100:32400" --token "your-plex-token"
-
-# Add a filesystem source
-retrovue source add --type filesystem --name "My Media Library" --base-path "/media/movies"
-
-# Add a source with enrichers
-retrovue source add --type plex --name "Plex Server" --base-url "http://plex:32400" --token "token" --enrichers "ffprobe"
-
-# Show source details (by name, UUID, or external ID)
-retrovue source show "My Plex Server"
-retrovue source show filesystem-4807c63e
-retrovue source show 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
-
-# Update a source (by name, UUID, or external ID)
-retrovue source update "My Plex Server" --name "Updated Plex Server"
-retrovue source update filesystem-4807c63e --name "Updated Media Library"
-retrovue source update plex-346d2265 --base-url "http://new-plex:32400" --token "new-token"
-
-# Delete a source (by name, UUID, or external ID)
-# This will cascade delete all related collections and path mappings
-retrovue source delete "My Plex Server" --force
-retrovue source delete filesystem-4807c63e --force
-retrovue source delete 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
-
-# List collections from sources
-retrovue source collections
-
-# Enable/disable collections for content discovery
-retrovue source enable "Movies"
-retrovue source enable "TV Shows"
-retrovue source disable "Horror"
-
-# Update enrichers on existing sources
-retrovue source enrichers "My Plex Server" "ffprobe"
-retrovue source enrichers "My Plex Server" "ffprobe,metadata"
 ```
 
-### Launch the Web Interface (Recommended)
+## 🌐 Launch the Web Interface
 
-**New in 2025**: Retrovue now includes a modern **Web UI** for easier setup and management!
-
-```powershell
-# Windows
-.\venv\Scripts\python.exe run_admin.py
-
-# macOS/Linux
+```bash
 python run_admin.py
 ```
 
-**Web Interface Features:**
-
-- 🌐 **Modern Web UI**: Access from any browser at http://localhost:8000
-- 🖥️ **Server Management**: Add and manage your Plex servers
-- 📚 **Library Discovery**: Browse and select libraries to sync
-- 🔄 **Content Sync**: Configure path mappings and sync content
-- 📊 **Real-time Progress**: See sync progress with live updates
-- ✨ **Responsive Design**: Works on desktop, tablet, and mobile
-
-**First-Time Setup:**
-
-1. **Start the server**: Run `python run_admin.py`
-2. **Open browser**: Navigate to http://localhost:8000
-3. **Add Plex server**: Configure your Plex server (name, URL, token)
-4. **Discover libraries**: Browse available libraries
-5. **Sync content**: Configure path mappings and start sync
-
-### Test the Stream (Legacy - For Testing Only)
-
-> ⚠️ **Note**: The streaming engine is currently being reworked. The legacy streaming server serves a raw MPEG-TS stream for basic testing purposes.
-
-**For VLC Testing (HLS):**
-
-1. Open VLC Media Player
-2. Go to: Media → Open Network Stream
-3. Enter: `http://localhost:8080/channel/1/playlist.m3u8`
-4. Click Play
-
-**HLS Streaming Features:**
-
-- **As-run alignment** via PROGRAM-DATE-TIME headers
-- **Seamless transitions** between content and commercials
-- **Multi-channel support** with independent schedules
-- **Industry-standard compatibility** with Plex Live TV, smart TVs, and mobile devices
-- See [Playout Documentation](docs/PLAYOUT.md) for technical details
+Open **http://localhost:8000** in your browser to manage servers, libraries, and syncs in real time.
 
 ## 🎯 Current Status
 
-### ✅ What's Working Now
+✅ Content import from Plex  
+✅ Library management  
+✅ Basic single-channel streaming  
+✅ Smart sync with minimal updates
 
-- **Content Import**: Sync movies and TV shows from Plex Media Server
-- **Library Management**: Browse and organize your content library
-- **Basic Streaming**: Single-channel streaming with simple content looping
-- **Smart Sync System**: Only updates content that has changed (super fast!)
-
-### 🔄 What's Coming Next
-
-- **Schedule Editor**: Drag-and-drop timeline management
-- **Multi-Channel Support**: Run multiple TV channels simultaneously
-- **Program Director**: Orchestrate channels and manage playback
-- **Advanced Streaming**: Professional-grade streaming with transitions
+🔄 Coming soon: Multi-channel scheduling, drag-and-drop timeline editor, advanced playout orchestration.
 
 ## 📚 Documentation
 
-All documentation has been organized in the `docs/` folder for better structure:
+See `docs/` for:
 
-### 📖 Main Documentation
-
-- **[📖 Beginner's Guide](docs/README.md)** - What Retrovue does and how all the pieces fit together
-- **[🚀 Quick Start Guide](docs/QUICKSTART.md)** - Step-by-step setup instructions for development
-- **[🏗️ System Architecture](docs/ARCHITECTURE.md)** - Clean architecture layers and design patterns
-- **[🗄️ Database Schema](docs/DB_SCHEMA.md)** - Tables, relationships, and data models
-- **[🔧 Configuration](docs/CONFIGURATION.md)** - Environment variables and deployment settings
-- **[💻 Retrovue CLI](docs/CLI.md)** - Modern CLI for content management and review workflows
-- **[📥 Importers](docs/IMPORTERS.md)** - Content discovery from filesystem, Plex, and custom sources
-- **[🔌 Plex CLI Ingest](docs/ingest/plex-cli.md)** - Single episode ingest from Plex (v0)
-- **[🔍 Enrichers](docs/ENRICHERS.md)** - Metadata enhancement with FFprobe and custom pipelines
-- **[✅ Review System](docs/REVIEW.md)** - Quality assurance workflow and human review process
-- **[📺 Playout System](docs/PLAYOUT.md)** - HLS-first output contract and testing procedures
-- **[🎛️ Streaming Engine](docs/streaming-engine.md)** - How video streaming works
-- **[🔄 Streaming Pipeline Concepts](docs/STREAMING_PIPELINE_CONCEPTS.md)** - Future streaming architecture (deferred work)
-- **[🎬 Plex Sync CLI](docs/plex-sync-cli.md)** - Legacy command-line interface for Plex integration
-- **[🚦 Development Roadmap](docs/development-roadmap.md)** - Track progress and see what's coming next
-- **[📝 Migration Notes](docs/MIGRATION_NOTES.md)** - Complete history of GUI modularization (Phases 1-8)
+- [Beginner’s Guide](docs/README.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Database Schema](docs/DB_SCHEMA.md)
+- [CLI Reference](docs/CLI.md)
+- [Streaming Engine](docs/streaming-engine.md)
+- [Development Roadmap](docs/development-roadmap.md)
 
 ## 🏗️ Project Goals
 
-Simulate a realistic broadcast TV station experience:
-
-- 📡 Channels with playout schedules
-- 📺 Commercials, intros/outros, bumpers
-- ⚠️ Emergency alert overrides
-- 🎨 Graphics overlays (bugs, lower thirds, branding)
-- 🌐 Deliver streams as HLS playlists (`.m3u8` + segments) consumable by Plex and VLC
-- 🖥️ Provide a management UI for metadata and scheduling
+- Simulate real broadcast station flow
+- Integrate commercials, bumpers, and station branding
+- Handle 24/7 scheduling and as-run logging
+- Provide a management UI for everything
 
 ## 🛠️ Tech Stack
 
-- **Playback:** ffmpeg, Docker
-- **Management UI:** Web UI (FastAPI + HTML/JS)
-- **Core API:** Python with clean separation (GUI ↔ Core API ↔ Managers)
-- **Database:** SQLite with versioned schema migrations
-- **Serving:** Python FastAPI / lightweight HTTP server (planned)
-- **Clients:** Plex Live TV, VLC
-
-### Database & Persistence Strategy
-
-**Current Implementation:**
-
-- **SQLite** is used for initial development and single-instance deployments
-- **Versioned Schema**: Schema files track version history (`sql/retrovue_schema_v1.2.3.sql` is current)
-- **Migration Path**: Schema upgrades are managed through versioned SQL files
-
-**Future Considerations:**
-
-- **PostgreSQL Support**: Planned for multi-user and high-concurrency deployments
-- **Schema Migrations**: Will use Alembic for automated database migrations
-- **Backward Compatibility**: Upgrade paths will be provided for early adopters
-- **Data Export/Import**: Tools will be provided for migrating between database backends
-
-**For Early Adopters:**
-
-- Current SQLite database structure is stable for content management and scheduling
-- Schema changes will be documented with upgrade scripts
-- Backup your `retrovue.db` file regularly (it's excluded from git via `.gitignore`)
-
-## 🛠️ Development Checklist
-
-**For Developers:**
-
-1. **Setup Environment:**
-
-   ```bash
-   git clone https://github.com/slbailey/Retrovue.git
-   cd Retrovue
-   python -m venv venv
-   source venv/bin/activate  # or .\venv\Scripts\activate on Windows
-   pip install -r requirements.txt
-   ```
-
-2. **Install Pre-commit Hooks:**
-
-   ```bash
-   pre-commit install
-   ```
-
-3. **Run Tests:**
-
-   ```bash
-   pytest -q
-   ```
-
-4. **Start Development Server:**
-
-   ```bash
-   uvicorn retrovue.api.main:app --reload --port 8000
-   # or use: make dev
-   ```
-
-5. **Verify No Qt References:**
-   ```bash
-   python scripts/check_no_qt.py
-   ```
+- Playback: **ffmpeg**, Docker
+- Core API: **Python (FastAPI)**
+- Database: **SQLite → PostgreSQL (planned)**
+- Web UI: **FastAPI + HTML/JS**
+- Clients: **Plex Live TV, VLC**
 
 ## 🤝 Contributing
 
-Retrovue is designed to be a community-driven project. Whether you're a developer, content creator, or just someone who loves retro TV, there are ways to contribute!
-
-**Ways to Contribute:**
-
-- **Report Issues**: Found a bug? [Create an issue](https://github.com/slbailey/Retrovue/issues/new/choose)
-- **Feature Requests**: Have an idea? [Request a feature](https://github.com/slbailey/Retrovue/issues/new/choose)
-- **Development**: Help build new features and improvements
-- **Testing**: Try it out and provide feedback
-- **Documentation**: Help improve guides and tutorials
-
-**Getting Started:**
-
-- Read our [Contributing Guide](CONTRIBUTING.md) for development workflow and guidelines
-- Check the [Development Roadmap](documentation/development-roadmap.md) for planned features
-- Browse [Good First Issues](https://github.com/slbailey/Retrovue/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) to get started
-
-**License:** Retrovue is released under the [MIT License](LICENSE).
-
-## ⚙️ Configuration & Secrets Management
-
-### Configuration Strategy
-
-Retrovue uses multiple configuration approaches depending on the use case:
-
-**1. Database-Stored Configuration (Primary)**
-
-- Plex server URLs, tokens, and library mappings are stored in the SQLite database
-- Managed via the CLI: `python -m cli.plex_sync servers add`
-- Best for persistent server configuration and library settings
-
-**2. Environment Variables (Testing & CI)**
-
-- Used primarily for testing and CI/CD pipelines
-- Overrides database configuration when set
-- Useful for temporary testing without modifying database
-
-**3. Configuration Files (Future)**
-
-- Planned support for `.env` files using pydantic settings
-- Will support structured configuration with validation
-- Environment-specific configs (dev, staging, production)
-
-### Configuration Precedence
-
-When the same setting exists in multiple places:
-
-1. **Environment Variables** (highest priority) - for testing/override
-2. **Database Configuration** - for persistent settings
-3. **Default Values** (lowest priority) - fallback values
-
-### Secrets Management Best Practices
-
-**DO:**
-
-- ✅ Store Plex tokens in the database (excluded from git via `.gitignore`)
-- ✅ Use environment variables for CI/CD pipelines
-- ✅ Keep backup copies of your `retrovue.db` file securely
-- ✅ Review `documentation/env.example` for environment variable reference
-
-**DON'T:**
-
-- ❌ Commit `retrovue.db` or `PlexToken.txt` to version control
-- ❌ Share your Plex token publicly
-- ❌ Store tokens in scripts or unencrypted config files
-- ❌ Use production credentials in test environments
-
-## 🧪 Running Tests with Live Plex
-
-The smoke tests can run against a live Plex server for comprehensive integration testing.
-
-### Environment Variables for Testing
-
-Set these environment variables to enable live Plex testing:
-
-**PowerShell (Windows):**
-
-```powershell
-# Required: Your Plex server base URL
-$env:PLEX_BASE_URL="http://192.168.1.100:32400"
-
-# Required: Your Plex authentication token
-# Get this from: https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
-$env:PLEX_TOKEN="your_plex_token_here"
-
-# Optional: Custom name for the test server (defaults to "LivePlex")
-$env:PLEX_SERVER_NAME="HomePlex"
-```
-
-**Bash (macOS/Linux):**
-
-```bash
-# Required: Your Plex server base URL
-export PLEX_BASE_URL="http://192.168.1.100:32400"
-
-# Required: Your Plex authentication token
-export PLEX_TOKEN="your_plex_token_here"
-
-# Optional: Custom name for the test server (defaults to "LivePlex")
-export PLEX_SERVER_NAME="HomePlex"
-```
-
-### Running Live Tests
-
-**Python-Based Tests:**
-
-```bash
-# Run simple smoke tests
-python scripts/smoke_test_simple.py
-
-# Run comprehensive smoke tests
-python scripts/smoke_test.py
-```
-
-**Shell-Based Tests:**
-
-_Windows (PowerShell):_
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1
-```
-
-_macOS/Linux (bash):_
-
-```bash
-bash scripts/smoke.sh
-```
-
-### Offline Mode
-
-For CI/testing without network access, set:
-
-```bash
-export PLEX_OFFLINE=1
-```
-
-This will run tests in offline mode, validating CLI structure without network operations.
-
-### JSON Output
-
-Many commands support `--format json` for machine-readable output:
-
-```bash
-# Get server information as JSON
-python cli/plex_sync.py --format json servers list
-
-# Add server and get ID as JSON
-python cli/plex_sync.py --format json servers add --name "Test" --base-url "http://test" --token "abc123"
-```
-
-## 📞 Support
-
-- **GitHub Issues**: Report bugs and request features
-- **Discussions**: Ask questions and share ideas
-- **Documentation**: Check the docs folder for detailed guides
+We welcome developers, archivists, and nostalgia lovers.  
+Read our [Contributing Guide](CONTRIBUTING.md) and check [Good First Issues](https://github.com/slbailey/Retrovue/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ---
 
-_Retrovue: Bringing the magic of retro TV to the modern streaming era_ 📺✨
+_Retrovue: Bringing the magic of retro TV to the modern streaming era._ 📺✨
