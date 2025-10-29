@@ -14,19 +14,40 @@ It recreates the magic of flipping through channels and stumbling onto something
 We live in an on-demand world — but constant choice can be exhausting.  
 Old television had rhythm. You didn’t scroll, you _tuned in_. You let the world surprise you. Retrovue exists to bring that rhythm back — not through nostalgia alone, but through **precision engineering**.
 
-What began as a hobby project to repurpose an old iPad screen during lockdown evolved into a full-fledged system: a network-grade, modular IPTV engine that behaves like a real broadcast backend. Every minute on every channel follows the rules of a genuine TV network — because _authenticity comes from structure._
+This project exists because one man "Irish Cratic Party" appeared one day on YouTube. He had a video that showed something magical. Something I'd been wanting FOREVER. But, he didn't release his source code, he didn't share with the world, he just showed it. And then, one day, he disappeared (and so did his video). That vision inspired this project. So many people wanted what he had and not only did he share, he took his ball and went home. No one knows why. What began as a hobby project to repurpose an old iPad screen during lockdown evolved into a full-fledged system: a network-grade, modular IPTV engine that behaves like a real broadcast backend. Every minute on every channel follows the rules of a genuine TV network — because _authenticity comes from structure._ And that is what we are recreating.
 
 ## 🧠 The Philosophy
 
-Retrovue is built on a simple belief:
+> **🧩 Retrovue’s Architecture: Structure Over Spaghetti**
 
-> **Structure is how we build trust — in code, and in community.**
+Retrovue’s end vision is a community-driven platform. With so many intertwined components — _ingest, scheduling, playout, overlays, metadata, streaming_ — scaling demanded more than good intentions: it demanded **real structure**.
 
-Every module — ingest, schedule, playout, or analytics — obeys strict contracts.  
-Those contracts define _what must be true_, not _how it’s done_.  
-They make the system testable, modular, and expandable — a living ecosystem of cooperating parts, just like a real broadcast operation.
+**Why Structure?**
 
-This discipline makes Retrovue different from hobbyist “shuffle players.” It doesn’t _fake_ live TV; it _becomes_ it.
+- ✅ Prevents scope creep.
+- ✅ Stops test code or messy hacks from quietly slipping into production.
+- ✅ Avoids the pitfalls of “hobby code” that could topple a system of this size.
+
+**Our Solution:**  
+Retrovue is driven by **contracts**:
+
+> _Explicit agreements define what each module does, not how it’s implemented._
+
+- Each domain (scheduling, ingest, playout, etc.) has its **own contract layer**.
+- Every contract is **backed by tests** to verify real-world behavior.
+
+**What does this mean for contributors?**
+
+- Modules can be built, improved, or replaced **independently**.
+- Swap in a new playout engine, scheduler, or metadata worker — no breakages.
+- **Tests** are our legal department, enforcing the network’s rules and trust.
+
+**The result?**
+
+- 🛰️ _Broadcast-grade reliability. Clean code with backbone._
+- Retrovue won’t devolve into another “shuffle media randomly” tool.
+- It’s engineered like a genuine TV network backend —  
+  **because that’s exactly what it’s meant to simulate.**
 
 ## ⚙️ The Vision
 
