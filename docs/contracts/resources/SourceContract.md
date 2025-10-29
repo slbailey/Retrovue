@@ -14,7 +14,7 @@ The Source domain is covered by the following specific contracts:
 - **[Source Delete](SourceDeleteContract.md)**: Deleting sources with cascade cleanup
 - **[Source Discover](SourceDiscoverContract.md)**: Discovering collections from sources
 - **[Source Ingest](SourceIngestContract.md)**: Processing collections for asset discovery
-- **Source Update** (planned): Updating source configurations
+- **[Source Update](SourceUpdateContract.md)**: Updating source configurations
 - **Source Enrichers** (planned): Managing metadata enrichers
 
 ---

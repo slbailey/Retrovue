@@ -19,6 +19,7 @@ from .base import (
     ImporterConfig,
     ImporterConfigurationError,
     ImporterError,
+    UpdateFieldSpec,
 )
 
 
@@ -139,6 +140,88 @@ class FilesystemImporter(BaseImporter):
             ],
             description="Scan local filesystem directories for media files and discover content"
         )
+    
+    @classmethod
+    def get_update_fields(cls) -> list[UpdateFieldSpec]:
+        """
+        Return the list of updatable configuration fields for the filesystem importer.
+        
+        Returns:
+            List of UpdateFieldSpec objects describing updatable fields
+        """
+        return [
+            UpdateFieldSpec(
+                config_key="root_paths",
+                cli_flag="--root-paths",
+                help="List of root directories to scan (comma-separated or JSON array)",
+                field_type="json",
+                is_sensitive=False,
+                is_immutable=False
+            ),
+            UpdateFieldSpec(
+                config_key="glob_patterns",
+                cli_flag="--glob-patterns",
+                help="List of glob patterns to match files (comma-separated or JSON array)",
+                field_type="json",
+                is_sensitive=False,
+                is_immutable=False
+            ),
+            UpdateFieldSpec(
+                config_key="include_hidden",
+                cli_flag="--include-hidden",
+                help="Whether to include hidden files and directories",
+                field_type="boolean",
+                is_sensitive=False,
+                is_immutable=False
+            ),
+            UpdateFieldSpec(
+                config_key="calculate_hash",
+                cli_flag="--calculate-hash",
+                help="Whether to calculate SHA-256 hash of files",
+                field_type="boolean",
+                is_sensitive=False,
+                is_immutable=False
+            ),
+        ]
+    
+    @classmethod
+    def validate_partial_update(cls, partial_config: dict[str, Any]) -> None:
+        """
+        Validate a partial configuration update for the filesystem importer.
+        
+        Args:
+            partial_config: Dictionary containing only the fields being updated
+            
+        Raises:
+            ImporterConfigurationError: If validation fails
+        """
+        if "root_paths" in partial_config:
+            root_paths = partial_config["root_paths"]
+            if not isinstance(root_paths, list):
+                raise ImporterConfigurationError("root_paths must be a list")
+            if not root_paths:
+                raise ImporterConfigurationError("root_paths cannot be empty")
+            for path in root_paths:
+                if not isinstance(path, str):
+                    raise ImporterConfigurationError("All root_paths must be strings")
+        
+        if "glob_patterns" in partial_config:
+            glob_patterns = partial_config["glob_patterns"]
+            if not isinstance(glob_patterns, list):
+                raise ImporterConfigurationError("glob_patterns must be a list")
+            for pattern in glob_patterns:
+                if not isinstance(pattern, str):
+                    raise ImporterConfigurationError("All glob_patterns must be strings")
+        
+        if "include_hidden" in partial_config:
+            include_hidden = partial_config["include_hidden"]
+            if not isinstance(include_hidden, bool):
+                raise ImporterConfigurationError("include_hidden must be a boolean")
+        
+        if "calculate_hash" in partial_config:
+            calculate_hash = partial_config["calculate_hash"]
+            if not isinstance(calculate_hash, bool):
+                raise ImporterConfigurationError("calculate_hash must be a boolean")
     
     def _validate_parameter_types(self) -> None:
         """

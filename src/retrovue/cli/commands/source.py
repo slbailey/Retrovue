@@ -32,12 +32,18 @@ def _redact_sensitive_config(config: dict) -> dict:
     contain sensitive authentication data, tokens, or credentials for any
     type of content source (Plex, filesystem, API, etc.).
     
+    Recursively processes nested dictionaries and lists to find and redact
+    sensitive values at any nesting level.
+    
     Args:
         config: Configuration dictionary that may contain sensitive data
         
     Returns:
         Configuration dictionary with sensitive values redacted
     """
+    if not isinstance(config, dict):
+        return config
+    
     redacted = config.copy()
     
     # Comprehensive list of sensitive key patterns
@@ -48,11 +54,22 @@ def _redact_sensitive_config(config: dict) -> dict:
         'login', 'user', 'username', 'email', 'account'
     ]
     
-    # Redact any key that contains sensitive patterns
-    for key in redacted:
+    # Recursively redact sensitive values
+    for key, value in redacted.items():
         key_lower = key.lower()
+        
+        # Check if this key matches sensitive patterns
         if any(pattern in key_lower for pattern in sensitive_patterns):
             redacted[key] = '***REDACTED***'
+        # Recursively process nested dictionaries
+        elif isinstance(value, dict):
+            redacted[key] = _redact_sensitive_config(value)
+        # Recursively process lists (which may contain dicts)
+        elif isinstance(value, list):
+            redacted[key] = [
+                _redact_sensitive_config(item) if isinstance(item, dict) else item
+                for item in value
+            ]
     
     return redacted
 
@@ -702,6 +719,7 @@ def update_source(
     base_url: str | None = typer.Option(None, "--base-url", help="New base URL for the source"),
     token: str | None = typer.Option(None, "--token", help="New authentication token"),
     base_path: str | None = typer.Option(None, "--base-path", help="New base filesystem path"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be updated without executing"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
@@ -720,6 +738,23 @@ def update_source(
             current_source = source_service.get_source_by_id(source_id)
             if not current_source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
+                raise typer.Exit(1)
+            
+            # Verify importer interface compliance (B-17, D-7)
+            # This check happens BEFORE building updates, BEFORE opening transaction, BEFORE UnitOfWork
+            from ...adapters.registry import ALIASES, SOURCES
+            
+            # Get importer class (not instance) for interface compliance check
+            importer_key = ALIASES.get(current_source.type.lower(), current_source.type.lower())
+            try:
+                importer_class = SOURCES[importer_key]
+            except KeyError:
+                typer.echo(f"Error: Importer for source type '{current_source.type}' is not available or not interface-compliant", err=True)
+                raise typer.Exit(1)
+            
+            # Check that importer class implements required update methods
+            if not hasattr(importer_class, "get_update_fields") or not hasattr(importer_class, "validate_partial_update"):
+                typer.echo(f"Error: Importer for source type '{current_source.type}' is not available or not interface-compliant", err=True)
                 raise typer.Exit(1)
             
             # Build update configuration
@@ -749,14 +784,62 @@ def update_source(
                 typer.echo("No updates provided", err=True)
                 raise typer.Exit(1)
             
+            # Handle dry-run mode
+            if dry_run:
+                # Redact sensitive config for display
+                current_config_redacted = _redact_sensitive_config(current_source.config.copy() if current_source.config else {})
+                proposed_config_redacted = _redact_sensitive_config(new_config.copy() if new_config else {})
+                
+                if json_output:
+                    # Dry-run JSON output format (B-16)
+                    result = {
+                        "id": current_source.id,
+                        "external_id": current_source.external_id,
+                        "type": current_source.type,
+                        "current_name": current_source.name,
+                        "proposed_name": name if name else current_source.name,
+                        "current_config": current_config_redacted,
+                        "proposed_config": proposed_config_redacted,
+                        "updated_parameters": []
+                    }
+                    if name:
+                        result["updated_parameters"].append("name")
+                    if "config" in updates:
+                        if current_source.type == "plex":
+                            if base_url:
+                                result["updated_parameters"].append("base_url")
+                            if token:
+                                result["updated_parameters"].append("token")
+                        elif current_source.type == "filesystem":
+                            if base_path:
+                                result["updated_parameters"].append("base_path")
+                    typer.echo(json.dumps(result, indent=2))
+                else:
+                    # Dry-run human-readable output
+                    typer.echo(f"Would update source: {current_source.name}")
+                    typer.echo(f"  ID: {current_source.id}")
+                    typer.echo(f"  Current Name: {current_source.name}")
+                    if name:
+                        typer.echo(f"  Proposed Name: {name}")
+                    typer.echo(f"  Type: {current_source.type}")
+                    
+                    if "config" in updates:
+                        typer.echo(f"  Current Configuration: {json.dumps(current_config_redacted)}")
+                        typer.echo(f"  Proposed Configuration: {json.dumps(proposed_config_redacted)}")
+                    
+                    typer.echo("(No database changes made — dry-run mode)")
+                return
+            
             # Update the source
             updated_source = source_service.update_source(source_id, **updates)
             if not updated_source:
                 typer.echo(f"Error: Failed to update source '{source_id}'", err=True)
                 raise typer.Exit(1)
             
+            # Redact sensitive config for display
+            redacted_config = _redact_sensitive_config(updated_source.config.copy() if updated_source.config else {})
+            
             if json_output:
-                import json
                 source_dict = {
                     "id": updated_source.id,
                     "external_id": updated_source.external_id,
@@ -764,8 +847,20 @@ def update_source(
                     "name": updated_source.name,
                     "status": updated_source.status,
                     "base_url": updated_source.base_url,
-                    "config": updated_source.config
+                    "config": redacted_config,
+                    "updated_parameters": []
                 }
+                if name:
+                    source_dict["updated_parameters"].append("name")
+                if "config" in updates:
+                    if current_source.type == "plex":
+                        if base_url:
+                            source_dict["updated_parameters"].append("base_url")
+                        if token:
+                            source_dict["updated_parameters"].append("token")
+                    elif current_source.type == "filesystem":
+                        if base_path:
+                            source_dict["updated_parameters"].append("base_path")
                 typer.echo(json.dumps(source_dict, indent=2))
             else:
                 typer.echo(f"Successfully updated source: {updated_source.name}")
@@ -774,7 +869,7 @@ def update_source(
                 if updated_source.base_url:
                     typer.echo(f"  Base URL: {updated_source.base_url}")
                 if updated_source.config:
-                    typer.echo(f"  Configuration: {updated_source.config}")
+                    typer.echo(f"  Configuration: {json.dumps(redacted_config)}")
                     
         except Exception as e:
             typer.echo(f"Error updating source: {e}", err=True)

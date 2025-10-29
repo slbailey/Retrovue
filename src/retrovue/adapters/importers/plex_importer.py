@@ -24,6 +24,7 @@ from .base import (
     ImporterConfigurationError,
     ImporterConnectionError,
     ImporterError,
+    UpdateFieldSpec,
 )
 
 logger = logging.getLogger(__name__)
@@ -709,6 +710,71 @@ class PlexImporter(BaseImporter):
             optional_params=[],
             description="Connect to Plex Media Server instances and discover content from their libraries"
         )
+    
+    @classmethod
+    def get_update_fields(cls) -> list[UpdateFieldSpec]:
+        """
+        Return the list of updatable configuration fields for the Plex importer.
+        
+        Returns:
+            List of UpdateFieldSpec objects describing updatable fields
+        """
+        return [
+            UpdateFieldSpec(
+                config_key="base_url",
+                cli_flag="--base-url",
+                help="Plex server base URL (e.g., http://192.168.1.100:32400)",
+                field_type="string",
+                is_sensitive=False,
+                is_immutable=False
+            ),
+            UpdateFieldSpec(
+                config_key="token",
+                cli_flag="--token",
+                help="Plex authentication token",
+                field_type="string",
+                is_sensitive=True,
+                is_immutable=False
+            ),
+            UpdateFieldSpec(
+                config_key="servers",
+                cli_flag="--servers",
+                help="JSON array of server definitions",
+                field_type="json",
+                is_sensitive=False,
+                is_immutable=False
+            ),
+        ]
+    
+    @classmethod
+    def validate_partial_update(cls, partial_config: dict[str, Any]) -> None:
+        """
+        Validate a partial configuration update for the Plex importer.
+        
+        Args:
+            partial_config: Dictionary containing only the fields being updated
+            
+        Raises:
+            ImporterConfigurationError: If validation fails
+        """
+        if "base_url" in partial_config:
+            url = partial_config["base_url"]
+            if not isinstance(url, str):
+                raise ImporterConfigurationError("base_url must be a string")
+            if not url.startswith(("http://", "https://")):
+                raise ImporterConfigurationError("base_url must start with http:// or https://")
+        
+        if "token" in partial_config:
+            token = partial_config["token"]
+            if not isinstance(token, str):
+                raise ImporterConfigurationError("token must be a string")
+            if not token:
+                raise ImporterConfigurationError("token cannot be empty")
+        
+        if "servers" in partial_config:
+            servers = partial_config["servers"]
+            if not isinstance(servers, list):
+                raise ImporterConfigurationError("servers must be a JSON array")
     
     def _validate_parameter_types(self) -> None:
         """

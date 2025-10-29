@@ -62,6 +62,8 @@ class ImporterInterface(Protocol):
     - Must raise ImporterError (or subclass) instead of exiting the process.
     - Must declare configuration schema via get_config_schema() so the CLI and registry can reason about it.
     - Must validate configuration parameters (API keys, file paths, connection settings, etc.).
+    - Must declare updatable fields via get_update_fields() for dynamic CLI flag generation.
+    - Must validate partial updates via validate_partial_update() to ensure update safety.
     """
     
     name: str
@@ -151,6 +153,38 @@ class ImporterInterface(Protocol):
             True if successfully disabled, False otherwise
         """
         ...
+    
+    @classmethod
+    def get_update_fields(cls) -> list[UpdateFieldSpec]:
+        """
+        Return the list of updatable configuration fields for this importer.
+        
+        This method defines which configuration fields can be updated via the CLI,
+        how they should appear as command-line flags, and their metadata (sensitivity,
+        immutability, type).
+        
+        Returns:
+            List of UpdateFieldSpec objects describing updatable fields
+        """
+        ...
+    
+    @classmethod
+    def validate_partial_update(cls, partial_config: dict[str, Any]) -> None:
+        """
+        Validate a partial configuration update.
+        
+        This method ensures that:
+        - Each provided key is valid for this importer
+        - Type/format rules are enforced (e.g., URL must look like a URL)
+        - Required relationships are maintained (if any)
+        
+        Args:
+            partial_config: Dictionary containing only the fields being updated
+            
+        Raises:
+            ImporterConfigurationError: If validation fails with a human-readable message
+        """
+        ...
 
 
 class ImporterError(Exception):
@@ -190,6 +224,33 @@ class ImporterConfig:
     """List of optional configuration parameters with name, description, and default value"""
     description: str
     """Human-readable description of the importer and its configuration parameters"""
+
+
+@dataclass
+class UpdateFieldSpec:
+    """
+    Specification for an updatable configuration field.
+    
+    Used by importers to declare which configuration fields can be updated
+    via the CLI, how they should appear as flags, and their validation requirements.
+    """
+    config_key: str
+    """The key name in the configuration dictionary (e.g., "base_url", "token")"""
+    
+    cli_flag: str
+    """The CLI flag name (e.g., "--base-url", "--token")"""
+    
+    help: str
+    """Human-readable description for help text"""
+    
+    field_type: str
+    """Type identifier: "string", "json", "csv", "path", etc."""
+    
+    is_sensitive: bool = False
+    """Whether this field contains sensitive data that should be redacted in output"""
+    
+    is_immutable: bool = False
+    """Whether this field cannot be updated after source creation"""
 
 
 class BaseImporter(ABC):
@@ -428,6 +489,55 @@ class BaseImporter(ABC):
             True if successfully disabled, False otherwise
         """
         return True
+    
+    @classmethod
+    @abstractmethod
+    def get_update_fields(cls) -> list[UpdateFieldSpec]:
+        """
+        Return the list of updatable configuration fields for this importer.
+        
+        This method defines which configuration fields can be updated via the CLI,
+        how they should appear as command-line flags, and their metadata (sensitivity,
+        immutability, type).
+        
+        Required Importer Interface for Source Update:
+        
+        get_update_fields() MUST return all user-settable configuration fields for this importer, including:
+        - the CLI flag name,
+        - the underlying config key,
+        - whether the field is sensitive,
+        - whether the field is immutable,
+        - and a human-readable description for help text.
+        
+        Returns:
+            List of UpdateFieldSpec objects describing updatable fields
+        """
+        pass
+    
+    @classmethod
+    @abstractmethod
+    def validate_partial_update(cls, partial_config: dict[str, Any]) -> None:
+        """
+        Validate a partial configuration update.
+        
+        This method ensures that:
+        - Each provided key is valid for this importer
+        - Type/format rules are enforced (e.g., URL must look like a URL, path exists)
+        - Required relationships are maintained (if any)
+        
+        validate_partial_update(partial_config: dict) MUST:
+        - ensure each provided key is valid for this importer,
+        - enforce type/format rules (e.g. URL must look like a URL),
+        - enforce required relationships (if any),
+        - raise a validation error with a human-readable message on failure.
+        
+        Args:
+            partial_config: Dictionary containing only the fields being updated
+            
+        Raises:
+            ImporterConfigurationError: If validation fails with a human-readable message
+        """
+        pass
     
     def __str__(self) -> str:
         """String representation of the importer."""
