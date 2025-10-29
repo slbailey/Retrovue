@@ -67,7 +67,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()
@@ -105,7 +105,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()
@@ -176,7 +176,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Empty Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()
@@ -206,7 +206,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()
@@ -246,7 +246,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Filesystem Source"
-            mock_source.type = "filesystem"
+            mock_source.kind = "filesystem"
             mock_source.config = {}
             
             mock_source_service = MagicMock()
@@ -270,7 +270,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()
@@ -302,7 +302,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()
@@ -341,7 +341,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()
@@ -371,7 +371,7 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.type = "plex"
+            mock_source.kind = "plex"
             mock_source.config = {"base_url": "http://test", "token": "test-token"}
             
             mock_source_service = MagicMock()

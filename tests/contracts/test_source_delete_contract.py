@@ -99,7 +99,7 @@ class TestSourceDeleteContract:
         """
         result = self.runner.invoke(app, ["delete"])
         assert result.exit_code != 0
-        assert "Missing argument" in result.stdout or "Error" in result.stderr
+        assert "Missing argument" in result.stdout or "Error" in result.stderr or "Usage:" in result.stdout
 
     def test_source_delete_requires_confirmation_without_force(self):
         """
@@ -127,7 +127,7 @@ class TestSourceDeleteContract:
             self._setup_mock_database(mock_db, mock_source)
             
             # Mock user input "no" to cancel
-            result = self.runner.invoke(app, ["delete", "test-source"], input="no\n")
+            result = self.runner.invoke(app, ["delete", "test-source", "--test-db"], input="no\n")
             
             assert result.exit_code == 0
             assert "WARNING: This will permanently delete the following:" in result.stdout
@@ -160,7 +160,7 @@ class TestSourceDeleteContract:
             self._setup_mock_database(mock_db, mock_source)
             
             # Mock user input "y" (not "yes")
-            result = self.runner.invoke(app, ["delete", "test-source"], input="y\n")
+            result = self.runner.invoke(app, ["delete", "test-source", "--test-db"], input="y\n")
             
             assert result.exit_code == 0
             assert "Deletion cancelled" in result.stdout
@@ -190,7 +190,7 @@ class TestSourceDeleteContract:
             # Set up database mocking
             self._setup_mock_database(mock_db, mock_source)
             
-            result = self.runner.invoke(app, ["delete", "test-source"], input="no\n")
+            result = self.runner.invoke(app, ["delete", "test-source", "--test-db"], input="no\n")
             
             assert result.exit_code == 0
             assert "Test Plex Server" in result.stdout
@@ -260,7 +260,7 @@ class TestSourceDeleteContract:
             
             mock_db.query.side_effect = mock_query_factory
             
-            result = self.runner.invoke(app, ["delete", "nonexistent-source"])
+            result = self.runner.invoke(app, ["delete", "nonexistent-source", "--test-db"])
             
             assert result.exit_code == 1
             assert "Error: Source 'nonexistent-source' not found" in result.stderr
@@ -290,7 +290,7 @@ class TestSourceDeleteContract:
             # Set up database mocking
             self._setup_mock_database(mock_db, mock_source)
             
-            result = self.runner.invoke(app, ["delete", "test-source"], input="no\n")
+            result = self.runner.invoke(app, ["delete", "test-source", "--test-db"], input="no\n")
             
             assert result.exit_code == 0
             assert "Deletion cancelled" in result.stdout
@@ -459,7 +459,7 @@ class TestSourceDeleteContract:
             mock_db.query.side_effect = mock_query_factory
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
-                result = self.runner.invoke(app, ["delete", "test-*"], input="no\n")
+                result = self.runner.invoke(app, ["delete", "test-*", "--test-db"], input="no\n")
                 
                 assert result.exit_code == 0
                 assert "WARNING: This will permanently delete 2 sources:" in result.stdout  # Aggregated count

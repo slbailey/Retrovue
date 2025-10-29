@@ -286,7 +286,7 @@ class TestSourceDeleteDataContract:
             mock_source_service = MagicMock()
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
-                result = self.runner.invoke(app, ["delete", "nonexistent-source"])
+                result = self.runner.invoke(app, ["delete", "nonexistent-source", "--test-db"])
                 
                 assert result.exit_code == 1
                 assert "Error: Source 'nonexistent-source' not found" in result.stderr
@@ -491,7 +491,7 @@ class TestSourceDeleteDataContract:
             mock_source_service = MagicMock()
             
             with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
-                result = self.runner.invoke(app, ["delete", "nonexistent-source", "--json"])
+                result = self.runner.invoke(app, ["delete", "nonexistent-source", "--test-db", "--json"])
                 
                 assert result.exit_code == 1
                 assert "Error: Source 'nonexistent-source' not found" in result.stderr
