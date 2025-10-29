@@ -50,7 +50,7 @@ jobs:
           pip install pytest pytest-asyncio ruff mypy types-requests
           pip install -e .
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Run linting
         run: |
@@ -69,7 +69,7 @@ jobs:
           pytest tests/contracts/test_source_add_contract.py tests/contracts/test_source_add_data_contract.py -v --tb=short
           echo "✅ SourceAdd contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce SourceList contract (ENFORCED)
         run: |
@@ -77,7 +77,7 @@ jobs:
           pytest tests/contracts/test_source_list_contract.py tests/contracts/test_source_list_data_contract.py -v --tb=short
           echo "✅ SourceList contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherAdd contract (ENFORCED)
         run: |
@@ -85,7 +85,7 @@ jobs:
           pytest tests/contracts/test_enricher_add_contract.py tests/contracts/test_enricher_add_data_contract.py -v --tb=short
           echo "✅ EnricherAdd contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherListTypes contract (ENFORCED)
         run: |
@@ -93,7 +93,7 @@ jobs:
           pytest tests/contracts/test_enricher_list_types_contract.py tests/contracts/test_enricher_list_types_data_contract.py -v --tb=short
           echo "✅ EnricherListTypes contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherList contract (ENFORCED)
         run: |
@@ -101,7 +101,7 @@ jobs:
           pytest tests/contracts/test_enricher_list_contract.py tests/contracts/test_enricher_list_data_contract.py -v --tb=short
           echo "✅ EnricherList contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherUpdate contract (ENFORCED)
         run: |
@@ -109,7 +109,7 @@ jobs:
           pytest tests/contracts/test_enricher_update_contract.py tests/contracts/test_enricher_update_data_contract.py -v --tb=short
           echo "✅ EnricherUpdate contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce EnricherRemove contract (ENFORCED)
         run: |
@@ -117,7 +117,7 @@ jobs:
           pytest tests/contracts/test_enricher_remove_contract.py tests/contracts/test_enricher_remove_data_contract.py -v --tb=short
           echo "✅ EnricherRemove contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce SourceListTypes contract (ENFORCED)
         run: |
@@ -125,7 +125,7 @@ jobs:
           pytest tests/contracts/test_source_list_types_contract.py tests/contracts/test_source_list_types_data_contract.py -v --tb=short
           echo "✅ SourceListTypes contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Enforce SourceDiscover contract (ENFORCED)
         run: |
@@ -133,7 +133,7 @@ jobs:
           pytest tests/contracts/test_source_discover_contract.py tests/contracts/test_source_discover_data_contract.py -v --tb=short
           echo "✅ SourceDiscover contract enforcement passed"
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
       - name: Cleanup test database
         run: |
@@ -145,7 +145,7 @@ jobs:
           from sqlalchemy.exc import OperationalError
 
           # Use TEST_DATABASE_URL if available, otherwise use default
-          db_url = os.getenv('TEST_DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/retrovue_test')
+          db_url = os.getenv('TEST_DATABASE_URL', 'postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test')
 
           # Create engine with longer timeout and retry logic
           engine = create_engine(
@@ -210,4 +210,4 @@ jobs:
                   exit(0)  # Don't fail the workflow for cleanup issues
           "
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retrovue_test
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test

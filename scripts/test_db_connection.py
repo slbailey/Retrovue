@@ -16,7 +16,7 @@ def test_database_connection():
     """Test database connection with improved timeout settings."""
     
     # Use TEST_DATABASE_URL if available, otherwise use default
-    db_url = os.getenv('TEST_DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/retrovue_test')
+    db_url = os.getenv('TEST_DATABASE_URL', 'postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test')
     
     print(f"🔗 Testing database connection to: {db_url}")
     
