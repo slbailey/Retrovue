@@ -745,16 +745,16 @@ def update_source(
             from ...adapters.registry import ALIASES, SOURCES
             
             # Get importer class (not instance) for interface compliance check
-            importer_key = ALIASES.get(current_source.type.lower(), current_source.type.lower())
+            importer_key = ALIASES.get(current_source.kind.lower(), current_source.kind.lower())
             try:
                 importer_class = SOURCES[importer_key]
             except KeyError:
-                typer.echo(f"Error: Importer for source type '{current_source.type}' is not available or not interface-compliant", err=True)
+                typer.echo(f"Error: Importer for source type '{current_source.kind}' is not available or not interface-compliant", err=True)
                 raise typer.Exit(1)
             
             # Check that importer class implements required update methods
             if not hasattr(importer_class, "get_update_fields") or not hasattr(importer_class, "validate_partial_update"):
-                typer.echo(f"Error: Importer for source type '{current_source.type}' is not available or not interface-compliant", err=True)
+                typer.echo(f"Error: Importer for source type '{current_source.kind}' is not available or not interface-compliant", err=True)
                 raise typer.Exit(1)
             
             # Build update configuration
@@ -764,7 +764,7 @@ def update_source(
             if name:
                 updates["name"] = name
             
-            if current_source.type == "plex":
+            if current_source.kind == "plex":
                 if base_url:
                     new_config["servers"] = [{"base_url": base_url, "token": new_config.get("servers", [{}])[0].get("token", "")}]
                 if token:
@@ -774,7 +774,7 @@ def update_source(
                 if new_config:
                     updates["config"] = new_config
                     
-            elif current_source.type == "filesystem":
+            elif current_source.kind == "filesystem":
                 if base_path:
                     new_config["root_paths"] = [base_path]
                 if new_config:
@@ -795,7 +795,7 @@ def update_source(
                     result = {
                         "id": current_source.id,
                         "external_id": current_source.external_id,
-                        "type": current_source.type,
+                        "type": current_source.kind,
                         "current_name": current_source.name,
                         "proposed_name": name if name else current_source.name,
                         "current_config": current_config_redacted,
@@ -805,12 +805,12 @@ def update_source(
                     if name:
                         result["updated_parameters"].append("name")
                     if "config" in updates:
-                        if current_source.type == "plex":
+                        if current_source.kind == "plex":
                             if base_url:
                                 result["updated_parameters"].append("base_url")
                             if token:
                                 result["updated_parameters"].append("token")
-                        elif current_source.type == "filesystem":
+                        elif current_source.kind == "filesystem":
                             if base_path:
                                 result["updated_parameters"].append("base_path")
                     typer.echo(json.dumps(result, indent=2))
@@ -821,7 +821,7 @@ def update_source(
                     typer.echo(f"  Current Name: {current_source.name}")
                     if name:
                         typer.echo(f"  Proposed Name: {name}")
-                    typer.echo(f"  Type: {current_source.type}")
+                    typer.echo(f"  Type: {current_source.kind}")
                     
                     if "config" in updates:
                         typer.echo(f"  Current Configuration: {json.dumps(current_config_redacted)}")
@@ -843,7 +843,7 @@ def update_source(
                 source_dict = {
                     "id": updated_source.id,
                     "external_id": updated_source.external_id,
-                    "type": updated_source.type,
+                    "type": updated_source.kind,
                     "name": updated_source.name,
                     "status": updated_source.status,
                     "base_url": updated_source.base_url,
@@ -853,19 +853,19 @@ def update_source(
                 if name:
                     source_dict["updated_parameters"].append("name")
                 if "config" in updates:
-                    if current_source.type == "plex":
+                    if current_source.kind == "plex":
                         if base_url:
                             source_dict["updated_parameters"].append("base_url")
                         if token:
                             source_dict["updated_parameters"].append("token")
-                    elif current_source.type == "filesystem":
+                    elif current_source.kind == "filesystem":
                         if base_path:
                             source_dict["updated_parameters"].append("base_path")
                 typer.echo(json.dumps(source_dict, indent=2))
             else:
                 typer.echo(f"Successfully updated source: {updated_source.name}")
                 typer.echo(f"  ID: {updated_source.id}")
-                typer.echo(f"  Type: {updated_source.type}")
+                typer.echo(f"  Type: {updated_source.kind}")
                 if updated_source.base_url:
                     typer.echo(f"  Base URL: {updated_source.base_url}")
                 if updated_source.config:

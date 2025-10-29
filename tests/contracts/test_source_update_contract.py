@@ -406,13 +406,26 @@ class TestSourceUpdateContract:
             mock_db.commit.side_effect = Exception("Concurrent modification detected")
             mock_session.return_value.__enter__.return_value = mock_db
             
-            with patch("retrovue.cli.commands.source.SourceService") as mock_service_class:
+            with patch("retrovue.cli.commands.source.SourceService") as mock_service_class, \
+                 patch("retrovue.adapters.registry.SOURCES") as mock_sources, \
+                 patch("retrovue.adapters.registry.ALIASES") as mock_aliases:
+                
+                from retrovue.adapters.importers.plex_importer import PlexImporter
+                
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
+                
+                def mock_getitem(self, key):
+                    if key == "plex":
+                        return PlexImporter
+                    raise KeyError(key)
+                
+                mock_aliases.get.return_value = "plex"
+                mock_sources.__getitem__ = mock_getitem
                 
                 mock_service = MagicMock()
                 mock_service.get_source_by_id.return_value = mock_source

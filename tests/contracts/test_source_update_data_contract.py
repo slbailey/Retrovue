@@ -37,14 +37,14 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
                 
                 updated_source = MagicMock()
                 updated_source.id = mock_source.id
                 updated_source.external_id = mock_source.external_id
-                updated_source.type = mock_source.type
+                updated_source.kind = mock_source.kind
                 updated_source.name = "Updated Plex"
                 updated_source.config = mock_source.config
                 
@@ -97,7 +97,7 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
                 
@@ -136,7 +136,7 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
                 
@@ -176,14 +176,14 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = original_id
                 mock_source.external_id = original_external_id
-                mock_source.type = original_type
+                mock_source.kind = original_type
                 mock_source.name = "Test Plex"
                 mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
                 
                 updated_source = MagicMock()
                 updated_source.id = original_id  # Should be unchanged
                 updated_source.external_id = original_external_id  # Should be unchanged
-                updated_source.type = original_type  # Should be unchanged
+                updated_source.kind = original_type  # Should be unchanged
                 updated_source.name = "Updated Plex"
                 updated_source.config = mock_source.config
                 
@@ -222,14 +222,14 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
                 
                 updated_source = MagicMock()
                 updated_source.id = mock_source.id
                 updated_source.external_id = mock_source.external_id
-                updated_source.type = mock_source.type
+                updated_source.kind = mock_source.kind
                 updated_source.name = "Updated Plex"
                 updated_source.config = mock_source.config
                 updated_source.updated_at = "2024-01-20T14:45:00Z"
@@ -268,7 +268,7 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = original_config.copy()
                 
@@ -279,7 +279,7 @@ class TestSourceUpdateDataContract:
                 updated_source = MagicMock()
                 updated_source.id = mock_source.id
                 updated_source.external_id = mock_source.external_id
-                updated_source.type = mock_source.type
+                updated_source.kind = mock_source.kind
                 updated_source.name = "Updated Plex"
                 updated_source.config = updated_config
                 
@@ -326,7 +326,7 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = original_config.copy()
                 
@@ -341,7 +341,7 @@ class TestSourceUpdateDataContract:
                 updated_source = MagicMock()
                 updated_source.id = mock_source.id
                 updated_source.external_id = mock_source.external_id
-                updated_source.type = mock_source.type
+                updated_source.kind = mock_source.kind
                 updated_source.name = "Updated Plex"
                 updated_source.config = updated_config
                 
@@ -378,14 +378,14 @@ class TestSourceUpdateDataContract:
                 mock_source = MagicMock()
                 mock_source.id = str(uuid.uuid4())
                 mock_source.external_id = "plex-12345678"
-                mock_source.type = "plex"
+                mock_source.kind = "plex"
                 mock_source.name = "Test Plex"
                 mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
                 
                 updated_source = MagicMock()
                 updated_source.id = mock_source.id
                 updated_source.external_id = mock_source.external_id
-                updated_source.type = mock_source.type
+                updated_source.kind = mock_source.kind
                 updated_source.name = "Updated Plex"
                 updated_source.config = mock_source.config
                 
