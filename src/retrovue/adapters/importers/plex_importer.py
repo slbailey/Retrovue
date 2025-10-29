@@ -994,6 +994,9 @@ class PlexImporter(BaseImporter):
             
             return collections
             
+        except ImporterError:
+            # Re-raise ImporterError as-is to avoid duplicate error messages
+            raise
         except Exception as e:
             logger.error(f"Failed to list collections: {e}")
             raise ImporterError(f"Failed to list collections: {e}") from e
