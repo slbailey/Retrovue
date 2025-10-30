@@ -8,7 +8,7 @@ These tests verify database operations, transaction safety, data integrity, and 
 import json
 import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, ANY
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app
@@ -157,7 +157,20 @@ class TestSourceListDataContract:
                 }
             ]
             
-            result = self.runner.invoke(app, ["source", "list"])
+            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "id": "test-id",
+                        "name": "Test Source",
+                        "type": "plex",
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z",
+                        "enabled_collections": 0,
+                        "ingestible_collections": 0,
+                    }
+                ]
+                result = self.runner.invoke(app, ["source", "list"])
+                mock_list.assert_called_once_with(ANY, source_type=None)
             
             assert result.exit_code == 0
             
@@ -214,7 +227,20 @@ class TestSourceListDataContract:
             mock_test_db.query.return_value.all.return_value = [mock_test_source]
             mock_test_db.query.return_value.filter.return_value.count.return_value = 0
             
-            result = self.runner.invoke(app, ["source", "list", "--test-db", "--json"])
+            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "id": "test-only-id",
+                        "name": "Test Only Source",
+                        "type": "plex",
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z",
+                        "enabled_collections": 0,
+                        "ingestible_collections": 0,
+                    }
+                ]
+                result = self.runner.invoke(app, ["source", "list", "--test-db", "--json"])
+                mock_list.assert_called_once_with(ANY, source_type=None)
             
             assert result.exit_code == 0
             
@@ -255,7 +281,29 @@ class TestSourceListDataContract:
             mock_db.query.return_value.all.return_value = [mock_source1, mock_source2]
             mock_db.query.return_value.filter.return_value.count.return_value = 0
             
-            result = self.runner.invoke(app, ["source", "list", "--json"])
+            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "id": "id1",
+                        "name": "Source 1",
+                        "type": "plex",
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z",
+                        "enabled_collections": 0,
+                        "ingestible_collections": 0,
+                    },
+                    {
+                        "id": "id2",
+                        "name": "Source 2",
+                        "type": "filesystem",
+                        "created_at": "2024-01-10T09:15:00Z",
+                        "updated_at": "2024-01-18T16:20:00Z",
+                        "enabled_collections": 0,
+                        "ingestible_collections": 0,
+                    },
+                ]
+                result = self.runner.invoke(app, ["source", "list", "--json"])
+                mock_list.assert_called_once_with(ANY, source_type=None)
             
             assert result.exit_code == 0
             
@@ -291,7 +339,20 @@ class TestSourceListDataContract:
             mock_db.query.return_value.all.return_value = [mock_source]
             mock_db.query.return_value.filter.return_value.count.return_value = 0
             
-            result = self.runner.invoke(app, ["source", "list"])
+            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "id": "test-id",
+                        "name": "Test Source",
+                        "type": "plex",
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z",
+                        "enabled_collections": 0,
+                        "ingestible_collections": 0,
+                    }
+                ]
+                result = self.runner.invoke(app, ["source", "list"])
+                mock_list.assert_called_once_with(ANY, source_type=None)
             
             assert result.exit_code == 0
             
@@ -327,7 +388,20 @@ class TestSourceListDataContract:
                 }
             ]
             
-            result = self.runner.invoke(app, ["source", "list", "--json"])
+            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "id": "test-source-id",
+                        "name": "Test Source",
+                        "type": "plex",
+                        "enabled_collections": 5,
+                        "ingestible_collections": 3,
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z",
+                    }
+                ]
+                result = self.runner.invoke(app, ["source", "list", "--json"])
+                mock_list.assert_called_once_with(ANY, source_type=None)
             
             assert result.exit_code == 0
             
@@ -359,7 +433,21 @@ class TestSourceListDataContract:
             mock_db.query.return_value.all.return_value = [mock_source]
             mock_db.query.return_value.filter.return_value.count.return_value = 0
             
-            result = self.runner.invoke(app, ["source", "list", "--json"])
+            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "id": "integrity-test-id",
+                        "name": "Integrity Test Source",
+                        "type": "plex",
+                        "config": {"servers": [{"base_url": "https://test.plex.com", "token": "test-token"}]},
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z",
+                        "enabled_collections": 0,
+                        "ingestible_collections": 0,
+                    }
+                ]
+                result = self.runner.invoke(app, ["source", "list", "--json"])
+                mock_list.assert_called_once_with(ANY, source_type=None)
             
             assert result.exit_code == 0
             
@@ -419,7 +507,20 @@ class TestSourceListDataContract:
             mock_db.query.return_value.filter.return_value.all.return_value = [mock_plex_source]
             mock_db.query.return_value.filter.return_value.count.return_value = 0
             
-            result = self.runner.invoke(app, ["source", "list", "--type", "plex", "--json"])
+            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "id": "plex-id",
+                        "name": "Plex Server",
+                        "type": "plex",
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z",
+                        "enabled_collections": 0,
+                        "ingestible_collections": 0,
+                    }
+                ]
+                result = self.runner.invoke(app, ["source", "list", "--type", "plex", "--json"])
+                mock_list.assert_called_once_with(ANY, source_type="plex")
             
             assert result.exit_code == 0
             
