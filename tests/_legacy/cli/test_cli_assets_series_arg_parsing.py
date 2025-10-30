@@ -1,5 +1,8 @@
 """
 Tests for CLI assets series command argument parsing.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This module tests the mutual exclusivity of positional and --series arguments,
 and ensures proper error handling.

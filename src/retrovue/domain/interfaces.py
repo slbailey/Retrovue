@@ -3,14 +3,14 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from .entities import SourceCollection
+from .entities import Collection
 
 
 class ImporterInterface(ABC):
     """Interface for content importers (Plex, filesystem, etc.)."""
     
     @abstractmethod
-    def validate_ingestible(self, collection: SourceCollection) -> bool:
+    def validate_ingestible(self, collection: Collection) -> bool:
         """
         Validate whether a collection meets the prerequisites for ingestion.
         
@@ -18,7 +18,7 @@ class ImporterInterface(ABC):
         requirements (e.g., valid path mappings for Plex, accessible directories for filesystem).
         
         Args:
-            collection: The SourceCollection to validate
+            collection: The Collection to validate
             
         Returns:
             bool: True if collection can be ingested, False otherwise
@@ -39,12 +39,12 @@ class ImporterInterface(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def ingest_collection(self, collection: SourceCollection, scope: str | None = None) -> dict[str, Any]:
+    def ingest_collection(self, collection: Collection, scope: str | None = None) -> dict[str, Any]:
         """
         Ingest content from a collection.
         
         Args:
-            collection: The SourceCollection to ingest from
+            collection: The Collection to ingest from
             scope: Optional scope for targeted ingest (title, season, episode)
             
         Returns:

@@ -1,5 +1,8 @@
 """
 Tests for the filename parser in the filesystem importer.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This module tests the pattern recognition and label extraction functionality
 for various filename formats commonly used for media files.

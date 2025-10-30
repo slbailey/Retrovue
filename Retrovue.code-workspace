@@ -1,22 +1,19 @@
 {
-	"folders": [
-		{
-			"path": "."
-		},
-		{
-			"path": "../ErsatzTV"
-		}
-	],
-	"settings": {
-		"powershell.cwd": "Retrovue",
-		"sqltools.connections": [
-			{
-				"previewLimit": 50,
-				"driver": "SQLite",
-				"name": "Retrovue",
-				"database": "${workspaceFolder:Retrovue}/retrovue.db"
-			}
-		],
-		"sqltools.useNodeRuntime": true
-	}
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "powershell.cwd": "Retrovue",
+    "sqltools.connections": [
+      {
+        "previewLimit": 50,
+        "driver": "SQLite",
+        "name": "Retrovue",
+        "database": "${workspaceFolder:Retrovue}/retrovue.db"
+      }
+    ],
+    "sqltools.useNodeRuntime": true
+  }
 }

@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -123,39 +124,43 @@ class Asset(Base):
     __tablename__ = "assets"
 
     uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
-    uri: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    collection_uuid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("collections.uuid", ondelete="RESTRICT"), nullable=False
+    )
+    canonical_key: Mapped[str] = mapped_column(Text, nullable=False)
+    canonical_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    uri: Mapped[str] = mapped_column(Text, nullable=False)
     size: Mapped[int] = mapped_column(BigInteger, nullable=False)  # size in bytes
-    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    video_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    audio_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    container: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    hash_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    discovered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    canonical: Mapped[bool] = mapped_column(
-        Boolean, 
-        default=False, 
-        nullable=False,
-        comment="Asset approval status for downstream schedulers and runtime. "
-                "True = approved for playout without human review. "
-                "False = exists in inventory but not yet approved; may be in review_queue."
-    )
     state: Mapped[str] = mapped_column(
-        String(20), 
-        default="new", 
+        SQLEnum("new", "enriching", "ready", "retired", name="asset_state"), 
         nullable=False,
         comment="Asset lifecycle state: new, enriching, ready, retired"
     )
     approved_for_broadcast: Mapped[bool] = mapped_column(
         Boolean, 
-        default=False, 
+        server_default=sa.text("false"), 
         nullable=False,
         comment="Asset approval status for broadcast. Must be true when state='ready'."
     )
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    operator_verified: Mapped[bool] = mapped_column(
+        Boolean, 
+        server_default=sa.text("false"), 
+        nullable=False,
+        comment="Asset approval status for downstream schedulers and runtime. "
+                "True = approved for playout without human review. "
+                "False = exists in inventory but not yet approved; may be in review_queue."
+    )
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    video_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    audio_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    container: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    hash_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default=sa.text("false"), nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    collection_uuid: Mapped[Any] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="SET NULL"), nullable=True)
+    last_enricher_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
     episodes: Mapped[list[Episode]] = relationship(
@@ -164,24 +169,46 @@ class Asset(Base):
     markers: Mapped[list[Marker]] = relationship(
         "Marker", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
     )
-    collection: Mapped[SourceCollection | None] = relationship("SourceCollection", passive_deletes=True)
+    collection: Mapped[Collection | None] = relationship("Collection", passive_deletes=True)
     review_queue: Mapped[list[ReviewQueue]] = relationship(
         "ReviewQueue", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
     )
     provider_refs: Mapped[list[ProviderRef]] = relationship("ProviderRef", back_populates="asset")
 
     __table_args__ = (
-        Index("ix_assets_canonical", "canonical"),
+        # Uniques
+        UniqueConstraint("collection_uuid", "canonical_key_hash", name="ix_assets_collection_canonical_unique"),
+        UniqueConstraint("collection_uuid", "uri", name="ix_assets_collection_uri_unique"),
+        
+        # Checks
+        CheckConstraint("(NOT approved_for_broadcast) OR (state = 'ready')", name="chk_approved_implies_ready"),
+        CheckConstraint(
+            "(is_deleted = TRUE AND deleted_at IS NOT NULL) OR (is_deleted = FALSE AND deleted_at IS NULL)",
+            name="chk_deleted_at_sync",
+        ),
+        CheckConstraint("char_length(canonical_key_hash) = 64", name="chk_canon_hash_len"),
+        CheckConstraint("canonical_key_hash ~ '^[0-9a-f]{64}$'", name="chk_canon_hash_hex"),
+        
+        # Indexes
+        Index("ix_assets_collection_uuid", "collection_uuid"),
+        Index("ix_assets_state", "state"),
+        Index("ix_assets_approved", "approved_for_broadcast"),
+        Index("ix_assets_operator_verified", "operator_verified"),
         Index("ix_assets_discovered_at", "discovered_at"),
         Index("ix_assets_is_deleted", "is_deleted"),
-        Index("ix_assets_state", "state"),
-        Index("ix_assets_approved_for_broadcast", "approved_for_broadcast"),
-        Index("ix_assets_collection_uuid", "collection_uuid"),
+        
+        # Partial schedulable index (hot path)
+        Index(
+            "ix_assets_schedulable",
+            "collection_uuid",
+            "discovered_at",
+            postgresql_where=sa.text("state = 'ready' AND approved_for_broadcast = true AND is_deleted = false"),
+        ),
     )
 
     def __repr__(self) -> str:
         return (
-            f"<Asset(uuid={self.uuid}, uri={self.uri}, size={self.size}, canonical={self.canonical})>"
+            f"<Asset(uuid={self.uuid}, uri={self.uri}, size={self.size}, state={self.state}, approved_for_broadcast={self.approved_for_broadcast})>"
         )
 
 
@@ -303,18 +330,18 @@ class Source(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    collections: Mapped[list[SourceCollection]] = relationship("SourceCollection", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
+    collections: Mapped[list[Collection]] = relationship("Collection", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self) -> str:
         return f"<Source(id={self.id}, name={self.name}, type={self.type})>"
 
 
-class SourceCollection(Base):
+class Collection(Base):
     """A collection within a content source (e.g., Plex library)."""
 
-    __tablename__ = "source_collections"
+    __tablename__ = "collections"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False)
     external_id: Mapped[str] = mapped_column(String(255), nullable=False)  # Plex library ID, etc.
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -330,14 +357,14 @@ class SourceCollection(Base):
     assets: Mapped[list[Asset]] = relationship("Asset", passive_deletes=True, overlaps="collection")
 
     __table_args__ = (
-        Index("ix_source_collections_source_id", "source_id"),
-        Index("ix_source_collections_sync_enabled", "sync_enabled"),
-        Index("ix_source_collections_ingestible", "ingestible"),
-        UniqueConstraint("source_id", "external_id", name="uq_source_collections_source_external"),
+        Index("ix_collections_source_id", "source_id"),
+        Index("ix_collections_sync_enabled", "sync_enabled"),
+        Index("ix_collections_ingestible", "ingestible"),
+        UniqueConstraint("source_id", "external_id", name="uq_collections_source_external"),
     )
 
     def __repr__(self) -> str:
-        return f"<SourceCollection(id={self.id}, source_id={self.source_id}, name={self.name}, sync_enabled={self.sync_enabled}, ingestible={self.ingestible})>"
+        return f"<Collection(uuid={self.uuid}, source_id={self.source_id}, name={self.name}, sync_enabled={self.sync_enabled}, ingestible={self.ingestible})>"
 
 
 class PathMapping(Base):
@@ -346,13 +373,13 @@ class PathMapping(Base):
     __tablename__ = "path_mappings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    collection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("source_collections.id", ondelete="CASCADE"), nullable=False)
+    collection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("collections.uuid", ondelete="CASCADE"), nullable=False)
     plex_path: Mapped[str] = mapped_column(String(500), nullable=False)
     local_path: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    collection: Mapped[SourceCollection] = relationship("SourceCollection", back_populates="path_mappings", passive_deletes=True)
+    collection: Mapped[Collection] = relationship("Collection", back_populates="path_mappings", passive_deletes=True)
 
     __table_args__ = (
         Index("ix_path_mappings_collection_id", "collection_id"),

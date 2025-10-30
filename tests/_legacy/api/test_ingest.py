@@ -3,6 +3,8 @@ Tests for ingest API endpoints.
 
 This module tests the ingest pipeline API functionality.
 """
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 
 import uuid
 from unittest.mock import patch

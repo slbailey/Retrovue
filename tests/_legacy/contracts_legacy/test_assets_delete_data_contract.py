@@ -1,5 +1,8 @@
 """
 Data contract tests for `retrovue assets delete` / `retrovue assets restore`.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This suite enforces the persistence guarantees in:
 docs/contracts/resources/AssetsDeleteContract.md

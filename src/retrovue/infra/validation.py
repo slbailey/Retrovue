@@ -14,13 +14,13 @@ from ..domain.entities import (
     EpisodeAsset,
     PathMapping,
     Season,
-    SourceCollection,
+    Collection,
     Title,
 )
 from ..infra.exceptions import ValidationError
 
 
-def validate_collection_exists(db: Session, collection_id: str) -> SourceCollection:
+def validate_collection_exists(db: Session, collection_id: str) -> Collection:
     """
     Validate collection exists and return it.
     
@@ -29,7 +29,7 @@ def validate_collection_exists(db: Session, collection_id: str) -> SourceCollect
         collection_id: Collection identifier (UUID, external_id, or name)
         
     Returns:
-        SourceCollection: The found collection
+        Collection: The found collection
         
     Raises:
         ValidationError: If collection not found or ambiguous
@@ -38,8 +38,8 @@ def validate_collection_exists(db: Session, collection_id: str) -> SourceCollect
     try:
         import uuid
         uuid.UUID(collection_id)
-        collection = db.query(SourceCollection).filter(
-            SourceCollection.id == collection_id
+        collection = db.query(Collection).filter(
+            Collection.id == collection_id
         ).first()
         if collection:
             return collection
@@ -47,15 +47,15 @@ def validate_collection_exists(db: Session, collection_id: str) -> SourceCollect
         pass
     
     # Try external_id
-    collection = db.query(SourceCollection).filter(
-        SourceCollection.external_id == collection_id
+    collection = db.query(Collection).filter(
+        Collection.external_id == collection_id
     ).first()
     if collection:
         return collection
     
     # Try name (case-insensitive)
-    collections = db.query(SourceCollection).filter(
-        SourceCollection.name.ilike(collection_id)
+    collections = db.query(Collection).filter(
+        Collection.name.ilike(collection_id)
     ).all()
     
     if len(collections) == 0:
@@ -67,7 +67,7 @@ def validate_collection_exists(db: Session, collection_id: str) -> SourceCollect
     return collections[0]
 
 
-def validate_collection_enabled(collection: SourceCollection) -> None:
+def validate_collection_enabled(collection: Collection) -> None:
     """
     Validate collection is enabled for operations.
     
@@ -81,7 +81,7 @@ def validate_collection_enabled(collection: SourceCollection) -> None:
         raise ValidationError(f"Collection '{collection.name}' is not enabled")
 
 
-def validate_path_mappings(db: Session, collection: SourceCollection) -> None:
+def validate_path_mappings(db: Session, collection: Collection) -> None:
     """
     Validate collection has valid path mappings.
     
@@ -144,7 +144,7 @@ def validate_no_conflicting_operations(db: Session, collection_id: str) -> None:
     pass
 
 
-def validate_wipe_prerequisites(db: Session, collection: SourceCollection) -> None:
+def validate_wipe_prerequisites(db: Session, collection: Collection) -> None:
     """
     Validate all prerequisites for wipe operation.
     
@@ -231,7 +231,7 @@ def validate_no_orphaned_records(db: Session) -> None:
         )
 
 
-def validate_collection_preserved(db: Session, collection: SourceCollection) -> None:
+def validate_collection_preserved(db: Session, collection: Collection) -> None:
     """
     Validate collection is preserved after operation.
     
@@ -242,14 +242,14 @@ def validate_collection_preserved(db: Session, collection: SourceCollection) -> 
     Raises:
         ValidationError: If collection was deleted
     """
-    preserved_collection = db.query(SourceCollection).filter(
-        SourceCollection.id == collection.id
+    preserved_collection = db.query(Collection).filter(
+        Collection.id == collection.id
     ).first()
     if not preserved_collection:
         raise ValidationError("Collection was deleted during operation")
 
 
-def validate_path_mappings_preserved(db: Session, collection: SourceCollection) -> None:
+def validate_path_mappings_preserved(db: Session, collection: Collection) -> None:
     """
     Validate path mappings are preserved after operation.
     
@@ -313,7 +313,7 @@ def validate_asset_draft(asset_draft) -> None:
         raise ValidationError("Asset draft missing episode number")
 
 
-def validate_collection_accessible(db: Session, collection: SourceCollection) -> None:
+def validate_collection_accessible(db: Session, collection: Collection) -> None:
     """
     Validate collection is accessible for operations.
     
@@ -328,7 +328,7 @@ def validate_collection_accessible(db: Session, collection: SourceCollection) ->
     validate_path_mappings(db, collection)
 
 
-def validate_enrichers_available(db: Session, collection: SourceCollection) -> None:
+def validate_enrichers_available(db: Session, collection: Collection) -> None:
     """
     Validate all required enrichers are available.
     
@@ -360,8 +360,8 @@ def validate_asset_relationships(db: Session, asset: Asset) -> None:
         raise ValidationError("Asset missing collection relationship")
     
     # Check collection exists
-    collection = db.query(SourceCollection).filter(
-        SourceCollection.id == asset.collection_id
+    collection = db.query(Collection).filter(
+        Collection.id == asset.collection_id
     ).first()
     if not collection:
         raise ValidationError("Asset references non-existent collection")

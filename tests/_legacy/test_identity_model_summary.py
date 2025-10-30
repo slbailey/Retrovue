@@ -1,5 +1,8 @@
 """
 Summary test documenting the current state of the identity model implementation.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This test validates what is currently working and what needs to be implemented
 to fully comply with the identity model documentation.

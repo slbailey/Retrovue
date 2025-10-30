@@ -38,6 +38,7 @@ retrovue = "retrovue.cli.main:cli"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+src = ["src"]
 extend-exclude = [
   "frontend", "dist", "build", "venv", ".venv",
   "alembic", "examples", "scripts", "tests", "tools",
@@ -57,6 +58,7 @@ ignore = ["E203", "E501", "B905", "B008", "B904"]
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
+pythonpath = ["src"]
 exclude = "(^|/)alembic/"
 
 [[tool.mypy.overrides]]

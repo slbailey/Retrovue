@@ -1,5 +1,8 @@
 """
 Tests for CLI assets select command with series and random mode in JSON format.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This module tests the new assets select command when selecting from a series
 with random mode, ensuring it returns the correct JSON structure.

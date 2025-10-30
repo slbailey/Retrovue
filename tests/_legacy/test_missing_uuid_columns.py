@@ -1,5 +1,8 @@
 """
 Tests to identify missing UUID columns in broadcast domain models.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 According to the identity model documentation, all persisted entities should have
 both id (INTEGER PK) and uuid (stable external identity) columns for cross-domain

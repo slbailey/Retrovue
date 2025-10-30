@@ -22,7 +22,7 @@ All contract documents MUST follow the `{Noun}{Verb}Contract.md` naming pattern:
 - **Source contracts**: `SourceAddContract.md`, `SourceDiscoverContract.md`, `SourceIngestContract.md`
 - **Collection contracts**: `CollectionIngestContract.md`, `CollectionWipeContract.md`
 - **Enricher contracts**: `EnricherAddContract.md`, `EnricherListContract.md`
-- **Asset contracts**: `AssetsDeleteContract.md`, `AssetsSelectContract.md`
+- **Asset contracts**: `AssetContract.md` (overview), `AssetShowContract.md`, `AssetListContract.md`, `AssetUpdateContract.md`, `AssetsDeleteContract.md`, `AssetsSelectContract.md`
 
 This naming convention:
 
@@ -37,7 +37,7 @@ This naming convention:
 
 | Component              | Purpose                                            | Path Pattern                                          |
 | ---------------------- | -------------------------------------------------- | ----------------------------------------------------- |
-| **Contract Document**  | Defines full behavior, inputs, and guarantees      | `docs/contracts/resources/{Noun}{Verb}Contract.md`              |
+| **Contract Document**  | Defines full behavior, inputs, and guarantees      | `docs/contracts/resources/{Noun}{Verb}Contract.md`    |
 | **CLI Contract Test**  | Validates user-facing CLI interaction              | `tests/contracts/test_{noun}_{verb}_contract.py`      |
 | **Data Contract Test** | Validates persistence, integrity, and side effects | `tests/contracts/test_{noun}_{verb}_data_contract.py` |
 
@@ -160,8 +160,9 @@ Each rule (B-# or D-#) must be explicitly covered by one of the two test files.
 
 ### Collections
 
-- `retrovue collection list --source <id>` — Show collections for a source.
-- `retrovue collection update <id>` — Enable or configure collection ingest.
+- `retrovue collection list [--source <id>]` — List all collections, optionally filtered by source.
+- `retrovue collection show <id>` — Display detailed collection information.
+- `retrovue collection update <id>` — Enable or configure collection ingest, manage enrichers, and path mappings.
 - `retrovue collection wipe <id>` — Wipe all assets in a collection (**destructive**).
 - `retrovue collection ingest <id>` — Ingest specific titles, seasons, or episodes.
 

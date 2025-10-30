@@ -11,11 +11,11 @@ This document provides an overview of all Collection domain testing contracts. I
 The Collection domain is covered by the following specific contracts:
 
 - **[Collection Ingest](CollectionIngestContract.md)**: Processing assets from a single collection
+- **[Collection Show](CollectionShowContract.md)**: Displaying detailed collection information
+- **[Collection List](CollectionListContract.md)**: Listing collections (optionally filtered by source)
+- **[Collection Update](CollectionUpdateContract.md)**: Updating collection configuration, sync state, and enricher attachments
 - **[Collection Wipe](CollectionWipeContract.md)**: Complete removal of collection data
-- **Collection List** (planned): Listing collections for a source
-- **Collection Update** (planned): Updating collection configuration and path mappings
 - **Collection Delete** (planned): Deleting collections with cascade cleanup
-- **Collection Enrichers** (planned): Managing metadata enrichers for collections
 
 ---
 

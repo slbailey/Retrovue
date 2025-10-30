@@ -16,7 +16,6 @@ from retrovue.infra.settings import settings
 from retrovue.infra.db import Base  # Base.metadata is target_metadata
 # Import models so autogenerate can see them
 from retrovue.domain.entities import *  # noqa
-from retrovue.schedule_manager.models import *  # noqa
 
 config = context.config
 

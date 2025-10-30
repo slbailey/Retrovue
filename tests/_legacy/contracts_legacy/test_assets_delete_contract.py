@@ -15,6 +15,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.assets import app

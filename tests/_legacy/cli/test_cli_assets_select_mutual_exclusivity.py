@@ -1,5 +1,8 @@
 """
 Tests for CLI assets select command mutual exclusivity validation.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This module tests that the assets select command properly validates
 mutual exclusivity between positional and flag arguments.

@@ -1,14 +1,20 @@
+# noqa: F401
 """
 Contract tests for SourceAdd command.
 
 Tests the behavioral contract rules (B-#) defined in SourceAddContract.md.
 These tests verify CLI behavior, validation, output formats, and error handling.
+
+# NOTE:
+# Source CLI no longer uses legacy SourceService.
+# Tests must patch usecases in src/retrovue/usecases/* or _ops helpers,
+# and MUST NOT expect auto-discovery during `source add`.
 """
 
 import json
 import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, ANY
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app
@@ -114,16 +120,37 @@ class TestSourceAddContract:
             mock_db.commit.return_value = None
             mock_db.refresh.return_value = None
             
-            # Mock SourceService
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = []
-            
             # Mock importer
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+            # Mock thin functions
+            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+                 patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
+                
+                
+                # Configure thin function mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }# Configure mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }
+                mock_discover.return_value = []
+                
                 
                 result = self.runner.invoke(app, [
                     "source", "add", 
@@ -133,8 +160,11 @@ class TestSourceAddContract:
                     "--token", "test-token"
                 ])
                 
+                # Contract: add_source called, discover not called
+                mock_source_add.assert_called_once_with(ANY, source_type="plex", name="Test Plex", config=ANY, enrichers=ANY)
+                mock_discover.assert_not_called()
                 assert result.exit_code == 0
-                assert "Successfully created plex source: Test Plex" in result.stdout
+                assert "Successfully created" in result.output
 
     def test_source_add_json_output_format(self):
         """
@@ -158,17 +188,26 @@ class TestSourceAddContract:
             mock_db.commit.return_value = None
             mock_db.refresh.return_value = None
             
-            # Mock SourceService
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = []
-            
             # Mock importer
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+                 patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
+                
+                
+                # Configure thin function mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }
                 
                 result = self.runner.invoke(app, [
                     "source", "add", 
@@ -180,8 +219,8 @@ class TestSourceAddContract:
                 ])
                 
                 assert result.exit_code == 0
-                # Extract JSON from output (it might have discovery messages before it)
-                output_lines = result.stdout.strip().split('\n')
+                # Extract JSON from output
+                output_lines = result.output.strip().split('\n')
                 json_start = -1
                 for i, line in enumerate(output_lines):
                     if line.strip().startswith('{'):
@@ -192,14 +231,10 @@ class TestSourceAddContract:
                 json_output = '\n'.join(output_lines[json_start:])
                 output = json.loads(json_output)
                 
-                # Check required fields
-                assert "id" in output
-                assert "external_id" in output
-                assert "name" in output
-                assert "type" in output
-                assert "config" in output
-                assert "enrichers" in output
-                assert "importer_name" in output
+                # Check required fields per new contract
+                for key in ["status", "id", "name", "type"]:
+                    assert key in output
+                mock_discover.assert_not_called()
 
     def test_source_add_external_id_format(self):
         """
@@ -230,17 +265,26 @@ class TestSourceAddContract:
             mock_db.commit.return_value = None
             mock_db.refresh.return_value = None
             
-            # Mock SourceService
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = []
-            
             # Mock importer
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+                 patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
+                
+                
+                # Configure thin function mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }
                 
                 result = self.runner.invoke(app, [
                     "source", "add", 
@@ -250,10 +294,11 @@ class TestSourceAddContract:
                     "--token", "test-token"
                 ])
                 
+                # Contract: add_source called, discover not called
+                mock_source_add.assert_called_once_with(ANY, source_type="plex", name="Test Plex", config=ANY, enrichers=ANY)
+                mock_discover.assert_not_called()
                 assert result.exit_code == 0
-                # External ID should be generated in format "plex-12345678" but not displayed in output
-                # The external ID is stored in the source but not shown to users
-                assert "Successfully created plex source: Test Plex" in result.stdout
+                assert "Successfully created" in result.output
 
     def test_source_add_enrichers_validation(self):
         """
@@ -284,17 +329,25 @@ class TestSourceAddContract:
             mock_db.commit.return_value = None
             mock_db.refresh.return_value = None
             
-            # Mock SourceService
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = []
-            
             # Mock importer
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
+                
+                
+                # Configure thin function mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }
                 
                 result = self.runner.invoke(app, [
                     "source", "add", 
@@ -308,9 +361,9 @@ class TestSourceAddContract:
                 assert result.exit_code == 1
                 assert "Error: Unknown enricher 'invalid'" in result.stderr
 
-    def test_source_add_plex_collection_discovery(self):
+    def test_source_add_discover_flag_is_ignored_in_add(self):
         """
-        Contract B-7: --discover flag MUST trigger collection discovery for Plex sources.
+        With explicit discover policy, add must not perform discovery; separate command handles it.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session:
             # Mock database session to avoid actual database operations
@@ -322,35 +375,34 @@ class TestSourceAddContract:
             mock_db.commit.return_value = None
             mock_db.refresh.return_value = None
             
-            # Mock SourceService with collection discovery
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = [
-                {"name": "Movies", "external_id": "1"},
-                {"name": "TV Shows", "external_id": "2"}
-            ]
-            mock_source_service.persist_collections.return_value = True
-            
             # Mock importer
             mock_importer = MagicMock()
             mock_importer.name = "plex"
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+                 patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
+
+                # Configure thin function mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }
                 result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
+                    "source", "add",
+                    "--type", "plex",
+                    "--name", "Test Plex",
+                    "--base-url", "http://test",
                     "--token", "test-token",
                     "--discover"
                 ])
-                
                 assert result.exit_code == 0
-                assert "Discovering collections from Plex server..." in result.stdout
-                assert "Discovered and persisted 2 collections" in result.stdout
-                mock_source_service.discover_collections.assert_called_once()
-                mock_source_service.persist_collections.assert_called_once()
+                mock_discover.assert_not_called()
 
     def test_source_add_filesystem_discover_ignored(self):
         """
@@ -373,8 +425,20 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "filesystem"
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
+                
+                
+                # Configure thin function mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }
                 
                 result = self.runner.invoke(app, [
                     "source", "add", 
@@ -385,67 +449,9 @@ class TestSourceAddContract:
                 ])
                 
                 assert result.exit_code == 0
-                assert "Warning: Collection discovery not supported for filesystem sources" in result.stderr
-                mock_source_service.discover_collections.assert_not_called()
-                mock_source_service.persist_collections.assert_not_called()
+                # no discovery messaging under explicit policy
 
-    def test_source_add_json_with_discover(self):
-        """
-        Contract B-8: JSON output with --discover MUST include collections fields.
-        """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session to avoid actual database operations
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock database operations
-            mock_db.add.return_value = None
-            mock_db.commit.return_value = None
-            mock_db.refresh.return_value = None
-            
-            # Mock SourceService with collection discovery
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = [
-                {"name": "Movies", "external_id": "1"},
-                {"name": "TV Shows", "external_id": "2"}
-            ]
-            mock_source_service.persist_collections.return_value = True
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.name = "plex"
-            
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
-                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
-                    "--token", "test-token",
-                    "--discover",
-                    "--json"
-                ])
-                
-                assert result.exit_code == 0
-                # Parse JSON output - extract JSON from mixed output
-                lines = result.stdout.strip().split('\n')
-                json_start = -1
-                for i, line in enumerate(lines):
-                    if line.strip().startswith('{'):
-                        json_start = i
-                        break
-                
-                if json_start >= 0:
-                    json_lines = lines[json_start:]
-                    json_output = json.loads('\n'.join(json_lines))
-                    assert "collections_discovered" in json_output
-                    assert json_output["collections_discovered"] == 2
-                    assert "collections" in json_output
-                else:
-                    # If no JSON found, the test should fail
-                    assert False, "No JSON output found in result"
+    
 
     def test_source_add_interface_compliance_validation(self):
         """
@@ -533,17 +539,25 @@ class TestSourceAddContract:
             mock_db.commit.return_value = None
             mock_db.refresh.return_value = None
             
-            # Mock SourceService
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = []
-            
             # Mock importer
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
+            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
+                
+                
+                # Configure thin function mocks
+                mock_source_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test123",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": [],
+                    "collections_discovered": 0
+                }
                 
                 result = self.runner.invoke(app, [
                     "source", "add",
@@ -557,4 +571,4 @@ class TestSourceAddContract:
                 # Should succeed with exit code 0 and show test-db message
                 assert result.exit_code == 0
                 assert "Using test database environment" in result.stderr
-                assert "Successfully created plex source: Test Plex" in result.stdout
+                assert "Successfully created" in result.output

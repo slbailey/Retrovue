@@ -8,6 +8,7 @@ for BroadcastChannel CRUD operations.
 from unittest.mock import patch
 
 import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session

@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC
 
 import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

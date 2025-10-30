@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ..domain.entities import PathMapping, Source, SourceCollection
+from ..domain.entities import PathMapping, Source, Collection
 
 
 @dataclass
@@ -64,7 +64,7 @@ class CollectionUpdateDTO:
 
 
 @dataclass
-class SourceCollectionDTO:
+class CollectionDTO:
     """
     Data Transfer Object for source collections.
     
@@ -161,7 +161,7 @@ class SourceService:
         Returns:
             List of dictionaries with source data and collection counts
         """
-        from ..domain.entities import Source, SourceCollection
+        from ..domain.entities import Source, Collection
         
         # Use a single transaction to ensure consistent read snapshot
         # First, get all sources in one query
@@ -177,10 +177,10 @@ class SourceService:
             
             # Get all collection counts for all sources in one query
             collection_counts = self.db.query(
-                SourceCollection.source_id,
-                SourceCollection.sync_enabled,
-                SourceCollection.ingestible
-            ).filter(SourceCollection.source_id.in_(source_ids)).all()
+                Collection.source_id,
+                Collection.sync_enabled,
+                Collection.ingestible
+            ).filter(Collection.source_id.in_(source_ids)).all()
             
             # Build counts dictionary for efficient lookup
             counts_by_source = {}
@@ -339,7 +339,7 @@ class SourceService:
         Delete a content source and all related data.
         
         This will cascade delete:
-        - SourceCollections (and their path mappings)
+        - Collections (and their path mappings)
         - PathMappings
         - Any other related data through foreign key constraints
         
@@ -372,9 +372,9 @@ class SourceService:
             return False
         
         # Count related data before deletion for logging
-        collections_count = self.db.query(SourceCollection).filter(SourceCollection.source_id == source.id).count()
+        collections_count = self.db.query(Collection).filter(Collection.source_id == source.id).count()
         path_mappings_count = 0
-        for collection in self.db.query(SourceCollection).filter(SourceCollection.source_id == source.id).all():
+        for collection in self.db.query(Collection).filter(Collection.source_id == source.id).all():
             path_mappings_count += self.db.query(PathMapping).filter(PathMapping.collection_id == collection.id).count()
         
         # Delete the source (cascade will handle related data)
@@ -395,7 +395,7 @@ class SourceService:
         
         return True
     
-    def list_enabled_collections(self, source_id: str) -> list[SourceCollectionDTO]:
+    def list_enabled_collections(self, source_id: str) -> list[CollectionDTO]:
         """
         List enabled collections for a specific source.
         
@@ -410,9 +410,9 @@ class SourceService:
         if not source:
             return []
         
-        collections = self.db.query(SourceCollection).filter(
-            SourceCollection.source_id == source.id,
-            SourceCollection.sync_enabled
+        collections = self.db.query(Collection).filter(
+            Collection.source_id == source.id,
+            Collection.sync_enabled
         ).all()
         
         result = []
@@ -424,7 +424,7 @@ class SourceService:
             
             mapping_pairs = [(m.plex_path, m.local_path) for m in mappings]
             
-            result.append(SourceCollectionDTO(
+            result.append(CollectionDTO(
                 external_id=collection.external_id,
                 name=collection.name,
                 sync_enabled=collection.sync_enabled,
@@ -435,7 +435,7 @@ class SourceService:
         
         return result
     
-    def list_all_collections(self, source_id: str | None = None) -> list[SourceCollectionDTO]:
+    def list_all_collections(self, source_id: str | None = None) -> list[CollectionDTO]:
         """
         List all collections, optionally filtered by source.
         
@@ -445,14 +445,14 @@ class SourceService:
         Returns:
             List of all collections
         """
-        query = self.db.query(SourceCollection)
+        query = self.db.query(Collection)
         
         if source_id:
             # Find source by external ID, name, or UUID
             source = self.get_source_by_id(source_id)
             if not source:
                 return []
-            query = query.filter(SourceCollection.source_id == source.id)
+            query = query.filter(Collection.source_id == source.id)
         
         collections = query.all()
         
@@ -465,7 +465,7 @@ class SourceService:
             
             mapping_pairs = [(m.plex_path, m.local_path) for m in mappings]
             
-            result.append(SourceCollectionDTO(
+            result.append(CollectionDTO(
                 external_id=collection.external_id,
                 name=collection.name,
                 sync_enabled=collection.sync_enabled,
@@ -490,9 +490,9 @@ class SourceService:
         """
         try:
             # Find the collection by external_id across all sources of this type
-            collection = self.db.query(SourceCollection).join(Source).filter(
+            collection = self.db.query(Collection).join(Source).filter(
                 Source.type == source_type,
-                SourceCollection.external_id == external_id
+                Collection.external_id == external_id
             ).first()
             
             if not collection:
@@ -507,7 +507,7 @@ class SourceService:
             print(f"Error updating collection enabled status: {e}")
             return False
     
-    def get_collection(self, source_id: str, external_id: str) -> SourceCollectionDTO | None:
+    def get_collection(self, source_id: str, external_id: str) -> CollectionDTO | None:
         """
         Get a specific collection by source and external ID.
         
@@ -584,9 +584,9 @@ class SourceService:
             if not source:
                 return False
                 
-            collection = self.db.query(SourceCollection).filter(
-                SourceCollection.source_id == source.id,
-                SourceCollection.external_id == external_id
+            collection = self.db.query(Collection).filter(
+                Collection.source_id == source.id,
+                Collection.external_id == external_id
             ).first()
             if not collection:
                 return False
@@ -697,7 +697,7 @@ class SourceService:
             config=source.config
         )
     
-    def discover_collections(self, source_id: str) -> list[SourceCollectionDTO]:
+    def discover_collections(self, source_id: str) -> list[CollectionDTO]:
         """
         Discover collections from a source without persisting.
         
@@ -744,7 +744,7 @@ class SourceService:
             # Convert to DTOs
             collections = []
             for lib in libraries:
-                collections.append(SourceCollectionDTO(
+                collections.append(CollectionDTO(
                     external_id=lib.get("key", ""),
                     name=lib.get("title", ""),
                     sync_enabled=False,  # Newly discovered collections start disabled
@@ -761,7 +761,7 @@ class SourceService:
             print(f"Error in discover_collections: {e}")
             return []
     
-    def persist_collections(self, source_id: str, collections: list[SourceCollectionDTO]) -> bool:
+    def persist_collections(self, source_id: str, collections: list[CollectionDTO]) -> bool:
         """
         Persist discovered collections to the database.
         
@@ -783,9 +783,9 @@ class SourceService:
             # Persist each collection
             for collection_dto in collections:
                 # Check if collection already exists
-                existing = self.db.query(SourceCollection).filter(
-                    SourceCollection.source_id == source.id,
-                    SourceCollection.external_id == collection_dto.external_id
+                existing = self.db.query(Collection).filter(
+                    Collection.source_id == source.id,
+                    Collection.external_id == collection_dto.external_id
                 ).first()
                 
                 if existing:
@@ -795,7 +795,7 @@ class SourceService:
                     collection = existing
                 else:
                     # Create new collection
-                    collection = SourceCollection(
+                    collection = Collection(
                         source_id=source.id,
                         external_id=collection_dto.external_id,
                         name=collection_dto.name,
@@ -857,17 +857,17 @@ class SourceService:
             try:
                 if len(collection_id) == 36 and collection_id.count('-') == 4:
                     collection_uuid = uuid.UUID(collection_id)
-                    collection = self.db.query(SourceCollection).filter(SourceCollection.id == collection_uuid).first()
+                    collection = self.db.query(Collection).filter(Collection.id == collection_uuid).first()
             except (ValueError, TypeError):
                 pass
             
             # If not found by UUID, try by external_id
             if not collection:
-                collection = self.db.query(SourceCollection).filter(SourceCollection.external_id == collection_id).first()
+                collection = self.db.query(Collection).filter(Collection.external_id == collection_id).first()
             
             # If not found by external_id, try by name (case-insensitive)
             if not collection:
-                name_matches = self.db.query(SourceCollection).filter(SourceCollection.name.ilike(collection_id)).all()
+                name_matches = self.db.query(Collection).filter(Collection.name.ilike(collection_id)).all()
                 if len(name_matches) == 1:
                     collection = name_matches[0]
                 elif len(name_matches) > 1:
@@ -906,14 +906,14 @@ class SourceService:
             
             for update in updates:
                 # Find or create the collection
-                collection = self.db.query(SourceCollection).filter(
-                    SourceCollection.source_id == source.id,
-                    SourceCollection.external_id == update.external_id
+                collection = self.db.query(Collection).filter(
+                    Collection.source_id == source.id,
+                    Collection.external_id == update.external_id
                 ).first()
                 
                 if not collection:
                     # Create new collection
-                    collection = SourceCollection(
+                    collection = Collection(
                         source_id=source.id,
                         external_id=update.external_id,
                         name=update.external_id,  # Use external_id as name if not provided

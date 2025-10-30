@@ -1,5 +1,8 @@
 """
 Tests for CLI assets series command JSON output when listing all series.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This module tests the JSON format when no specific series is requested,
 ensuring it returns {"series": [...]} format.

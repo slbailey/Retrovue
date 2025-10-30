@@ -1,5 +1,8 @@
 """
 End-to-end pipeline tests for the filesystem importer.
+import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+
 
 This module tests the complete pipeline from file discovery through
 confidence scoring and asset registration.

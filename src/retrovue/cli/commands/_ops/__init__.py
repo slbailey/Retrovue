@@ -25,6 +25,20 @@ from .source_delete_ops import (
     resolve_source_selector,
     source_is_protected_for_prod_delete,
 )
+from .collection_ingest_service import (
+    CollectionIngestResult,
+    CollectionIngestService,
+    IngestStats,
+    resolve_collection_selector,
+    validate_ingestible_with_importer,
+    validate_prerequisites,
+)
+from .source_ingest_service import (
+    SourceIngestResult,
+    SourceIngestService,
+    CollectionIngestResult as SourceCollectionIngestResult,
+    resolve_source_selector as resolve_source_selector_for_ingest,
+)
 
 __all__ = [
     # Confirmation module exports
@@ -41,4 +55,16 @@ __all__ = [
     "perform_source_deletions",
     "resolve_source_selector",
     "source_is_protected_for_prod_delete",
+    # Collection ingest service exports
+    "CollectionIngestResult",
+    "CollectionIngestService",
+    "IngestStats",
+    "resolve_collection_selector",
+    "validate_ingestible_with_importer",
+    "validate_prerequisites",
+    # Source ingest service exports
+    "SourceIngestResult",
+    "SourceIngestService",
+    "SourceCollectionIngestResult",
+    "resolve_source_selector_for_ingest",
 ]

@@ -6,7 +6,7 @@ This adapter isolates the *existing* content library lookup functionality.
 
 from __future__ import annotations
 
-from ..content_manager.library_service import LibraryService
+from src_legacy.retrovue.content_manager.library_service import LibraryService
 from ..domain.entities import EntityType, ProviderRef
 from ..infra.uow import session
 

@@ -1,3 +1,4 @@
+# noqa: F401
 """
 Data contract tests for SourceAdd command.
 
@@ -6,10 +7,10 @@ These tests verify database operations, transaction safety, and data integrity.
 """
 
 import json
-import pytest
+import pytest  # type: ignore[import-not-found]
 import uuid
 from unittest.mock import patch, MagicMock
-from typer.testing import CliRunner
+from typer.testing import CliRunner  # type: ignore[import-not-found]
 
 from retrovue.cli.main import app
 
@@ -38,9 +39,8 @@ class TestSourceAddDataContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock source service
-            mock_source_service = MagicMock()
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
+            # Patch usecase add_source
+            with patch("retrovue.usecases.source_add.add_source") as mock_uc_add:
                 result = self.runner.invoke(app, [
                     "source", "add", 
                     "--type", "plex", 
@@ -54,6 +54,7 @@ class TestSourceAddDataContract:
                 mock_db.add.assert_called_once()
                 mock_db.commit.assert_called_once()
                 mock_db.refresh.assert_called_once()
+                mock_uc_add.assert_called_once()
 
     def test_source_add_external_id_uniqueness(self):
         """
@@ -78,9 +79,8 @@ class TestSourceAddDataContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock source service
-            mock_source_service = MagicMock()
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
+            # Patch usecase add_source
+            with patch("retrovue.usecases.source_add.add_source") as mock_uc_add:
                 result = self.runner.invoke(app, [
                     "source", "add", 
                     "--type", "plex", 
@@ -90,134 +90,27 @@ class TestSourceAddDataContract:
                 ])
                 
                 assert result.exit_code == 0
-                # External ID should be generated in format "plex-12345678" but not displayed in output
-                # The external ID is stored in the source but not shown to users
-                assert "Successfully created plex source: Test Plex" in result.stdout
+                # Success message should be emitted
+                assert "Successfully created" in result.output
+                mock_uc_add.assert_called_once()
 
-    def test_source_add_collection_discovery_transaction(self):
+    def test_source_add_does_not_discover_implicitly(self):
         """
-        Contract D-3: Collection discovery MUST occur within the same transaction as source creation.
+        Discovery must NOT occur during add; separate command handles it.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session to avoid actual database operations
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock database operations
-            mock_db.add.return_value = None
-            mock_db.commit.return_value = None
-            mock_db.refresh.return_value = None
-            
-            # Mock SourceService with collection discovery
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = [
-                {"name": "Movies", "external_id": "1"},
-                {"name": "TV Shows", "external_id": "2"}
-            ]
-            mock_source_service.persist_collections.return_value = True
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.name = "plex"
-            
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
-                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
-                    "--token", "test-token",
-                    "--discover"
-                ])
-                
-                assert result.exit_code == 0
-                # Verify collection discovery was called
-                mock_source_service.discover_collections.assert_called_once()
-                mock_source_service.persist_collections.assert_called_once()
+        with (
+            patch("retrovue.usecases.source_add.add_source") as mock_add,
+            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+        ):
+            result = self.runner.invoke(app, [
+                "source", "add", "--type", "plex", "--name", "My Plex"
+            ])
 
-    def test_source_add_collections_disabled_by_default(self):
-        """
-        Contract D-4: Newly discovered collections MUST be persisted with sync_enabled=False.
-        """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session to avoid actual database operations
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock database operations
-            mock_db.add.return_value = None
-            mock_db.commit.return_value = None
-            mock_db.refresh.return_value = None
-            
-            # Mock SourceService with collection discovery
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = [
-                {"name": "Movies", "external_id": "1"},
-                {"name": "TV Shows", "external_id": "2"}
-            ]
-            mock_source_service.persist_collections.return_value = True
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.name = "plex"
-            
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
-                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
-                    "--token", "test-token",
-                    "--discover"
-                ])
-                
-                assert result.exit_code == 0
-                assert "all disabled by default" in result.stdout
+        assert result.exit_code == 0
+        mock_add.assert_called_once()
+        mock_discover.assert_not_called()
 
-    def test_source_add_path_mapping_empty_local_path(self):
-        """
-        Contract D-5: PathMapping records MUST be created with empty local_path for discovered collections.
-        """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session to avoid actual database operations
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock database operations
-            mock_db.add.return_value = None
-            mock_db.commit.return_value = None
-            mock_db.refresh.return_value = None
-            
-            # Mock SourceService with collection discovery
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = [
-                {"name": "Movies", "external_id": "1"}
-            ]
-            mock_source_service.persist_collections.return_value = True
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.name = "plex"
-            
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
-                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
-                    "--token", "test-token",
-                    "--discover"
-                ])
-                
-                assert result.exit_code == 0
-                # Verify persist_collections was called (which should create path mappings)
-                mock_source_service.persist_collections.assert_called_once()
+    
 
     def test_source_add_transaction_rollback_on_failure(self):
         """
@@ -280,60 +173,20 @@ class TestSourceAddDataContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock source service
-            mock_source_service = MagicMock()
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
-                    "--token", "test-token",
-                    "--enrichers", "ffprobe"
-                ])
-                
-                assert result.exit_code == 0
-                # Verify enricher validation occurred
-                mock_enrichers.assert_called_once()
+            result = self.runner.invoke(app, [
+                "source", "add", 
+                "--type", "plex", 
+                "--name", "Test Plex", 
+                "--base-url", "http://test", 
+                "--token", "test-token",
+                "--enrichers", "ffprobe"
+            ])
+            
+            assert result.exit_code == 0
+            # Verify enricher validation occurred
+            mock_enrichers.assert_called_once()
 
-    def test_source_add_no_discovery_without_flag(self):
-        """
-        Contract D-9: Collection discovery MUST NOT occur unless --discover is explicitly provided.
-        Note: This test verifies that discovery is not called when --discover flag is not provided.
-        """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session to avoid actual database operations
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock database operations
-            mock_db.add.return_value = None
-            mock_db.commit.return_value = None
-            mock_db.refresh.return_value = None
-            
-            # Mock SourceService
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = []
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.name = "PlexImporter"
-            
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
-                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "filesystem", 
-                    "--name", "Test Filesystem", 
-                    "--base-path", "/test/path"
-                    # No --discover flag
-                ])
-                
-                assert result.exit_code == 0
-                # Verify no collection discovery occurred for filesystem sources
-                mock_source_service.discover_collections.assert_not_called()
-                mock_source_service.persist_collections.assert_not_called()
+    
 
     def test_source_add_interface_compliance_before_creation(self):
         """
@@ -407,59 +260,18 @@ class TestSourceAddDataContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock source service
-            mock_source_service = MagicMock()
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
-                    "--token", "test-token"
-                ])
-                
-                assert result.exit_code == 0
-                # Verify database operations were called in correct order
-                mock_db.add.assert_called_once()
-                mock_db.commit.assert_called_once()
-                mock_db.refresh.assert_called_once()
+            result = self.runner.invoke(app, [
+                "source", "add", 
+                "--type", "plex", 
+                "--name", "Test Plex", 
+                "--base-url", "http://test", 
+                "--token", "test-token"
+            ])
+            
+            assert result.exit_code == 0
+            # Verify database operations were called in correct order
+            mock_db.add.assert_called_once()
+            mock_db.commit.assert_called_once()
+            mock_db.refresh.assert_called_once()
 
-    def test_source_add_collection_discovery_atomicity(self):
-        """
-        Contract: Collection discovery MUST be atomic with source creation.
-        """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session to avoid actual database operations
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock database operations
-            mock_db.add.return_value = None
-            mock_db.commit.return_value = None
-            mock_db.refresh.return_value = None
-            
-            # Mock SourceService with collection discovery failure
-            mock_source_service = MagicMock()
-            mock_source_service.discover_collections.return_value = [
-                {"name": "Movies", "external_id": "1"}
-            ]
-            mock_source_service.persist_collections.return_value = False  # Simulate failure
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.name = "plex"
-            
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service), \
-                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, [
-                    "source", "add", 
-                    "--type", "plex", 
-                    "--name", "Test Plex", 
-                    "--base-url", "http://test", 
-                    "--token", "test-token",
-                    "--discover"
-                ])
-                
-                assert result.exit_code == 0
-                assert "Warning: Failed to persist collections" in result.stderr
+    

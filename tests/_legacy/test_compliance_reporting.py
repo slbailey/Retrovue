@@ -7,6 +7,7 @@ and as-run log generation through UUID-based correlation.
 from datetime import UTC, datetime
 
 import pytest
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
