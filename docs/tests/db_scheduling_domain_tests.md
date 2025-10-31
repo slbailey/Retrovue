@@ -128,7 +128,6 @@ def cleanup_test_data(session):
     session.query(BroadcastTemplateBlock).delete()
 
     # Delete parent records
-    session.query(CatalogAsset).delete()
     session.query(BroadcastTemplate).delete()
     session.query(BroadcastChannel).delete()
 

@@ -35,6 +35,7 @@ from typing import Any
 
 class ProducerMode(Enum):
     """Producer operational modes"""
+
     NORMAL = "normal"
     EMERGENCY = "emergency"
     GUIDE = "guide"
@@ -42,6 +43,7 @@ class ProducerMode(Enum):
 
 class ProducerStatus(Enum):
     """Producer operational status"""
+
     STOPPED = "stopped"
     STARTING = "starting"
     RUNNING = "running"
@@ -52,6 +54,7 @@ class ProducerStatus(Enum):
 @dataclass
 class ProducerState:
     """Current state of a producer"""
+
     producer_id: str
     channel_id: str
     mode: ProducerMode
@@ -64,6 +67,7 @@ class ProducerState:
 @dataclass
 class ContentSegment:
     """Content segment to play"""
+
     asset_id: str
     start_time: datetime
     end_time: datetime

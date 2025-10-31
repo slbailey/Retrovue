@@ -6,7 +6,7 @@ Verifies filtering conditions and return shape for assets needing attention.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -20,7 +20,7 @@ def _asset(**kwargs):
         uri="/media/a.mp4",
         state="enriching",
         approved_for_broadcast=False,
-        discovered_at=datetime(2025, 10, 30, 12, 0, tzinfo=timezone.utc),
+        discovered_at=datetime(2025, 10, 30, 12, 0, tzinfo=UTC),
         is_deleted=False,
     )
     defaults.update(kwargs)

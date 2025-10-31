@@ -44,7 +44,7 @@ class TestCollectionIngestSafetyContract:
             # DB behavior: no existing assets
             db = MagicMock()
             mock_session.return_value.__enter__.return_value = db
-            db.scalar_one_or_none.return_value = None
+            db.scalar.return_value = None
 
             result = self.runner.invoke(
                 app,
@@ -92,7 +92,7 @@ class TestCollectionIngestSafetyContract:
             db = MagicMock()
             mock_session.return_value.__enter__.return_value = db
             # Return an existing asset for each lookup
-            db.scalar_one_or_none.return_value = existing
+            db.scalar.return_value = existing
 
             result = self.runner.invoke(
                 app,

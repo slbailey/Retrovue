@@ -27,6 +27,7 @@ from typing import Any, Optional
 
 class DayOfWeek(Enum):
     """Days of the week for rule application"""
+
     MONDAY = 0
     TUESDAY = 1
     WEDNESDAY = 2
@@ -38,6 +39,7 @@ class DayOfWeek(Enum):
 
 class ContentType(Enum):
     """Types of content for rule application"""
+
     EPISODE = "episode"
     MOVIE = "movie"
     COMMERCIAL = "commercial"
@@ -49,6 +51,7 @@ class ContentType(Enum):
 
 class ToneRating(Enum):
     """Content tone ratings for rule application"""
+
     G = "G"  # General audience
     PG = "PG"  # Parental guidance
     PG13 = "PG-13"  # Parents strongly cautioned
@@ -64,17 +67,18 @@ class ToneRating(Enum):
 @dataclass
 class TimeWindow:
     """Time window for rule application"""
+
     start_time: time
     end_time: time
     days_of_week: list[DayOfWeek]
-    
+
     def applies_to(self, timestamp: datetime) -> bool:
         """
         Check if this time window applies to a given timestamp.
-        
+
         Args:
             timestamp: The timestamp to check
-            
+
         Returns:
             True if the rule applies to this time
         """
@@ -90,17 +94,17 @@ class TimeWindow:
 class BlockRule:
     """
     Block rule definition for content restrictions.
-    
+
     Defines time-based content restrictions that apply to specific channels
     and time windows. These rules control what content can air when.
-    
+
     Key Properties:
     - time_window: When the rule applies
     - content_type: What type of content is restricted/allowed
     - tone_rating: Content rating restrictions
     - rotation_rule: How often content can repeat
     """
-    
+
     id: str
     channel_id: str
     name: str
@@ -108,21 +112,26 @@ class BlockRule:
     time_window: TimeWindow
     content_type: ContentType | None = None
     tone_rating: ToneRating | None = None
-    rotation_rule: Optional['RotationRule'] = None
+    rotation_rule: Optional["RotationRule"] = None
     enabled: bool = True
     priority: int = 0
-    
-    def applies_to(self, channel_id: str, timestamp: datetime, 
-                  content_type: ContentType, tone_rating: ToneRating) -> bool:
+
+    def applies_to(
+        self,
+        channel_id: str,
+        timestamp: datetime,
+        content_type: ContentType,
+        tone_rating: ToneRating,
+    ) -> bool:
         """
         Check if this block rule applies to a given situation.
-        
+
         Args:
             channel_id: Channel to check
             timestamp: When the content will air
             content_type: Type of content
             tone_rating: Rating of content
-            
+
         Returns:
             True if the rule applies to this situation
         """
@@ -133,14 +142,14 @@ class BlockRule:
         # - Check if tone rating matches
         # - Return True/False
         pass
-    
+
     def allows_content(self, content: dict[str, Any]) -> bool:
         """
         Check if this rule allows the given content.
-        
+
         Args:
             content: Content to check (with type, rating, etc.)
-            
+
         Returns:
             True if content is allowed by this rule
         """
@@ -156,11 +165,11 @@ class BlockRule:
 class RotationRule:
     """
     Rotation rule for content repetition and spacing.
-    
+
     Controls how often content can repeat and ensures proper spacing
     between airings of the same content.
     """
-    
+
     id: str
     name: str
     description: str
@@ -169,17 +178,18 @@ class RotationRule:
     max_airings_per_week: int
     content_types: list[ContentType]
     enabled: bool = True
-    
-    def can_air_content(self, content_id: str, timestamp: datetime, 
-                       recent_airings: list[datetime]) -> bool:
+
+    def can_air_content(
+        self, content_id: str, timestamp: datetime, recent_airings: list[datetime]
+    ) -> bool:
         """
         Check if content can air at the given time based on rotation rules.
-        
+
         Args:
             content_id: ID of content to check
             timestamp: When content would air
             recent_airings: List of recent airing times
-            
+
         Returns:
             True if content can air based on rotation rules
         """
@@ -195,11 +205,11 @@ class RotationRule:
 class BlockPolicy:
     """
     Block policy that combines multiple rules with priorities.
-    
+
     A policy is a collection of block rules that work together to
     define content restrictions for a channel or time period.
     """
-    
+
     id: str
     name: str
     description: str
@@ -207,15 +217,15 @@ class BlockPolicy:
     rules: list[BlockRule]
     priority: int = 0
     enabled: bool = True
-    
+
     def applies_to(self, channel_id: str, timestamp: datetime) -> bool:
         """
         Check if this policy applies to a given channel and time.
-        
+
         Args:
             channel_id: Channel to check
             timestamp: When to check
-            
+
         Returns:
             True if policy applies to this situation
         """
@@ -224,15 +234,15 @@ class BlockPolicy:
         # - Check if any rules apply to timestamp
         # - Return True/False
         pass
-    
+
     def get_applicable_rules(self, channel_id: str, timestamp: datetime) -> list[BlockRule]:
         """
         Get all rules that apply to a given situation.
-        
+
         Args:
             channel_id: Channel to check
             timestamp: When to check
-            
+
         Returns:
             List of applicable rules, ordered by priority
         """
@@ -241,17 +251,18 @@ class BlockPolicy:
         # - Sort by priority (highest first)
         # - Return ordered list
         pass
-    
-    def evaluate_content(self, content: dict[str, Any], 
-                        channel_id: str, timestamp: datetime) -> bool:
+
+    def evaluate_content(
+        self, content: dict[str, Any], channel_id: str, timestamp: datetime
+    ) -> bool:
         """
         Evaluate if content passes all applicable rules in this policy.
-        
+
         Args:
             content: Content to evaluate
             channel_id: Channel content will air on
             timestamp: When content will air
-            
+
         Returns:
             True if content passes all applicable rules
         """

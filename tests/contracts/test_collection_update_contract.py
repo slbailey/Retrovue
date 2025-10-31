@@ -9,7 +9,10 @@ def test_collection_update_supports_test_db_uses_test_sessionmaker():
     runner = CliRunner()
 
     with patch("retrovue.cli.commands.collection.get_sessionmaker") as mock_get_sm, \
-         patch("retrovue.cli.commands.collection.session") as mock_session:
+         patch("retrovue.cli.commands.collection.session") as mock_session, \
+         patch("os.path.exists", return_value=True), \
+         patch("os.path.isdir", return_value=True), \
+         patch("os.access", return_value=True):
         # Mock test sessionmaker
         TestSessionMaker = MagicMock()
         test_db = MagicMock()
@@ -41,15 +44,15 @@ def test_collection_update_supports_test_db_uses_test_sessionmaker():
                     "--local-path",
                     "Z:/Movies",
                     "--sync-enabled",
-                    "true",
                     "--json",
                     "--test-db",
                 ],
             )
 
-        assert result.exit_code == 0
-        mock_get_sm.assert_called_once_with(for_test=True)
-        mock_session.assert_not_called()
+    assert result.exit_code == 0
+    mock_get_sm.assert_called_once_with(for_test=True)
+    mock_session.assert_not_called()
 
-        data = json.loads(result.stdout)
-        assert data["status"] == "updated"
+    data = json.loads(result.stdout)
+    assert data["status"] == "updated"
+

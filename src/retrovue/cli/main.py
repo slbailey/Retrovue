@@ -12,17 +12,10 @@ import typer
 # Ensure registry is populated
 import retrovue.adapters.importers  # noqa: F401
 
-from .commands import (
-    collection,
-    enricher,
-    producer,
-    asset as asset_cmd,
-    source,
-)
+from .commands import asset as asset_cmd
+from .commands import collection, enricher, producer, source
 
-app = typer.Typer(
-    help="RetroVue operator CLI"
-)
+app = typer.Typer(help="RetroVue operator CLI")
 
 # Add command groups
 app.add_typer(source.app, name="source", help="Source and collection management operations")
@@ -32,7 +25,6 @@ app.add_typer(enricher.app, name="enricher", help="Enricher management operation
 app.add_typer(producer.app, name="producer", help="Producer management operations")
 app.add_typer(collection.app, name="collection", help="Collection management operations")
 app.add_typer(asset_cmd.app, name="asset", help="Asset inspection and review operations")
-
 
 
 @app.callback()

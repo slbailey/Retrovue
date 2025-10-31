@@ -18,16 +18,14 @@ from .source_service import (
 __all__ = [
     # Services
     "LibraryService",
-    "SourceService", 
+    "SourceService",
     "IngestOrchestrator",
     "PathResolverService",
-    
     # DTOs
     "SourceCollectionDTO",
-    "ContentSourceDTO", 
+    "ContentSourceDTO",
     "CollectionUpdateDTO",
     "IngestReport",
-    
     # Exceptions
     "PathResolutionError",
 ]

@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app
@@ -80,5 +79,59 @@ class TestAssetAttentionContract:
         assert payload.get("status") == "ok"
         assert payload.get("total") == len(rows)
         assert payload.get("assets") == rows
+
+    def test_collection_filter(self):
+        """
+        Contract: The command MUST support filtering by collection UUID via --collection.
+        """
+        rows = [
+            {
+                "uuid": "11111111-1111-1111-1111-111111111111",
+                "collection_uuid": "22222222-2222-2222-2222-222222222222",
+                "uri": "/media/a.mp4",
+                "state": "enriching",
+                "approved_for_broadcast": False,
+                "discovered_at": "2025-10-30T12:00:00Z",
+            }
+        ]
+        collection_uuid = "22222222-2222-2222-2222-222222222222"
+        with patch(
+            "retrovue.usecases.asset_attention.list_assets_needing_attention",
+            return_value=rows,
+        ) as list_fn:
+            result = self.runner.invoke(app, ["asset", "attention", "--collection", collection_uuid])
+
+        assert result.exit_code == 0
+        list_fn.assert_called_once()
+        # Verify collection_uuid was passed to the usecase
+        call_kwargs = list_fn.call_args[1]
+        assert call_kwargs.get("collection_uuid") == collection_uuid
+
+    def test_limit_parameter(self):
+        """
+        Contract: The command MUST support limiting results via --limit.
+        """
+        rows = [
+            {
+                "uuid": f"11111111-1111-1111-1111-11111111111{i}",
+                "collection_uuid": "22222222-2222-2222-2222-222222222222",
+                "uri": f"/media/a{i}.mp4",
+                "state": "enriching",
+                "approved_for_broadcast": False,
+                "discovered_at": "2025-10-30T12:00:00Z",
+            }
+            for i in range(3)
+        ]
+        with patch(
+            "retrovue.usecases.asset_attention.list_assets_needing_attention",
+            return_value=rows,
+        ) as list_fn:
+            result = self.runner.invoke(app, ["asset", "attention", "--limit", "50"])
+
+        assert result.exit_code == 0
+        list_fn.assert_called_once()
+        # Verify limit was passed to the usecase
+        call_kwargs = list_fn.call_args[1]
+        assert call_kwargs.get("limit") == 50
 
 

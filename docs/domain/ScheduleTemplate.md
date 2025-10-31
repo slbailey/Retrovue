@@ -31,7 +31,7 @@ BroadcastTemplate has a one-to-many relationship with BroadcastTemplateBlock, wh
 
 ScheduleService consumes BroadcastTemplate records through BroadcastScheduleDay assignments. Templates provide the programming structure that ScheduleService uses to generate playout schedules.
 
-Templates define the "what" of programming through their associated BroadcastTemplateBlock entries, which contain content selection rules. ScheduleService applies these rules to select appropriate content from the CatalogAsset catalog.
+Templates define the "what" of programming through their associated BroadcastTemplateBlock entries, which contain content selection rules. ScheduleService applies these rules to select appropriate content from the Asset catalog.
 
 Templates are assigned to channels for specific broadcast dates through BroadcastScheduleDay, creating the link between programming structure and actual scheduling.
 

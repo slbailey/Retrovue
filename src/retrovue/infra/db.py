@@ -16,8 +16,10 @@ NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s",
 }
 
+
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
 
 engine = create_engine(
     settings.database_url,
@@ -27,13 +29,17 @@ engine = create_engine(
     pool_size=settings.pool_size,
     max_overflow=settings.max_overflow,
     pool_timeout=settings.pool_timeout,
-    connect_args={"connect_timeout": settings.connect_timeout} if "postgresql" in settings.database_url else {},
+    connect_args={"connect_timeout": settings.connect_timeout}
+    if "postgresql" in settings.database_url
+    else {},
 )
+
 
 @event.listens_for(engine, "connect")
 def _set_search_path(dbapi_conn, _):
     with dbapi_conn.cursor() as cur:
         cur.execute("SET search_path TO public")
+
 
 SessionLocal = sessionmaker(
     bind=engine,

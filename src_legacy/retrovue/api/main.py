@@ -27,7 +27,7 @@ from .web import pages
 app = FastAPI(
     title="Retrovue Admin",
     description="Admin interface for Retrovue content management",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add CORS middleware with configurable origins
@@ -40,20 +40,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Add request ID middleware
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next: Callable) -> Response:
     """Middleware to generate request IDs and log request/response details."""
     # Generate unique request ID
     request_id = str(uuid.uuid4())
-    
+
     # Store request ID in request state for use in endpoints
     request.state.request_id = request_id
-    
+
     # Get logger with proper configuration
     from ..infra.logging import get_logger
+
     logger = get_logger("request")
-    
+
     # Log request start
     start_time = time.time()
     logger = logger.bind(request_id=request_id)
@@ -64,14 +66,14 @@ async def request_id_middleware(request: Request, call_next: Callable) -> Respon
         query_params=str(request.query_params) if request.query_params else None,
         client_ip=request.client.host if request.client else None,
     )
-    
+
     # Process request
     try:
         response = await call_next(request)
-        
+
         # Calculate processing time
         process_time = time.time() - start_time
-        
+
         # Log request completion
         logger.info(
             "request_completed",
@@ -80,16 +82,16 @@ async def request_id_middleware(request: Request, call_next: Callable) -> Respon
             status_code=response.status_code,
             process_time_ms=round(process_time * 1000, 2),
         )
-        
+
         # Add request ID to response headers
         response.headers["X-Request-ID"] = request_id
-        
+
         return response
-        
+
     except Exception as e:
         # Calculate processing time
         process_time = time.time() - start_time
-        
+
         # Log request error
         logger.error(
             "request_failed",
@@ -98,9 +100,10 @@ async def request_id_middleware(request: Request, call_next: Callable) -> Respon
             error=str(e),
             process_time_ms=round(process_time * 1000, 2),
         )
-        
+
         # Re-raise the exception
         raise
+
 
 # Mount static files (if directory exists)
 if os.path.exists("static"):
@@ -127,6 +130,7 @@ app.include_router(pages.router)
 async def health_redirect():
     """Legacy health endpoint - redirects to new healthz endpoint."""
     from fastapi.responses import RedirectResponse
+
     return RedirectResponse(url="/api/healthz")
 
 
@@ -134,9 +138,11 @@ async def health_redirect():
 async def root():
     """Root endpoint redirects to dashboard."""
     from fastapi.responses import RedirectResponse
+
     return RedirectResponse(url="/dashboard")
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

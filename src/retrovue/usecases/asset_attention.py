@@ -47,9 +47,3 @@ def list_assets_needing_attention(
             }
         )
     return result
-
-
-
-
-
-

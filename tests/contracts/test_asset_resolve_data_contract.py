@@ -8,7 +8,6 @@ list_assets_needing_attention after resolution.
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner

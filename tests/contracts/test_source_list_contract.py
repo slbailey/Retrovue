@@ -8,7 +8,6 @@ These tests verify CLI behavior, filtering, output formats, and read-only operat
 import json
 import pytest
 import uuid
-from datetime import datetime
 from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
@@ -34,69 +33,60 @@ class TestSourceListContract:
         """
         Contract B-1: The command MUST return all known sources unless filtered.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock sources query
-            from datetime import datetime
-            mock_source1 = MagicMock()
-            mock_source1.id = "4b2b05e7-d7d2-414a-a587-3f5df9b53f44"
-            mock_source1.name = "My Plex Server"
-            mock_source1.kind = "plex"
-            mock_source1.created_at = datetime.fromisoformat("2024-01-15T10:30:00")
-            mock_source1.updated_at = datetime.fromisoformat("2024-01-20T14:45:00")
-            
-            mock_source2 = MagicMock()
-            mock_source2.id = "8c3d12f4-e9a1-4b2c-d6e7-1f8a9b0c2d3e"
-            mock_source2.name = "Local Media Library"
-            mock_source2.kind = "filesystem"
-            mock_source2.created_at = datetime.fromisoformat("2024-01-10T09:15:00")
-            mock_source2.updated_at = datetime.fromisoformat("2024-01-18T16:20:00")
-            
-            mock_db.query.return_value.all.return_value = [mock_source1, mock_source2]
-            
-            # Mock collection counts
-            mock_db.query.return_value.filter.return_value.count.return_value = 2  # enabled_collections
-            mock_db.query.return_value.filter.return_value.count.return_value = 1  # ingestible_collections
-            
+        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+            mock_source_list.return_value = [
+                {
+                    "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
+                    "name": "My Plex Server",
+                    "type": "plex",
+                    "enabled_collections": 2,
+                    "ingestible_collections": 1,
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
+                },
+                {
+                    "id": "8c3d12f4-e9a1-4b2c-d6e7-1f8a9b0c2d3e",
+                    "name": "Local Media Library",
+                    "type": "filesystem",
+                    "enabled_collections": 0,
+                    "ingestible_collections": 0,
+                    "created_at": "2024-01-10T09:15:00+00:00",
+                    "updated_at": "2024-01-18T16:20:00+00:00",
+                },
+            ]
+
             result = self.runner.invoke(app, ["source", "list"])
-            
+
             assert result.exit_code == 0
             assert "My Plex Server" in result.stdout
             assert "Local Media Library" in result.stdout
             assert "Total: 2 sources configured" in result.stdout
+            mock_source_list.assert_called_once_with(source_type=None)
 
     def test_source_list_type_filter_valid_type(self):
         """
         Contract B-2: --type MUST restrict results to sources whose type exactly matches a known importer type.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock plex source only
-            from datetime import datetime
-            mock_source = MagicMock()
-            mock_source.id = "4b2b05e7-d7d2-414a-a587-3f5df9b53f44"
-            mock_source.name = "My Plex Server"
-            mock_source.type = "plex"
-            mock_source.created_at = datetime.fromisoformat("2024-01-15T10:30:00")
-            mock_source.updated_at = datetime.fromisoformat("2024-01-20T14:45:00")
-            
-            mock_db.query.return_value.filter.return_value.all.return_value = [mock_source]
-            
-            # Mock collection counts
-            mock_db.query.return_value.filter.return_value.count.return_value = 2
-            
+        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+            mock_source_list.return_value = [
+                {
+                    "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
+                    "name": "My Plex Server",
+                    "type": "plex",
+                    "enabled_collections": 2,
+                    "ingestible_collections": 1,
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
+                }
+            ]
+
             result = self.runner.invoke(app, ["source", "list", "--type", "plex"])
-            
+
             assert result.exit_code == 0
             assert "My Plex Server" in result.stdout
             assert "plex" in result.stdout
             assert "Total: 1 plex source configured" in result.stdout
+            mock_source_list.assert_called_once_with(source_type="plex")
 
     def test_source_list_type_filter_invalid_type_exits_one(self):
         """
@@ -115,27 +105,21 @@ class TestSourceListContract:
         """
         Contract B-4: --json MUST return valid JSON output with the required fields (status, total, sources).
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock source
-            mock_source = MagicMock()
-            mock_source.id = "4b2b05e7-d7d2-414a-a587-3f5df9b53f44"
-            mock_source.name = "My Plex Server"
-            mock_source.type = "plex"
-            mock_source.created_at = datetime.fromisoformat("2024-01-15T10:30:00Z")
-            mock_source.updated_at = datetime.fromisoformat("2024-01-20T14:45:00Z")
-            
-            mock_db.query.return_value.all.return_value = [mock_source]
-            
-            # Mock collection counts
-            mock_db.query.return_value.filter.return_value.count.return_value = 2  # enabled_collections
-            mock_db.query.return_value.filter.return_value.count.return_value = 1  # ingestible_collections
-            
+        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+            mock_source_list.return_value = [
+                {
+                    "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
+                    "name": "My Plex Server",
+                    "type": "plex",
+                    "enabled_collections": 2,
+                    "ingestible_collections": 1,
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
+                }
+            ]
+
             result = self.runner.invoke(app, ["source", "list", "--json"])
-            
+
             assert result.exit_code == 0
             
             # Parse JSON output
@@ -159,6 +143,7 @@ class TestSourceListContract:
             assert "ingestible_collections" in source
             assert "created_at" in source
             assert "updated_at" in source
+            mock_source_list.assert_called_once_with(source_type=None)
 
     def test_source_list_deterministic_ordering(self):
         """
@@ -224,14 +209,9 @@ class TestSourceListContract:
         """
         Contract B-6: When there are no results, output MUST still be structurally valid (empty list in JSON mode).
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock empty results
-            mock_db.query.return_value.all.return_value = []
-            
+        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+            mock_source_list.return_value = []
+
             result = self.runner.invoke(app, ["source", "list", "--json"])
             
             assert result.exit_code == 0
@@ -242,86 +222,91 @@ class TestSourceListContract:
             assert output["status"] == "ok"
             assert output["total"] == 0
             assert output["sources"] == []
+            mock_source_list.assert_called_once_with(source_type=None)
 
     def test_source_list_read_only_operation(self):
         """
         Contract B-7: The command MUST be read-only and MUST NOT mutate database state, importer registry state, or collection ingest state.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session
+        with patch("retrovue.cli.commands.source.session") as mock_session, \
+             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock sources query
-            mock_source = MagicMock()
-            mock_source.id = "test-id"
-            mock_source.name = "Test Source"
-            mock_source.type = "plex"
-            mock_source.created_at = datetime.fromisoformat("2024-01-15T10:30:00Z")
-            mock_source.updated_at = datetime.fromisoformat("2024-01-20T14:45:00Z")
-            
-            mock_db.query.return_value.all.return_value = [mock_source]
-            mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
+
+            mock_list_sources.return_value = [
+                {
+                    "id": "test-id",
+                    "name": "Test Source",
+                    "type": "plex",
+                    "enabled_collections": 0,
+                    "ingestible_collections": 0,
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
+                }
+            ]
+
             result = self.runner.invoke(app, ["source", "list"])
-            
+
             assert result.exit_code == 0
-            
-            # Verify only read operations were called
+
             mock_db.query.assert_called()
             mock_db.add.assert_not_called()
             mock_db.commit.assert_not_called()
             mock_db.delete.assert_not_called()
+            mock_list_sources.assert_called_once_with(mock_db, source_type=None)
 
     def test_source_list_test_db_mode(self):
         """
         Contract B-8: --test-db MUST query the test DB session instead of production.
         Contract B-9: --test-db MUST keep response shape and exit code behavior identical to production mode.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session
+        with patch("retrovue.cli.commands.source.session") as mock_session, \
+             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock sources query
-            mock_source = MagicMock()
-            mock_source.id = "test-id"
-            mock_source.name = "Test Source"
-            mock_source.type = "plex"
-            mock_source.created_at = datetime.fromisoformat("2024-01-15T10:30:00Z")
-            mock_source.updated_at = datetime.fromisoformat("2024-01-20T14:45:00Z")
-            
-            mock_db.query.return_value.all.return_value = [mock_source]
-            mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
+
+            mock_list_sources.return_value = [
+                {
+                    "id": "test-id",
+                    "name": "Test Source",
+                    "type": "plex",
+                    "enabled_collections": 0,
+                    "ingestible_collections": 0,
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
+                }
+            ]
+
             result = self.runner.invoke(app, ["source", "list", "--test-db"])
-            
+
             assert result.exit_code == 0
             assert "Test Source" in result.stdout
             assert "Total: 1 source configured" in result.stdout
+            mock_list_sources.assert_called_once_with(mock_db, source_type=None)
 
     def test_source_list_test_db_json_mode(self):
         """
         Contract B-9: --test-db MUST keep response shape and exit code behavior identical to production mode.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
-            # Mock database session
+        with patch("retrovue.cli.commands.source.session") as mock_session, \
+             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock sources query
-            mock_source = MagicMock()
-            mock_source.id = "test-id"
-            mock_source.name = "Test Source"
-            mock_source.type = "plex"
-            mock_source.created_at = datetime.fromisoformat("2024-01-15T10:30:00Z")
-            mock_source.updated_at = datetime.fromisoformat("2024-01-20T14:45:00Z")
-            
-            mock_db.query.return_value.all.return_value = [mock_source]
-            mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
+
+            mock_list_sources.return_value = [
+                {
+                    "id": "test-id",
+                    "name": "Test Source",
+                    "type": "plex",
+                    "enabled_collections": 0,
+                    "ingestible_collections": 0,
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
+                }
+            ]
+
             result = self.runner.invoke(app, ["source", "list", "--test-db", "--json"])
-            
+
             assert result.exit_code == 0
             
             # Parse JSON output
@@ -331,35 +316,32 @@ class TestSourceListContract:
             assert output["total"] == 1
             assert len(output["sources"]) == 1
             assert output["sources"][0]["name"] == "Test Source"
+            mock_list_sources.assert_called_once_with(mock_db, source_type=None)
 
     def test_source_list_no_external_system_calls(self):
         """
         Contract B-10: The command MUST NOT call external systems (importers, Plex APIs, filesystem scans, etc.). It is metadata-only.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session, \
+        with patch("retrovue.cli.commands.source.source_list") as mock_source_list, \
              patch("retrovue.cli.commands.source.get_importer") as mock_get_importer:
-            
-            # Mock database session
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
-            # Mock sources query
-            mock_source = MagicMock()
-            mock_source.id = "test-id"
-            mock_source.name = "Test Source"
-            mock_source.type = "plex"
-            mock_source.created_at = datetime.fromisoformat("2024-01-15T10:30:00Z")
-            mock_source.updated_at = datetime.fromisoformat("2024-01-20T14:45:00Z")
-            
-            mock_db.query.return_value.all.return_value = [mock_source]
-            mock_db.query.return_value.filter.return_value.count.return_value = 0
-            
+            mock_source_list.return_value = [
+                {
+                    "id": "test-id",
+                    "name": "Test Source",
+                    "type": "plex",
+                    "enabled_collections": 0,
+                    "ingestible_collections": 0,
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
+                }
+            ]
+
             result = self.runner.invoke(app, ["source", "list"])
-            
+
             assert result.exit_code == 0
-            
-            # Verify no external system calls were made
+
             mock_get_importer.assert_not_called()
+            mock_source_list.assert_called_once_with(source_type=None)
 
     def test_source_list_test_db_session_failure_exits_one(self):
         """

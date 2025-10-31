@@ -243,6 +243,22 @@ Total: 0 collections
 
 ---
 
+## Tests
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__help_flag
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b1_lists_all_collections
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b2_resolves_source_by_uuid
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b2_resolves_source_by_external_id
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b2_resolves_source_by_name
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b3_errors_when_source_missing
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b4_errors_when_source_ambiguous
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b5_filters_collections_by_source
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b6_returns_structured_json
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b7_output_is_deterministic
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b8_reports_no_collections
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b9_is_read_only
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b10_b11_test_db_uses_isolated_session
+- [x] tests/contracts/test_collection_list_contract.py::test_collection_list_contract__b12_skips_external_systems
+
 ## Data Effects
 
 ### Database Queries

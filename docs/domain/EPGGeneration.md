@@ -12,12 +12,12 @@ The EPG is built from the following data sources:
 
 - **BroadcastChannel**: Defines the channels and their timing policies
 - **BroadcastPlaylogEvent**: Records what was actually played and when
-- **CatalogAsset**: Contains the metadata for scheduled content
+- **Asset**: Contains the metadata for scheduled content
 - **Schedule state**: Live scheduling information managed by ScheduleService
 
 ## Contract / interface
 
-The on-screen guide (and the GuideProducer channel) is generated from live schedule state, not from a permanently maintained epg_entries table. The EPG view is built by joining BroadcastPlaylogEvent to CatalogAsset to present "now / next" with title-level metadata.
+The on-screen guide (and the GuideProducer channel) is generated from live schedule state, not from a permanently maintained epg_entries table. The EPG view is built by joining BroadcastPlaylogEvent to Asset to present "now / next" with title-level metadata.
 
 ## Execution model
 

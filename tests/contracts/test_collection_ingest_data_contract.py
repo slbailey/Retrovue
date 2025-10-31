@@ -42,11 +42,13 @@ class TestCollectionIngestDataContract:
         All database operations MUST occur within the same transaction boundary.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context") as mock_get_db_context, \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
             
+            mock_db_cm = MagicMock()
             mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            mock_db_cm.__enter__.return_value = mock_db
+            mock_get_db_context.return_value = mock_db_cm
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -68,8 +70,8 @@ class TestCollectionIngestDataContract:
             
             assert result.exit_code == 0
             
-            # Verify session context manager was used (Unit of Work pattern)
-            mock_session.assert_called_once()
+            # Verify session/test-db context manager was used (Unit of Work pattern)
+            mock_get_db_context.assert_called_once()
             mock_db.__enter__.assert_called_once()  # Transaction started
             
             # Verify commit was called (transaction completed)
@@ -82,11 +84,13 @@ class TestCollectionIngestDataContract:
         Changes to one collection MUST NOT affect other collections.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context") as mock_get_db_context, \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
             
+            mock_db_cm = MagicMock()
             mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            mock_db_cm.__enter__.return_value = mock_db
+            mock_get_db_context.return_value = mock_db_cm
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -394,11 +398,13 @@ class TestCollectionIngestDataContract:
         Contract D-5b: Service layer MUST handle all database persistence and transaction management.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context") as mock_get_db_context, \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
             
+            mock_db_cm = MagicMock()
             mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            mock_db_cm.__enter__.return_value = mock_db
+            mock_get_db_context.return_value = mock_db_cm
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -544,11 +550,13 @@ class TestCollectionIngestDataContract:
         Contract D-7: When --test-db is used, operations MUST occur in test database transaction.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context") as mock_get_db_context, \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
             
+            mock_db_cm = MagicMock()
             mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            mock_db_cm.__enter__.return_value = mock_db
+            mock_get_db_context.return_value = mock_db_cm
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -582,11 +590,13 @@ class TestCollectionIngestDataContract:
         No database writes occur, but test DB context is used for resolution.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context") as mock_get_db_context, \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
             
+            mock_db_cm = MagicMock()
             mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            mock_db_cm.__enter__.return_value = mock_db
+            mock_get_db_context.return_value = mock_db_cm
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -625,11 +635,13 @@ class TestCollectionIngestDataContract:
         This test verifies that audit metadata is handled (implementation detail).
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context") as mock_get_db_context, \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
             
+            mock_db_cm = MagicMock()
             mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            mock_db_cm.__enter__.return_value = mock_db
+            mock_get_db_context.return_value = mock_db_cm
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -660,11 +672,13 @@ class TestCollectionIngestDataContract:
         Contract D-18: All operations run with --test-db MUST be isolated from production database.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context") as mock_get_db_context, \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
             
+            mock_db_cm = MagicMock()
             mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            mock_db_cm.__enter__.return_value = mock_db
+            mock_get_db_context.return_value = mock_db_cm
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id

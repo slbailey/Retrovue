@@ -82,7 +82,7 @@ class TestCollectionIngestWithRealImporter:
         mock_get_importer.return_value = importer
 
         # Ensure no existing assets found
-        db.scalar_one_or_none.return_value = None
+        db.scalar.return_value = None
 
         # Act
         result = self.runner.invoke(app, ["collection", "ingest", str(collection.uuid), "--json"])
@@ -122,7 +122,7 @@ class TestCollectionIngestWithRealImporter:
         existing1.hash_sha256 = "h1"  # same hash -> no update
         existing2 = MagicMock()
         existing2.hash_sha256 = None
-        db.scalar_one_or_none.side_effect = [existing1, existing2]
+        db.scalar.side_effect = [existing1, existing2]
 
         # Act
         result = self.runner.invoke(app, ["collection", "ingest", str(collection.uuid), "--json"])

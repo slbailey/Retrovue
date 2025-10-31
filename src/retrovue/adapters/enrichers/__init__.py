@@ -11,6 +11,6 @@ __all__ = [
     "Enricher",
     "EnricherError",
     "EnricherNotFoundError",
-    "EnricherConfigurationError", 
+    "EnricherConfigurationError",
     "FFprobeEnricher",
 ]

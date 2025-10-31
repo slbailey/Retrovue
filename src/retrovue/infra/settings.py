@@ -6,8 +6,8 @@ This module defines all configuration settings for Retrovue using Pydantic BaseS
 
 from __future__ import annotations
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
@@ -15,9 +15,12 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Main application settings using Pydantic BaseSettings."""
-    
+
     # Database settings (keep existing)
-    database_url: str = Field(default="postgresql+psycopg://retrovue:mb061792@192.168.1.50:5432/retrovue", alias="DATABASE_URL")
+    database_url: str = Field(
+        default="postgresql+psycopg://retrovue:mb061792@192.168.1.50:5432/retrovue",
+        alias="DATABASE_URL",
+    )
     # NEW: optional test DB
     test_database_url: str | None = Field(default=None, alias="TEST_DATABASE_URL")
     echo_sql: bool = Field(default=False, alias="ECHO_SQL")
@@ -25,7 +28,7 @@ class Settings(BaseSettings):
     max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW")
     pool_timeout: int = Field(default=30, alias="DB_POOL_TIMEOUT")
     connect_timeout: int = Field(default=30, alias="DB_CONNECT_TIMEOUT")
-    
+
     # New settings
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     media_roots: str = Field(default="", alias="MEDIA_ROOTS")  # Comma-separated paths

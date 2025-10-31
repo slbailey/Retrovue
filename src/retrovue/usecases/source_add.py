@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from ..domain.entities import Source
-from ..infra.uow import session as default_session
 
 
 def add_source(
@@ -13,13 +12,13 @@ def add_source(
     *,
     source_type: str,
     name: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     enrichers: list[str] | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a Source. Single noun-verb operation. Returns data for CLI.
     """
-    external_id = f"{source_type}-{name.lower().replace(' ', '-') }"
+    external_id = f"{source_type}-{name.lower().replace(' ', '-')}"
 
     source = Source(
         external_id=external_id,
@@ -40,7 +39,6 @@ def add_source(
         "config": source.config,
         "enrichers": enrichers or [],
     }
-
 
 
 __all__ = ["add_source"]

@@ -18,7 +18,7 @@ __all__ = [
     "DiscoveredItem",
     "Importer",
     "ImporterError",
-    "ImporterNotFoundError", 
+    "ImporterNotFoundError",
     "ImporterConfigurationError",
     "FilesystemImporter",
     "PlexImporter",

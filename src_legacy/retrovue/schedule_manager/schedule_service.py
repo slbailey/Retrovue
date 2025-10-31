@@ -9,7 +9,7 @@ to create or modify schedule entries.
 
 Key Responsibilities:
 - Maintain EPG Horizon (≥ 2 days ahead)
-- Maintain Playlog Horizon (≥ 2 hours ahead) 
+- Maintain Playlog Horizon (≥ 2 hours ahead)
 - Enforce block rules and content policies
 - Provide read methods for current and future programming
 - Ensure time alignment across all channels
@@ -35,6 +35,7 @@ from typing import Any
 @dataclass
 class ScheduleQuery:
     """Query parameters for schedule lookups"""
+
     channel_id: str
     start_time: datetime
     end_time: datetime | None = None
@@ -45,6 +46,7 @@ class ScheduleQuery:
 @dataclass
 class ProgrammingInfo:
     """Information about what's scheduled to air"""
+
     channel_id: str
     start_time: datetime
     end_time: datetime
@@ -58,13 +60,13 @@ class ProgrammingInfo:
 class ScheduleService:
     """
     Authority for schedule state and horizons.
-    
+
     This service is the single source of truth for all scheduling data in RetroVue.
     It maintains the EPG and Playlog horizons, enforces content rules, and provides
     read access to schedule information.
-    
+
     Pattern: Authority + Service/Capability Provider
-    
+
     Key Responsibilities:
     - Own EPG Horizon + Playlog Horizon data
     - Only interface allowed to create/modify schedule entries
@@ -73,20 +75,22 @@ class ScheduleService:
     - Coordinate with Content Manager for eligible content
     - Time authority compliance – All time calculations, including absolute_start / absolute_end timestamps, must use MasterClock. ScheduleService is not allowed to call system time directly.
     """
-    
+
     def __init__(self):
         """Initialize the Schedule Service"""
         # TODO: Initialize database session, content manager integration
         pass
-    
-    def get_current_programming(self, channel_id: str, timestamp: datetime | None = None) -> ProgrammingInfo | None:
+
+    def get_current_programming(
+        self, channel_id: str, timestamp: datetime | None = None
+    ) -> ProgrammingInfo | None:
         """
         Get what's currently airing on a channel at a given timestamp.
-        
+
         Args:
             channel_id: The channel to query
             timestamp: When to check (defaults to now)
-            
+
         Returns:
             ProgrammingInfo for what's airing, or None if nothing scheduled
         """
@@ -95,15 +99,17 @@ class ScheduleService:
         # - Return ProgrammingInfo with current show details
         # - Handle timezone conversion for channel
         pass
-    
-    def get_upcoming_programming(self, channel_id: str, hours_ahead: int = 3) -> list[ProgrammingInfo]:
+
+    def get_upcoming_programming(
+        self, channel_id: str, hours_ahead: int = 3
+    ) -> list[ProgrammingInfo]:
         """
         Get upcoming programming for a channel.
-        
+
         Args:
             channel_id: The channel to query
             hours_ahead: How many hours into the future to look
-            
+
         Returns:
             List of ProgrammingInfo for upcoming shows
         """
@@ -112,16 +118,18 @@ class ScheduleService:
         # - Return ordered list of ProgrammingInfo
         # - Ensure EPG horizon is maintained (≥ 2 days)
         pass
-    
-    def get_playlog_events(self, channel_id: str, start_time: datetime, end_time: datetime) -> list[dict[str, Any]]:
+
+    def get_playlog_events(
+        self, channel_id: str, start_time: datetime, end_time: datetime
+    ) -> list[dict[str, Any]]:
         """
         Get precise playlog events for a time range.
-        
+
         Args:
             channel_id: The channel to query
             start_time: Start of time range
             end_time: End of time range
-            
+
         Returns:
             List of playlog events with absolute_start/absolute_end
         """
@@ -130,13 +138,20 @@ class ScheduleService:
         # - Return events with precise timing
         # - Ensure playlog horizon is maintained (≥ 2 hours)
         pass
-    
-    def create_epg_entry(self, channel_id: str, title: str, description: str, 
-                        start_time: datetime, end_time: datetime, 
-                        content_type: str, asset_id: str | None = None) -> str:
+
+    def create_epg_entry(
+        self,
+        channel_id: str,
+        title: str,
+        description: str,
+        start_time: datetime,
+        end_time: datetime,
+        content_type: str,
+        asset_id: str | None = None,
+    ) -> str:
         """
         Create a new EPG entry.
-        
+
         Args:
             channel_id: Channel this entry is for
             title: Program title
@@ -145,7 +160,7 @@ class ScheduleService:
             end_time: When it ends (snapped to :00/:30)
             content_type: Type of content (episode, movie, commercial, etc.)
             asset_id: Link to content asset
-            
+
         Returns:
             ID of created EPG entry
         """
@@ -156,13 +171,19 @@ class ScheduleService:
         # - Create EPGEntry record
         # - Update EPG horizon if needed
         pass
-    
-    def create_playlog_event(self, channel_id: str, asset_id: str, 
-                           absolute_start: datetime, absolute_end: datetime,
-                           segment_type: str, epg_entry_id: str | None = None) -> str:
+
+    def create_playlog_event(
+        self,
+        channel_id: str,
+        asset_id: str,
+        absolute_start: datetime,
+        absolute_end: datetime,
+        segment_type: str,
+        epg_entry_id: str | None = None,
+    ) -> str:
         """
         Create a new playlog event.
-        
+
         Args:
             channel_id: Channel this event is for
             asset_id: The media file being played
@@ -170,7 +191,7 @@ class ScheduleService:
             absolute_end: Precise end timestamp
             segment_type: Type of segment (content, commercial, bumper, etc.)
             epg_entry_id: Link to scheduled EPG entry
-            
+
         Returns:
             ID of created playlog event
         """
@@ -180,14 +201,14 @@ class ScheduleService:
         # - Create PlaylogEvent record
         # - Update playlog horizon if needed
         pass
-    
+
     def check_epg_horizon(self, channel_id: str) -> bool:
         """
         Check if EPG horizon is adequate (≥ 2 days ahead).
-        
+
         Args:
             channel_id: Channel to check
-            
+
         Returns:
             True if horizon is adequate, False if needs extension
         """
@@ -196,14 +217,14 @@ class ScheduleService:
         # - Check if it's ≥ 2 days from now
         # - Return True/False
         pass
-    
+
     def check_playlog_horizon(self, channel_id: str) -> bool:
         """
         Check if playlog horizon is adequate (≥ 2 hours ahead).
-        
+
         Args:
             channel_id: Channel to check
-            
+
         Returns:
             True if horizon is adequate, False if needs extension
         """
@@ -212,14 +233,14 @@ class ScheduleService:
         # - Check if it's ≥ 2 hours from now
         # - Return True/False
         pass
-    
+
     def extend_epg_horizon(self, channel_id: str) -> int:
         """
         Extend EPG horizon for a channel.
-        
+
         Args:
             channel_id: Channel to extend
-            
+
         Returns:
             Number of new EPG entries created
         """
@@ -230,14 +251,14 @@ class ScheduleService:
         # - Create EPGEntry records
         # - Return count of new entries
         pass
-    
+
     def extend_playlog_horizon(self, channel_id: str) -> int:
         """
         Extend playlog horizon for a channel.
-        
+
         Args:
             channel_id: Channel to extend
-            
+
         Returns:
             Number of new playlog events created
         """
@@ -247,15 +268,17 @@ class ScheduleService:
         # - Create PlaylogEvent records with precise timing
         # - Return count of new events
         pass
-    
-    def apply_block_rules(self, channel_id: str, content_candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+
+    def apply_block_rules(
+        self, channel_id: str, content_candidates: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Apply block rules and content policies to filter content.
-        
+
         Args:
             channel_id: Channel to apply rules for
             content_candidates: List of content to filter
-            
+
         Returns:
             Filtered list of content that passes all rules
         """
@@ -266,7 +289,7 @@ class ScheduleService:
         # - Apply rotation rules
         # - Return filtered content list
         pass
-    
+
     def broadcast_day_for(self, channel_id: str, when_utc: datetime) -> date:
         """
         Given a UTC timestamp, return the broadcast day label (a date) for that channel.
@@ -286,16 +309,16 @@ class ScheduleService:
         Args:
             channel_id: The channel to check
             when_utc: UTC timestamp (must be timezone-aware)
-            
+
         Returns:
             The broadcast day label as a date object
-            
+
         Raises:
             ValueError if when_utc is naive.
         """
         if when_utc.tzinfo is None:
             raise ValueError("datetime must be timezone-aware")
-        
+
         # TODO: Get MasterClock instance and channel timezone
         # For now, this is a stub implementation
         # In real implementation:
@@ -303,15 +326,19 @@ class ScheduleService:
         # 2. Get channel timezone via _channel_timezone()
         # 3. Convert when_utc to channel local time using MasterClock.to_channel_time()
         # 4. Apply broadcast day logic
-        
+
         # Stub implementation - will be replaced with real logic
         local_time = when_utc  # Placeholder
-        if local_time.time() >= local_time.time().replace(hour=6, minute=0, second=0, microsecond=0):
+        if local_time.time() >= local_time.time().replace(
+            hour=6, minute=0, second=0, microsecond=0
+        ):
             return local_time.date()
         else:
-            return (local_time.date() - timedelta(days=1))
-    
-    def broadcast_day_window(self, channel_id: str, when_utc: datetime) -> tuple[datetime, datetime]:
+            return local_time.date() - timedelta(days=1)
+
+    def broadcast_day_window(
+        self, channel_id: str, when_utc: datetime
+    ) -> tuple[datetime, datetime]:
         """
         Return (start_local, end_local) for the broadcast day that contains when_utc,
         in channel-local tz, tz-aware datetimes.
@@ -326,16 +353,16 @@ class ScheduleService:
         Args:
             channel_id: The channel to check
             when_utc: UTC timestamp (must be timezone-aware)
-            
+
         Returns:
             Tuple of (start_local, end_local) in channel timezone
-            
+
         Raises:
             ValueError if when_utc is naive.
         """
         if when_utc.tzinfo is None:
             raise ValueError("datetime must be timezone-aware")
-        
+
         # TODO: Get MasterClock instance and channel timezone
         # For now, this is a stub implementation
         # In real implementation:
@@ -343,17 +370,22 @@ class ScheduleService:
         # 2. Get channel timezone via _channel_timezone()
         # 3. Convert when_utc to channel local time using MasterClock.to_channel_time()
         # 4. Calculate broadcast day window
-        
+
         # Stub implementation - will be replaced with real logic
         broadcast_day = self.broadcast_day_for(channel_id, when_utc)
-        
+
         # Calculate start and end of broadcast day
         start_local = datetime.combine(broadcast_day, datetime.min.time().replace(hour=6))
-        end_local = datetime.combine(broadcast_day + timedelta(days=1), datetime.min.time().replace(hour=5, minute=59, second=59, microsecond=999999))
-        
+        end_local = datetime.combine(
+            broadcast_day + timedelta(days=1),
+            datetime.min.time().replace(hour=5, minute=59, second=59, microsecond=999999),
+        )
+
         return (start_local, end_local)
-    
-    def active_segment_spanning_rollover(self, channel_id: str, rollover_start_utc: datetime) -> dict[str, Any] | None:
+
+    def active_segment_spanning_rollover(
+        self, channel_id: str, rollover_start_utc: datetime
+    ) -> dict[str, Any] | None:
         """
         Given the UTC timestamp for rollover boundary (which is local 06:00:00),
         return info about any scheduled content that STARTED BEFORE rollover
@@ -381,16 +413,16 @@ class ScheduleService:
         Args:
             channel_id: The channel to check
             rollover_start_utc: UTC timestamp for rollover boundary (local 06:00:00)
-            
+
         Returns:
             Dict with carryover info or None if no carryover
-            
+
         Raises:
             ValueError if rollover_start_utc is naive.
         """
         if rollover_start_utc.tzinfo is None:
             raise ValueError("datetime must be timezone-aware")
-        
+
         # TODO: Implement active segment spanning rollover detection
         # For now, this is a stub implementation
         # In real implementation:
@@ -399,17 +431,17 @@ class ScheduleService:
         # 3. Convert rollover_start_utc to channel local time
         # 4. Query schedule for content that started before 06:00 and ends after 06:00
         # 5. Return carryover info if found
-        
+
         # Stub implementation - will be replaced with real logic
         return None
-    
+
     def _channel_timezone(self, channel_id: str) -> str:
         """
         Return that channel's IANA timezone string (e.g. 'America/New_York').
-        
+
         Args:
             channel_id: The channel to get timezone for
-            
+
         Returns:
             IANA timezone string for the channel
         """
@@ -419,6 +451,6 @@ class ScheduleService:
         # 1. Query channel configuration from database
         # 2. Return the channel's configured timezone
         # 3. Default to 'America/New_York' if not configured
-        
+
         # Stub implementation - will be replaced with real logic
-        return 'America/New_York'
+        return "America/New_York"

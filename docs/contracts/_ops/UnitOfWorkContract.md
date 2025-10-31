@@ -150,12 +150,12 @@ def ingest_collection(collection_id: str, filters: IngestFilters) -> IngestResul
 #### Asset Processing Contract
 
 ```python
-def process_asset(asset_draft: AssetDraft, collection: Collection) -> AssetProcessingResult:
+def process_discovered_item(discovered_item: DiscoveredItem, collection: Collection) -> AssetProcessingResult:
     """
-    Process a single asset through the ingest pipeline.
+    Process a single discovered item through the ingest pipeline.
 
     Pre-conditions:
-    - AssetDraft is valid and complete
+    - DiscoveredItem is valid and complete
     - Collection exists and is accessible
     - All required enrichers are available
 
@@ -173,12 +173,12 @@ def process_asset(asset_draft: AssetDraft, collection: Collection) -> AssetProce
     with session() as db:
         try:
             # Phase 1: Pre-flight validation
-            validate_asset_draft(asset_draft)
+            validate_discovered_item(discovered_item)
             validate_collection_accessible(db, collection)
             validate_enrichers_available(db, collection)
 
             # Phase 2: Execute processing
-            result = execute_asset_processing(db, asset_draft, collection)
+            result = execute_asset_processing(db, discovered_item, collection)
 
             # Phase 3: Post-operation validation
             validate_asset_relationships(db, result.asset)
@@ -188,7 +188,7 @@ def process_asset(asset_draft: AssetDraft, collection: Collection) -> AssetProce
             return result
 
         except Exception as e:
-            logger.error("asset_processing_failed", asset_path=asset_draft.file_path, error=str(e))
+            logger.error("asset_processing_failed", asset_path=discovered_item.path_uri, error=str(e))
             raise AssetProcessingError(f"Asset processing failed: {e}")
 ```
 

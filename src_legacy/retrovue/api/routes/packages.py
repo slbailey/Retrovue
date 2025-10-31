@@ -38,25 +38,25 @@ async def list_packages(
 ):
     """
     List all packages with optional filtering.
-    
+
     Args:
         skip: Number of packages to skip
         limit: Maximum number of packages to return
         package_type: Filter by package type
         db: Database session
-        
+
     Returns:
         List of packages with metadata
     """
     try:
         query = db.query(Package)
-        
+
         if package_type:
             query = query.filter(Package.type == package_type)
-        
+
         total = query.count()
         packages = query.offset(skip).limit(limit).all()
-        
+
         package_list = []
         for package in packages:
             package_list.append(
@@ -70,18 +70,18 @@ async def list_packages(
                     item_count=len(package.items),
                 )
             )
-        
+
         return PackageListResponse(
             success=True,
             message=f"Retrieved {len(package_list)} packages",
             data=package_list,
             total=total,
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list packages: {str(e)}"
+            detail=f"Failed to list packages: {str(e)}",
         )
 
 
@@ -92,23 +92,22 @@ async def get_package(
 ):
     """
     Get a specific package by ID.
-    
+
     Args:
         package_id: ID of the package to retrieve
         db: Database session
-        
+
     Returns:
         Package data with items
     """
     try:
         package = db.query(Package).filter(Package.id == package_id).first()
-        
+
         if not package:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Package {package_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Package {package_id} not found"
             )
-        
+
         # Convert items to read format
         items = []
         for item in package.items:
@@ -123,7 +122,7 @@ async def get_package(
                     notes=item.notes,
                 )
             )
-        
+
         package_data = PackageRead(
             id=package.id,
             name=package.name,
@@ -134,19 +133,19 @@ async def get_package(
             updated_at=package.updated_at,
             items=items,
         )
-        
+
         return PackageResponse(
             success=True,
             message=f"Retrieved package {package_id}",
             data=package_data,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get package: {str(e)}"
+            detail=f"Failed to get package: {str(e)}",
         )
 
 
@@ -157,11 +156,11 @@ async def create_package(
 ):
     """
     Create a new package.
-    
+
     Args:
         package_data: Package creation data
         db: Database session
-        
+
     Returns:
         Created package data
     """
@@ -172,11 +171,11 @@ async def create_package(
             type=package_data.type,
             duration=package_data.duration,
         )
-        
+
         db.add(package)
         db.flush()
         db.refresh(package)
-        
+
         package_response = PackageRead(
             id=package.id,
             name=package.name,
@@ -187,18 +186,18 @@ async def create_package(
             updated_at=package.updated_at,
             items=[],
         )
-        
+
         return PackageResponse(
             success=True,
             message=f"Created package {package.id}",
             data=package_response,
         )
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create package: {str(e)}"
+            detail=f"Failed to create package: {str(e)}",
         )
 
 
@@ -210,24 +209,23 @@ async def update_package(
 ):
     """
     Update an existing package.
-    
+
     Args:
         package_id: ID of the package to update
         package_data: Package update data
         db: Database session
-        
+
     Returns:
         Updated package data
     """
     try:
         package = db.query(Package).filter(Package.id == package_id).first()
-        
+
         if not package:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Package {package_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Package {package_id} not found"
             )
-        
+
         # Update fields if provided
         if package_data.name is not None:
             package.name = package_data.name
@@ -237,10 +235,10 @@ async def update_package(
             package.type = package_data.type
         if package_data.duration is not None:
             package.duration = package_data.duration
-        
+
         db.flush()
         db.refresh(package)
-        
+
         # Convert items to read format
         items = []
         for item in package.items:
@@ -255,7 +253,7 @@ async def update_package(
                     notes=item.notes,
                 )
             )
-        
+
         package_response = PackageRead(
             id=package.id,
             name=package.name,
@@ -266,20 +264,20 @@ async def update_package(
             updated_at=package.updated_at,
             items=items,
         )
-        
+
         return PackageResponse(
             success=True,
             message=f"Updated package {package_id}",
             data=package_response,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update package: {str(e)}"
+            detail=f"Failed to update package: {str(e)}",
         )
 
 
@@ -290,39 +288,38 @@ async def delete_package(
 ):
     """
     Delete a package and all its items.
-    
+
     Args:
         package_id: ID of the package to delete
         db: Database session
-        
+
     Returns:
         Deletion confirmation
     """
     try:
         package = db.query(Package).filter(Package.id == package_id).first()
-        
+
         if not package:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Package {package_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Package {package_id} not found"
             )
-        
+
         db.delete(package)
         db.flush()
-        
+
         return PackageResponse(
             success=True,
             message=f"Deleted package {package_id}",
             data=None,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete package: {str(e)}"
+            detail=f"Failed to delete package: {str(e)}",
         )
 
 
@@ -334,24 +331,23 @@ async def add_package_item(
 ):
     """
     Add an item to a package.
-    
+
     Args:
         package_id: ID of the package
         item_data: Package item creation data
         db: Database session
-        
+
     Returns:
         Updated package data
     """
     try:
         package = db.query(Package).filter(Package.id == package_id).first()
-        
+
         if not package:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Package {package_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Package {package_id} not found"
             )
-        
+
         package_item = PackageItem(
             package_id=package_id,
             asset_type=item_data.asset_type,
@@ -360,14 +356,14 @@ async def add_package_item(
             duration_override=item_data.duration_override,
             notes=item_data.notes,
         )
-        
+
         db.add(package_item)
         db.flush()
         db.refresh(package_item)
-        
+
         # Return updated package
         db.refresh(package)
-        
+
         # Convert items to read format
         items = []
         for item in package.items:
@@ -382,7 +378,7 @@ async def add_package_item(
                     notes=item.notes,
                 )
             )
-        
+
         package_response = PackageRead(
             id=package.id,
             name=package.name,
@@ -393,20 +389,20 @@ async def add_package_item(
             updated_at=package.updated_at,
             items=items,
         )
-        
+
         return PackageResponse(
             success=True,
             message=f"Added item to package {package_id}",
             data=package_response,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to add package item: {str(e)}"
+            detail=f"Failed to add package item: {str(e)}",
         )
 
 
@@ -418,41 +414,40 @@ async def remove_package_item(
 ):
     """
     Remove an item from a package.
-    
+
     Args:
         package_id: ID of the package
         item_id: ID of the item to remove
         db: Database session
-        
+
     Returns:
         Updated package data
     """
     try:
         package = db.query(Package).filter(Package.id == package_id).first()
-        
+
         if not package:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Package {package_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Package {package_id} not found"
             )
-        
-        package_item = db.query(PackageItem).filter(
-            PackageItem.id == item_id,
-            PackageItem.package_id == package_id
-        ).first()
-        
+
+        package_item = (
+            db.query(PackageItem)
+            .filter(PackageItem.id == item_id, PackageItem.package_id == package_id)
+            .first()
+        )
+
         if not package_item:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Package item {item_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Package item {item_id} not found"
             )
-        
+
         db.delete(package_item)
         db.flush()
-        
+
         # Return updated package
         db.refresh(package)
-        
+
         # Convert items to read format
         items = []
         for item in package.items:
@@ -467,7 +462,7 @@ async def remove_package_item(
                     notes=item.notes,
                 )
             )
-        
+
         package_response = PackageRead(
             id=package.id,
             name=package.name,
@@ -478,18 +473,18 @@ async def remove_package_item(
             updated_at=package.updated_at,
             items=items,
         )
-        
+
         return PackageResponse(
             success=True,
             message=f"Removed item from package {package_id}",
             data=package_response,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to remove package item: {str(e)}"
+            detail=f"Failed to remove package item: {str(e)}",
         )

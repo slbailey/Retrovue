@@ -31,6 +31,7 @@ from typing import Any
 
 class SystemMode(Enum):
     """System-wide operational modes"""
+
     NORMAL = "normal"
     EMERGENCY = "emergency"
     MAINTENANCE = "maintenance"
@@ -39,6 +40,7 @@ class SystemMode(Enum):
 
 class ChannelStatus(Enum):
     """Status of individual channels"""
+
     STOPPED = "stopped"
     STARTING = "starting"
     RUNNING = "running"
@@ -49,6 +51,7 @@ class ChannelStatus(Enum):
 @dataclass
 class SystemHealth:
     """System health and performance metrics"""
+
     total_channels: int
     active_channels: int
     total_viewers: int
@@ -60,6 +63,7 @@ class SystemHealth:
 @dataclass
 class ChannelInfo:
     """Information about a channel's runtime state"""
+
     channel_id: str
     name: str
     status: ChannelStatus
@@ -71,43 +75,43 @@ class ChannelInfo:
 class ProgramDirector:
     """
     Global coordinator and policy layer for the entire broadcast system.
-    
+
     Pattern: Orchestrator + Policy Enforcer
-    
+
     This is the "system director" that coordinates all channels, enforces system-wide
     policies, and manages emergency overrides. It orchestrates the entire broadcast
     operation but does not handle individual channel operations or content decisions.
-    
+
     Key Responsibilities:
     - Coordinate all channels at a system level
     - Enforce global policy and mode (normal vs emergency)
     - Trigger system-wide emergency override and revert
     - Report system health and status
-    
+
     Boundaries:
     - IS allowed to: Coordinate channels, enforce policies, manage emergencies
     - IS NOT allowed to: Generate schedules, ingest content, pick content, manage individual viewers, spawn Producer instances directly
-    
+
     BROADCAST DAY BEHAVIOR (06:00 → 06:00):
     - ProgramDirector coordinates channels, but does NOT redefine broadcast day logic.
-    - ProgramDirector can ask ScheduleService for the current broadcast day or what's 
+    - ProgramDirector can ask ScheduleService for the current broadcast day or what's
       rolling over, but it does not slice content or reschedule content at day boundaries.
-    - Emergency / override logic should respect in-progress longform content 
-      (e.g. a movie spanning 05:00–07:00) unless an emergency explicitly overrides 
+    - Emergency / override logic should respect in-progress longform content
+      (e.g. a movie spanning 05:00–07:00) unless an emergency explicitly overrides
       normal playout.
-    - Goal: ProgramDirector should treat broadcast day mostly as a reporting/scheduling 
+    - Goal: ProgramDirector should treat broadcast day mostly as a reporting/scheduling
       grouping, not as a playout cut point.
     """
-    
+
     def __init__(self):
         """Initialize the Program Director"""
         # TODO: Initialize system state, channel managers, health monitoring
         pass
-    
+
     def get_system_health(self) -> SystemHealth:
         """
         Get overall system health and performance metrics.
-        
+
         Returns:
             SystemHealth with current system status
         """
@@ -117,14 +121,14 @@ class ProgramDirector:
         # - Check for system alerts and issues
         # - Return comprehensive health status
         pass
-    
+
     def get_channel_status(self, channel_id: str) -> ChannelInfo | None:
         """
         Get runtime status for a specific channel.
-        
+
         Args:
             channel_id: Channel to check
-            
+
         Returns:
             ChannelInfo for the channel, or None if not found
         """
@@ -134,11 +138,11 @@ class ProgramDirector:
         # - Get last activity timestamp
         # - Return channel information
         pass
-    
+
     def get_all_channels(self) -> list[ChannelInfo]:
         """
         Get status for all channels in the system.
-        
+
         Returns:
             List of ChannelInfo for all channels
         """
@@ -147,14 +151,14 @@ class ProgramDirector:
         # - Get status for each channel
         # - Return list of channel information
         pass
-    
+
     def activate_emergency_mode(self, reason: str) -> bool:
         """
         Activate system-wide emergency mode.
-        
+
         Args:
             reason: Reason for emergency activation
-            
+
         Returns:
             True if emergency mode activated successfully
         """
@@ -165,11 +169,11 @@ class ProgramDirector:
         # - Log emergency activation
         # - Return success status
         pass
-    
+
     def deactivate_emergency_mode(self) -> bool:
         """
         Deactivate emergency mode and return to normal operation.
-        
+
         Returns:
             True if emergency mode deactivated successfully
         """
@@ -180,11 +184,11 @@ class ProgramDirector:
         # - Log emergency deactivation
         # - Return success status
         pass
-    
+
     def enforce_system_policies(self) -> list[str]:
         """
         Enforce system-wide policies across all channels.
-        
+
         Returns:
             List of policy violations or enforcement actions
         """
@@ -194,11 +198,11 @@ class ProgramDirector:
         # - Enforce content and timing policies
         # - Return list of actions taken
         pass
-    
+
     def coordinate_channel_operations(self) -> dict[str, Any]:
         """
         Coordinate operations across all channels.
-        
+
         Returns:
             Dictionary of coordination results
         """
@@ -208,11 +212,11 @@ class ProgramDirector:
         # - Handle channel dependencies
         # - Return coordination results
         pass
-    
+
     def monitor_system_performance(self) -> dict[str, Any]:
         """
         Monitor system performance and resource usage.
-        
+
         Returns:
             Dictionary of performance metrics
         """
@@ -222,14 +226,14 @@ class ProgramDirector:
         # - Check for bottlenecks or issues
         # - Return performance metrics
         pass
-    
+
     def handle_system_alerts(self, alerts: list[str]) -> bool:
         """
         Handle system alerts and notifications.
-        
+
         Args:
             alerts: List of alerts to handle
-            
+
         Returns:
             True if alerts handled successfully
         """
@@ -239,11 +243,11 @@ class ProgramDirector:
         # - Log alert handling
         # - Return success status
         pass
-    
+
     def get_emergency_content(self) -> list[dict[str, Any]]:
         """
         Get emergency content for system-wide override.
-        
+
         Returns:
             List of emergency content available
         """
@@ -252,11 +256,11 @@ class ProgramDirector:
         # - Filter for system-wide emergency use
         # - Return available emergency content
         pass
-    
+
     def validate_system_state(self) -> bool:
         """
         Validate that the system is in a consistent state.
-        
+
         Returns:
             True if system state is valid
         """

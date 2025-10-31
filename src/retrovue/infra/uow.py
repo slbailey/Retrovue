@@ -22,14 +22,14 @@ from .db import SessionLocal
 def session() -> Generator[Session, None, None]:
     """
     Database session context manager for CLI operations and batch jobs.
-    
+
     Provides Unit of Work semantics:
     - Opens a DB session
     - Yields it for use
     - On success: commits the transaction
     - On exception: rolls back and re-raises the exception
     - Always closes the session
-    
+
     Usage:
         with session() as db:
             # perform database operations
@@ -50,10 +50,10 @@ def session() -> Generator[Session, None, None]:
 def get_db() -> Generator[Session, None, None]:
     """
     FastAPI dependency generator for database sessions.
-    
+
     Provides the same Unit of Work semantics as session() but as a generator
     for use with FastAPI's dependency injection system.
-    
+
     Usage in FastAPI endpoints:
         @app.get("/items/")
         def read_items(db: Session = Depends(get_db)):

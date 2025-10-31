@@ -14,7 +14,6 @@ from ...infra.uow import session
 from ...usecases import asset_attention as _uc_asset_attention
 from ...usecases import asset_update as _uc_asset_update
 
-
 app = typer.Typer(name="asset", help="Asset inspection and review operations")
 
 
@@ -55,12 +54,13 @@ def list_attention(
             )
 
 
-
 @app.command("resolve")
 def resolve_asset(
     asset_uuid: str = typer.Argument(..., help="Asset UUID to resolve"),
     approve: bool = typer.Option(False, "--approve", help="Approve asset for broadcast"),
-    ready: bool = typer.Option(False, "--ready", help="Mark asset state=ready (allowed from enriching)"),
+    ready: bool = typer.Option(
+        False, "--ready", help="Mark asset state=ready (allowed from enriching)"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """
@@ -102,4 +102,3 @@ def resolve_asset(
         typer.echo(json.dumps({"status": "ok", "asset": result}, indent=2))
     else:
         typer.echo(f"Asset {result['uuid']} updated")
-

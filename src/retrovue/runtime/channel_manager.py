@@ -96,9 +96,7 @@ class ChannelRuntimeState:
             "viewer_count": self.viewer_count,
             "producer_status": self.producer_status,
             "producer_started_at": (
-                self.producer_started_at.isoformat()
-                if self.producer_started_at
-                else None
+                self.producer_started_at.isoformat() if self.producer_started_at else None
             ),
             "stream_endpoint": self.stream_endpoint,
             "last_health": self.last_health,
@@ -133,13 +131,13 @@ class ChannelManager:
 
     BROADCAST DAY INVARIANTS (06:00 → 06:00):
     - ChannelManager NEVER snaps playout to the 06:00 broadcast day boundary.
-    - ChannelManager is source-driven. If a program started at 05:00 and runs until 07:00, 
+    - ChannelManager is source-driven. If a program started at 05:00 and runs until 07:00,
       ChannelManager continues it seamlessly past 06:00.
-    - ChannelManager does not attempt to "start the new broadcast day" at 06:00 in the middle 
+    - ChannelManager does not attempt to "start the new broadcast day" at 06:00 in the middle
       of ongoing content.
-    - ChannelManager does NOT compute broadcast day labels. It asks ScheduleService what's 
+    - ChannelManager does NOT compute broadcast day labels. It asks ScheduleService what's
       playing "right now" given MasterClock.now_utc(), and uses that for playout offset only.
-    - This must be expressed in code comments so future maintainers do not reintroduce 
+    - This must be expressed in code comments so future maintainers do not reintroduce
       the "cut at 6am" bug.
     """
 
@@ -218,9 +216,7 @@ class ChannelManager:
             NoScheduleDataError if ScheduleService has nothing for "right now".
         """
         station_time = self.clock.get_current_time()
-        playout_plan = self.schedule_service.get_playout_plan_now(
-            self.channel_id, station_time
-        )
+        playout_plan = self.schedule_service.get_playout_plan_now(self.channel_id, station_time)
 
         if not playout_plan:
             raise NoScheduleDataError(
@@ -266,9 +262,7 @@ class ChannelManager:
 
         # If we have an active producer, surface its endpoint for new viewers.
         if self.active_producer:
-            self.runtime_state.stream_endpoint = (
-                self.active_producer.get_stream_endpoint()
-            )
+            self.runtime_state.stream_endpoint = self.active_producer.get_stream_endpoint()
 
     def viewer_leave(self, session_id: str) -> None:
         """
@@ -359,9 +353,7 @@ class ChannelManager:
         # Producer is up. Record runtime state.
         self.runtime_state.producer_status = "running"
         self.runtime_state.producer_started_at = station_time
-        self.runtime_state.stream_endpoint = (
-            self.active_producer.get_stream_endpoint()
-        )
+        self.runtime_state.stream_endpoint = self.active_producer.get_stream_endpoint()
 
     def _stop_producer_if_idle(self) -> None:
         """
@@ -448,13 +440,16 @@ class ChannelManager:
 # Custom exceptions for failure states
 # ----------------------------------------------------------------------
 
+
 class ChannelManagerError(Exception):
     """Base exception for ChannelManager errors."""
+
     pass
 
 
 class ProducerStartupError(ChannelManagerError):
     """Raised when a Producer cannot be constructed or fails to start."""
+
     pass
 
 
@@ -465,6 +460,7 @@ class NoScheduleDataError(ChannelManagerError):
     This is considered an upstream scheduling failure, NOT permission for
     ChannelManager to improvise content.
     """
+
     pass
 
 
@@ -475,4 +471,5 @@ class ChannelFailedError(ChannelManagerError):
     This encodes the invariant that a channel is either on-air or failed:
     we do not allow a 'partially started' channel.
     """
+
     pass

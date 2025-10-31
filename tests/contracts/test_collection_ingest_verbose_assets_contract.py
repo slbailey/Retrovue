@@ -74,7 +74,7 @@ class TestCollectionIngestVerboseAssets:
         mock_get_importer.return_value = importer
 
         # No existing assets
-        db.scalar_one_or_none.return_value = None
+        db.scalar.return_value = None
 
         # Act
         result = self.runner.invoke(app, [
@@ -125,7 +125,7 @@ class TestCollectionIngestVerboseAssets:
         existing2.hash_sha256 = None
         existing2.last_enricher_checksum = "e1"
 
-        db.scalar_one_or_none.side_effect = [existing1, existing2]
+        db.scalar.side_effect = [existing1, existing2]
 
         # Act
         result = self.runner.invoke(app, [
@@ -163,7 +163,7 @@ class TestCollectionIngestVerboseAssets:
         mock_get_importer.return_value = importer
 
         # No existing assets
-        db.scalar_one_or_none.return_value = None
+        db.scalar.return_value = None
 
         # Act (without --verbose-assets)
         result = self.runner.invoke(app, [

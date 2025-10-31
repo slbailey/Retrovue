@@ -35,7 +35,7 @@ ScheduleService consumes BroadcastTemplateBlock records to determine content sel
 1. Identifies the active template for a channel and date via BroadcastScheduleDay
 2. Retrieves all blocks for that template
 3. Determines which block applies to the current time period
-4. Applies the block's rule_json to select appropriate content from CatalogAsset
+4. Applies the block's rule_json to select appropriate content from Asset
 5. Generates BroadcastPlaylogEvent entries for the selected content
 
 Template blocks provide the "how to select content" logic that drives automated scheduling decisions.
@@ -67,7 +67,7 @@ Template blocks are content selection rules, not runtime components. They define
 - [Scheduling](Scheduling.md) - High-level scheduling system
 - [Schedule template](ScheduleTemplate.md) - Reusable programming templates
 - [Schedule day](ScheduleDay.md) - Template assignments
-- [Catalog asset](CatalogAsset.md) - Approved content
+- [Asset](Asset.md) - Approved content
 - [Playlog event](PlaylogEvent.md) - Generated playout events
 - [Channel manager](../runtime/ChannelManager.md) - Stream execution
 - [Operator CLI](../operator/CLI.md) - Operational procedures

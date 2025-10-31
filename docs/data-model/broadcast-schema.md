@@ -231,9 +231,9 @@ The Library Domain discovers, ingests, enriches, and reviews media. Once an oper
 - canonical (if true, it's allowed on air)
 - source_ingest_asset_id (for provenance / audit)
 
-After promotion, ScheduleService may consider that CatalogAsset when filling a schedule block. If canonical=false, it's visible to operators but still forbidden to air.
+ScheduleService queries Asset records where `state='ready'` and `approved_for_broadcast=true` to fill schedule blocks.
 
 **Critical Rules:**
 
-- **ScheduleService is forbidden** to schedule any CatalogAsset with canonical=false.
-- **Runtime / ChannelManager is forbidden** to playout any CatalogAsset with canonical=false.
+- **ScheduleService is forbidden** to schedule any Asset with `approved_for_broadcast=false`.
+- **Runtime / ChannelManager is forbidden** to playout any Asset with `approved_for_broadcast=false`.

@@ -20,7 +20,7 @@ from .registry import (
 
 __all__ = [
     "register_importer",
-    "get_importer", 
+    "get_importer",
     "list_importers",
     "unregister_importer",
     "register_enricher",
