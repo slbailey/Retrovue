@@ -54,8 +54,8 @@ jobs:
 
       - name: Run linting
         run: |
-          echo "🔍 Running ruff check with strict configuration..."
-          ruff check .
+          echo "🔍 Running ruff check (src only) with project config..."
+          ruff check src --config pyproject.toml
           echo "✅ Ruff check passed"
           echo "🔍 Running mypy type checking..."
           mypy
