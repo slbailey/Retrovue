@@ -33,9 +33,9 @@ Asset represents the leaf unit of broadcastable content in RetroVue. Each asset 
   - **Invariant**: When `true`, `state` MUST be `ready`
   - Used by schedulers to determine what's available for playback
   - Set manually by operators via `asset resolve --approve`
-- **operator_verified** (Boolean, required, default=False): Reserved for future operator review workflows (currently unused)
-  - Field exists in schema but is not used by current implementation
-  - Intended for staged approval workflows distinct from broadcast approval
+- **operator_verified** (Boolean, required, default=False): Schema placeholder for future staged approval workflows
+  - Will support multi-tier review processes distinct from broadcast approval
+  - Provides flexibility for operator review pipelines
 
 ### Soft delete fields
 
@@ -52,7 +52,7 @@ Asset represents the leaf unit of broadcastable content in RetroVue. Each asset 
 
 ### Change tracking fields
 
-- **last_enricher_checksum** (String(64), nullable): Reserved for future enricher change detection (not currently populated)
+- **last_enricher_checksum** (String(64), nullable): Schema placeholder for future automatic enricher change detection
 - **created_at** (DateTime(timezone=True), required, auto-generated): When asset record was created
 - **updated_at** (DateTime(timezone=True), required, auto-generated): Last modification timestamp
 
@@ -65,7 +65,7 @@ Asset has relationships with:
 - **Marker**: Chapters, availability windows, and other asset markers
 - **ReviewQueue**: Items requiring human review for quality assurance
 
-**Note**: Episode linkage via `episode_assets` junction table is planned but not yet implemented.
+**Note**: Support for episode linkage via `episode_assets` junction table is planned for an upcoming iteration.
 
 ### Indexes
 
@@ -91,7 +91,7 @@ Assets have state fields that indicate their processing status:
 3. **`ready`**: Fully processed and approved for broadcast, eligible for scheduling
 4. **`retired`**: No longer available or approved for broadcast
 
-State transitions are enforced procedurally by ingest and enricher services; there is no formal state machine implementation.
+Procedural lifecycle control keeps the ingest and enrichment pipeline predictable and transparent, with state transitions enforced by ingest and enricher services.
 
 ### Critical invariants
 
@@ -99,7 +99,7 @@ State transitions are enforced procedurally by ingest and enricher services; the
 - **An asset with `approved_for_broadcast=true` MUST be in `ready` state** (enforced by database constraint)
 - **Newly ingested assets enter the system in `new` or `enriching` state, NEVER `ready`**
 - **Assets MUST belong to exactly one collection via `collection_uuid`**
-- **Approval is manual**: `approved_for_broadcast` is set by operator review via `asset resolve --approve`, not automatically by enrichers
+- **Operator approval required**: `approved_for_broadcast` is set by operator review via `asset resolve --approve`
 
 ### Typical lifecycle flow
 
@@ -148,8 +148,8 @@ Assets within a collection are identified by canonical identity for duplicate de
 
 **Enricher Change Detection**:
 
-- `last_enricher_checksum` field reserved for future use; not currently populated
-- Planned: System will compare enricher configuration checksums and re-process when configuration changes
+- Reserved for future enrichment improvements
+- Checksum-based reprocessing will automatically detect enricher configuration changes
 
 ## Contract-driven behavior
 
@@ -160,7 +160,7 @@ Assets within a collection are identified by canonical identity for duplicate de
 - **Asset Attention**: `retrovue asset attention` - List assets needing operator attention (downgraded or not broadcastable)
 - **Asset Resolve**: `retrovue asset resolve <uuid>` - Resolve a single asset by approving and/or marking ready
 
-**Planned CLI Operations:**
+**Upcoming CLI Operations:**
 
 - **Asset Show**: `retrovue asset show <uuid>` - Display detailed asset information
 - **Asset List**: `retrovue asset list` - List assets with filtering options
@@ -169,7 +169,7 @@ Assets within a collection are identified by canonical identity for duplicate de
 - **Asset Delete**: `retrovue assets delete` - Delete assets (soft delete only in production)
 - **Asset Restore**: `retrovue assets restore` - Restore soft-deleted assets
 
-**Note**: Current implementation uses singular noun (`asset`), while some planned operations reference plural (`assets`). This inconsistency should be resolved to standardize on singular throughout.
+**Note**: The current implementation uses singular noun (`asset`), with standardization of this convention planned for forthcoming commands.
 
 ### Safety expectations
 
@@ -259,12 +259,12 @@ Select assets for operations:
 
 ### Approval / broadcast readiness
 
-Assets require manual operator approval before becoming broadcast-ready:
+Assets require operator approval before becoming broadcast-ready:
 
 - Use `retrovue asset attention` to list assets needing attention (state='enriching' OR approved_for_broadcast=false)
 - Use `retrovue asset resolve <uuid> --approve --ready` to approve and mark asset as ready
 - ONLY `ready` assets with `approved_for_broadcast=true` are eligible for scheduling
-- Approval is manual; enrichers do not automatically set `approved_for_broadcast=true`
+- Operator approval required; enrichers do not automatically set `approved_for_broadcast=true`
 
 ### Cleanup / retirement
 
@@ -300,33 +300,31 @@ Asset UUID is the primary key and spine connecting all asset-related tables. The
 
 ## Future work
 
-The following features are planned but not yet implemented:
+The current schema provides a solid foundation for upcoming enrichment and scheduling enhancements. Planned extensions include:
 
-### Unimplemented CLI Operations
+### Upcoming CLI Operations
 
 - **Asset Show**: Display detailed asset information
 - **Asset List**: List assets with filtering options
 - **Asset Update**: Update asset metadata and configuration
 - **Asset Select**: Select assets by various criteria (UUID, title, series, genre, etc.)
-- **Asset Delete**: Delete assets (soft delete workflow)
+- **Asset Delete**: Delete assets with soft delete workflow
 - **Asset Restore**: Restore soft-deleted assets
 
-### Unimplemented Features
+### Future Enhancements
 
-- **Episode Linkage**: `episode_assets` junction table for linking assets to TV show episodes
-- **Enricher Checksum Tracking**: `last_enricher_checksum` field exists but is not populated
-- **Automatic Approval**: Enrichers do not automatically set `approved_for_broadcast=true` on completion
-- **Enricher Change Detection**: No automatic re-processing when enricher configuration changes
-- **Provider Key Prefixing**: Canonical key generation does not consistently prefix with provider names
-- **Operator Verified Workflow**: `operator_verified` field exists but is not used by current implementation
+- **Episode Linkage**: Extension into episode relationships via `episode_assets` junction table
+- **Enricher Checksum Tracking**: Automatic enricher change detection using `last_enricher_checksum`
+- **Automatic Approval**: Integration of enricher-driven approval workflows
+- **Provider Key Prefixing**: Standardized provider name prefixing in canonical key generation
+- **Operator Verified Workflow**: Multi-tier review processes using `operator_verified` field
 
-### Planned Enhancements
+### Design Extensions
 
 - Formal state machine implementation for asset lifecycle transitions
-- Automatic enricher change detection using `last_enricher_checksum`
 - Bulk operations for asset selection, deletion, and restoration
 - Integration tests for asset-to-episode linkage
-- Standardized CLI naming (singular `asset` throughout)
+- CLI naming standardization (singular `asset` throughout)
 
 ## See also
 
