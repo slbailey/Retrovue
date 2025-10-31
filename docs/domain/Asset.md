@@ -59,7 +59,7 @@ Asset is the atomic unit of broadcastable content in RetroVue. It bridges ingest
 Asset has relationships with:
 
 - **Collection** (via `collection_uuid` foreign key): The collection this asset belongs to
-- **Episode** (via `episode_assets` junction table): Many-to-many relationship with episodes
+- **Episode** (via `episode_assets` junction table): Many-to-many relationship with episodes (planned/WIP)
 - **ProviderRef**: External system references (Plex rating keys, etc.)
 - **Marker**: Chapters, availability windows, and other asset markers
 - **ReviewQueue**: Items requiring human review for quality assurance
@@ -75,7 +75,7 @@ Asset table includes indexes on:
 - `ix_assets_discovered_at` on `discovered_at`
 - `ix_assets_is_deleted` on `is_deleted`
 - `ix_assets_collection_canonical_unique` **unique** on `(collection_uuid, canonical_key_hash)`
-- `ix_assets_collection_uri_unique` **unique** on `(collection_uuid, uri)`
+- `ix_assets_collection_uri_unique` **unique** on `(collection_uuid, uri)` (deployment / storage-layout dependent)
 - `ix_assets_schedulable` **partial** on `(collection_uuid, discovered_at)` where `state='ready' AND approved_for_broadcast=true AND is_deleted=false` (hot path for schedulers)
 
 ## Contract / interface
