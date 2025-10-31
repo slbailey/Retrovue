@@ -93,6 +93,15 @@ Assets progress through four distinct states:
 
 Procedural lifecycle control keeps the ingest and enrichment pipeline predictable and transparent. State transitions are enforced by ingest and enricher services.
 
+### Asset Lifecycle
+
+| From State | Action | To State | Notes |
+|-------------|---------|----------|-------|
+| `new` | Enrichment begins | `enriching` | Automatic during ingest |
+| `enriching` | Operator resolves and approves | `ready` | via `asset resolve --approve --ready` |
+| `ready` | Operator retires asset | `retired` | via update/delete ops |
+| any | Soft delete | — | Marks `is_deleted=true` |
+
 ### Critical invariants
 
 - Check constraint: `chk_approved_implies_ready` enforces that `approved_for_broadcast=true` requires `state='ready'`
