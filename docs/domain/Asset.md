@@ -1,16 +1,16 @@
-# Domain — Asset
+_Related: [Collection](Collection.md) • [Source](Source.md) • [Scheduling](Scheduling.md) • [Ingest Pipeline](IngestPipeline.md)_
 
-Related: [Collection](Collection.md) • [Source](Source.md) • [Scheduling](Scheduling.md) • [Ingest Pipeline](IngestPipeline.md) • [Contracts](../contracts/README.md)
+# Domain — Asset
 
 ## Purpose
 
-Asset represents the leaf unit of broadcastable content in RetroVue. Each asset belongs to exactly one collection and has lifecycle state fields indicating its readiness for scheduling and playout. Assets are the single source of truth for all broadcastable content, whether just ingested or fully processed and ready for broadcast. Assets form the atomic building blocks of RetroVue's content model, serving as the bridge between ingestion, enrichment, and broadcast domains.
+Asset is the atomic unit of broadcastable content in RetroVue. It bridges ingestion, enrichment, and playout by defining a consistent, canonical representation of every piece of media. Assets are the foundation of RetroVue's content lifecycle and the single source of truth for anything that can air.
 
 ## Core model / scope
 
 ### Primary key / identity fields
 
-- **uuid** (UUID, primary key): Stable identifier that serves as the spine connecting all other tables that reference assets
+- **uuid** (UUID, primary key): Primary identifier serving as the spine connecting all asset-related tables
 
 ### Canonical identity fields
 
@@ -30,12 +30,10 @@ Asset represents the leaf unit of broadcastable content in RetroVue. Each asset 
 ### Approval / broadcast readiness fields
 
 - **approved_for_broadcast** (Boolean, required, default=False): Runtime gating flag for schedulers and playout
-  - **Invariant**: When `true`, `state` MUST be `ready`
-  - Used by schedulers to determine what's available for playback
-  - Set manually by operators via `asset resolve --approve`
-- **operator_verified** (Boolean, required, default=False): Schema placeholder for future staged approval workflows
-  - Will support multi-tier review processes distinct from broadcast approval
-  - Provides flexibility for operator review pipelines
+  - Invariant: `true` requires `state='ready'` (enforced by database constraint)
+  - Used by ScheduleService to determine available content
+  - Set by operators via `asset resolve --approve`
+- **operator_verified** (Boolean, required, default=False): Reserved for future multi-tier review processes distinct from broadcast approval
 
 ### Soft delete fields
 
@@ -52,7 +50,7 @@ Asset represents the leaf unit of broadcastable content in RetroVue. Each asset 
 
 ### Change tracking fields
 
-- **last_enricher_checksum** (String(64), nullable): Schema placeholder for future automatic enricher change detection
+- **last_enricher_checksum** (String(64), nullable): Reserved for future automatic enricher change detection
 - **created_at** (DateTime(timezone=True), required, auto-generated): When asset record was created
 - **updated_at** (DateTime(timezone=True), required, auto-generated): Last modification timestamp
 
@@ -61,221 +59,202 @@ Asset represents the leaf unit of broadcastable content in RetroVue. Each asset 
 Asset has relationships with:
 
 - **Collection** (via `collection_uuid` foreign key): The collection this asset belongs to
+- **Episode** (via `episode_assets` junction table): Many-to-many relationship with episodes
 - **ProviderRef**: External system references (Plex rating keys, etc.)
 - **Marker**: Chapters, availability windows, and other asset markers
 - **ReviewQueue**: Items requiring human review for quality assurance
-
-**Note**: Support for episode linkage via `episode_assets` junction table is planned for an upcoming iteration.
 
 ### Indexes
 
 Asset table includes indexes on:
 
-- `collection_uuid` (for collection-based queries)
-- `state` (for lifecycle state queries)
-- `approved_for_broadcast` (for broadcast eligibility queries)
-- `operator_verified` (for operator verification queries)
-- `discovered_at` (for chronological queries)
-- `is_deleted` (for soft delete filtering)
-- `(collection_uuid, canonical_key_hash)` **unique** (for duplicate detection and efficient lookups)
-- **Partial index**: `ix_assets_schedulable` on `(collection_uuid, discovered_at)` where `state='ready' AND approved_for_broadcast=true AND is_deleted=false` (hot path for schedulers)
+- `ix_assets_collection_uuid` on `collection_uuid`
+- `ix_assets_state` on `state`
+- `ix_assets_approved` on `approved_for_broadcast`
+- `ix_assets_operator_verified` on `operator_verified`
+- `ix_assets_discovered_at` on `discovered_at`
+- `ix_assets_is_deleted` on `is_deleted`
+- `ix_assets_collection_canonical_unique` **unique** on `(collection_uuid, canonical_key_hash)`
+- `ix_assets_collection_uri_unique` **unique** on `(collection_uuid, uri)`
+- `ix_assets_schedulable` **partial** on `(collection_uuid, discovered_at)` where `state='ready' AND approved_for_broadcast=true AND is_deleted=false` (hot path for schedulers)
 
 ## Contract / interface
 
 ### Lifecycle states
 
-Assets have state fields that indicate their processing status:
+Assets progress through four distinct states:
 
-1. **`new`**: Recently discovered during ingest, minimal metadata, not yet processed
-2. **`enriching`**: Being processed by enrichers to add metadata and enhance content
-3. **`ready`**: Fully processed and approved for broadcast, eligible for scheduling
-4. **`retired`**: No longer available or approved for broadcast
+1. **`new`**: Recently discovered, minimal metadata, awaiting processing
+2. **`enriching`**: Undergoing enrichment by metadata services
+3. **`ready`**: Fully processed, operator-approved, available for scheduling
+4. **`retired`**: No longer available for broadcast
 
-Procedural lifecycle control keeps the ingest and enrichment pipeline predictable and transparent, with state transitions enforced by ingest and enricher services.
+Procedural lifecycle control keeps the ingest and enrichment pipeline predictable and transparent. State transitions are enforced by ingest and enricher services.
 
 ### Critical invariants
 
-- **An asset in `ready` state MUST have `approved_for_broadcast=true`** (enforced by database constraint)
-- **An asset with `approved_for_broadcast=true` MUST be in `ready` state** (enforced by database constraint)
-- **Newly ingested assets enter the system in `new` or `enriching` state, NEVER `ready`**
-- **Assets MUST belong to exactly one collection via `collection_uuid`**
-- **Operator approval required**: `approved_for_broadcast` is set by operator review via `asset resolve --approve`
+- Check constraint: `chk_approved_implies_ready` enforces that `approved_for_broadcast=true` requires `state='ready'`
+- Check constraint: `chk_deleted_at_sync` ensures `is_deleted` and `deleted_at` are synchronized
+- Check constraint: `chk_canon_hash_len` enforces canonical key hash length of 64 characters
+- Check constraint: `chk_canon_hash_hex` enforces canonical key hash is hexadecimal
+- Unique constraint: `ix_assets_collection_canonical_unique` on `(collection_uuid, canonical_key_hash)` prevents duplicate assets
+- Unique constraint: `ix_assets_collection_uri_unique` on `(collection_uuid, uri)` prevents duplicate URIs per collection
+- Newly ingested assets enter as `new` or `enriching`, never `ready`
+- Every asset belongs to exactly one collection via `collection_uuid`
 
-### Typical lifecycle flow
+### Lifecycle flow
 
-Assets typically progress through these states:
+Assets progress through:
 
 1. **Discovery**: Asset discovered during collection ingest (`state=new`)
 2. **Enrichment**: Enrichers process metadata and enhance content (`state=enriching`)
-3. **Manual Approval**: Operator reviews and approves via `asset resolve --approve --ready` (sets `state=ready` and `approved_for_broadcast=true`)
-4. **Broadcast**: Ready assets are eligible for scheduling and playout
-5. **Retirement**: Assets can be marked `state=retired` when no longer available
+3. **Approval**: Operator reviews and approves via `asset resolve --approve --ready` (sets `state=ready` and `approved_for_broadcast=true`)
+4. **Scheduling**: Ready assets become eligible for scheduling and playout
+5. **Retirement**: Assets marked `state=retired` when no longer available
 
 State transitions are enforced procedurally by ingest, enricher, and operator workflows.
 
 ### Canonical key system
 
-Assets are uniquely identified within a collection using a canonical key system:
+Assets are uniquely identified within a collection using canonical keys:
 
-- **Canonical Key**: Deterministic string generated by `src/retrovue/infra/canonical.py::canonical_key_for()`
-  - Primarily normalizes filesystem paths and URIs (e.g., `file:/media/movie.mp4`)
-  - Uses `provider_key` or `external_id` when available from importers
-  - Format varies by importer; typically includes collection identifier
+- **Canonical Key**: Deterministic string generated by `canonical_key_for()`
+  - Normalizes filesystem paths and URIs (e.g., `file:/media/movie.mp4`)
+  - Uses `provider_key` or `external_id` when available
+  - Includes collection identifier
 - **Canonical Hash**: SHA256 hash of canonical key, stored as `canonical_key_hash`
-  - Used for efficient database lookups and duplicate detection
+  - Enables efficient lookups and duplicate detection
   - Enforces uniqueness: `(collection_uuid, canonical_key_hash)`
 - **Key Generation**: Handled by ingest service via `src/retrovue/infra/canonical.py`
 
-**Canonical Key Normalization Rules**:
+**Normalization Rules**:
 - Windows paths: `C:\path\to\file.mkv` → `/c/path/to/file.mkv`
-- UNC paths: `\\server\share\file.mkv` → `//server/share/file.mkv`
-- URIs: `file:///path/to/file.mkv` → normalized scheme://host/path
+- UNC paths: `\\SERVER\share\file.mkv` → `//SERVER/share/file.mkv` (server name preserved)
+- URIs: `file:///path/to/file.mkv` → normalized scheme://host/path (host lowercased)
 - Paths are lowercased and trailing slashes removed
 
-### Duplicate / change detection behavior
+### Duplicate detection
 
-Assets within a collection are identified by canonical identity for duplicate detection:
+Assets are identified by canonical identity within a collection:
 
-- **Canonical Identity**: Determined by importer-specific logic via `canonical_key_for()`
-- **Uniqueness**: Only one Asset record per canonical identity within a collection (enforced by DB unique constraint on `collection_uuid, canonical_key_hash`)
-- **Duplicate Resolution**: When a canonical key hash matches an existing record, ingest updates that record instead of inserting a new one
+- **Canonical Identity**: Determined by importer via `canonical_key_for()`
+- **Uniqueness**: One asset per canonical identity (enforced by unique constraint on `collection_uuid, canonical_key_hash`)
+- **Duplicate Resolution**: Matching canonical key hash updates existing record instead of inserting
 
 **Content Change Detection**:
 
-- `hash_sha256` field tracks content signature
-- System compares current content hash with stored hash
-- Changed assets are re-processed, resetting state to `new` or `enriching`
+- `hash_sha256` tracks content signature
+- Ingest compares current hash with stored hash
+- Changed assets re-process, resetting state to `new` or `enriching`
 
 **Enricher Change Detection**:
 
 - Reserved for future enrichment improvements
-- Checksum-based reprocessing will automatically detect enricher configuration changes
+- Checksum-based reprocessing will automatically detect configuration changes
 
 ## Contract-driven behavior
 
-### How CLI noun-verb pairs map to Asset operations
+### CLI operations
 
-**Implemented Operations:**
+**Implemented**:
+- `retrovue asset attention` — List assets needing operator attention
+- `retrovue asset resolve <uuid>` — Approve and/or mark asset ready
 
-- **Asset Attention**: `retrovue asset attention` - List assets needing operator attention (downgraded or not broadcastable)
-- **Asset Resolve**: `retrovue asset resolve <uuid>` - Resolve a single asset by approving and/or marking ready
+**Upcoming**:
+- `retrovue asset show <uuid>` — Display detailed asset information
+- `retrovue asset list` — List assets with filtering options
+- `retrovue asset update <uuid>` — Update asset metadata and configuration
+- `retrovue assets select` — Select assets by criteria
+- `retrovue assets delete` — Delete assets (soft delete only in production)
+- `retrovue assets restore` — Restore soft-deleted assets
 
-**Upcoming CLI Operations:**
-
-- **Asset Show**: `retrovue asset show <uuid>` - Display detailed asset information
-- **Asset List**: `retrovue asset list` - List assets with filtering options
-- **Asset Update**: `retrovue asset update <uuid>` - Update asset metadata and configuration
-- **Asset Select**: `retrovue assets select` - Select assets by various criteria (UUID, title, series, genre, etc.)
-- **Asset Delete**: `retrovue assets delete` - Delete assets (soft delete only in production)
-- **Asset Restore**: `retrovue assets restore` - Restore soft-deleted assets
-
-**Note**: The current implementation uses singular noun (`asset`), with standardization of this convention planned for forthcoming commands.
-
-### Safety expectations
-
-All Asset operations are defined by behavioral contracts that specify exact CLI syntax, safety expectations, output formats, and data effects:
-
-- **Safety first**: No destructive operations run against live data during automated tests
-- **One contract per noun-verb pair**: Each Asset operation has its own focused contract
-- **Test isolation**: All operations support `--test-db` for isolated testing
-- **Idempotent operations**: Asset operations are safely repeatable
-- **Clear error handling**: Failed operations provide clear diagnostic information
-- **Unit of Work**: All database-modifying operations MUST be wrapped in atomic transactions
-
-### Testability expectations
-
-- Contract-driven testing ensures behavioral consistency
-- Clear error messages and diagnostic information
-
-### Idempotence / transaction boundaries
-
-- Asset operations are safely repeatable
-- All database-modifying operations MUST be wrapped in atomic transactions
-- Transaction rollback occurs on any fatal error, ensuring no partial state changes
+Asset operations follow behavioral contracts that specify exact CLI syntax, safety guarantees, output formats, and data effects. All operations support `--test-db` for isolated testing and include atomic transaction boundaries with rollback on error.
 
 ## Execution model
 
-### How Assets flow through ingest → enrichment → approval → scheduling → playout
+### Asset lifecycle
 
-Assets are the source of all scheduled content. The flow is:
+Assets flow from discovery through scheduling:
 
-1. **Ingest Pipeline**: Importers enumerate assets from external sources (Plex, filesystem, etc.)
+1. **Discovery**: Importers enumerate assets from external sources
 2. **Normalization**: Importers return normalized asset descriptions
-3. **Persistence**: Ingest service creates Asset records in `new` or `enriching` state (updates existing records if canonical key hash matches)
+3. **Persistence**: Ingest creates Asset records in `new` or `enriching` state (updates existing records if canonical key hash matches)
 4. **Duplicate Detection**: System checks canonical identity to prevent duplicates
-5. **Change Detection**: System identifies existing assets and re-processes if content hash changed
-6. **Enrichment**: Enrichers attach metadata, validate content, enhance descriptions (sets state to `enriching`)
-7. **Manual Approval**: Operator reviews assets via `asset attention` and approves via `asset resolve --approve --ready`
-8. **Scheduling**: ScheduleService queries for assets with `state='ready' AND approved_for_broadcast=true AND is_deleted=false`
-9. **Playout**: Scheduling creates ProgramEpisode entries which reference assets; PlaylogEvents are generated from ProgramEpisodes for playback
+5. **Change Detection**: System re-processes existing assets if content hash changed
+6. **Enrichment**: Enrichers attach metadata, validate content, set state to `enriching`
+7. **Approval**: Operators review via `asset attention` and approve via `asset resolve --approve --ready`
+8. **Scheduling**: ScheduleService queries for `state='ready' AND approved_for_broadcast=true AND is_deleted=false`
+9. **Playout**: Scheduling creates ProgramEpisode entries referencing assets; PlaylogEvents generated from ProgramEpisodes for playback
 
-**Note**: ScheduleService does not directly schedule Asset records; it consumes ProgramEpisode entries which reference assets. Playback occurs via PlaylogEvent → ProgramEpisode → Asset chain.
+**Note**: ScheduleService consumes ProgramEpisode entries, not Asset records directly. Playback follows PlaylogEvent → ProgramEpisode → Asset chain.
 
-### Which services operate on Asset
+### Service integration
 
 - **IngestService**: Creates and manages asset lifecycle during collection ingest
 - **EnricherService**: Processes assets through enrichment pipeline
 - **ScheduleService**: Queries ready, approved assets for scheduling (via ProgramEpisode creation)
 - **PlayoutService**: Uses asset metadata from ProgramEpisode references for playout execution
 
-### Which parts of the system are allowed to see/use which states
+### State visibility
 
 - **Ingest Layer**: Creates assets in `new` or `enriching` state
 - **Enrichment Layer**: Processes assets in `enriching` state
 - **Operator Layer**: Reviews and approves via `asset attention` and `asset resolve`
-- **Scheduling Layer**: ONLY queries `ready` assets with `approved_for_broadcast=true AND is_deleted=false`
+- **Scheduling Layer**: Queries `ready` assets with `approved_for_broadcast=true AND is_deleted=false`
 - **Runtime Layer**: Consumes assets indirectly via PlaylogEvent → ProgramEpisode references
 
 ## Failure / fallback behavior
 
-### What happens when ingest or enrichment breaks
+### Ingest and enrichment failure handling
 
-If assets fail to be discovered or processed, the system logs errors and continues with available assets. Invalid assets remain in `enriching` state or are marked as `retired`. If ready assets are missing or invalid, the system falls back to default programming or the most recent valid content.
+If assets fail discovery or processing, the system logs errors and continues with available assets. Invalid assets remain in `enriching` state or marked as `retired`. Missing or invalid ready assets trigger fallback to default programming or most recent valid content.
 
-### Safety rules for delete/restore, especially around scheduled content
+### Safety rules
 
-- **PRODUCTION SAFETY**: Hard deletes are disabled in production; only soft deletes (`is_deleted=true`) are allowed
-- **PRODUCTION SAFETY**: Assets referenced by PlaylogEvent or AsRunLog CANNOT be deleted in production, even with `--force`
-- Asset deletion requires confirmation unless `--force` is provided (for soft deletes)
-- Individual asset ingest failures do not abort the entire collection ingest operation
-- Transaction rollback occurs on any fatal error, ensuring no partial state changes
+- **PRODUCTION SAFETY**: Hard deletes disabled in production; only soft deletes (`is_deleted=true`) permitted
+- **PRODUCTION SAFETY**: Assets referenced by PlaylogEvent or AsRunLog cannot be deleted, even with `--force`
+- Asset deletion requires confirmation unless `--force` provided
+- Individual asset ingest failures do not abort collection ingest operation
+- Transaction rollback on any fatal error prevents partial state changes
 
 ## Operator workflows
 
-### Discovery / ingest
+### Discovery and ingest
 
-Assets are automatically discovered during collection ingest operations:
+Assets are automatically discovered during collection ingest:
 
-- `retrovue collection ingest <collection_id>` - Ingest assets from a collection
-- `retrovue source ingest <source_id>` - Bulk ingest from all enabled collections in a source
+- `retrovue collection ingest <collection_id>` — Ingest assets from a collection
+- `retrovue source ingest <source_id>` — Bulk ingest from all enabled collections in a source
 
-### Selection / filtering / targeting assets
+### Selection and filtering
 
 Select assets for operations:
 
-- `retrovue assets select --uuid <uuid>` - Select specific asset by UUID
-- `retrovue assets select --type "TV" --title "The Simpsons" --season 1 --episode 1` - Select by TV show hierarchy
-- `retrovue assets select --type "Movie" --title "The Matrix"` - Select movie assets
+- `retrovue assets select --uuid <uuid>` — Select specific asset by UUID
+- `retrovue assets select --type "TV" --title "The Simpsons" --season 1 --episode 1` — Select by TV show hierarchy
+- `retrovue assets select --type "Movie" --title "The Matrix"` — Select movie assets
 
-### Approval / broadcast readiness
+### Approval workflow
 
 Assets require operator approval before becoming broadcast-ready:
 
-- Use `retrovue asset attention` to list assets needing attention (state='enriching' OR approved_for_broadcast=false)
-- Use `retrovue asset resolve <uuid> --approve --ready` to approve and mark asset as ready
-- ONLY `ready` assets with `approved_for_broadcast=true` are eligible for scheduling
-- Operator approval required; enrichers do not automatically set `approved_for_broadcast=true`
+- Use `retrovue asset attention` to list assets needing attention
+- Use `retrovue asset resolve <uuid> --approve --ready` to approve and mark ready
+- Only `ready` assets with `approved_for_broadcast=true` are eligible for scheduling
+- Enrichers do not automatically set `approved_for_broadcast=true`
 
-### Cleanup / retirement
+### Cleanup and retirement
 
-Use soft delete (`is_deleted=true`) to remove content while preserving audit trail:
+Use soft delete to remove content while preserving audit trail:
 
-- `retrovue assets delete --uuid <uuid>` - Soft delete (reversible; hard deletes disabled in production)
-- Assets can be marked as `retired` to prevent further scheduling without deleting
+- `retrovue assets delete --uuid <uuid>` — Soft delete (reversible; hard deletes disabled in production)
+- Mark assets as `retired` to prevent scheduling without deleting
 
 ## Naming rules
 
-### Canonical casing (Asset vs assets)
+### Naming conventions
+
+The canonical name for this concept in code and documentation is **Asset**.
 
 - **Operator-facing noun**: `assets` (humans type `retrovue assets ...`)
 - **Internal canonical model**: `Asset`
@@ -283,55 +262,15 @@ Use soft delete (`is_deleted=true`) to remove content while preserving audit tra
 - **CLI commands**: Use UUID as primary identifier
 - **Code and docs**: Always refer to the persisted model as `Asset` (singular, capitalized)
 
-### Table naming
-
-- Database table: `assets` (plural)
-- Foreign key references: `collection_uuid`
-
-### CLI naming
-
-- CLI noun: `assets` (plural)
-- Commands: `retrovue assets select`, `retrovue assets delete`, etc.
-- Primary identifier: UUID
-
-### UUID spine rule
-
-Asset UUID is the primary key and spine connecting all asset-related tables. There is no "AssetDraft" - importers return normalized Asset data that becomes Asset records during ingest.
+There is no "AssetDraft" — importers return normalized Asset data that becomes Asset records during ingest.
 
 ## Future work
 
-The current schema provides a solid foundation for upcoming enrichment and scheduling enhancements. Planned extensions include:
-
-### Upcoming CLI Operations
-
-- **Asset Show**: Display detailed asset information
-- **Asset List**: List assets with filtering options
-- **Asset Update**: Update asset metadata and configuration
-- **Asset Select**: Select assets by various criteria (UUID, title, series, genre, etc.)
-- **Asset Delete**: Delete assets with soft delete workflow
-- **Asset Restore**: Restore soft-deleted assets
-
-### Future Enhancements
-
-- **Episode Linkage**: Extension into episode relationships via `episode_assets` junction table
-- **Enricher Checksum Tracking**: Automatic enricher change detection using `last_enricher_checksum`
-- **Automatic Approval**: Integration of enricher-driven approval workflows
-- **Provider Key Prefixing**: Standardized provider name prefixing in canonical key generation
-- **Operator Verified Workflow**: Multi-tier review processes using `operator_verified` field
-
-### Design Extensions
-
-- Formal state machine implementation for asset lifecycle transitions
-- Bulk operations for asset selection, deletion, and restoration
-- Integration tests for asset-to-episode linkage
-- CLI naming standardization (singular `asset` throughout)
+The current schema provides a solid foundation for upcoming enrichment and scheduling enhancements. Future iterations will add automatic enricher checksum validation using `last_enricher_checksum`.
 
 ## See also
 
-- [Asset Contracts](../contracts/resources/README.md#asset-contracts) - Complete behavioral contracts for all Asset operations
 - [Collection](Collection.md) - Content groupings that contain assets
 - [Source](Source.md) - Content sources that contain collections
-- [Importer](Importer.md) - Content discovery and normalization from external systems
-- [Ingest Pipeline](IngestPipeline.md) - Content discovery workflow that creates assets
 - [Scheduling](Scheduling.md) - How ready assets become scheduled content
-- [PlaylogEvent](PlaylogEvent.md) - Scheduled asset playout events
+- [Ingest Pipeline](IngestPipeline.md) - Content discovery workflow
