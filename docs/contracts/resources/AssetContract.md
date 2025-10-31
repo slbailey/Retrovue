@@ -8,13 +8,18 @@ This document provides an overview of all Asset domain testing contracts. Indivi
 
 ## Scope
 
-The Asset domain is covered by the following specific contracts:
+**Implemented Contracts:**
+
+- **[Asset Attention](AssetAttentionContract.md)**: List assets needing operator attention (downgraded or not broadcastable)
+- **[Asset Resolve](AssetResolveContract.md)**: Resolve a single asset by approving and/or marking ready
+
+**Planned Contracts:**
 
 - **[Asset Select](AssetsSelectContract.md)**: Selecting assets by various criteria (UUID, title, series, genre, etc.)
 - **[Asset Delete](AssetsDeleteContract.md)**: Deleting assets (soft or hard delete) and restoring soft-deleted assets
-- **Asset Show** (planned): Displaying detailed asset information
-- **Asset List** (planned): Listing assets with filtering options
-- **Asset Update** (planned): Updating asset metadata and configuration
+- **[Asset Show](AssetShowContract.md)**: Displaying detailed asset information
+- **[Asset List](AssetListContract.md)**: Listing assets with filtering options
+- **[Asset Update](AssetUpdateContract.md)**: Updating asset metadata and configuration
 
 ---
 
