@@ -154,21 +154,36 @@ Assets are identified by canonical identity within a collection:
 
 ## Contract-driven behavior
 
+All Asset operations are defined by behavioral contracts that specify exact CLI syntax, safety expectations, output formats, and data effects. The contracts ensure:
+
+- **Safety first**: No destructive operations run against live data during automated tests
+- **One contract per operation**: Each Asset operation has its own focused contract
+- **Test isolation**: All operations support `--test-db` for isolated testing
+- **Idempotent operations**: Asset operations are safely repeatable
+- **Clear error handling**: Failed operations provide clear diagnostic information
+
+Key contract patterns:
+
+- `--test-db` flag directs operations to isolated test environment
+- `--dry-run` flag shows what would be performed without executing
+- Confirmation prompts for destructive operations (with `--force` override)
+- JSON output format for automation and machine consumption
+- Atomic transactions with rollback on failure
+
 ### CLI operations
 
 **Implemented**:
-- `retrovue asset attention` — List assets needing operator attention
-- `retrovue asset resolve <uuid>` — Approve and/or mark asset ready
+- `retrovue asset attention` — List assets needing operator attention _(Contract: [Asset Attention](../contracts/resources/AssetAttentionContract.md))_
+- `retrovue asset resolve <uuid>` — Approve and/or mark asset ready _(Contract: [Asset Resolve](../contracts/resources/AssetResolveContract.md))_
 
-**Upcoming**:
-- `retrovue asset show <uuid>` — Display detailed asset information
-- `retrovue asset list` — List assets with filtering options
-- `retrovue asset update <uuid>` — Update asset metadata and configuration
-- `retrovue assets select` — Select assets by criteria
-- `retrovue assets delete` — Delete assets (soft delete only in production)
-- `retrovue assets restore` — Restore soft-deleted assets
+**Planned**:
+- `retrovue asset show <uuid>` — Display detailed asset information _(Contract: [Asset Show](../contracts/resources/AssetShowContract.md))_
+- `retrovue asset list` — List assets with filtering options _(Contract: [Asset List](../contracts/resources/AssetListContract.md))_
+- `retrovue asset update <uuid>` — Update asset metadata and configuration _(Contract: [Asset Update](../contracts/resources/AssetUpdateContract.md))_
+- `retrovue assets select` — Select assets by criteria _(Contract: [Assets Select](../contracts/resources/AssetsSelectContract.md))_
+- `retrovue assets delete` — Delete assets _(Contract: [Assets Delete](../contracts/resources/AssetsDeleteContract.md))_
 
-Asset operations follow behavioral contracts that specify exact CLI syntax, safety guarantees, output formats, and data effects. All operations support `--test-db` for isolated testing and include atomic transaction boundaries with rollback on error.
+For complete behavioral specifications, see the [Asset Contracts](../contracts/resources/AssetContract.md).
 
 ## Execution model
 
@@ -228,7 +243,7 @@ Assets are automatically discovered during collection ingest:
 
 ### Selection and filtering
 
-Select assets for operations:
+Select assets for operations _(Contract: Planned)_:
 
 - `retrovue assets select --uuid <uuid>` — Select specific asset by UUID
 - `retrovue assets select --type "TV" --title "The Simpsons" --season 1 --episode 1` — Select by TV show hierarchy
@@ -245,7 +260,7 @@ Assets require operator approval before becoming broadcast-ready:
 
 ### Cleanup and retirement
 
-Use soft delete to remove content while preserving audit trail:
+Use soft delete to remove content while preserving audit trail _(Contract: Planned)_:
 
 - `retrovue assets delete --uuid <uuid>` — Soft delete (reversible; hard deletes disabled in production)
 - Mark assets as `retired` to prevent scheduling without deleting
@@ -270,6 +285,7 @@ The current schema provides a solid foundation for upcoming enrichment and sched
 
 ## See also
 
+- [Asset Contracts](../contracts/resources/AssetContract.md) - Complete behavioral contracts for all Asset operations
 - [Collection](Collection.md) - Content groupings that contain assets
 - [Source](Source.md) - Content sources that contain collections
 - [Scheduling](Scheduling.md) - How ready assets become scheduled content
