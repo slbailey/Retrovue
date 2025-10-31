@@ -36,18 +36,27 @@ class TestCollectionIngestContract:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
+    def _make_session_cm(self):
+        """Return a no-op context manager yielding a minimal fake DB session.
+
+        Behavior tests should not depend on ORM internals; this keeps CLI happy
+        without asserting on low-level query behavior.
+        """
+        db = MagicMock()
+        cm = MagicMock()
+        cm.__enter__.return_value = db
+        cm.__exit__.return_value = False
+        return cm
+
     # B-1: Collection ID Resolution
     def test_b1_collection_resolution_uuid(self):
         """
         Contract B-1: Command MUST accept UUID as collection identifier.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service, \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -57,46 +66,35 @@ class TestCollectionIngestContract:
             mock_collection.source_id = str(uuid.uuid4())
             
             # Mock collection resolution
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.validate_ingestible.return_value = True
-            mock_get_importer.return_value = mock_importer
-            
-            # Mock service instance
-            mock_service_instance = MagicMock()
-            mock_result = MagicMock()
-            mock_result.stats = MagicMock()
-            mock_result.stats.assets_discovered = 0
-            mock_result.stats.assets_ingested = 0
-            mock_result.stats.assets_skipped = 0
-            mock_result.stats.assets_updated = 0
-            mock_service_instance.ingest_collection.return_value = mock_result
-            
-            with patch("retrovue.cli.commands.collection.CollectionIngestService", return_value=mock_service_instance):
-                result = self.runner.invoke(app, ["collection", "ingest", collection_id])
+            with patch("retrovue.cli.commands.collection.resolve_collection_selector", return_value=mock_collection):
+                # Mock importer
+                mock_importer = MagicMock()
+                mock_importer.validate_ingestible.return_value = True
+                mock_get_importer.return_value = mock_importer
                 
-                assert result.exit_code == 0
+                # Mock service instance
+                mock_service_instance = MagicMock()
+                mock_result = MagicMock()
+                mock_result.stats = MagicMock()
+                mock_result.stats.assets_discovered = 0
+                mock_result.stats.assets_ingested = 0
+                mock_result.stats.assets_skipped = 0
+                mock_result.stats.assets_updated = 0
+                mock_service_instance.ingest_collection.return_value = mock_result
+                
+                with patch("retrovue.cli.commands.collection.CollectionIngestService", return_value=mock_service_instance):
+                    result = self.runner.invoke(app, ["collection", "ingest", collection_id])
+                    
+                    assert result.exit_code == 0
 
     def test_b1_collection_resolution_external_id(self):
         """
         Contract B-1: Command MUST accept external ID as collection identifier.
         """
         external_id = "plex-5063d926-1"
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = str(uuid.uuid4())
@@ -106,13 +104,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -138,12 +129,9 @@ class TestCollectionIngestContract:
         """
         Contract B-1: Collection name matching MUST be case-insensitive.
         """
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = str(uuid.uuid4())
@@ -152,13 +140,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -188,11 +169,8 @@ class TestCollectionIngestContract:
         """
         Contract B-1: If multiple collections match (case-insensitive), exit code 1 with error message.
         """
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             # Mock multiple collections with same name (case-insensitive)
             # Mock resolve_collection_selector to raise ValueError with ambiguous message
@@ -209,11 +187,8 @@ class TestCollectionIngestContract:
         """
         Contract B-1: Resolution MUST NOT prefer one collection over another, even if one has exact casing match.
         """
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             # Mock resolve_collection_selector to raise ValueError with ambiguous message
             # (even though one might match exact casing, we should not prefer it)
@@ -231,11 +206,8 @@ class TestCollectionIngestContract:
         """
         Contract B-1: If collection not found, exit code 1.
         """
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             # Mock resolve_collection_selector to raise ValueError for not found
             mock_resolve.side_effect = ValueError("Collection 'NonExistent' not found")
@@ -251,13 +223,10 @@ class TestCollectionIngestContract:
         Contract B-2: If no --title is provided, command MUST ingest entire collection.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
-            
+
             mock_collection = MagicMock()
             mock_collection.id = collection_id
             mock_collection.name = "TV Shows"
@@ -265,13 +234,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -283,12 +245,9 @@ class TestCollectionIngestContract:
         Contract B-2: If no --title is provided, command MUST ingest entire collection.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -297,13 +256,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -381,11 +333,8 @@ class TestCollectionIngestContract:
         Contract B-5: When --json is supplied, output MUST include required fields.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -398,13 +347,6 @@ class TestCollectionIngestContract:
             # Mock collection resolution via resolve_collection_selector
             with patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
                 mock_resolve.return_value = mock_collection
-                
-                # Mock source query
-                mock_source = MagicMock()
-                mock_source.type = "plex"
-                mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-                mock_source.name = "Test Source"
-                mock_db.query.return_value.filter.return_value.first.return_value = mock_source
                 
                 # Mock importer
                 mock_importer = MagicMock()
@@ -478,12 +420,9 @@ class TestCollectionIngestContract:
         Contract B-6: CLI MUST report scope in human-readable mode.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -492,13 +431,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -529,12 +461,9 @@ class TestCollectionIngestContract:
         Contract B-7: When --dry-run is present, NO database writes or file operations may occur.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -543,13 +472,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -587,12 +509,9 @@ class TestCollectionIngestContract:
         Contract B-8: If title/season/episode cannot be found, exit code 2.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -601,13 +520,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -634,12 +546,9 @@ class TestCollectionIngestContract:
         Contract B-8: Scope resolution failure MUST still output valid JSON if --json was passed.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -648,13 +557,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -741,12 +643,11 @@ class TestCollectionIngestContract:
         Contract B-10: When run with --test-db, no changes may affect production databases.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
             
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
+            # DB context handled via _get_db_context; no direct session mocking here
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -755,13 +656,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -795,12 +689,9 @@ class TestCollectionIngestContract:
         Contract B-10a: When both --dry-run and --test-db are provided, --dry-run takes precedence.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -809,13 +700,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -857,11 +741,8 @@ class TestCollectionIngestContract:
         Contract B-11: Full collection ingest requires sync_enabled=true. If false, exit code 1.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -870,13 +751,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock service to raise ValueError for prerequisite failure
             with patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service, \
@@ -902,12 +776,9 @@ class TestCollectionIngestContract:
         Contract B-11: --dry-run allows preview even if sync_enabled=false.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -916,13 +787,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -969,13 +833,6 @@ class TestCollectionIngestContract:
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
             
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
-            
             # Mock importer
             mock_importer = MagicMock()
             mock_importer.validate_ingestible.return_value = False
@@ -1000,11 +857,8 @@ class TestCollectionIngestContract:
         Contract B-13: Targeted ingest requires ingestible=true. If false, exit code 1.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -1013,13 +867,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = False  # But must be ingestible
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -1048,12 +895,9 @@ class TestCollectionIngestContract:
         Contract B-13: Targeted ingest MAY bypass sync_enabled=false.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -1062,13 +906,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True  # But ingestible
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -1098,8 +935,8 @@ class TestCollectionIngestContract:
     # B-14: Importer Enumeration
     def test_b14_importer_returns_asset_drafts_no_db_writes(self):
         """
-        Contract B-14: Importer MUST return AssetDraft objects without database writes.
-        This test verifies that enumerate_assets is called and returns data structures,
+        Contract B-14: Importer MUST return DiscoveredItem objects without database writes.
+        This test verifies that discover is called and returns data structures,
         not database records.
         """
         collection_id = str(uuid.uuid4())
@@ -1117,13 +954,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -1154,12 +984,9 @@ class TestCollectionIngestContract:
         If validate_ingestible() returns false, enumerate_assets() MUST NOT be called.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -1169,13 +996,6 @@ class TestCollectionIngestContract:
             
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -1212,12 +1032,9 @@ class TestCollectionIngestContract:
         Contract B-14a: When validate_ingestible() returns true, enumerate_assets() may proceed.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -1227,13 +1044,6 @@ class TestCollectionIngestContract:
             
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             # Mock importer
             mock_importer = MagicMock()
@@ -1272,12 +1082,9 @@ class TestCollectionIngestContract:
         If collection not found, exit code 1 immediately (no prerequisite check).
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve, \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             # Mock resolve_collection_selector to raise ValueError (collection not found)
             mock_resolve.side_effect = ValueError(f"Collection '{collection_id}' not found")
@@ -1298,12 +1105,9 @@ class TestCollectionIngestContract:
         If prerequisites fail, scope resolution MUST NOT be attempted.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve, \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -1311,13 +1115,6 @@ class TestCollectionIngestContract:
             mock_collection.sync_enabled = True
             mock_collection.ingestible = False  # Prerequisites fail
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             mock_importer = MagicMock()
             mock_importer.validate_ingestible.return_value = False
@@ -1349,12 +1146,9 @@ class TestCollectionIngestContract:
         Contract B-15: Scope resolution occurs only after prerequisites pass.
         """
         collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection.session") as mock_session, \
+        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
              patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-            
-            mock_db = MagicMock()
-            mock_session.return_value.__enter__.return_value = mock_db
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -1363,13 +1157,6 @@ class TestCollectionIngestContract:
             mock_collection.ingestible = True  # Prerequisites pass
             mock_collection.source_id = str(uuid.uuid4())
             mock_resolve.return_value = mock_collection
-            
-            # Mock source query
-            mock_source = MagicMock()
-            mock_source.type = "plex"
-            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test"}]}
-            mock_source.name = "Test Source"
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
             
             mock_importer = MagicMock()
             mock_importer.validate_ingestible.return_value = True
@@ -1982,3 +1769,544 @@ class TestCollectionIngestTimeTrackingAndStatistics:
         # Verify service was called
         mock_service.ingest_collection.assert_called_once()
 
+
+class TestCollectionIngestCanonicalKey:
+    """Tests for canonical key derivation refinement (Milestone 2b)."""
+    
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.collection_id = str(uuid.uuid4())
+        self.source_id = str(uuid.uuid4())
+        
+        # Mock collection data
+        self.collection = MagicMock()
+        self.collection.id = self.collection_id
+        self.collection.uuid = self.collection_id
+        self.collection.name = "Test Collection"
+        self.collection.sync_enabled = True
+        self.collection.ingestible = True
+        self.collection.source_id = self.source_id
+        
+        # Mock source data
+        self.source = MagicMock()
+        self.source.id = self.source_id
+        self.source.type = "filesystem"
+        
+        # Mock importer
+        self.importer = MagicMock()
+        self.importer.name = "filesystem"
+        self.importer.validate_ingestible.return_value = True
+    
+    def _setup_session_mock(self, mock_session):
+        """Helper to setup session mock consistently across tests."""
+        mock_db = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_db
+        return mock_db
+    
+    @patch('retrovue.cli.commands.collection.session')
+    @patch('retrovue.cli.commands.collection.get_importer')
+    @patch('retrovue.cli.commands.collection.resolve_collection_selector')
+    @patch('retrovue.cli.commands.collection.CollectionIngestService')
+    def test_canonical_key_windows_path_normalization(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
+        """Verify that Windows paths are normalized correctly."""
+        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        
+        # Test Windows path normalization
+        windows_path = r"C:\Movies\The Matrix.mkv"
+        result_key = canonical_key_for(
+            {"path_uri": windows_path},
+            collection=self.collection,
+            provider="filesystem"
+        )
+        # Should normalize Windows drive to lowercase /c/
+        assert "/c/" in result_key
+        # Path should be lowercased and slashes normalized
+        assert "movies/the matrix.mkv" in result_key.lower()
+        assert "the matrix.mkv" in result_key.lower()
+    
+    @patch('retrovue.cli.commands.collection.session')
+    @patch('retrovue.cli.commands.collection.get_importer')
+    @patch('retrovue.cli.commands.collection.resolve_collection_selector')
+    @patch('retrovue.cli.commands.collection.CollectionIngestService')
+    def test_canonical_key_posix_path_normalization(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
+        """Verify that POSIX paths are normalized correctly."""
+        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        
+        # Test POSIX path normalization
+        posix_path = "/mnt/data/MOVIES/THE_MATRIX.MKV"
+        result_key = canonical_key_for(
+            {"path_uri": posix_path},
+            collection=self.collection,
+            provider="filesystem"
+        )
+        # Should be lowercased
+        assert "the_matrix.mkv" in result_key.lower()
+    
+    @patch('retrovue.cli.commands.collection.session')
+    @patch('retrovue.cli.commands.collection.get_importer')
+    @patch('retrovue.cli.commands.collection.resolve_collection_selector')
+    @patch('retrovue.cli.commands.collection.CollectionIngestService')
+    def test_canonical_key_smb_path_normalization(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
+        """Verify that SMB paths are normalized correctly."""
+        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        
+        # Test SMB path normalization
+        smb_path = "smb://SERVER/Share/Video.mkv"
+        result_key = canonical_key_for(
+            {"path_uri": smb_path},
+            collection=self.collection,
+            provider="smb"
+        )
+        # Should lowercase but preserve structure
+        assert "smb://" in result_key
+        assert "server" in result_key.lower()
+    
+    @patch('retrovue.cli.commands.collection.session')
+    @patch('retrovue.cli.commands.collection.get_importer')
+    @patch('retrovue.cli.commands.collection.resolve_collection_selector')
+    @patch('retrovue.cli.commands.collection.CollectionIngestService')
+    def test_canonical_key_duplicate_path_equivalence(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
+        """Verify that normalized equivalent paths map to the same hash."""
+        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        
+        # Test different path formats that should map to the same canonical key
+        path1 = r"C:\Movies\video.mkv"
+        path2 = "c:/movies/video.mkv"
+        
+        key1 = canonical_key_for(
+            {"path_uri": path1},
+            collection=self.collection,
+            provider="filesystem"
+        )
+        key2 = canonical_key_for(
+            {"path_uri": path2},
+            collection=self.collection,
+            provider="filesystem"
+        )
+        
+        # Should produce the same canonical key
+        assert key1 == key2
+        
+        # Hashes should also be the same
+        hash1 = canonical_hash(key1)
+        hash2 = canonical_hash(key2)
+        assert hash1 == hash2
+    
+    @patch('retrovue.cli.commands.collection.session')
+    @patch('retrovue.cli.commands.collection.get_importer')
+    @patch('retrovue.cli.commands.collection.resolve_collection_selector')
+    @patch('retrovue.cli.commands.collection.CollectionIngestService')
+    def test_canonical_key_missing_fields_raises_error(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
+        """Verify that missing fields raise IngestError."""
+        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        from retrovue.infra.exceptions import IngestError
+        
+        # Test with item that has no usable fields
+        with pytest.raises(IngestError, match="Cannot derive canonical key"):
+            canonical_key_for(
+                {},
+                collection=self.collection,
+                provider="filesystem"
+            )
+    
+    @patch('retrovue.cli.commands.collection.session')
+    @patch('retrovue.cli.commands.collection.get_importer')
+    @patch('retrovue.cli.commands.collection.resolve_collection_selector')
+    @patch('retrovue.cli.commands.collection.CollectionIngestService')
+    def test_canonical_key_mixed_path_formats(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
+        """Verify canonicalization of mixed paths."""
+        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        
+        # Test various path formats
+        test_paths = [
+            (r"C:\Movies\Video.mkv", "/c/movies/video.mkv"),
+            ("/mnt/data/MOVIES/", "/mnt/data/movies"),
+            ("smb://SERVER/share/file", "smb://server/share/file"),
+            (r"\\SERVER\share\file", "//server/share/file"),
+        ]
+        
+        for original, expected_normalized in test_paths:
+            key = canonical_key_for(
+                {"path_uri": original},
+                collection=self.collection,
+                provider="filesystem"
+            )
+            # Should contain the normalized path
+            assert expected_normalized in key.lower() or key == expected_normalized
+
+
+class TestMilestone2CAssetPersistence:
+    """Milestone 2C — Minimal Asset Persistence and Repository Integration."""
+
+    def _make_collection(self):
+        m = MagicMock()
+        m.uuid = uuid.uuid4()
+        m.name = "TV Shows"
+        m.sync_enabled = True
+        m.ingestible = True
+        return m
+
+    def _make_importer(self, items: list[dict[str, object]]):
+        imp = MagicMock()
+        imp.name = "filesystem"
+        imp.validate_ingestible.return_value = True
+        imp.discover.return_value = items
+        return imp
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_persist_new_assets_when_missing(self, mock_session):
+        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestService
+
+        mock_db = MagicMock()
+        # No existing assets found
+        mock_db.scalar.return_value = None
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+        importer = self._make_importer([
+            {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 123456},
+            {"path_uri": "/media/TV/The Show/S01E02.mkv", "size": 234567},
+        ])
+
+        service = CollectionIngestService(mock_db)
+        result = service.ingest_collection(collection=collection, importer=importer)
+
+        # Stats: 2 discovered, 2 ingested, 0 skipped, no errors
+        assert result.stats.assets_discovered == 2
+        assert result.stats.assets_ingested == 2
+        assert result.stats.assets_skipped == 0
+        assert result.stats.errors == []
+
+        # Persistence: Session.add called twice
+        assert mock_db.add.call_count == 2
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_skip_duplicates_by_canonical_hash(self, mock_session):
+        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestService
+        from retrovue.domain.entities import Asset
+
+        mock_db = MagicMock()
+        existing_asset = MagicMock(spec=Asset)
+        # First lookup returns existing asset (duplicate), second returns None (new)
+        mock_db.scalar.side_effect = [existing_asset, None]
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+        importer = self._make_importer([
+            {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 123456},  # duplicate
+            {"path_uri": "/media/TV/The Show/S01E02.mkv", "size": 234567},  # new
+        ])
+
+        service = CollectionIngestService(mock_db)
+        result = service.ingest_collection(collection=collection, importer=importer)
+
+        # Stats: 2 discovered, 1 ingested, 1 skipped
+        assert result.stats.assets_discovered == 2
+        assert result.stats.assets_ingested == 1
+        assert result.stats.assets_skipped == 1
+
+        # Persistence: Session.add called once for the new asset only
+        assert mock_db.add.call_count == 1
+
+
+class TestMilestone2DAssetChangeDetection:
+    """Milestone 2D — Asset Change Detection (Content + Enricher)."""
+
+    def _make_collection(self):
+        m = MagicMock()
+        m.uuid = uuid.uuid4()
+        m.name = "TV Shows"
+        m.sync_enabled = True
+        m.ingestible = True
+        return m
+
+    def _make_importer(self, items: list[dict[str, object]]):
+        imp = MagicMock()
+        imp.name = "filesystem"
+        imp.validate_ingestible.return_value = True
+        imp.discover.return_value = items
+        return imp
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_existing_asset_different_hash_increments_changed_content(self, mock_session):
+        from retrovue.cli.main import app
+        from retrovue.domain.entities import Asset
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
+
+        runner = CliRunner()
+
+        mock_db = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+
+        # Patch resolution in CLI to avoid DB lookups for collection
+        with patch("retrovue.cli.commands.collection.resolve_collection_selector", return_value=collection), \
+             patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
+             patch.object(svc._AssetRepository, "get_by_collection_and_canonical_hash") as mock_repo_get, \
+             patch.object(svc, "canonical_key_for", return_value="canon-key"), \
+             patch.object(svc, "canonical_hash", return_value="abc123"):
+
+            existing = MagicMock(spec=Asset)
+            existing.hash_sha256 = "oldhash"
+            existing.last_enricher_checksum = "enc1"
+            mock_repo_get.return_value = existing
+
+            importer = self._make_importer([
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "newhash", "enricher_checksum": "enc1"}
+            ])
+            mock_get_importer.return_value = importer
+
+            result = runner.invoke(app, [
+                "collection", "ingest", str(collection.uuid), "--json"
+            ])
+
+            assert result.exit_code == 0
+            data = json.loads(result.stdout)
+            assert data["stats"]["assets_discovered"] == 1
+            assert data["stats"]["assets_ingested"] == 0
+            assert data["stats"]["assets_skipped"] == 0
+            assert data["stats"]["assets_changed_content"] == 1
+            assert data["stats"]["assets_changed_enricher"] == 0
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_existing_asset_different_enricher_increments_changed_enricher(self, mock_session):
+        from retrovue.cli.main import app
+        from retrovue.domain.entities import Asset
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
+
+        runner = CliRunner()
+
+        mock_db = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+
+        with patch("retrovue.cli.commands.collection.resolve_collection_selector", return_value=collection), \
+             patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
+             patch.object(svc._AssetRepository, "get_by_collection_and_canonical_hash") as mock_repo_get, \
+             patch.object(svc, "canonical_key_for", return_value="canon-key"), \
+             patch.object(svc, "canonical_hash", return_value="abc123"):
+
+            existing = MagicMock(spec=Asset)
+            existing.hash_sha256 = "hash1"
+            existing.last_enricher_checksum = "enc1"
+            mock_repo_get.return_value = existing
+
+            importer = self._make_importer([
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc2"}
+            ])
+            mock_get_importer.return_value = importer
+
+            result = runner.invoke(app, [
+                "collection", "ingest", str(collection.uuid), "--json"
+            ])
+
+            assert result.exit_code == 0
+            data = json.loads(result.stdout)
+            assert data["stats"]["assets_discovered"] == 1
+            assert data["stats"]["assets_ingested"] == 0
+            assert data["stats"]["assets_skipped"] == 0
+            assert data["stats"]["assets_changed_content"] == 0
+            assert data["stats"]["assets_changed_enricher"] == 1
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_existing_asset_no_diffs_increments_skipped(self, mock_session):
+        from retrovue.cli.main import app
+        from retrovue.domain.entities import Asset
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
+
+        runner = CliRunner()
+
+        mock_db = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+
+        with patch("retrovue.cli.commands.collection.resolve_collection_selector", return_value=collection), \
+             patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
+             patch.object(svc._AssetRepository, "get_by_collection_and_canonical_hash") as mock_repo_get, \
+             patch.object(svc, "canonical_key_for", return_value="canon-key"), \
+             patch.object(svc, "canonical_hash", return_value="abc123"):
+
+            existing = MagicMock(spec=Asset)
+            existing.hash_sha256 = "hash1"
+            existing.last_enricher_checksum = "enc1"
+            mock_repo_get.return_value = existing
+
+            importer = self._make_importer([
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc1"}
+            ])
+            mock_get_importer.return_value = importer
+
+            result = runner.invoke(app, [
+                "collection", "ingest", str(collection.uuid), "--json"
+            ])
+
+            assert result.exit_code == 0
+            data = json.loads(result.stdout)
+            assert data["stats"]["assets_discovered"] == 1
+            assert data["stats"]["assets_ingested"] == 0
+            assert data["stats"]["assets_skipped"] == 1
+            assert data["stats"]["assets_changed_content"] == 0
+            assert data["stats"]["assets_changed_enricher"] == 0
+
+
+class TestMilestone3AAssetStateUpdate:
+    """Milestone 3A — Apply change detection to Asset state (ingest-time only)."""
+
+    def _make_collection(self):
+        m = MagicMock()
+        m.uuid = uuid.uuid4()
+        m.name = "TV Shows"
+        m.sync_enabled = True
+        m.ingestible = True
+        return m
+
+    def _make_importer(self, items: list[dict[str, object]]):
+        imp = MagicMock()
+        imp.name = "filesystem"
+        imp.validate_ingestible.return_value = True
+        imp.discover.return_value = items
+        return imp
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_existing_asset_new_content_hash_updates_and_downgrades_state(self, mock_session):
+        from retrovue.cli.main import app
+        from retrovue.domain.entities import Asset
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
+
+        runner = CliRunner()
+
+        mock_db = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+
+        with patch("retrovue.cli.commands.collection.resolve_collection_selector", return_value=collection), \
+             patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
+             patch.object(svc._AssetRepository, "get_by_collection_and_canonical_hash") as mock_repo_get, \
+             patch.object(svc, "canonical_key_for", return_value="canon-key"), \
+             patch.object(svc, "canonical_hash", return_value="abc123"):
+
+            existing = MagicMock(spec=Asset)
+            existing.hash_sha256 = "oldhash"
+            existing.last_enricher_checksum = "enc1"
+            existing.state = "ready"
+            existing.approved_for_broadcast = True
+            mock_repo_get.return_value = existing
+
+            importer = self._make_importer([
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "newhash", "enricher_checksum": "enc1"}
+            ])
+            mock_get_importer.return_value = importer
+
+            result = runner.invoke(app, [
+                "collection", "ingest", str(collection.uuid), "--json"
+            ])
+
+            assert result.exit_code == 0
+            data = json.loads(result.stdout)
+            # Counters
+            assert data["stats"]["assets_discovered"] == 1
+            assert data["stats"]["assets_ingested"] == 0
+            assert data["stats"]["assets_skipped"] == 0
+            assert data["stats"]["assets_changed_content"] == 1
+            # Mutation side-effects
+            assert existing.hash_sha256 == "newhash"
+            assert existing.state == "enriching"
+            assert existing.approved_for_broadcast is False
+            # Ensure session saw a mutation we intend to persist
+            assert mock_db.add.call_count >= 1
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_existing_asset_new_enricher_updates_and_downgrades_state(self, mock_session):
+        from retrovue.cli.main import app
+        from retrovue.domain.entities import Asset
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
+
+        runner = CliRunner()
+
+        mock_db = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+
+        with patch("retrovue.cli.commands.collection.resolve_collection_selector", return_value=collection), \
+             patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
+             patch.object(svc._AssetRepository, "get_by_collection_and_canonical_hash") as mock_repo_get, \
+             patch.object(svc, "canonical_key_for", return_value="canon-key"), \
+             patch.object(svc, "canonical_hash", return_value="abc123"):
+
+            existing = MagicMock(spec=Asset)
+            existing.hash_sha256 = "hash1"
+            existing.last_enricher_checksum = "enc1"
+            existing.state = "ready"
+            existing.approved_for_broadcast = True
+            mock_repo_get.return_value = existing
+
+            importer = self._make_importer([
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc2"}
+            ])
+            mock_get_importer.return_value = importer
+
+            result = runner.invoke(app, [
+                "collection", "ingest", str(collection.uuid), "--json"
+            ])
+
+            assert result.exit_code == 0
+            data = json.loads(result.stdout)
+            # Counters
+            assert data["stats"]["assets_discovered"] == 1
+            assert data["stats"]["assets_ingested"] == 0
+            assert data["stats"]["assets_skipped"] == 0
+            assert data["stats"]["assets_changed_enricher"] == 1
+            # Mutation side-effects
+            assert existing.last_enricher_checksum == "enc2"
+            assert existing.state == "enriching"
+            # Ensure session saw a mutation we intend to persist
+            assert mock_db.add.call_count >= 1
+
+    @patch("retrovue.cli.commands.collection.session")
+    def test_existing_asset_no_changes_keeps_state_and_no_add(self, mock_session):
+        from retrovue.cli.main import app
+        from retrovue.domain.entities import Asset
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
+
+        runner = CliRunner()
+
+        mock_db = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        collection = self._make_collection()
+
+        with patch("retrovue.cli.commands.collection.resolve_collection_selector", return_value=collection), \
+             patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
+             patch.object(svc._AssetRepository, "get_by_collection_and_canonical_hash") as mock_repo_get, \
+             patch.object(svc, "canonical_key_for", return_value="canon-key"), \
+             patch.object(svc, "canonical_hash", return_value="abc123"):
+
+            existing = MagicMock(spec=Asset)
+            existing.hash_sha256 = "hash1"
+            existing.last_enricher_checksum = "enc1"
+            existing.state = "ready"
+            existing.approved_for_broadcast = True
+            mock_repo_get.return_value = existing
+
+            importer = self._make_importer([
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc1"}
+            ])
+            mock_get_importer.return_value = importer
+
+            result = runner.invoke(app, [
+                "collection", "ingest", str(collection.uuid), "--json"
+            ])
+
+            assert result.exit_code == 0
+            data = json.loads(result.stdout)
+            # Counters
+            assert data["stats"]["assets_discovered"] == 1
+            assert data["stats"]["assets_ingested"] == 0
+            assert data["stats"]["assets_skipped"] == 1
+            # No mutation intended
+            assert mock_db.add.call_count == 0

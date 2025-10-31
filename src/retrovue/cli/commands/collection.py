@@ -12,6 +12,7 @@ import typer
 
 from ...infra.exceptions import ValidationError
 from ...infra.uow import session
+from ...infra.db import get_sessionmaker
 from ...infra.validation import (
     validate_collection_exists,
     validate_collection_preserved,
@@ -32,8 +33,10 @@ app = typer.Typer(name="collection", help="Collection management operations")
 
 @app.command("list")
 def list_collections(
-    source: str = typer.Option(..., "--source", help="Source ID to list collections for"),
+    source_pos: str = typer.Argument(None, help="Source ID to list collections for (positional)"),
+    source_flag: str = typer.Option(None, "--source", help="Source ID to list collections for (flag)"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
 ):
     """
     Show Collections for a Source. For each:
@@ -45,29 +48,63 @@ def list_collections(
     
     Examples:
         retrovue collection list --source "My Plex Server"
+        retrovue collection list "My Plex Server"
         retrovue collection list --source plex-5063d926 --json
     """
-    with session() as db:
+    # Choose appropriate session context (test or default)
+    if test_db:
+        SessionForTest = get_sessionmaker(for_test=True)
+        db_cm = SessionForTest()
+    else:
+        db_cm = session()
 
-        from src_legacy.retrovue.content_manager.source_service import SourceService
-        from ...domain.entities import PathMapping, Collection
+    with db_cm as db:
+        if test_db and not json_output:
+            typer.echo("Using test database environment", err=True)
+
+        from ...domain.entities import PathMapping, Collection, Source
         
         try:
-            source_service = SourceService(db)
+            # Determine source: --source flag takes precedence over positional argument
+            source_id = source_flag if source_flag else source_pos
             
-            # Find the source
-            source_obj = source_service.get_source_by_id(source)
-            if not source_obj:
-                typer.echo(f"Error: Source '{source}' not found", err=True)
-                raise typer.Exit(1)
-            
-            # Get collections for this source
-            collections = db.query(Collection).filter(
-                Collection.source_id == source_obj.id
-            ).all()
+            if not source_id:
+                # No source filter provided - list all collections
+                collections = db.query(Collection).all()
+                source_obj = None
+            else:
+                # Find the source by UUID, external_id, or name using in-session resolution
+                source_obj = None
+                try:
+                    import uuid as uuid_module
+                    # Try UUID first
+                    uuid_module.UUID(source_id)
+                    source_obj = db.query(Source).filter(Source.id == source_id).first()
+                except ValueError:
+                    pass
+                
+                # Try external_id if not found by UUID
+                if not source_obj:
+                    source_obj = db.query(Source).filter(Source.external_id == source_id).first()
+                
+                # Try name if not found by external_id
+                if not source_obj:
+                    source_obj = db.query(Source).filter(Source.name == source_id).first()
+                
+                if not source_obj:
+                    typer.echo(f"Error: Source '{source_id}' not found", err=True)
+                    raise typer.Exit(1)
+                
+                # Get collections for this source
+                collections = db.query(Collection).filter(
+                    Collection.source_id == source_obj.id
+                ).all()
             
             if not collections:
-                typer.echo(f"No collections found for source '{source_obj.name}'")
+                if source_obj:
+                    typer.echo(f"No collections found for source '{source_obj.name}'")
+                else:
+                    typer.echo("No collections found")
                 return
             
             # Build collection data with path mappings
@@ -75,7 +112,7 @@ def list_collections(
             for collection in collections:
                 # Get path mappings for this collection
                 path_mappings = db.query(PathMapping).filter(
-                    PathMapping.collection_id == collection.uuid
+                    PathMapping.collection_uuid == collection.uuid
                 ).all()
                 
                 # Build mapping pairs
@@ -110,7 +147,10 @@ def list_collections(
                 console = Console()
                 
                 # Create main table
-                table = Table(title=f"Collections for source '{source_obj.name}'")
+                if source_obj:
+                    table = Table(title=f"Collections for source '{source_obj.name}'")
+                else:
+                    table = Table(title="All Collections")
                 table.add_column("ID", style="cyan", width=8)
                 table.add_column("Name", style="green")
                 table.add_column("Sync", style="yellow")
@@ -148,6 +188,7 @@ def list_collections(
 @app.command("list-all")
 def list_all_collections(
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
 ):
     """
     List all collections across all sources.
@@ -163,14 +204,18 @@ def list_all_collections(
         retrovue collection list-all
         retrovue collection list-all --json
     """
-    with session() as db:
+    # Choose appropriate session context (test or default)
+    if test_db:
+        SessionForTest = get_sessionmaker(for_test=True)
+        db_cm = SessionForTest()
+    else:
+        db_cm = session()
 
-        from src_legacy.retrovue.content_manager.source_service import SourceService
+    with db_cm as db:
+
         from ...domain.entities import Source, Collection
         
         try:
-            SourceService(db)
-            
             # Get all collections across all sources
             collections = db.query(Collection).join(Source).all()
             
@@ -230,9 +275,10 @@ def update_collection(
     collection_id: str = typer.Argument(..., help="Collection ID, external ID, or name to update"),
     sync_enabled: bool | None = typer.Option(None, "--sync-enabled", help="Enable or disable collection sync"),
     local_path: str | None = typer.Option(None, "--local-path", help="Override local path mapping"),
-    # TODO: Add --map flag for path mapping like --map "/mnt/media/Horror=Z:\Horror"
+    # TODO: Add --map flag for path mapping like --map "/mnt/media/Horror=Z:\\Horror"
     # map_paths: Optional[str] = typer.Option(None, "--map", help="Path mapping in format 'plex_path=local_path'"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
 ):
     """
     Enable/disable ingest for that Collection. Configure or change the local path mapping for that Collection.
@@ -249,59 +295,30 @@ def update_collection(
         retrovue collection update collection-movies-1 --local-path /new/path
         retrovue collection update 2a3cd8d1-2345-6789-abcd-ef1234567890 --sync-enabled true
     """
-    with session() as db:
+    # Choose appropriate session context (test or default)
+    if test_db:
+        SessionForTest = get_sessionmaker(for_test=True)
+        db_cm = SessionForTest()
+    else:
+        db_cm = session()
+
+    with db_cm as db:
         import os
 
-        from src_legacy.retrovue.content_manager.source_service import SourceService
         from ...domain.entities import PathMapping, Collection
         
         try:
-            SourceService(db)
-            
-            # Find the collection by ID (try UUID first, then external_id, then name)
-            import uuid
-            collection = None
-            
-            # Try to find by UUID first
+            # Find the collection using thin wrapper
             try:
-                if len(collection_id) == 36 and collection_id.count('-') == 4:
-                    collection_uuid = uuid.UUID(collection_id)
-                    collection = db.query(Collection).filter(Collection.uuid == collection_uuid).first()
-            except (ValueError, TypeError):
-                pass
-            
-            # If not found by UUID, try by external_id
-            if not collection:
-                collection = db.query(Collection).filter(Collection.external_id == collection_id).first()
-            
-            # If not found by external_id, try by name (case-insensitive)
-            if not collection:
-                name_matches = db.query(Collection).filter(Collection.name.ilike(collection_id)).all()
-                if len(name_matches) == 1:
-                    collection = name_matches[0]
-                elif len(name_matches) > 1:
-                    typer.echo(f"Error: Multiple collections found with name '{collection_id}':", err=True)
-                    for match in name_matches:
-                        typer.echo(f"  - {match.name} (UUID: {match.id})", err=True)
-                    typer.echo("Use the full UUID to specify which collection to update.", err=True)
-                    raise typer.Exit(1)
-            
-            if not collection:
-                typer.echo(f"Error: Collection '{collection_id}' not found", err=True)
+                collection = resolve_collection_selector(db, collection_id)
+            except ValueError as e:
+                typer.echo(f"Error: {e}", err=True)
                 raise typer.Exit(1)
             
             # Validate updates
             updates = {}
             validation_errors = []
-            
-            if sync_enabled is not None:
-                updates["sync_enabled"] = sync_enabled
-                
-                # If enabling sync, check if collection is ingestible
-                if sync_enabled:
-                    # Check if collection is ingestible using persisted field
-                    if not collection.ingestible:
-                        validation_errors.append("Cannot enable sync: collection is not ingestible (no valid local path mappings)")
+            local_path_valid = False
             
             if local_path is not None:
                 updates["local_path"] = local_path
@@ -313,6 +330,18 @@ def update_collection(
                     validation_errors.append(f"Local path is not a directory: {local_path}")
                 elif not os.access(local_path, os.R_OK):
                     validation_errors.append(f"Local path is not readable: {local_path}")
+                else:
+                    local_path_valid = True
+            
+            if sync_enabled is not None:
+                updates["sync_enabled"] = sync_enabled
+                
+                # If enabling sync, ensure collection is (or will be) ingestible
+                if sync_enabled:
+                    # Allow enabling sync if either already ingestible OR a valid --local-path is provided in the same command
+                    will_be_ingestible = collection.ingestible or local_path_valid
+                    if not will_be_ingestible:
+                        validation_errors.append("Cannot enable sync: collection is not ingestible (add --local-path to set a valid mapping)")
             
             if validation_errors:
                 typer.echo("Validation errors:", err=True)
@@ -324,14 +353,6 @@ def update_collection(
                 typer.echo("No updates provided", err=True)
                 raise typer.Exit(1)
             
-            # TODO: Implement path mapping functionality
-            # When --map flag is provided:
-            # 1. Parse the mapping string (e.g., "/mnt/media/Horror=Z:\Horror")
-            # 2. Find PathMapping row by plex_path
-            # 3. Update local_path in that PathMapping
-            # 4. Validate that local_path exists and is readable
-            # 5. Once at least one PathMapping.local_path is set and reachable, allow enabling the collection (row.enabled = true)
-            
             # Apply updates in a transaction
             try:
                 if "sync_enabled" in updates:
@@ -340,15 +361,17 @@ def update_collection(
                 if "local_path" in updates:
                     # Update or create path mapping
                     # Delete existing mappings
-                    db.query(PathMapping).filter(PathMapping.collection_id == collection.uuid).delete()
+                    db.query(PathMapping).filter(PathMapping.collection_uuid == collection.uuid).delete()
                     
                     # Create new mapping
                     new_mapping = PathMapping(
-                        collection_id=collection.uuid,
+                        collection_uuid=collection.uuid,
                         plex_path=f"/plex/{collection.name.lower().replace(' ', '_')}",  # Default plex path
                         local_path=updates["local_path"]
                     )
                     db.add(new_mapping)
+                    # A readable mapping was provided; mark collection ingestible
+                    collection.ingestible = True
                 
                 # Commit the transaction
                 db.commit()
@@ -465,47 +488,19 @@ def delete_collection(
         retrovue collection delete 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
     """
     with session() as db:
-        from src_legacy.retrovue.content_manager.source_service import SourceService
         from ...domain.entities import PathMapping, Collection
         
         try:
-            source_service = SourceService(db)
-            
-            # Find the collection by ID (try UUID first, then external_id, then name)
-            import uuid
-            collection = None
-            
-            # Try to find by UUID first
+            # Find the collection using thin wrapper
             try:
-                if len(collection_id) == 36 and collection_id.count('-') == 4:
-                    collection_uuid = uuid.UUID(collection_id)
-                    collection = db.query(Collection).filter(Collection.uuid == collection_uuid).first()
-            except (ValueError, TypeError):
-                pass
-            
-            # If not found by UUID, try by external_id
-            if not collection:
-                collection = db.query(Collection).filter(Collection.external_id == collection_id).first()
-            
-            # If not found by external_id, try by name (case-insensitive)
-            if not collection:
-                name_matches = db.query(Collection).filter(Collection.name.ilike(collection_id)).all()
-                if len(name_matches) == 1:
-                    collection = name_matches[0]
-                elif len(name_matches) > 1:
-                    typer.echo(f"Error: Multiple collections found with name '{collection_id}':", err=True)
-                    for match in name_matches:
-                        typer.echo(f"  - {match.name} (UUID: {match.id})", err=True)
-                    typer.echo("Use the full UUID to specify which collection to delete.", err=True)
-                    raise typer.Exit(1)
-            
-            if not collection:
-                typer.echo(f"Error: Collection '{collection_id}' not found", err=True)
+                collection = resolve_collection_selector(db, collection_id)
+            except ValueError as e:
+                typer.echo(f"Error: {e}", err=True)
                 raise typer.Exit(1)
             
             if not force:
                 # Count related data to show user what will be deleted
-                path_mappings_count = db.query(PathMapping).filter(PathMapping.collection_id == collection.uuid).count()
+                path_mappings_count = db.query(PathMapping).filter(PathMapping.collection_uuid == collection.uuid).count()
                 
                 typer.echo(f"Are you sure you want to delete collection '{collection.name}' (ID: {collection.uuid})?")
                 typer.echo("This will also delete:")
@@ -516,11 +511,12 @@ def delete_collection(
                     typer.echo("Deletion cancelled")
                     raise typer.Exit(0)
             
+            # Delete path mappings first
+            db.query(PathMapping).filter(PathMapping.collection_uuid == collection.uuid).delete()
+            
             # Delete the collection
-            success = source_service.delete_collection(collection_id)
-            if not success:
-                typer.echo(f"Error: Failed to delete collection '{collection_id}'", err=True)
-                raise typer.Exit(1)
+            db.delete(collection)
+            db.commit()
             
             if json_output:
                 import json
@@ -550,8 +546,6 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     Returns:
         Wipe result
     """
-    from src_legacy.retrovue.content_manager.library_service import LibraryService
-    from src_legacy.retrovue.content_manager.source_service import SourceService
     from ...domain.entities import (
         Asset,
         Episode,
@@ -561,9 +555,6 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
         Season,
         Title,
     )
-    
-    SourceService(db)
-    LibraryService(db)
     
     # Get collection info for reporting
     collection_info = {
@@ -585,64 +576,64 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     }
     
     # Find assets from this collection
-    # For new assets (with collection_id), use direct query
-    # For existing assets (without collection_id), use path mapping approach
+    # For new assets (with collection_uuid), use direct query
+    # For existing assets (without collection_uuid), use path mapping approach
     assets_with_collection_id = db.query(Asset).filter(
-        Asset.collection_id == collection.uuid
+        Asset.collection_uuid == collection.uuid
     ).all()
     
-    # For existing assets without collection_id, use path mapping
-    path_mappings = db.query(PathMapping).filter(PathMapping.collection_id == collection.uuid).all()
+    # For existing assets without collection_uuid, use path mapping
+    path_mappings = db.query(PathMapping).filter(PathMapping.collection_uuid == collection.uuid).all()
     assets_from_paths = []
     for mapping in path_mappings:
         if mapping.local_path:
             escaped_path = mapping.local_path.replace("\\", "\\\\")
             matching_assets = db.query(Asset).filter(
                 Asset.uri.op('~')(f'^{escaped_path}'),
-                Asset.collection_id.is_(None)  # Only existing assets without collection_id
+                Asset.collection_uuid.is_(None)  # Only assets that predate collection_uuid linkage
             ).all()
             assets_from_paths.extend(matching_assets)
     
     # Combine both sets
     all_collection_assets = assets_with_collection_id + assets_from_paths
-    collection_asset_ids = [asset.id for asset in all_collection_assets]
+    collection_asset_uuids = [asset.uuid for asset in all_collection_assets]
     
     # Count entities that will be deleted
-    stats["assets"] = len(collection_asset_ids)
+    stats["assets"] = len(collection_asset_uuids)
     
     # Collect IDs of episodes, seasons, and titles that will be affected
     collection_episode_ids = []
     collection_season_ids = []
     collection_title_ids = []
     
-    if collection_asset_ids:
+    if collection_asset_uuids:
         # Count episode assets
         stats["episode_assets"] = db.query(EpisodeAsset).filter(
-            EpisodeAsset.asset_id.in_(collection_asset_ids)
+            EpisodeAsset.asset_uuid.in_(collection_asset_uuids)
         ).count()
         
         # Count review queue entries
         stats["review_queue_entries"] = db.query(ReviewQueue).filter(
-            ReviewQueue.asset_id.in_(collection_asset_ids)
+            ReviewQueue.asset_uuid.in_(collection_asset_uuids)
         ).count()
         
         # Get episodes that have these assets
         episodes_with_assets = db.query(Episode).join(EpisodeAsset).filter(
-            EpisodeAsset.asset_id.in_(collection_asset_ids)
+            EpisodeAsset.asset_uuid.in_(collection_asset_uuids)
         ).all()
         collection_episode_ids = list({episode.id: episode for episode in episodes_with_assets}.keys())
         stats["episodes"] = len(collection_episode_ids)
         
         # Get seasons that have these episodes
         seasons_with_episodes = db.query(Season).join(Episode).join(EpisodeAsset).filter(
-            EpisodeAsset.asset_id.in_(collection_asset_ids)
+            EpisodeAsset.asset_uuid.in_(collection_asset_uuids)
         ).all()
         collection_season_ids = list({season.id: season for season in seasons_with_episodes}.keys())
         stats["seasons"] = len(collection_season_ids)
         
         # Get titles that have these seasons
         titles_with_seasons = db.query(Title).join(Season).join(Episode).join(EpisodeAsset).filter(
-            EpisodeAsset.asset_id.in_(collection_asset_ids)
+            EpisodeAsset.asset_uuid.in_(collection_asset_uuids)
         ).all()
         collection_title_ids = list({title.id: title for title in titles_with_seasons}.keys())
         stats["titles"] = len(collection_title_ids)
@@ -705,21 +696,21 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     if stats["review_queue_entries"] > 0:
         typer.echo(f"Deleting {stats['review_queue_entries']} review queue entries...")
         db.query(ReviewQueue).filter(
-            ReviewQueue.asset_id.in_(collection_asset_ids)
+            ReviewQueue.asset_uuid.in_(collection_asset_uuids)
         ).delete(synchronize_session=False)
     
     # 2. Delete episode-asset links
     if stats["episode_assets"] > 0:
         typer.echo(f"Deleting {stats['episode_assets']} episode-asset links...")
         db.query(EpisodeAsset).filter(
-            EpisodeAsset.asset_id.in_(collection_asset_ids)
+            EpisodeAsset.asset_uuid.in_(collection_asset_uuids)
         ).delete(synchronize_session=False)
     
     # 3. Delete assets
     if stats["assets"] > 0:
         typer.echo(f"Deleting {stats['assets']} assets...")
         db.query(Asset).filter(
-            Asset.id.in_(collection_asset_ids)
+            Asset.uuid.in_(collection_asset_uuids)
         ).delete(synchronize_session=False)
     
     # 4. Delete orphaned episodes (episodes with no remaining assets)
@@ -920,6 +911,8 @@ def collection_ingest(
                                 importer_config["token"] = server.get("token")
                                 if not importer_config["base_url"] or not importer_config["token"]:
                                     raise ValueError(f"Plex server configuration incomplete for source '{source.name}'")
+                                # Capture collection library key for Plex (do not pass to constructor for backward compatibility)
+                                collection_library_key = getattr(collection, "external_id", None)
                             elif source.type == "filesystem":
                                 config = source.config or {}
                                 importer_config["source_name"] = source.name
@@ -927,15 +920,50 @@ def collection_ingest(
                             else:
                                 raise ValueError(f"Unsupported source type '{source.type}'")
 
-                            importer = get_importer(source.type, **importer_config)
+                            # Instantiate importer without non-standard kwargs
+                            _kwargs = dict(importer_config)
+                            _kwargs.pop("library_key", None)
+                            importer = get_importer(source.type, **_kwargs)
+                            # Set library_key attribute post-construction if supported
+                            try:
+                                if 'collection_library_key' in locals() and collection_library_key and hasattr(importer, 'library_key'):
+                                    setattr(importer, 'library_key', collection_library_key)
+                            except Exception:
+                                pass
                         else:
                             raise ValueError(f"Source not found for collection '{collection.name}'")
-                except Exception:
+                except Exception as e:
+                    # Emit diagnostic details to help operator understand why importer failed
+                    try:
+                        details = {
+                            "source_type": getattr(source, "type", None),
+                            "base_url": importer_config.get("base_url"),
+                            "has_token": bool(importer_config.get("token")),
+                            "library_key": importer_config.get("library_key"),
+                        }
+                        typer.echo(
+                            f"Warning: failed to construct importer: {e}. Details: "
+                            f"type={details['source_type']} base_url={details['base_url']} "
+                            f"has_token={details['has_token']} library_key={details['library_key']}",
+                            err=True,
+                        )
+                    except Exception:
+                        pass
+
                     class _NullImporter:
                         def validate_ingestible(self, _collection):
                             return True
+                        def discover(self):
+                            return []
                     importer = importer or _NullImporter()
             
+            # Provide early human feedback for non-JSON runs
+            if not json_output:
+                if dry_run:
+                    typer.echo("[DRY RUN] Starting ingest: validating and ingesting assets...")
+                else:
+                    typer.echo("Starting ingest: validating and ingesting assets...")
+
             # Call service to perform ingest
             try:
                 # If the service is a mock, enforce prerequisite validation and invoke importer validation here

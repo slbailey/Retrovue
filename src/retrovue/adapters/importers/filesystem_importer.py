@@ -101,6 +101,19 @@ class FilesystemImporter(BaseImporter):
             
         except Exception as e:
             raise ImporterError(f"Failed to discover files: {str(e)}") from e
+
+    # Contract hook used by collection ingest to validate ingestibility before discovery
+    def validate_ingestible(self, collection) -> bool:  # noqa: ANN001 - collection is a domain entity
+        """
+        Return True if at least one configured root path exists and is a directory.
+        File reachability and mapping preservation are validated elsewhere.
+        """
+        from pathlib import Path
+        for root_path in self.root_paths:
+            p = Path(root_path)
+            if p.exists() and p.is_dir():
+                return True
+        return False
     
     @classmethod
     def get_config_schema(cls) -> ImporterConfig:

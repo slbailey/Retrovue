@@ -373,7 +373,7 @@ class PathMapping(Base):
     __tablename__ = "path_mappings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    collection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("collections.uuid", ondelete="CASCADE"), nullable=False)
+    collection_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("collections.uuid", ondelete="CASCADE"), nullable=False)
     plex_path: Mapped[str] = mapped_column(String(500), nullable=False)
     local_path: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -382,11 +382,11 @@ class PathMapping(Base):
     collection: Mapped[Collection] = relationship("Collection", back_populates="path_mappings", passive_deletes=True)
 
     __table_args__ = (
-        Index("ix_path_mappings_collection_id", "collection_id"),
+        Index("ix_path_mappings_collection_uuid", "collection_uuid"),
     )
 
     def __repr__(self) -> str:
-        return f"<PathMapping(id={self.id}, collection_id={self.collection_id}, plex_path={self.plex_path}, local_path={self.local_path})>"
+        return f"<PathMapping(id={self.id}, collection_uuid={self.collection_uuid}, plex_path={self.plex_path}, local_path={self.local_path})>"
 
 
 class BroadcastChannel(Base):

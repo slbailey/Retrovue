@@ -16,6 +16,7 @@ from .commands import (
     collection,
     enricher,
     producer,
+    asset as asset_cmd,
     source,
 )
 
@@ -30,6 +31,7 @@ app.add_typer(source.app, name="source", help="Source and collection management 
 app.add_typer(enricher.app, name="enricher", help="Enricher management operations")
 app.add_typer(producer.app, name="producer", help="Producer management operations")
 app.add_typer(collection.app, name="collection", help="Collection management operations")
+app.add_typer(asset_cmd.app, name="asset", help="Asset inspection and review operations")
 
 
 

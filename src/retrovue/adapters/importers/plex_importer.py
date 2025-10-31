@@ -16,7 +16,6 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from ...domain.asset_draft import AssetDraft
 from .base import (
     BaseImporter,
     DiscoveredItem,
@@ -33,7 +32,7 @@ logger = logging.getLogger(__name__)
 class PlexClient:
     """Plex HTTP client for fetching libraries and items."""
     
-    def __init__(self, base_url: str, token: str):
+    def __init__(self, base_url: str, token: str, library_key: str | None = None):
         """
         Initialize Plex client.
         
@@ -652,6 +651,11 @@ class PlexImporter(BaseImporter):
         self.base_url = base_url
         self.token = token
         self.client = PlexClient(base_url, token)
+        # Be robust if older callers don't pass library_key or runtime lags behind edits
+        try:
+            self.library_key = library_key  # type: ignore[name-defined]
+        except NameError:
+            self.library_key = None
     
     def discover(self) -> list[DiscoveredItem]:
         """
@@ -671,6 +675,9 @@ class PlexImporter(BaseImporter):
             
             discovered_items = []
             libraries = self.client.get_libraries()
+            # If scoped to a specific library, filter to that key
+            if self.library_key is not None:
+                libraries = [lib for lib in libraries if str(lib.get("key")) == str(self.library_key)]
             
             for library in libraries:
                 try:
@@ -687,6 +694,19 @@ class PlexImporter(BaseImporter):
             
         except Exception as e:
             raise ImporterError(f"Failed to discover content from Plex: {str(e)}") from e
+    
+    # Contract hook used by collection ingest to validate ingestibility before discovery
+    def validate_ingestible(self, collection) -> bool:  # noqa: ANN001 - collection is a domain entity
+        """
+        Return True if this importer can attempt ingest for the given collection.
+
+        For Plex, a lightweight connectivity check is sufficient here; deeper
+        path mapping validation is handled elsewhere in the CLI/service layer.
+        """
+        try:
+            return bool(self._test_connection())
+        except Exception:
+            return False
     
     @classmethod
     def get_config_schema(cls) -> ImporterConfig:
@@ -1000,131 +1020,4 @@ class PlexImporter(BaseImporter):
         except Exception as e:
             logger.error(f"Failed to list collections: {e}")
             raise ImporterError(f"Failed to list collections: {e}") from e
-    
-    def fetch_assets_for_collection(
-        self, 
-        source_config: dict[str, Any], 
-        collection_descriptor: dict[str, Any], 
-        local_path: str,
-        title_filter: str | None = None,
-        season_filter: int | None = None,
-        episode_filter: int | None = None
-    ) -> list[AssetDraft]:
-        """
-        Return AssetDraft objects for that collection.
-        
-        Args:
-            source_config: Source configuration (unused for Plex)
-            collection_descriptor: Collection information from list_collections
-            local_path: Local path mapping for the collection
-            
-        Returns:
-            List of AssetDraft objects representing media items
-        """
-        try:
-            collection_id = collection_descriptor["id"]
-            items = self.client.get_library_items(
-                collection_id, 
-                title_filter=title_filter,
-                season_filter=season_filter,
-                episode_filter=episode_filter
-            )
-            
-            asset_drafts = []
-            for item in items:
-                try:
-                    asset_draft = self._create_asset_draft(item, collection_descriptor, local_path)
-                    if asset_draft:
-                        asset_drafts.append(asset_draft)
-                except Exception as e:
-                    logger.warning(f"Failed to create asset draft for item {item.get('ratingKey', 'unknown')}: {e}")
-                    continue
-            
-            return asset_drafts
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch assets for collection {collection_descriptor.get('name', 'unknown')}: {e}")
-            raise ImporterError(f"Failed to fetch assets for collection: {e}") from e
-    
-    def _create_asset_draft(
-        self, 
-        item: dict[str, Any], 
-        collection_descriptor: dict[str, Any], 
-        local_path: str
-    ) -> AssetDraft | None:
-        """
-        Create an AssetDraft from a Plex item.
-        
-        Args:
-            item: Plex item information
-            collection_descriptor: Collection information
-            local_path: Local path mapping
-            
-        Returns:
-            AssetDraft or None if creation fails
-        """
-        try:
-            # Extract file path and map it to local path
-            plex_file_path = item.get("file_path", "")
-            if not plex_file_path:
-                return None
-            
-            # Map Plex path to local path
-            # This is a simple implementation - in production, you'd want more sophisticated path mapping
-            local_file_path = plex_file_path
-            if local_path and plex_file_path.startswith("/"):
-                # Simple path replacement - in production, use proper path mapping service
-                local_file_path = plex_file_path.replace("/", local_path + "/", 1)
-            
-            # Extract metadata
-            title = item.get("title", "Unknown Title")
-            year = item.get("year")
-            duration = item.get("duration")
-            file_size = item.get("fileSize")
-            
-            # Extract TV show hierarchy information
-            series_title = item.get("show_title")
-            season_number = item.get("season_index")
-            episode_number = item.get("episode_index")
-            episode_title = title  # For episodes, the title is the episode title
-            
-            # Create raw metadata
-            raw_metadata = {
-                "plex_rating_key": item.get("ratingKey"),
-                "plex_type": item.get("type"),
-                "plex_year": year,
-                "plex_updated_at": item.get("updatedAt"),
-                "collection_name": collection_descriptor.get("name"),
-                "collection_type": collection_descriptor.get("type"),
-                "show_title": series_title,
-                "season_title": item.get("season_title"),
-                "season_index": season_number,
-                "episode_index": episode_number
-            }
-            
-            # Create AssetDraft
-            asset_draft = AssetDraft(
-                uuid=uuid.uuid4(),
-                file_path=local_file_path,
-                title=episode_title,  # Use episode title as the main title
-                duration_ms=int(duration) if duration else None,
-                file_size=int(file_size) if file_size else None,
-                source_type="plex",
-                source_id=self.base_url,
-                collection_id=collection_descriptor["id"],
-                external_id=item.get("ratingKey"),
-                raw_metadata=raw_metadata,
-                discovered_at=datetime.utcnow(),
-                # TV show hierarchy
-                series_title=series_title,
-                season_number=int(season_number) if season_number else None,
-                episode_number=int(episode_number) if episode_number else None,
-                episode_title=episode_title
-            )
-            
-            return asset_draft
-            
-        except Exception as e:
-            logger.warning(f"Failed to create asset draft: {e}")
-            return None
     

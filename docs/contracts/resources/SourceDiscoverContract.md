@@ -68,6 +68,15 @@ Would discover 3 collections from 'My Plex Server':
   • Music (ID: 3) - Would be created
 ```
 
+**Dry-run Output with Existing Collections:**
+
+```
+Discovered collections from 'My Plex Server' (dry-run):
+  • Movies (ID: 1) - Would skip (already exists)
+  • TV Shows (ID: 2) - Would skip (already exists)
+  • New Collection (ID: 10) - Would be created
+```
+
 ### JSON Output
 
 ```json

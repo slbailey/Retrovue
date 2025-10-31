@@ -26,7 +26,6 @@ from typer.testing import CliRunner
 from sqlalchemy.orm.exc import NoResultFound
 
 from retrovue.cli.main import app
-from retrovue.domain.asset_draft import AssetDraft
 
 
 class TestCollectionIngestDataContract:
@@ -364,9 +363,9 @@ class TestCollectionIngestDataContract:
             mock_importer = MagicMock()
             mock_importer.validate_ingestible.return_value = True
             
-            # Mock enumerate_assets to return AssetDraft objects (not DB records)
-            mock_asset_draft = MagicMock(spec=AssetDraft)
-            mock_importer.enumerate_assets.return_value = [mock_asset_draft]
+            # Mock discover to return DiscoveredItem objects (not DB records)
+            mock_discovered_item = MagicMock()
+            mock_importer.discover.return_value = [mock_discovered_item]
             
             mock_get_importer.return_value = mock_importer
             
@@ -382,8 +381,8 @@ class TestCollectionIngestDataContract:
             
             assert result.exit_code == 0
             
-            # Verify importer was called (enumeration)
-            mock_importer.enumerate_assets.assert_called_once()
+            # Verify importer was called (discovery)
+            mock_importer.discover.assert_called_once()
             
             # Verify importer did NOT call commit/add/flush (no persistence)
             # Note: This is verified by ensuring the importer doesn't have direct DB access

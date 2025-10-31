@@ -22,9 +22,9 @@ The plugin must expose:
     - stable identifier / name
     - display label
     - source_path or equivalent remote path info
-- `fetch_assets_for_collection(source_config, collection_descriptor, local_path)`
-  - Return AssetDraft objects for that collection.
-  - The ingest orchestrator handles duplicate detection automatically based on asset URI.
+- `discover()` method that returns DiscoveredItem objects
+  - Returns list of DiscoveredItem objects with path_uri, provider_key, size, hash_sha256
+  - The ingest orchestrator handles duplicate detection automatically based on canonical key
 
 The importer must NOT decide which collections sync. RetroVue handles that via `sync_enabled`.
 
@@ -41,7 +41,7 @@ The plugin must declare:
 - `scope = ingest` or `playout`
 - parameter spec for CLI (`retrovue enricher add --type <type> --help`)
 - `apply(input_obj) -> output_obj`
-  - `scope=ingest`: input is AssetDraft, output is AssetDraft
+  - `scope=ingest`: input is DiscoveredItem, output is DiscoveredItem
   - `scope=playout`: input is playout plan, output is playout plan
 
 Enrichers must be orderable. RetroVue will call multiple enrichers in ascending priority.

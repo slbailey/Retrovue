@@ -9,18 +9,22 @@ Define the behavioral contract for listing collections in the RetroVue system. T
 ## Command Shape
 
 ```
-retrovue collection list [--source <source_id>] [--json] [--test-db]
+retrovue collection list [<source_id>] [--source <source_id>] [--json] [--test-db]
 ```
 
-### Optional Parameters
+### Parameters
 
-- `--source <source_id>`: Filter to only collections belonging to the specified source. The source identifier can be:
-  - Full UUID
-  - External ID (e.g., `plex-5063d926`)
-  - Case-insensitive display name
-  - If multiple sources match the provided name, the command MUST exit with code 1 and emit an error message directing the operator to use an ID
+- `<source_id>` (positional, optional): Filter to only collections belonging to the specified source. Can be provided as a positional argument OR via `--source` flag.
+- `--source <source_id>` (optional): Filter to only collections belonging to the specified source. If both positional and `--source` are provided, `--source` takes precedence.
+  - The source identifier can be:
+    - Full UUID
+    - External ID (e.g., `plex-5063d926`)
+    - Case-insensitive display name
+    - If multiple sources match the provided name, the command MUST exit with code 1 and emit an error message directing the operator to use an ID
 - `--json`: Return machine-readable structured output
 - `--test-db`: Query the isolated test database instead of production
+
+**Note**: Either `<source_id>` positional argument OR `--source` flag can be used to filter by source. If neither is provided, all collections across all sources are returned.
 
 ---
 
@@ -36,8 +40,9 @@ retrovue collection list [--source <source_id>] [--json] [--test-db]
 
 ### Filtering Behavior
 
-- Without `--source`: Returns all collections across all sources
-- With `--source`: Returns only collections belonging to the specified source
+- Without source filter (no positional argument and no `--source`): Returns all collections across all sources
+- With source filter (positional argument OR `--source`): Returns only collections belonging to the specified source
+- If both positional argument and `--source` are provided, `--source` takes precedence
 - Source identification MUST follow the same resolution rules as `source show` (UUID, external ID, or case-insensitive name, with ambiguity handling)
 - If source is not found, the command MUST exit with code 1 and emit: "Error: Source 'X' not found."
 - If multiple sources match the provided name, the command MUST exit with code 1 and emit: "Error: Multiple sources found with name 'X'. Use source ID to disambiguate: <id1>, <id2>, ..."
@@ -321,16 +326,28 @@ retrovue collection list
 # List with JSON output
 retrovue collection list --json
 
-# List collections for a specific source by name
+# List collections for a specific source by name (using --source flag)
 retrovue collection list --source "My Plex Server"
 
-# List collections for a specific source by UUID
+# List collections for a specific source by name (using positional argument)
+retrovue collection list "My Plex Server"
+
+# List collections for a specific source by UUID (using --source flag)
 retrovue collection list --source 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
 
-# List collections for a specific source by external ID
+# List collections for a specific source by UUID (using positional argument)
+retrovue collection list 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
+
+# List collections for a specific source by external ID (using --source flag)
 retrovue collection list --source plex-5063d926
 
-# List collections with JSON output
+# List collections for a specific source by external ID (using positional argument)
+retrovue collection list plex-5063d926
+
+# List collections with JSON output (positional source)
+retrovue collection list "My Plex Server" --json
+
+# List collections with JSON output (using --source flag)
 retrovue collection list --source "My Plex Server" --json
 ```
 

@@ -13,7 +13,7 @@ Source is managed by SQLAlchemy with the following fields:
 - **id** (UUID, primary key): Internal identifier for relational joins and foreign key references
 - **external_id** (String(255), required, unique): External system identifier (e.g., "plex-abc123", "filesystem-def456")
 - **name** (String(255), required): Human-facing source label used in UI and operator tooling
-- **kind** (String(50), required): Source type identifier ("plex", "filesystem", etc.)
+- **type** (String(50), required): Source type identifier ("plex", "filesystem", etc.)
 - **config** (JSON, nullable): Source-specific configuration including connection details and enrichers
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 - **updated_at** (DateTime(timezone=True), required): Record last modification timestamp

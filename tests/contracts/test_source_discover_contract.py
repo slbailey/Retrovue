@@ -190,8 +190,8 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -216,8 +216,8 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -246,8 +246,8 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -270,8 +270,8 @@ class TestSourceDiscoverContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -280,8 +280,10 @@ class TestSourceDiscoverContract:
             mock_importer = MagicMock()
             mock_importer.list_collections.return_value = []
             
-            with patch("retrovue.cli.commands.source.source_add") as mock_source_add, \
-                 patch("retrovue.adapters.importers.plex_importer.PlexImporter", return_value=mock_importer):
+            # Mock database query to return the mock source
+            mock_db.query.return_value.filter.return_value.first.return_value = mock_source
+            
+            with patch("retrovue.adapters.registry.get_importer", return_value=mock_importer):
                 
                 result = self.runner.invoke(app, ["discover", "test-source", "--test-db"])
                 

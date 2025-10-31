@@ -138,7 +138,7 @@ def build_pending_delete_summary(db: Session, sources: list[Source]) -> PendingD
         # Count path mappings for this source (through collections)
         path_mappings_count = (
             db.query(PathMapping)
-            .join(Collection, PathMapping.collection_id == Collection.id)
+            .join(Collection, PathMapping.collection_uuid == Collection.uuid)
             .filter(Collection.source_id == source.id)
             .count()
         )
@@ -260,7 +260,7 @@ def delete_one_source_transactionally(db: Session, source_id: str) -> dict[str, 
         
         path_mappings_count = (
             db.query(PathMapping)
-            .join(Collection, PathMapping.collection_id == Collection.id)
+            .join(Collection, PathMapping.collection_uuid == Collection.uuid)
             .filter(Collection.source_id == source_id)
             .count()
         )

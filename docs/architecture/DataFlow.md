@@ -4,16 +4,17 @@ _Related: [Architecture overview](ArchitectureOverview.md) • [System boundarie
 
 This describes how content moves through RetroVue from disk/library to screen.
 
-## 1. Source → Collection → AssetDraft
+## 1. Source → Collection → Asset
 
 - An importer plugin (Source type) knows how to talk to something like Plex or a filesystem.
 - Operator registers that Source: `retrovue source add ...`
 - Operator discovers collections from that Source: `retrovue source discover <source_id>`
 - Operator enables ingest on selected Collections.
 - When ingest runs:
-  - The importer returns AssetDraft objects for each item in that Collection.
+  - The importer returns DiscoveredItem objects for each item in that Collection.
+  - The ingest service converts DiscoveredItem to Asset records.
   - Ingest-scope enrichers run (filename parser, TheTVDB, LLM synopsis, etc.).
-  - The enriched AssetDraft is stored in the RetroVue catalog.
+  - Assets are persisted in the RetroVue catalog.
 
 At this point the system "knows" about that content.
 

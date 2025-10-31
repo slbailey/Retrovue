@@ -27,7 +27,7 @@ class TestSourceUpdateDataContract:
         mock_source = MagicMock()
         mock_source.id = str(uuid.uuid4())
         mock_source.external_id = "plex-12345678"
-        mock_source.kind = "plex"
+        mock_source.type = "plex"
         mock_source.name = "Test Plex"
         mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
         update_result = {
@@ -54,7 +54,7 @@ class TestSourceUpdateDataContract:
         mock_source = MagicMock()
         mock_source.id = str(uuid.uuid4())
         mock_source.external_id = "plex-12345678"
-        mock_source.kind = "plex"
+        mock_source.type = "plex"
         mock_source.name = "Test Plex"
         mock_source.config = {"servers": [{"base_url": "http://test", "token": "token"}]}
         with patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source), \
@@ -85,7 +85,7 @@ class TestSourceUpdateDataContract:
         mock_source = MagicMock()
         mock_source.id = str(uuid.uuid4())
         mock_source.external_id = "plex-12345678"
-        mock_source.kind = "plex"
+        mock_source.type = "plex"
         mock_source.name = "Test Plex"
         mock_source.config = original_config.copy()
         with patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source), \
@@ -115,7 +115,7 @@ class TestSourceUpdateDataContract:
         mock_source = MagicMock()
         mock_source.id = str(uuid.uuid4())
         mock_source.external_id = "plex-12345678"
-        mock_source.kind = "plex"
+        mock_source.type = "plex"
         mock_source.name = "Test Plex"
         mock_source.config = original_config.copy()
         with patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source), \

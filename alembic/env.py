@@ -33,9 +33,21 @@ def include_object(object, name, type_, reflected, compare_to):
     return True
 
 
+def _choose_url() -> str:
+    """Choose database URL for Alembic.
+
+    By default uses the app's DATABASE_URL. If ALEMBIC_USE_TEST_DB=1 and a
+    TEST_DATABASE_URL is configured in settings, prefer that instead.
+    """
+    use_test = os.getenv("ALEMBIC_USE_TEST_DB") == "1"
+    if use_test and settings.test_database_url:
+        return settings.test_database_url
+    return settings.database_url
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = settings.database_url  # <-- ALWAYS use app's DB URL (Postgres)
+    url = _choose_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -53,8 +65,8 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    # Force Alembic to use the same URL as the app
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    # Force Alembic to use the selected URL (app or test)
+    config.set_main_option("sqlalchemy.url", _choose_url())
 
     connectable = engine_from_config(
         configuration=config.get_section(config.config_ini_section, {}),

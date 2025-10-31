@@ -35,7 +35,7 @@ Major layers:
    - Nothing auto-runs without operator intent (e.g. ingest is explicit).
 
 5. Plugin surface
-   - Importer plugins create AssetDrafts from Sources (plex, filesystem, etc.).
+   - Importer plugins return DiscoveredItems from Sources (plex, filesystem, etc.).
    - Enricher plugins add metadata or decorate playout.
    - Producer plugins generate base playout plans.
    - All plugins are registered through registries and surfaced in the CLI.

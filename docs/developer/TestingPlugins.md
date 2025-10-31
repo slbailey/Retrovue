@@ -9,12 +9,12 @@ Give plugin authors a repeatable way to verify their plugin works before deployi
 ## Testing importer (Source) plugins
 
 - Call the importer's `list_collections()` with a known config and confirm it returns stable identifiers and paths.
-- Call `fetch_assets_for_collection()` and confirm it returns AssetDraft objects with enough metadata for ingest.
+- Call `discover()` and confirm it returns DiscoveredItem objects with enough metadata for ingest.
 - Run `retrovue source add --type <yourtype> --help` and confirm your parameter spec renders correctly.
 
 ## Testing enricher plugins
 
-- Feed a representative AssetDraft (for ingest scope) or playout plan (for playout scope) into your `apply()` method.
+- Feed a representative DiscoveredItem (for ingest scope) or playout plan (for playout scope) into your `apply()` method.
 - Confirm:
   - You return the modified object.
   - You do not persist anywhere.

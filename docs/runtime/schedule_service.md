@@ -16,7 +16,7 @@ ScheduleService owns broadcast day logic and channel timing policy. No other com
 
 ## Content Authority Constraint
 
-**ScheduleService may only schedule CatalogAsset entries that are marked as canonical/approved for broadcast.**
+**ScheduleService may only schedule Asset entries that are marked as approved for broadcast.**
 
 ScheduleService is forbidden from:
 

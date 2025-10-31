@@ -39,7 +39,7 @@ def validate_collection_exists(db: Session, collection_id: str) -> Collection:
         import uuid
         uuid.UUID(collection_id)
         collection = db.query(Collection).filter(
-            Collection.id == collection_id
+            Collection.uuid == collection_id
         ).first()
         if collection:
             return collection
@@ -93,7 +93,7 @@ def validate_path_mappings(db: Session, collection: Collection) -> None:
         ValidationError: If path mappings are invalid
     """
     mappings = db.query(PathMapping).filter(
-        PathMapping.collection_id == collection.id
+        PathMapping.collection_uuid == collection.uuid
     ).all()
     
     if not mappings:
@@ -243,7 +243,7 @@ def validate_collection_preserved(db: Session, collection: Collection) -> None:
         ValidationError: If collection was deleted
     """
     preserved_collection = db.query(Collection).filter(
-        Collection.id == collection.id
+        Collection.uuid == collection.uuid
     ).first()
     if not preserved_collection:
         raise ValidationError("Collection was deleted during operation")
@@ -261,7 +261,7 @@ def validate_path_mappings_preserved(db: Session, collection: Collection) -> Non
         ValidationError: If path mappings were deleted
     """
     path_mappings = db.query(PathMapping).filter(
-        PathMapping.collection_id == collection.id
+        PathMapping.collection_uuid == collection.uuid
     ).count()
     if path_mappings == 0:
         raise ValidationError("Path mappings were deleted during operation")
@@ -361,7 +361,7 @@ def validate_asset_relationships(db: Session, asset: Asset) -> None:
     
     # Check collection exists
     collection = db.query(Collection).filter(
-        Collection.id == asset.collection_id
+        Collection.uuid == asset.collection_id
     ).first()
     if not collection:
         raise ValidationError("Asset references non-existent collection")

@@ -20,12 +20,33 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from typing import Any
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import NoResultFound
 
-from ....domain.entities import Collection
+from ....domain.entities import Collection, Asset
 from ....infra.exceptions import IngestError
+from ....infra.canonical import canonical_key_for, canonical_hash
+from sqlalchemy import select
+
+
+class _AssetRepository:
+    """Private repository for Asset operations scoped to this service."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_collection_and_canonical_hash(self, collection_uuid, canonical_key_hash):
+        stmt = select(Asset).where(
+            Asset.collection_uuid == collection_uuid,
+            Asset.canonical_key_hash == canonical_key_hash,
+        )
+        # Session.scalar returns the first column of the first row or None
+        return self.db.scalar(stmt)
+
+    def create(self, asset: Asset) -> None:
+        self.db.add(asset)
 
 
 @dataclass
@@ -35,6 +56,8 @@ class IngestStats:
     assets_discovered: int = 0
     assets_ingested: int = 0
     assets_skipped: int = 0
+    assets_changed_content: int = 0
+    assets_changed_enricher: int = 0
     assets_updated: int = 0
     duplicates_prevented: int = 0
     errors: list[str] = None
@@ -57,6 +80,9 @@ class CollectionIngestResult:
     title: str | None = None
     season: int | None = None
     episode: int | None = None
+    # Verbose-only fields (included in JSON only when populated by verbose flag)
+    created_assets: list[dict[str, str]] | None = None
+    updated_assets: list[dict[str, str]] | None = None
     
     def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary matching contract JSON output format."""
@@ -69,6 +95,8 @@ class CollectionIngestResult:
                 "assets_discovered": self.stats.assets_discovered,
                 "assets_ingested": self.stats.assets_ingested,
                 "assets_skipped": self.stats.assets_skipped,
+                "assets_changed_content": self.stats.assets_changed_content,
+                "assets_changed_enricher": self.stats.assets_changed_enricher,
                 "assets_updated": self.stats.assets_updated,
                 "duplicates_prevented": self.stats.duplicates_prevented,
                 "errors": self.stats.errors
@@ -84,6 +112,11 @@ class CollectionIngestResult:
             result["season"] = self.season
         if self.episode is not None:
             result["episode"] = self.episode
+        # Only include verbose lists when populated
+        if self.created_assets is not None:
+            result["created_assets"] = self.created_assets
+        if self.updated_assets is not None:
+            result["updated_assets"] = self.updated_assets
         
         return result
 
@@ -238,7 +271,10 @@ class CollectionIngestService:
         season: int | None = None,
         episode: int | None = None,
         dry_run: bool = False,
-        test_db: bool = False
+        test_db: bool = False,
+        verbose_assets: bool = False,
+        max_new: int | None = None,
+        max_updates: int | None = None,
     ) -> CollectionIngestResult:
         """
         Ingest a collection following the contract validation order.
@@ -312,14 +348,153 @@ class CollectionIngestService:
             scope = "collection"
         
         # Phase 5: Execute Ingest Work
-        # For Phase 1, we're not actually processing assets yet, just validating the flow
-        # In Phase 2, we'll add actual asset enumeration and processing
-        
         stats = IngestStats()
-        
-        # TODO (Phase 2): Call importer.enumerate_assets() or equivalent
-        # TODO (Phase 2): Process each AssetDraft through Layer 1 (asset processing)
-        # TODO (Phase 2): Update collection.last_ingest_time on successful completion
+        repo = _AssetRepository(self.db)
+        created_assets: list[dict[str, str]] | None = [] if verbose_assets else None
+        updated_assets: list[dict[str, str]] | None = [] if verbose_assets else None
+
+        # Discover items from importer (importers must not persist)
+        try:
+            discovered_items = importer.discover()
+        except Exception as e:
+            raise RuntimeError(f"Importer discovery failed: {e}") from e
+
+        # Get provider name from importer
+        provider = getattr(importer, "name", None) if importer else None
+
+        def _get_uri(item: Any) -> str | None:
+            if isinstance(item, dict):
+                return item.get("uri") or item.get("path") or item.get("external_id")
+            return getattr(item, "path_uri", None)
+
+        def _get_size(item: Any) -> int:
+            if isinstance(item, dict):
+                size_val = item.get("size", 0)
+                return int(size_val) if size_val is not None else 0
+            size_val = getattr(item, "size", 0)
+            return int(size_val) if size_val is not None else 0
+
+        def _get_hash_sha256(item: Any) -> str | None:
+            if isinstance(item, dict):
+                return item.get("hash_sha256") or item.get("content_hash")
+            return getattr(item, "hash_sha256", None)
+
+        def _get_enricher_checksum(item: Any) -> str | None:
+            if isinstance(item, dict):
+                return item.get("enricher_checksum") or item.get("last_enricher_checksum")
+            return getattr(item, "enricher_checksum", None)
+
+        for item in discovered_items or []:
+            stats.assets_discovered += 1
+            try:
+                canonical_key = canonical_key_for(item, collection=collection, provider=provider)
+                canonical_key_hash = canonical_hash(canonical_key)
+            except IngestError as e:
+                stats.errors.append(str(e))
+                continue
+
+            # Dry-run still executes all reads; it only avoids persisting writes
+            existing = repo.get_by_collection_and_canonical_hash(
+                collection.uuid, canonical_key_hash
+            )
+            if existing is not None:
+                # Existing asset found; determine if content or enricher changed
+                incoming_hash = _get_hash_sha256(item)
+                incoming_enricher = _get_enricher_checksum(item)
+
+                changed_content = (
+                    incoming_hash is not None and incoming_hash != getattr(existing, "hash_sha256", None)
+                )
+                changed_enricher = (
+                    incoming_enricher is not None and incoming_enricher != getattr(existing, "last_enricher_checksum", None)
+                )
+
+                if changed_content:
+                    # Update content hash on the existing asset
+                    existing.hash_sha256 = incoming_hash  # type: ignore[attr-defined]
+                    # Downgrade state if previously ready (cannot safely broadcast changed content)
+                    if getattr(existing, "state", None) == "ready":
+                        existing.state = "enriching"  # type: ignore[attr-defined]
+                    # Never auto-approve on change
+                    if hasattr(existing, "approved_for_broadcast"):
+                        existing.approved_for_broadcast = False  # type: ignore[attr-defined]
+                    # Ensure the session tracks the mutation within this UnitOfWork
+                    self.db.add(existing)
+                    stats.assets_changed_content += 1
+                    stats.assets_updated += 1
+                    if updated_assets is not None:
+                        existing_uuid = str(getattr(existing, "uuid", getattr(existing, "id", "")))
+                        updated_assets.append({
+                            "uuid": existing_uuid,
+                            "uri": _get_uri(item) or canonical_key,
+                            "reason": "content",
+                        })
+                    # Guardrail: abort if updates exceeded
+                    if max_updates is not None and (
+                        stats.assets_changed_content + stats.assets_changed_enricher
+                    ) > max_updates:
+                        stats.errors.append("ingest aborted: max_updates exceeded")
+                        break
+                elif changed_enricher:
+                    # Update last enricher checksum on the existing asset
+                    existing.last_enricher_checksum = incoming_enricher  # type: ignore[attr-defined]
+                    # Downgrade state if previously ready
+                    if getattr(existing, "state", None) == "ready":
+                        existing.state = "enriching"  # type: ignore[attr-defined]
+                    # Ensure the session tracks the mutation within this UnitOfWork
+                    self.db.add(existing)
+                    stats.assets_changed_enricher += 1
+                    stats.assets_updated += 1
+                    if updated_assets is not None:
+                        existing_uuid = str(getattr(existing, "uuid", getattr(existing, "id", "")))
+                        updated_assets.append({
+                            "uuid": existing_uuid,
+                            "uri": _get_uri(item) or canonical_key,
+                            "reason": "enricher",
+                        })
+                    # Guardrail: abort if updates exceeded
+                    if max_updates is not None and (
+                        stats.assets_changed_content + stats.assets_changed_enricher
+                    ) > max_updates:
+                        stats.errors.append("ingest aborted: max_updates exceeded")
+                        break
+                else:
+                    stats.assets_skipped += 1
+                continue
+
+            uri_val = _get_uri(item) or canonical_key
+            size_val = _get_size(item)
+
+            asset = Asset(
+                uuid=uuid.uuid4(),
+                collection_uuid=collection.uuid,
+                canonical_key=canonical_key,
+                canonical_key_hash=canonical_key_hash,
+                uri=uri_val,
+                size=size_val,
+                state="new",
+                approved_for_broadcast=False,
+                operator_verified=False,
+                discovered_at=datetime.now(timezone.utc),
+            )
+            # Populate optional incoming fields when creating a new asset
+            incoming_hash = _get_hash_sha256(item)
+            incoming_enricher = _get_enricher_checksum(item)
+            if incoming_hash is not None:
+                asset.hash_sha256 = incoming_hash
+            if incoming_enricher is not None:
+                asset.last_enricher_checksum = incoming_enricher
+            repo.create(asset)
+            stats.assets_ingested += 1
+            if created_assets is not None:
+                created_assets.append({
+                    "uuid": str(asset.uuid),
+                    "uri": uri_val,
+                })
+            # Guardrail: abort if new exceeded
+            if max_new is not None and stats.assets_ingested > max_new:
+                stats.errors.append("ingest aborted: max_new exceeded")
+                break
         
         result = CollectionIngestResult(
             collection_id=str(collection.uuid),
@@ -328,7 +503,9 @@ class CollectionIngestService:
             stats=stats,
             title=title,
             season=season,
-            episode=episode
+            episode=episode,
+            created_assets=created_assets,
+            updated_assets=updated_assets,
         )
         
         return result

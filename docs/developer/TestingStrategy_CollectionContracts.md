@@ -34,7 +34,7 @@ However, the Asset domain hasn't been built yet. How should we proceed?
 
 - Use mocks/stubs for Asset operations in Phase 1
 - Verify service layer calls Asset persistence methods correctly
-- Verify importer returns `AssetDraft` objects without DB writes
+- Verify importer returns `DiscoveredItem` objects without DB writes
 - Mark Asset-dependent tests as `@pytest.mark.skip("Requires Asset domain - Phase 2")`
 
 ### Phase 2: Build Minimal Asset Domain for Contract Testing
@@ -55,15 +55,10 @@ However, the Asset domain hasn't been built yet. How should we proceed?
 
 2. **Asset Repository/Service** (minimal):
 
-   - `find_by_canonical_id(collection_id, canonical_id)` → Asset | None
-   - `create(asset_draft)` → Asset
-   - `update(asset, asset_draft)` → Asset
+   - `find_by_canonical_hash(collection_uuid, canonical_key_hash)` → Asset | None
+   - `create(asset)` → Asset
+   - `update(asset)` → Asset
    - `update_timestamp(asset)` → Asset
-
-3. **AssetDraft Model** (data transfer object):
-   - Fields returned by importer
-   - Canonical identity fields
-   - Content signature fields
 
 **Contract-Driven Requirements:**
 The contracts define exactly what Asset domain needs to provide:
@@ -121,10 +116,10 @@ This phase is driven by broader requirements, not just contract testing.
 ```python
 # test_collection_ingest_contract.py
 
-def test_b14_importer_returns_asset_drafts_without_db_writes():
-    """B-14: Verify importer returns AssetDraft objects without DB writes."""
+def test_b14_importer_returns_discovered_items_without_db_writes():
+    """B-14: Verify importer returns DiscoveredItem objects without DB writes."""
     # Mock importer
-    # Verify enumerate_assets() returns AssetDraft objects
+    # Verify discover() returns DiscoveredItem objects
     # Verify no database writes occur in importer
 
 @pytest.mark.skip("Requires Asset domain - Phase 2")
@@ -154,11 +149,11 @@ class AssetRepository:
         """D-9: Find existing asset by canonical identity."""
         ...
 
-    def create(self, asset_draft: AssetDraft) -> Asset:
+    def create(self, asset: Asset) -> Asset:
         """D-13: Create new asset in 'new' or 'enriching' state."""
         ...
 
-    def update(self, asset: Asset, asset_draft: AssetDraft) -> Asset:
+    def update(self, asset: Asset) -> Asset:
         """D-11, D-14: Update existing asset."""
         ...
 ```

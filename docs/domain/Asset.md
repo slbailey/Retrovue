@@ -95,12 +95,18 @@ Procedural lifecycle control keeps the ingest and enrichment pipeline predictabl
 
 ### Asset Lifecycle
 
-| From State | Action | To State | Notes |
-|-------------|---------|----------|-------|
-| `new` | Enrichment begins | `enriching` | Automatic during ingest |
-| `enriching` | Operator resolves and approves | `ready` | via `asset resolve --approve --ready` |
-| `ready` | Operator retires asset | `retired` | via update/delete ops |
-| any | Soft delete | — | Marks `is_deleted=true` |
+#### Asset State Transition Table
+
+
+| **From State** | **Action**                   | **To State** | **Notes**                      |
+|:-------------- |:---------------------------- |:------------ |:------------------------------ |
+| `new`          | Enrichment begins            | `enriching`  | Automatic during ingest        |
+| `enriching`    | Operator resolves and        | `ready`      | via `asset resolve --approve`  |
+|                | approves                     |              | `--ready`                      |
+| `ready`        | Operator retires asset       | `retired`    | via update/delete operations   |
+| *any*          | Soft delete                  | —            | Marks `is_deleted=true`        |
+
+
 
 ### Critical invariants
 

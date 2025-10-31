@@ -74,9 +74,9 @@ Assigns a template to a channel for a specific broadcast day. Each channel can h
 
 - Unique constraint on (channel_id, schedule_date) ensures one template per channel per broadcast day
 
-### catalog_asset
+### Asset (from Library Domain)
 
-Broadcast-approved catalog entries that are eligible for scheduling. This is NOT the Library Domain - this is the curated, station-approved broadcast catalog. Only catalog entries with `canonical=true` are eligible for scheduling.
+Broadcast-approved assets that are eligible for scheduling. Assets from the Library Domain can be scheduled when `state='ready'` and `approved_for_broadcast=true`. The Asset table serves as the single source of truth for schedulable content.
 
 | Column                 | Type        | Description                                                               | Required? | Who writes it                       | Who reads it                                             |
 | ---------------------- | ----------- | ------------------------------------------------------------------------- | --------- | ----------------------------------- | -------------------------------------------------------- |

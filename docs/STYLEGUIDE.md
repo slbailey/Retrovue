@@ -42,7 +42,7 @@ Use these exact words:
 - Producer Registry
 - Enricher (never "enhancer", never "overlay stage")
 - playout plan
-- AssetDraft
+- DiscoveredItem
 - Playlog / as-run log / EPG
 - MasterClock
 

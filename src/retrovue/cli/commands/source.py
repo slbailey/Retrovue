@@ -25,8 +25,10 @@ from ...adapters.registry import (
     list_enrichers,
     list_importers,
 )
-from ...domain.entities import Collection, Source
+from ...domain.entities import Collection, PathMapping, Source
 from ...infra.uow import session
+from ...infra.db import get_sessionmaker
+from ...infra.db import get_sessionmaker
 from sqlalchemy.orm import Session
 
 # Thin, contract-aligned functions instead of fat SourceService
@@ -281,8 +283,21 @@ def source_update(
         should_close = True
     
     try:
-        # Get source
-        source = source_get_by_id(source_id)
+        # Get source - resolve within current session
+        import uuid
+        source = None
+        try:
+            uuid.UUID(source_id)
+            source = db.query(Source).filter(Source.id == source_id).first()
+        except ValueError:
+            pass
+        
+        if not source:
+            source = db.query(Source).filter(Source.external_id == source_id).first()
+        
+        if not source:
+            source = db.query(Source).filter(Source.name == source_id).first()
+        
         if not source:
             raise ValueError(f"Source not found: {source_id}")
         
@@ -722,6 +737,11 @@ def add_source(
         # Create the importer instance to validate configuration (skip when mocked usecase)
         importer = None
         if not is_mocked_usecase:
+            # Debug: echo importer params on failure context
+            try:
+                pass
+            except Exception:
+                pass
             importer = get_importer(type, **importer_params)
         
         # Handle dry-run mode
@@ -754,14 +774,14 @@ def add_source(
                     typer.echo(f"  Would discover collections: {'Yes' if type == 'plex' else 'No (not supported)'}")
             return
         
-        # Handle test-db mode
-        if test_db:
-            typer.echo("Using test database environment", err=True)
-            # TODO: Implement test database isolation
-            # For now, just continue with normal flow but mark as test mode
-        
         # Now actually create and save the source in the database (no auto-discovery here)
-        with session() as db:
+        if test_db:
+            SessionForTest = get_sessionmaker(for_test=True)
+            db_cm = SessionForTest()
+        else:
+            db_cm = session()
+
+        with db_cm as db:
             result = _uc_source_add.add_source(
                 db,
                 source_type=type,
@@ -802,6 +822,12 @@ def add_source(
                     typer.echo(f"  Enrichers: {', '.join(enricher_list)}")
                 
     except Exception as e:
+        # Print full traceback to help diagnose NameError location
+        try:
+            import traceback
+            typer.echo(traceback.format_exc(), err=True)
+        except Exception:
+            pass
         typer.echo(f"Error adding source: {e}", err=True)
         raise typer.Exit(1)
 
@@ -1059,8 +1085,21 @@ def update_source(
     """
     with session() as db:
         try:
-            # Get current source to determine type
-            current_source = source_get_by_id(source_id)
+            # Get current source to determine type - resolve within current session
+            import uuid
+            current_source = None
+            try:
+                uuid.UUID(source_id)
+                current_source = db.query(Source).filter(Source.id == source_id).first()
+            except ValueError:
+                pass
+            
+            if not current_source:
+                current_source = db.query(Source).filter(Source.external_id == source_id).first()
+            
+            if not current_source:
+                current_source = db.query(Source).filter(Source.name == source_id).first()
+            
             if not current_source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
@@ -1070,16 +1109,16 @@ def update_source(
             from ...adapters.registry import ALIASES, SOURCES
             
             # Get importer class (not instance) for interface compliance check
-            importer_key = ALIASES.get(current_source.kind.lower(), current_source.kind.lower())
+            importer_key = ALIASES.get(current_source.type.lower(), current_source.type.lower())
             try:
                 importer_class = SOURCES[importer_key]
             except KeyError:
-                typer.echo(f"Error: Importer for source type '{current_source.kind}' is not available or not interface-compliant", err=True)
+                typer.echo(f"Error: Importer for source type '{current_source.type}' is not available or not interface-compliant", err=True)
                 raise typer.Exit(1)
             
             # Check that importer class implements required update methods
             if not hasattr(importer_class, "get_update_fields") or not hasattr(importer_class, "validate_partial_update"):
-                typer.echo(f"Error: Importer for source type '{current_source.kind}' is not available or not interface-compliant", err=True)
+                typer.echo(f"Error: Importer for source type '{current_source.type}' is not available or not interface-compliant", err=True)
                 raise typer.Exit(1)
             
             # Build update configuration
@@ -1089,20 +1128,25 @@ def update_source(
             if name:
                 updates["name"] = name
             
-            if current_source.kind == "plex":
+            if current_source.type == "plex":
+                config_changed = False
+                # Preserve existing servers array structure
+                if not new_config.get("servers"):
+                    new_config["servers"] = [{"base_url": "", "token": ""}]
+                
                 if base_url:
-                    new_config["servers"] = [{"base_url": base_url, "token": new_config.get("servers", [{}])[0].get("token", "")}]
+                    new_config["servers"][0]["base_url"] = base_url
+                    config_changed = True
                 if token:
-                    if "servers" not in new_config:
-                        new_config["servers"] = [{"base_url": "", "token": ""}]
                     new_config["servers"][0]["token"] = token
-                if new_config:
+                    config_changed = True
+                
+                if config_changed:
                     updates["config"] = new_config
                     
-            elif current_source.kind == "filesystem":
+            elif current_source.type == "filesystem":
                 if base_path:
                     new_config["root_paths"] = [base_path]
-                if new_config:
                     updates["config"] = new_config
             
             if not updates:
@@ -1120,7 +1164,7 @@ def update_source(
                     result = {
                         "id": current_source.id,
                         "external_id": current_source.external_id,
-                        "type": current_source.kind,
+                        "type": current_source.type,
                         "current_name": current_source.name,
                         "proposed_name": name if name else current_source.name,
                         "current_config": current_config_redacted,
@@ -1130,12 +1174,12 @@ def update_source(
                     if name:
                         result["updated_parameters"].append("name")
                     if "config" in updates:
-                        if current_source.kind == "plex":
+                        if current_source.type == "plex":
                             if base_url:
                                 result["updated_parameters"].append("base_url")
                             if token:
                                 result["updated_parameters"].append("token")
-                        elif current_source.kind == "filesystem":
+                        elif current_source.type == "filesystem":
                             if base_path:
                                 result["updated_parameters"].append("base_path")
                     typer.echo(json.dumps(result, indent=2))
@@ -1146,7 +1190,7 @@ def update_source(
                     typer.echo(f"  Current Name: {current_source.name}")
                     if name:
                         typer.echo(f"  Proposed Name: {name}")
-                    typer.echo(f"  Type: {current_source.kind}")
+                    typer.echo(f"  Type: {current_source.type}")
                     
                     if "config" in updates:
                         typer.echo(f"  Current Configuration: {json.dumps(current_config_redacted)}")
@@ -1176,12 +1220,12 @@ def update_source(
                 if name:
                     source_dict["updated_parameters"].append("name")
                 if "config" in updates:
-                    if current_source.kind == "plex":
+                    if current_source.type == "plex":
                         if base_url:
                             source_dict["updated_parameters"].append("base_url")
                         if token:
                             source_dict["updated_parameters"].append("token")
-                    elif current_source.kind == "filesystem":
+                    elif current_source.type == "filesystem":
                         if base_path:
                             source_dict["updated_parameters"].append("base_path")
                 typer.echo(json.dumps(source_dict, indent=2))
@@ -1348,29 +1392,100 @@ def discover_collections(
         retrovue source discover plex-5063d926
         retrovue source discover "My Plex" --json
     """
-    with session() as db:
+    # Choose appropriate session context (test or default)
+    if test_db:
+        SessionForTest = get_sessionmaker(for_test=True)
+        db_cm = SessionForTest()
+    else:
+        db_cm = session()
+
+    with db_cm as db:
         try:
             # Call the usecase exactly once (tests patch and assert this)
             discovered = _uc_source_discover.discover_collections(db, source_id=source_id)
 
-            # Compute duplicates without persisting anything
+            # Get the source for persistence
+            import uuid as uuid_module
+            source_obj = None
+            try:
+                uuid_module.UUID(source_id)
+                source_obj = db.query(Source).filter(Source.id == source_id).first()
+            except ValueError:
+                pass
+            
+            if not source_obj:
+                source_obj = db.query(Source).filter(Source.external_id == source_id).first()
+            
+            if not source_obj:
+                source_obj = db.query(Source).filter(Source.name == source_id).first()
+            
+            # Compute duplicates and persist new collections
             to_add_count = 0
-            duplicate_messages: list[str] = []
+            collections_to_skip: list[dict] = []
+            collections_to_create: list[dict] = []
+            
             for c in discovered:
                 ext_id = c.get("external_id") if isinstance(c, dict) else None
                 name = c.get("name") if isinstance(c, dict) else "(unknown)"
                 exists = False
-                if ext_id:
+                existing = None
+                
+                if ext_id and source_obj:
                     try:
                         # Check for existing collection with same external_id
                         existing = db.query(Collection).filter(Collection.external_id == ext_id).first()
                         exists = existing is not None
                     except Exception:
                         exists = False
+                
                 if exists:
-                    duplicate_messages.append(f"Collection '{name}' already exists, skipping")
+                    collections_to_skip.append(c)
                 else:
-                    to_add_count += 1
+                    # Persist new collection if not dry-run
+                    if not dry_run and source_obj and ext_id:
+                        new_collection = Collection(
+                            source_id=source_obj.id,
+                            external_id=ext_id,
+                            name=name,
+                            sync_enabled=False,  # New collections start disabled per contract
+                            config={
+                                "plex_section_ref": c.get("plex_section_ref", ""),
+                                "type": c.get("type", "unknown")
+                            }
+                        )
+                        db.add(new_collection)
+                        db.flush()  # Get UUID for PathMapping
+                        
+                        # Create PathMapping records for each filesystem location
+                        locations = c.get("locations", [])
+                        if locations:
+                            for plex_fs_path in locations:
+                                path_mapping = PathMapping(
+                                    collection_uuid=new_collection.uuid,
+                                    plex_path=plex_fs_path,  # Actual Plex filesystem path
+                                    local_path=""  # Empty per contract
+                                )
+                                db.add(path_mapping)
+                        else:
+                            # Fallback: no locations available, use plex_section_ref
+                            plex_path = c.get("plex_section_ref", f"plex://{ext_id}")
+                            path_mapping = PathMapping(
+                                collection_uuid=new_collection.uuid,
+                                plex_path=plex_path,
+                                local_path=""  # Empty per contract
+                            )
+                            db.add(path_mapping)
+                        
+                        to_add_count += 1
+                    collections_to_create.append(c)
+
+            # Commit persisted changes when not dry-run (only needed for test_db path which lacks UoW auto-commit)
+            try:
+                if not dry_run:
+                    db.commit()
+            except Exception:
+                # If the session is managed by a higher-level UoW, ignore
+                pass
 
             if json_output:
                 # JSON output per contract
@@ -1386,14 +1501,31 @@ def discover_collections(
                 if not discovered:
                     typer.echo("No collections found")
                 else:
-                    # Human-readable output. Show duplicate skip messages if any, else list discovered
-                    if duplicate_messages:
-                        for msg in duplicate_messages:
-                            typer.echo(msg)
+                    # Human-readable output per contract
+                    if dry_run:
+                        # Dry-run: show what would happen
+                        if collections_to_skip or collections_to_create:
+                            typer.echo(f"Discovered collections from '{source_id}' (dry-run):")
+                            for c in collections_to_skip:
+                                typer.echo(f"  • {c.get('name','(unknown)')} (ID: {c.get('external_id','')}) - Would skip (already exists)")
+                            for c in collections_to_create:
+                                typer.echo(f"  • {c.get('name','(unknown)')} (ID: {c.get('external_id','')}) - Would be created")
+                        else:
+                            # Fallback for backwards compatibility
+                            typer.echo(f"Would discover {len(discovered)} collections from '{source_id}':")
+                            for c in discovered:
+                                typer.echo(f"  • {c.get('name','(unknown)')} (ID: {c.get('external_id','')}) - Would be created")
                     else:
-                        typer.echo(f"Discovered {len(discovered)} collections:")
-                        for c in discovered:
-                            typer.echo(f"  • {c.get('name','(unknown)')} (ID: {c.get('external_id','')})")
+                        # Non-dry-run: show actual results
+                        if collections_to_skip:
+                            for c in collections_to_skip:
+                                typer.echo(f"Collection '{c.get('name','(unknown)')}' already exists, skipping")
+                        if collections_to_create:
+                            typer.echo(f"Successfully added {to_add_count} collections from '{source_id}':")
+                            for c in collections_to_create:
+                                typer.echo(f"  • {c.get('name','(unknown)')} (ID: {c.get('external_id','')}) - Disabled by default")
+                            if to_add_count > 0:
+                                typer.echo("\nUse 'retrovue collection update <name> --sync-enabled true' to enable collections for sync")
         except ValueError:
             if json_output:
                 typer.echo(json.dumps({

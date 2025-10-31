@@ -36,8 +36,8 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -67,8 +67,8 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -86,7 +86,10 @@ class TestSourceDiscoverDataContract:
         """
         Contract D-3: Discovery MUST NOT flip existing collections from sync_enabled=False to sync_enabled=True.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
+        with (
+            patch("retrovue.cli.commands.source.session") as mock_session,
+            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+        ):
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
@@ -94,35 +97,46 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
-            mock_source_service = MagicMock()
-            mock_source_service.get_source_by_id.return_value = mock_source
-            
-            # Mock importer to return collections
-            mock_importer = MagicMock()
-            mock_importer.list_collections.return_value = [
+            # Mock usecase to return discovered collections
+            mock_discover.return_value = [
                 {"external_id": "1", "name": "Movies", "plex_section_ref": "1", "type": "movie"}
             ]
             
-            # Mock database query to return existing collection with sync_enabled=False
+            # Mock database query to return source and existing collection
             existing_collection = MagicMock()
             existing_collection.external_id = "1"
             existing_collection.name = "Movies"
             existing_collection.sync_enabled = False
-            mock_db.query.return_value.filter.return_value.first.return_value = existing_collection
             
-            with patch("retrovue.cli.commands.source.source_add") as mock_source_add, \
-                 patch("retrovue.adapters.importers.plex_importer.PlexImporter", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, ["discover", "test-source"])
-                
-                assert result.exit_code == 0
-                # Verify no new collection was added (duplicate skipped)
-                mock_db.add.assert_not_called()
-                # Verify existing collection's sync_enabled status was not changed
-                assert existing_collection.sync_enabled is False
+            # Setup mock chain: query(Source) -> source, query(Collection) -> existing_collection
+            from retrovue.domain.entities import Source, Collection
+            
+            # Create separate mock chains for Source and Collection queries
+            source_query = MagicMock()
+            source_query.filter.return_value.first.return_value = mock_source
+            
+            collection_query = MagicMock()
+            collection_query.filter.return_value.first.return_value = existing_collection
+            
+            def query_side_effect(model):
+                if model == Source:
+                    return source_query
+                elif model == Collection:
+                    return collection_query
+                return MagicMock()
+            
+            mock_db.query.side_effect = query_side_effect
+            
+            result = self.runner.invoke(app, ["discover", "test-source"])
+            
+            assert result.exit_code == 0
+            # Verify no new collection was added (duplicate skipped)
+            mock_db.add.assert_not_called()
+            # Verify existing collection's sync_enabled status was not changed
+            assert existing_collection.sync_enabled is False
 
     def test_source_discover_path_mapping_empty_local_path(self):
         """
@@ -142,8 +156,8 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -172,8 +186,8 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -202,8 +216,8 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -226,7 +240,10 @@ class TestSourceDiscoverDataContract:
         Note: Current implementation skips existing collections entirely.
         This test documents the expected behavior when metadata updates are implemented.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
+        with (
+            patch("retrovue.cli.commands.source.session") as mock_session,
+            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+        ):
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
@@ -234,15 +251,11 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
-            mock_source_service = MagicMock()
-            mock_source_service.get_source_by_id.return_value = mock_source
-            
-            # Mock importer to return collections
-            mock_importer = MagicMock()
-            mock_importer.list_collections.return_value = [
+            # Mock usecase to return discovered collections
+            mock_discover.return_value = [
                 {"external_id": "1", "name": "Movies Updated", "plex_section_ref": "1", "type": "movie"}
             ]
             
@@ -251,16 +264,30 @@ class TestSourceDiscoverDataContract:
             existing_collection.external_id = "1"
             existing_collection.name = "Movies"
             existing_collection.sync_enabled = False
-            mock_db.query.return_value.filter.return_value.first.return_value = existing_collection
             
-            with patch("retrovue.cli.commands.source.source_add") as mock_source_add, \
-                 patch("retrovue.adapters.importers.plex_importer.PlexImporter", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, ["discover", "test-source"])
-                
-                assert result.exit_code == 0
-                # TODO: When metadata updates are implemented, verify collection name was updated
-                # For now, this test documents the expected behavior
+            # Setup mock chain: query(Source) -> source, query(Collection) -> existing_collection
+            from retrovue.domain.entities import Source, Collection
+            
+            source_query = MagicMock()
+            source_query.filter.return_value.first.return_value = mock_source
+            
+            collection_query = MagicMock()
+            collection_query.filter.return_value.first.return_value = existing_collection
+            
+            def query_side_effect(model):
+                if model == Source:
+                    return source_query
+                elif model == Collection:
+                    return collection_query
+                return MagicMock()
+            
+            mock_db.query.side_effect = query_side_effect
+            
+            result = self.runner.invoke(app, ["discover", "test-source"])
+            
+            assert result.exit_code == 0
+            # TODO: When metadata updates are implemented, verify collection name was updated
+            # For now, this test documents the expected behavior
 
     def test_source_discover_uses_importer_discovery_capability(self):
         """
@@ -277,8 +304,8 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
@@ -297,7 +324,10 @@ class TestSourceDiscoverDataContract:
         Note: Current implementation doesn't explicitly verify interface compliance.
         This test documents the expected behavior when interface verification is implemented.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
+        with (
+            patch("retrovue.cli.commands.source.session") as mock_session,
+            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+        ):
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
@@ -305,25 +335,29 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
-            mock_source_service = MagicMock()
-            mock_source_service.get_source_by_id.return_value = mock_source
+            # Mock usecase
+            mock_discover.return_value = []
             
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.list_collections.return_value = []
+            from retrovue.domain.entities import Source
+            source_query = MagicMock()
+            source_query.filter.return_value.first.return_value = mock_source
             
-            with patch("retrovue.cli.commands.source.source_add") as mock_source_add, \
-                 patch("retrovue.adapters.importers.plex_importer.PlexImporter", return_value=mock_importer):
-                
-                result = self.runner.invoke(app, ["discover", "test-source"])
-                
-                assert result.exit_code == 0
-                # TODO: When interface compliance verification is implemented, 
-                # verify that compliance check happens before discovery
-                # For now, this test documents the expected behavior
+            def query_side_effect(model):
+                if model == Source:
+                    return source_query
+                return MagicMock()
+            
+            mock_db.query.side_effect = query_side_effect
+            
+            result = self.runner.invoke(app, ["discover", "test-source"])
+            
+            assert result.exit_code == 0
+            # TODO: When interface compliance verification is implemented, 
+            # verify that compliance check happens before discovery
+            # For now, this test documents the expected behavior
 
     def test_source_discover_database_error_propagation(self):
         """
@@ -340,14 +374,25 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
-            
-            mock_source_service = MagicMock()
-            mock_source_service.get_source_by_id.return_value = mock_source
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             # Simulate database exception during duplicate check
-            mock_db.query.side_effect = Exception("Database connection error")
+            # Need to handle Source query first, then Collection query fails
+            from retrovue.domain.entities import Source
+            
+            call_count = 0
+            def query_side_effect(model):
+                nonlocal call_count
+                if model == Source and call_count == 0:
+                    call_count += 1
+                    source_query = MagicMock()
+                    source_query.filter.return_value.first.return_value = mock_source
+                    return source_query
+                else:
+                    raise Exception("Database connection error")
+            
+            mock_db.query.side_effect = query_side_effect
             mock_discover.return_value = [{"external_id": "1", "name": "Movies"}]
             result = self.runner.invoke(app, ["discover", "test-source"])
             # Discovery-only: duplicate check errors are tolerated as no persistence occurs
@@ -368,8 +413,8 @@ class TestSourceDiscoverDataContract:
             mock_source = MagicMock()
             mock_source.id = "test-source-id"
             mock_source.name = "Test Plex Server"
-            mock_source.kind = "plex"
-            mock_source.config = {"base_url": "http://test", "token": "test-token"}
+            mock_source.type = "plex"
+            mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
             
             mock_source_service = MagicMock()
             mock_source_service.get_source_by_id.return_value = mock_source
