@@ -806,7 +806,8 @@ class PlexImporter(BaseImporter):
                 ep = self.client.find_episode_by_sse(title, season, episode)
                 # Synthesize a minimal item compatible with _create_discovered_item
                 # Try to fetch file info via get_episode_metadata to get Part file
-                meta = self.get_episode_metadata(int(ep.get("ratingKey")))
+                rk_val = ep.get("ratingKey")
+                meta = self.client.get_episode_metadata(int(str(rk_val))) if rk_val is not None else {}
                 part_file = None
                 file_size = None
                 for media in meta.get("Media", []):
@@ -1160,7 +1161,7 @@ class PlexImporter(BaseImporter):
         """
         try:
             # Extract upstream file path from labels when available
-            def _labels(obj) -> list[str]:
+            def _labels(obj: DiscoveredItem | dict) -> list[str]:
                 if isinstance(obj, dict):
                     return obj.get("raw_labels") or []
                 return getattr(obj, "raw_labels", None) or []
@@ -1183,7 +1184,7 @@ class PlexImporter(BaseImporter):
                     else:
                         rk = getattr(item, "provider_key", None)
                     if rk:
-                        meta = self.get_episode_metadata(int(rk))
+                        meta = self.client.get_episode_metadata(int(str(rk)))
                         # Find first Part file
                         for media in meta.get("Media", []):
                             for part in media.get("Part", []):
