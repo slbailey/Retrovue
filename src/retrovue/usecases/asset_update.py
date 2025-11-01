@@ -67,3 +67,4 @@ def update_asset_review_status(
     db.add(asset)  # no commit; UoW handles it
 
     return _serialize_asset(asset)
+

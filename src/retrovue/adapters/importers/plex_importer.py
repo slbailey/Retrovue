@@ -42,12 +42,16 @@ class PlexClient:
             base_url: Plex server base URL (e.g., "http://127.0.0.1:32400")
             token: Plex authentication token
         """
-        self.base_url = base_url.rstrip("/")
-        self.token = token
+        # Be resilient to accidental whitespace/newlines
+        self.base_url = base_url.strip().rstrip("/")
+        self.token = token.strip()
         self.session = self._create_session()
 
     def _create_session(self) -> requests.Session:
-        """Create a requests session with retry logic."""
+        """Create a requests session with retry logic and Plex headers."""
+        import os
+        import uuid as _uuid
+
         session = requests.Session()
 
         # Configure retry strategy
@@ -60,6 +64,22 @@ class PlexClient:
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
+
+        # Standard Plex headers improve compatibility behind proxies/CDNs
+        client_id = str(_uuid.uuid4())
+        session.headers.update(
+            {
+                "X-Plex-Product": "Retrovue",
+                "X-Plex-Version": "1.0",
+                "X-Plex-Client-Identifier": client_id,
+                "X-Plex-Platform": "Python",
+                "Accept": "application/xml",
+            }
+        )
+
+        # Allow disabling SSL verification for self-signed certs when explicitly requested
+        if os.getenv("RETROVUE_INSECURE_SSL") == "1":
+            session.verify = False
 
         return session
 
@@ -75,9 +95,10 @@ class PlexClient:
         """
         try:
             url = f"{self.base_url}/library/sections"
+            # Send token both as header and query param for maximum compatibility
             params = {"X-Plex-Token": self.token}
-
-            response = self.session.get(url, params=params, timeout=20)
+            headers = {"X-Plex-Token": self.token}
+            response = self.session.get(url, params=params, headers=headers, timeout=20)
             response.raise_for_status()
 
             # Parse XML response
@@ -133,7 +154,8 @@ class PlexClient:
             # Get library content to determine type
             url = f"{self.base_url}/library/sections/{library_key}/all"
             params = {"X-Plex-Token": self.token}
-            response = self.session.get(url, params=params, timeout=20)
+            headers = {"X-Plex-Token": self.token}
+            response = self.session.get(url, params=params, headers=headers, timeout=20)
             response.raise_for_status()
 
             import xml.etree.ElementTree as ET
@@ -164,7 +186,9 @@ class PlexClient:
 
                     # Get seasons for this show
                     seasons_url = f"{self.base_url}/library/metadata/{show_key}/children"
-                    seasons_response = self.session.get(seasons_url, params=params, timeout=20)
+                    seasons_response = self.session.get(
+                        seasons_url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
+                    )
                     seasons_response.raise_for_status()
 
                     seasons_root = ET.fromstring(seasons_response.content)
@@ -191,7 +215,10 @@ class PlexClient:
                         # Get episodes for this season
                         episodes_url = f"{self.base_url}/library/metadata/{season_key}/children"
                         episodes_response = self.session.get(
-                            episodes_url, params=params, timeout=20
+                            episodes_url,
+                            params=params,
+                            headers={"X-Plex-Token": self.token},
+                            timeout=20,
                         )
                         episodes_response.raise_for_status()
 
@@ -247,7 +274,9 @@ class PlexClient:
             else:
                 # For movie libraries, get movies directly
                 url = f"{self.base_url}/library/sections/{library_key}/all"
-                response = self.session.get(url, params=params, timeout=20)
+                response = self.session.get(
+                    url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
+                )
                 response.raise_for_status()
 
                 root = ET.fromstring(response.content)
@@ -307,8 +336,9 @@ class PlexClient:
         try:
             url = f"{self.base_url}/library/metadata/{rating_key}"
             params = {"X-Plex-Token": self.token}
-
-            response = self.session.get(url, params=params, timeout=20)
+            response = self.session.get(
+                url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
+            )
             response.raise_for_status()
 
             # Parse XML response
@@ -480,8 +510,9 @@ class PlexClient:
             # First try the global search without type restriction
             url = f"{self.base_url}/search"
             params = {"X-Plex-Token": self.token, "query": series_title}
-
-            response = self.session.get(url, params=params, timeout=20)
+            response = self.session.get(
+                url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
+            )
             response.raise_for_status()
 
             # Parse XML response
@@ -531,7 +562,9 @@ class PlexClient:
                     url = f"{self.base_url}/library/sections/{library['key']}/all"
                     params = {"X-Plex-Token": self.token}
 
-                    response = self.session.get(url, params=params, timeout=20)
+                    response = self.session.get(
+                        url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
+                    )
                     response.raise_for_status()
 
                     # Parse XML response
@@ -576,8 +609,9 @@ class PlexClient:
         try:
             url = f"{self.base_url}/library/metadata/{series_rating_key}/children"
             params = {"X-Plex-Token": self.token}
-
-            response = self.session.get(url, params=params, timeout=20)
+            response = self.session.get(
+                url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
+            )
             response.raise_for_status()
 
             # Parse XML response
@@ -618,8 +652,9 @@ class PlexClient:
         try:
             url = f"{self.base_url}/library/metadata/{season_rating_key}/children"
             params = {"X-Plex-Token": self.token}
-
-            response = self.session.get(url, params=params, timeout=20)
+            response = self.session.get(
+                url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
+            )
             response.raise_for_status()
 
             # Parse XML response
@@ -690,10 +725,13 @@ class PlexImporter(BaseImporter):
             base_url: Plex server base URL
             token: Plex authentication token
         """
-        super().__init__(base_url=base_url, token=token)
-        self.base_url = base_url
-        self.token = token
-        self.client = PlexClient(base_url, token)
+        # Normalize early so both BaseImporter and client get clean values
+        cleaned_base_url = base_url.strip()
+        cleaned_token = token.strip()
+        super().__init__(base_url=cleaned_base_url, token=cleaned_token)
+        self.base_url = cleaned_base_url
+        self.token = cleaned_token
+        self.client = PlexClient(cleaned_base_url, cleaned_token)
         self.library_key: str | None = None  # Set externally via attribute assignment
 
     def discover(self) -> list[DiscoveredItem]:
@@ -733,6 +771,68 @@ class PlexImporter(BaseImporter):
 
             return discovered_items
 
+        except Exception as e:
+            raise ImporterError(f"Failed to discover content from Plex: {str(e)}") from e
+
+    # Optional fast path for targeted ingest
+    def discover_scoped(
+        self, *, title: str | None = None, season: int | None = None, episode: int | None = None
+    ) -> list[DiscoveredItem]:
+        """
+        Discover only items that match the provided scope when possible.
+
+        For TV libraries, this uses filtered library enumeration to avoid scanning
+        the entire library hierarchy.
+        """
+        try:
+            discovered_items: list[DiscoveredItem] = []
+
+            # If we have a library_key, use filtered enumeration
+            if self.library_key is not None:
+                items = self.client.get_library_items(
+                    self.library_key,
+                    title_filter=title,
+                    season_filter=season,
+                    episode_filter=episode,
+                )
+                for item in items:
+                    di = self._create_discovered_item(item, {"title": "scoped", "key": self.library_key})
+                    if di:
+                        discovered_items.append(di)
+                return discovered_items
+
+            # Fallback: try series search path when full library filter isn't available
+            if title and season is not None and episode is not None:
+                ep = self.client.find_episode_by_sse(title, season, episode)
+                # Synthesize a minimal item compatible with _create_discovered_item
+                # Try to fetch file info via get_episode_metadata to get Part file
+                meta = self.get_episode_metadata(int(ep.get("ratingKey")))
+                part_file = None
+                file_size = None
+                for media in meta.get("Media", []):
+                    for part in media.get("Part", []):
+                        if part.get("file"):
+                            part_file = part.get("file")
+                            file_size = part.get("size")
+                            break
+                    if part_file:
+                        break
+                synth = {
+                    "ratingKey": ep.get("ratingKey"),
+                    "title": ep.get("title"),
+                    "type": "episode",
+                    "file_path": part_file,
+                    "fileSize": file_size,
+                    "updatedAt": ep.get("updatedAt"),
+                    "show_title": ep.get("grandparentTitle"),
+                    "season_index": ep.get("parentIndex"),
+                    "episode_index": ep.get("index"),
+                }
+                di = self._create_discovered_item(synth, {"title": "scoped"})
+                return [di] if di else []
+
+            # Last resort: standard discovery
+            return self.discover()
         except Exception as e:
             raise ImporterError(f"Failed to discover content from Plex: {str(e)}") from e
 
@@ -979,12 +1079,9 @@ class PlexImporter(BaseImporter):
             DiscoveredItem or None if creation fails
         """
         try:
-            # Extract file path
+            # Always use source-native URI as the item's path_uri
+            # Keep upstream file path available on the item for resolver use
             plex_file_path = item.get("file_path", "")
-            if not plex_file_path:
-                return None
-
-            # Create Plex URI
             path_uri = f"plex://{item.get('ratingKey', 'unknown')}"
 
             # Extract metadata
@@ -1014,6 +1111,11 @@ class PlexImporter(BaseImporter):
                 raw_labels.append(f"episode:{episode_number}")
 
             raw_labels.append(f"library:{library['title']}")
+            # Keep upstream file path and library metadata to assist URI resolution later
+            if plex_file_path:
+                raw_labels.append(f"plex_file_path:{plex_file_path}")
+            if "key" in library:
+                raw_labels.append(f"plex_library_key:{library['key']}")
             raw_labels.append(f"type:{item.get('type', 'unknown')}")
 
             # Convert updatedAt to datetime if available
@@ -1038,6 +1140,153 @@ class PlexImporter(BaseImporter):
                 f"Failed to create discovered item from Plex item {item.get('ratingKey', 'unknown')}: {e}"
             )
             return None
+
+    def resolve_local_uri(
+        self,
+        item: DiscoveredItem | dict,
+        *,
+        collection: Any | None = None,
+        path_mappings: list[tuple[str, str]] | None = None,
+    ) -> str:
+        """
+        Resolve a local file:// URI using Plex library locations and PathMappings.
+
+        Steps:
+        - Determine the file path for the item (from labels or metadata lookup)
+        - Find the item's library and compute the relative suffix from a library location
+        - Build a virtual plex path "/plex/{library_name_normalized}{suffix}"
+        - Apply longest-prefix match from path_mappings to map to local path
+        - Return file:// URI to the mapped local path
+        """
+        try:
+            # Extract upstream file path from labels when available
+            def _labels(obj) -> list[str]:
+                if isinstance(obj, dict):
+                    return obj.get("raw_labels") or []
+                return getattr(obj, "raw_labels", None) or []
+
+            file_path = None
+            lib_key = None
+            for lbl in _labels(item):
+                if isinstance(lbl, str):
+                    if lbl.startswith("plex_file_path:"):
+                        file_path = lbl.split(":", 1)[1]
+                    elif lbl.startswith("plex_library_key:"):
+                        lib_key = lbl.split(":", 1)[1]
+
+            # If no file path in labels, try to look up via ratingKey using metadata call
+            if not file_path:
+                try:
+                    rk = None
+                    if isinstance(item, dict):
+                        rk = item.get("provider_key") or item.get("ratingKey")
+                    else:
+                        rk = getattr(item, "provider_key", None)
+                    if rk:
+                        meta = self.get_episode_metadata(int(rk))
+                        # Find first Part file
+                        for media in meta.get("Media", []):
+                            for part in media.get("Part", []):
+                                if part.get("file"):
+                                    file_path = part.get("file")
+                                    break
+                            if file_path:
+                                break
+                except Exception:
+                    file_path = None
+
+            if not file_path:
+                return ""
+
+            # Build mapping candidates: (source_path_string, is_virtual)
+            candidates: list[str] = []
+            try:
+                # Determine virtual /plex/{collection_name} path using the RetroVue collection name
+                suffix = None
+                if collection is not None and hasattr(collection, "name"):
+                    # Normalize collection name to match PathMapping convention (lowercase + underscores)
+                    coll_name = str(getattr(collection, "name"))
+                    coll_name = coll_name.strip().lower().replace(" ", "_")
+                else:
+                    coll_name = "unknown"
+                # Try to compute suffix from Plex library locations to strip root
+                try:
+                    libraries = self.client.get_libraries()
+                    if lib_key:
+                        for lib in libraries:
+                            if str(lib.get("key")) == str(lib_key):
+                                for loc in lib.get("locations", []) or []:
+                                    if isinstance(loc, str) and file_path.startswith(loc):
+                                        suffix = file_path[len(loc) :]
+                                        break
+                                break
+                except Exception:
+                    suffix = None
+                if suffix is None:
+                    from pathlib import Path as _Path
+                    suffix = "/" + _Path(file_path).name
+                suffix = suffix.replace("\\", "/")
+                virt_plex_path = f"/plex/{coll_name}{suffix}"
+                candidates.append(virt_plex_path)
+            except Exception:
+                pass
+
+            # Also try mapping the raw Plex file path directly
+            try:
+                raw_norm = file_path.replace("\\", "/")
+                candidates.append(raw_norm)
+            except Exception:
+                pass
+
+            # Apply path mappings (longest-prefix match against any candidate)
+            if path_mappings and candidates:
+                def _norm(s: str) -> str:
+                    t = s.replace("\\", "/")
+                    # strip schemes and leading slashes
+                    for pref in ("file://", "smb://"):
+                        if t.lower().startswith(pref):
+                            t = t[len(pref) :]
+                            break
+                    while t.startswith("/"):
+                        t = t[1:]
+                    return t.lower()
+                def _to_file_uri_preserve(path_str: str) -> str:
+                    # Preserve drive letters; convert UNC appropriately
+                    p = path_str.replace("\\", "/")
+                    # UNC: //server/share/...
+                    if p.startswith("//"):
+                        return f"file:{p}"
+                    # Drive letter: R:/...
+                    if len(p) >= 2 and p[1] == ":":
+                        if not p.startswith("/"):
+                            p = "/" + p
+                        return f"file://{p}"
+                    # POSIX
+                    if not p.startswith("/"):
+                        p = "/" + p
+                    return f"file://{p}"
+                best: tuple[str, str, str] | None = None  # (matched_prefix, local_base, chosen_candidate)
+                for candidate in candidates:
+                    cand_lower = _norm(candidate)
+                    for plex_p, local_p in path_mappings:
+                        plex_norm = _norm(plex_p)
+                        if cand_lower.startswith(plex_norm):
+                            if best is None or len(plex_norm) > len(best[0]):
+                                best = (plex_norm, local_p, candidate)
+                if best is not None:
+                    matched_prefix, local_p, chosen = best
+                    # Compute remainder using normalized forms to avoid slash/case issues
+                    chosen_norm = _norm(chosen)
+                    remainder = chosen_norm[len(matched_prefix) :]
+                    from pathlib import Path as _Path
+
+                    # Return native OS path (do NOT convert to file://)
+                    mapped_path = str(_Path(local_p) / remainder.lstrip("/\\"))
+                    return mapped_path
+
+            return ""
+        except Exception:
+            return ""
 
     def list_collections(self, source_config: dict[str, Any]) -> list[dict[str, Any]]:
         """

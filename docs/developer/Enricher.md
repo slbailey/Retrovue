@@ -558,6 +558,13 @@ class FFprobeEnricher:
             raise EnricherError(f"FFprobe execution failed: {e}")
 ```
 
+Requirements & Failure Behavior:
+
+- FFprobe must be installed and on PATH (or configured via `ffprobe_path`).
+- If FFprobe cannot be located or executed, the enricher raises a clear error:
+  "FFprobe executable not found. Install ffprobe and ensure it is on PATH, or configure ffprobe_path."
+- Collection ingest records enricher errors under `stats.errors` and continues processing other items.
+
 ### Metadata Enricher (Ingest Scope)
 
 ```python

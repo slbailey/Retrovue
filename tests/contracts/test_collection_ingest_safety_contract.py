@@ -63,7 +63,7 @@ class TestCollectionIngestSafetyContract:
             assert payload["stats"]["assets_ingested"] == 1
             assert any("max_new exceeded" in e for e in payload["stats"]["errors"])  # abort reason present
 
-    def test_ingest_aborts_when_max_updates_exceeded(self):
+    def test_ingest_ignores_max_updates_when_updates_disallowed(self):
         collection = self._mock_collection()
 
         # Three existing items that will trigger updates (changed content hash)
@@ -108,10 +108,10 @@ class TestCollectionIngestSafetyContract:
 
             assert result.exit_code == 0
             payload = json.loads(result.stdout)
-            # One update counted, then aborted
-            assert payload["stats"]["assets_updated"] == 1
-            assert payload["stats"]["assets_changed_content"] + payload["stats"]["assets_changed_enricher"] == 1
-            assert any("max_updates exceeded" in e for e in payload["stats"]["errors"])  # abort reason present
+            # Updates are disallowed during collection ingest; no updates counted or aborted
+            assert payload["stats"]["assets_updated"] == 0
+            assert payload["stats"]["assets_changed_content"] + payload["stats"]["assets_changed_enricher"] == 0
+            assert not payload["stats"]["errors"]
 
     def test_ingest_uses_test_db_when_flag_set(self):
         collection = self._mock_collection()

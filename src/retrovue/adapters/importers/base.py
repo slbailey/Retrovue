@@ -154,6 +154,66 @@ class ImporterInterface(Protocol):
         """
         ...
 
+    def resolve_local_uri(
+        self, item: "DiscoveredItem | dict", *, collection: Any | None = None, path_mappings: list[tuple[str, str]] | None = None
+    ) -> str:
+        """
+        Resolve a local file URI suitable for enrichment.
+
+        Default behavior:
+        - If item.path_uri is already file://, return it.
+        - Else, attempt path-mapping substitution using provided path_mappings (plex_path -> local_path).
+        - Fallback to the original path_uri if no mapping applies.
+        """
+        try:
+            # Extract uri
+            uri = None
+            if isinstance(item, dict):
+                uri = item.get("path_uri") or item.get("uri") or item.get("path")
+            else:
+                uri = getattr(item, "path_uri", None) or getattr(item, "uri", None)
+
+            if isinstance(uri, str) and uri.startswith("file://"):
+                return uri
+
+            # Only attempt mapping when file-like path is present on the item
+            raw_path = None
+            if isinstance(item, dict):
+                raw_path = item.get("path") or item.get("file_path")
+            else:
+                raw_path = getattr(item, "path", None)
+
+            if isinstance(raw_path, str) and path_mappings:
+                norm = raw_path.replace("\\", "/")
+                best: tuple[str, str] | None = None
+                for plex_p, local_p in path_mappings:
+                    if norm.lower().startswith(plex_p.replace("\\", "/").lower()):
+                        if best is None or len(plex_p) > len(best[0]):
+                            best = (plex_p, local_p)
+                if best is not None:
+                    plex_p, local_p = best
+                    suffix = norm[len(plex_p) :]
+                    from pathlib import Path as _Path
+
+                    mapped_path = str(_Path(local_p) / suffix.lstrip("/\\"))
+                    try:
+                        return _Path(mapped_path).resolve().as_uri()
+                    except Exception:
+                        mapped_norm = mapped_path.replace("\\", "/")
+                        if not mapped_norm.startswith("/"):
+                            mapped_norm = f"/{mapped_norm}"
+                        return f"file://{mapped_norm}"
+
+            # Fallback to original uri if present
+            if isinstance(uri, str):
+                return uri
+            return ""
+        except Exception:
+            # Non-fatal; allow enrichment to attempt with original
+            if isinstance(item, dict):
+                return item.get("path_uri") or item.get("uri") or ""
+            return getattr(item, "path_uri", None) or getattr(item, "uri", None) or ""
+
     @classmethod
     def get_update_fields(cls) -> list[UpdateFieldSpec]:
         """

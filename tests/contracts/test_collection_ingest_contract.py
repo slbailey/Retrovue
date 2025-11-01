@@ -2028,7 +2028,7 @@ class TestMilestone2DAssetChangeDetection:
         return imp
 
     @patch("retrovue.cli.commands.collection.session")
-    def test_existing_asset_different_hash_increments_changed_content(self, mock_session):
+    def test_existing_asset_different_hash_is_skipped_no_update(self, mock_session):
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
         from retrovue.cli.commands._ops import collection_ingest_service as svc
@@ -2065,12 +2065,12 @@ class TestMilestone2DAssetChangeDetection:
             data = json.loads(result.stdout)
             assert data["stats"]["assets_discovered"] == 1
             assert data["stats"]["assets_ingested"] == 0
-            assert data["stats"]["assets_skipped"] == 0
-            assert data["stats"]["assets_changed_content"] == 1
+            assert data["stats"]["assets_skipped"] == 1
+            assert data["stats"]["assets_changed_content"] == 0
             assert data["stats"]["assets_changed_enricher"] == 0
 
     @patch("retrovue.cli.commands.collection.session")
-    def test_existing_asset_different_enricher_increments_changed_enricher(self, mock_session):
+    def test_existing_asset_different_enricher_is_skipped_no_update(self, mock_session):
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
         from retrovue.cli.commands._ops import collection_ingest_service as svc
@@ -2106,9 +2106,9 @@ class TestMilestone2DAssetChangeDetection:
             data = json.loads(result.stdout)
             assert data["stats"]["assets_discovered"] == 1
             assert data["stats"]["assets_ingested"] == 0
-            assert data["stats"]["assets_skipped"] == 0
+            assert data["stats"]["assets_skipped"] == 1
             assert data["stats"]["assets_changed_content"] == 0
-            assert data["stats"]["assets_changed_enricher"] == 1
+            assert data["stats"]["assets_changed_enricher"] == 0
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_no_diffs_increments_skipped(self, mock_session):
@@ -2171,7 +2171,7 @@ class TestMilestone3AAssetStateUpdate:
         return imp
 
     @patch("retrovue.cli.commands.collection.session")
-    def test_existing_asset_new_content_hash_updates_and_downgrades_state(self, mock_session):
+    def test_existing_asset_new_content_hash_is_skipped_and_not_mutated(self, mock_session):
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
         from retrovue.cli.commands._ops import collection_ingest_service as svc
@@ -2207,20 +2207,20 @@ class TestMilestone3AAssetStateUpdate:
 
             assert result.exit_code == 0
             data = json.loads(result.stdout)
-            # Counters
+            # Counters reflect skip and no updates
             assert data["stats"]["assets_discovered"] == 1
             assert data["stats"]["assets_ingested"] == 0
-            assert data["stats"]["assets_skipped"] == 0
-            assert data["stats"]["assets_changed_content"] == 1
-            # Mutation side-effects
-            assert existing.hash_sha256 == "newhash"
-            assert existing.state == "enriching"
-            assert existing.approved_for_broadcast is False
-            # Ensure session saw a mutation we intend to persist
-            assert mock_db.add.call_count >= 1
+            assert data["stats"]["assets_skipped"] == 1
+            assert data["stats"]["assets_changed_content"] == 0
+            # No mutation side-effects
+            assert existing.hash_sha256 == "oldhash"
+            assert existing.state == "ready"
+            assert existing.approved_for_broadcast is True
+            # No DB add for updates
+            assert mock_db.add.call_count == 0
 
     @patch("retrovue.cli.commands.collection.session")
-    def test_existing_asset_new_enricher_updates_and_downgrades_state(self, mock_session):
+    def test_existing_asset_new_enricher_is_skipped_and_not_mutated(self, mock_session):
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
         from retrovue.cli.commands._ops import collection_ingest_service as svc
@@ -2256,16 +2256,16 @@ class TestMilestone3AAssetStateUpdate:
 
             assert result.exit_code == 0
             data = json.loads(result.stdout)
-            # Counters
+            # Counters reflect skip and no updates
             assert data["stats"]["assets_discovered"] == 1
             assert data["stats"]["assets_ingested"] == 0
-            assert data["stats"]["assets_skipped"] == 0
-            assert data["stats"]["assets_changed_enricher"] == 1
-            # Mutation side-effects
-            assert existing.last_enricher_checksum == "enc2"
-            assert existing.state == "enriching"
-            # Ensure session saw a mutation we intend to persist
-            assert mock_db.add.call_count >= 1
+            assert data["stats"]["assets_skipped"] == 1
+            assert data["stats"]["assets_changed_enricher"] == 0
+            # No mutation side-effects
+            assert existing.last_enricher_checksum == "enc1"
+            assert existing.state == "ready"
+            # No DB add for updates
+            assert mock_db.add.call_count == 0
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_no_changes_keeps_state_and_no_add(self, mock_session):

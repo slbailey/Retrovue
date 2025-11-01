@@ -396,6 +396,58 @@ class FilesystemImporter(BaseImporter):
         # This method just confirms the operation
         return True
 
+    def resolve_local_uri(
+        self,
+        item: DiscoveredItem | dict,
+        *,
+        collection: Any | None = None,
+        path_mappings: list[tuple[str, str]] | None = None,
+    ) -> str:
+        """
+        Filesystem items already reference local files. Return a file:// URI.
+
+        - If item.path_uri is file://, return as-is.
+        - Else if a plain path string is present, convert to file://.
+        - Otherwise, return empty string.
+        """
+        try:
+            def _to_file_uri_preserve(path_str: str) -> str:
+                p = path_str.replace("\\", "/")
+                if p.startswith("//"):
+                    return f"file:{p}"
+                if len(p) >= 2 and p[1] == ":":
+                    if not p.startswith("/"):
+                        p = "/" + p
+                    return f"file://{p}"
+                if not p.startswith("/"):
+                    p = "/" + p
+                return f"file://{p}"
+
+            uri = None
+            if isinstance(item, dict):
+                uri = item.get("path_uri") or item.get("uri") or item.get("path")
+            else:
+                uri = getattr(item, "path_uri", None) or getattr(item, "uri", None)
+
+            if isinstance(uri, str) and uri.startswith("file://"):
+                # Convert to native path for downstream tools
+                t = uri[len("file://") :]
+                if t.startswith("/") and len(t) > 2 and t[2] == ":":
+                    t = t[1:]
+                return t
+
+            # Treat as local path
+            path_val = None
+            if isinstance(item, dict):
+                path_val = item.get("path")
+            else:
+                path_val = getattr(item, "path", None)
+            if isinstance(path_val, str) and path_val:
+                return path_val
+            return ""
+        except Exception:
+            return ""
+
     def _should_include_file(self, file_path: Path) -> bool:
         """
         Determine if a file should be included in discovery.

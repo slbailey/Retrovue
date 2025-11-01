@@ -4,6 +4,10 @@ _Related: [Data model: Broadcast schema](../data-model/broadcast-schema.md) • 
 
 ## 🎯 Schema Version 1.2 - Media-First Architecture
 
+Update (canonical_uri):
+- The `assets` table now includes `canonical_uri` (Text, nullable) and index `ix_assets_collection_canonical_uri (collection_uuid, canonical_uri)`.
+- Use Alembic to apply: `alembic upgrade head` with the appropriate `RETROVUE_DATABASE_URL` for test/prod.
+
 ### **Core Design Philosophy**
 
 The RetroVue database schema is built on a **media-first foundation** where every record begins with a physical media file. This approach ensures that:
@@ -15,13 +19,12 @@ The RetroVue database schema is built on a **media-first foundation** where ever
 
 ### **Schema Management Methodology**
 
-RetroVue uses a **schema-first approach** with no migration framework:
+RetroVue maintains schema changes via Alembic migrations (see `alembic/versions/`).
 
-- **Single Source of Truth**: `sql/retrovue_schema_v1.2.sql` is the authoritative schema
-- **No Migrations**: Schema changes are made directly to the SQL file
-- **Clean Recreate**: Database is deleted and recreated from the SQL file for any changes
-- **Deterministic**: Every database creation produces identical results
-- **Simple Workflow**: Drop database → Update schema → Run Alembic migrations
+- **Single Source of Truth**: Alembic revisions + in-code models are authoritative
+- **Revisions**: Apply incremental migrations with Alembic
+- **Deterministic**: Consistent revision history across environments
+- **Workflow**: Update models → Generate/author migration → `alembic upgrade head`
 
 ### **Core Entities Overview**
 

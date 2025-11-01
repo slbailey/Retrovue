@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from ....domain.entities import Asset, Collection
 from ....infra.canonical import canonical_hash, canonical_key_for
 from ....infra.exceptions import IngestError
+from ....adapters.registry import ENRICHERS
 
 
 class _AssetRepository:
@@ -343,21 +344,99 @@ class CollectionIngestService:
         created_assets: list[dict[str, str]] | None = [] if verbose_assets else None
         updated_assets: list[dict[str, str]] | None = [] if verbose_assets else None
 
+        # Build enricher pipeline for this collection (ingest scope)
+        # Read from persisted Enricher instances referenced by collection.config['enrichers']
+        pipeline: list[tuple[str, int, Any]] = []  # (enricher_id, priority, instance)
+        pipeline_signature: list[dict[str, Any]] = []
+        try:
+            cfg = dict(getattr(collection, "config", {}) or {})
+            configured = cfg.get("enrichers", []) if isinstance(cfg.get("enrichers"), list) else []
+            # Load DB-backed enricher config for proper instantiation
+            from ....domain.entities import Enricher as EnricherRow
+
+            for entry in configured:
+                try:
+                    enricher_id = entry.get("enricher_id") if isinstance(entry, dict) else None
+                    priority = int(entry.get("priority", 0)) if isinstance(entry, dict) else 0
+                    if not enricher_id:
+                        continue
+                    row = (
+                        self.db.query(EnricherRow)
+                        .filter(EnricherRow.enricher_id == enricher_id)
+                        .first()
+                    )
+                    if not row or getattr(row, "scope", "ingest") != "ingest":
+                        continue
+                    # Instantiate enricher by type with stored config
+                    cls = ENRICHERS.get(row.type)
+                    instance = cls(**(row.config or {})) if cls else None
+                    if instance is None:
+                        continue
+                    pipeline.append((enricher_id, priority, instance))
+                except Exception:
+                    continue
+            # Stable order by priority, then id
+            pipeline.sort(key=lambda t: (t[1], t[0]))
+            pipeline_signature = [{"enricher_id": eid, "priority": pr} for (eid, pr, _) in pipeline]
+        except Exception:
+            pipeline = []
+            pipeline_signature = []
+
+        # Compute a stable checksum for the pipeline
+        import json as _json
+        from hashlib import sha256 as _sha256
+
+        pipeline_checksum = None
+        try:
+            sig_bytes = _json.dumps(pipeline_signature, sort_keys=True).encode("utf-8")
+            pipeline_checksum = _sha256(sig_bytes).hexdigest()
+        except Exception:
+            pipeline_checksum = None
+
         # Discover items from importer (importers must not persist)
         try:
-            discovered_items = importer.discover()
+            # Use scoped discovery when title/season/episode filters are provided and the importer supports it
+            if (title is not None or season is not None or episode is not None) and hasattr(
+                importer, "discover_scoped"
+            ):
+                try:
+                    discovered_items = importer.discover_scoped(
+                        title=title, season=season, episode=episode
+                    )
+                except Exception:
+                    # Fallback to full discovery if scoped path is unavailable
+                    discovered_items = importer.discover()
+            else:
+                discovered_items = importer.discover()
         except Exception as e:
             raise RuntimeError(f"Importer discovery failed: {e}") from e
 
         # Get provider name from importer
         provider = getattr(importer, "name", None) if importer else None
 
+        # Preload path mappings for this collection to resolve local paths before enrichment
+        path_mappings: list[tuple[str, str]] = []
+        try:
+            from ....domain.entities import PathMapping as _PathMapping
+
+            rows = (
+                self.db.query(_PathMapping).filter(_PathMapping.collection_uuid == collection.uuid).all()
+            )
+            for pm in rows:
+                plex_p = getattr(pm, "plex_path", "") or ""
+                local_p = getattr(pm, "local_path", "") or ""
+                if plex_p and local_p:
+                    # Normalize slashes for comparison; keep original local path
+                    path_mappings.append((plex_p.replace("\\", "/"), local_p))
+        except Exception:
+            path_mappings = []
+
         def _get_uri(item: Any) -> str | None:
             if isinstance(item, dict):
                 return (
-                    item.get("uri")
+                    item.get("path_uri")
+                    or item.get("uri")
                     or item.get("path")
-                    or item.get("path_uri")
                     or item.get("external_id")
                 )
             return getattr(item, "path_uri", None)
@@ -379,8 +458,56 @@ class CollectionIngestService:
                 return item.get("enricher_checksum") or item.get("last_enricher_checksum")
             return getattr(item, "enricher_checksum", None)
 
+        def _extract_label_value(labels: list[str] | None, key: str) -> str | None:
+            """Extract a value from raw_labels in the form key:value."""
+            if not labels:
+                return None
+            prefix = f"{key}:"
+            for label in labels:
+                if isinstance(label, str) and label.startswith(prefix):
+                    return label[len(prefix) :]
+            return None
+
         for item in discovered_items or []:
             stats.assets_discovered += 1
+            # Capture source_uri before any local resolution
+            try:
+                source_uri_val = _get_uri(item)
+            except Exception:
+                source_uri_val = None
+            # Ask importer to resolve a local file URI for enrichment; do not persist this URI
+            try:
+                local_uri = importer.resolve_local_uri(
+                    item, collection=collection, path_mappings=path_mappings
+                )
+                if isinstance(local_uri, str) and local_uri:
+                    try:
+                        if isinstance(item, dict):
+                            item["path_uri"] = local_uri
+                        else:
+                            setattr(item, "path_uri", local_uri)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            # Apply enricher pipeline to each discovered item (best-effort)
+            if pipeline:
+                try:
+                    enriched = item
+                    for _, _, enr in pipeline:
+                        try:
+                            enriched = enr.enrich(enriched)
+                        except Exception as enr_exc:
+                            stats.errors.append(str(enr_exc))
+                    item = enriched
+                except Exception:
+                    pass
+            # Attach pipeline checksum so ingest can detect enricher changes
+            try:
+                if pipeline_checksum:
+                    setattr(item, "enricher_checksum", pipeline_checksum)
+            except Exception:
+                pass
             try:
                 canonical_key = canonical_key_for(item, collection=collection, provider=provider)
                 canonical_key_hash = canonical_hash(canonical_key)
@@ -393,81 +520,16 @@ class CollectionIngestService:
                 collection.uuid, canonical_key_hash
             )
             if existing is not None:
-                # Existing asset found; determine if content or enricher changed
-                incoming_hash = _get_hash_sha256(item)
-                incoming_enricher = _get_enricher_checksum(item)
-
-                changed_content = incoming_hash is not None and incoming_hash != getattr(
-                    existing, "hash_sha256", None
-                )
-                changed_enricher = incoming_enricher is not None and incoming_enricher != getattr(
-                    existing, "last_enricher_checksum", None
-                )
-
-                if changed_content:
-                    if (
-                        max_updates is not None
-                        and (stats.assets_changed_content + stats.assets_changed_enricher)
-                        >= max_updates
-                    ):
-                        stats.errors.append("ingest aborted: max_updates exceeded")
-                        break
-                    # Update content hash on the existing asset
-                    existing.hash_sha256 = incoming_hash  # type: ignore[attr-defined]
-                    # Downgrade state if previously ready (cannot safely broadcast changed content)
-                    if getattr(existing, "state", None) == "ready":
-                        existing.state = "enriching"  # type: ignore[attr-defined]
-                    # Never auto-approve on change
-                    if hasattr(existing, "approved_for_broadcast"):
-                        existing.approved_for_broadcast = False  # type: ignore[attr-defined]
-                    # Ensure the session tracks the mutation within this UnitOfWork
-                    self.db.add(existing)
-                    stats.assets_changed_content += 1
-                    stats.assets_updated += 1
-                    if updated_assets is not None:
-                        existing_uuid = str(getattr(existing, "uuid", getattr(existing, "id", "")))
-                        updated_assets.append(
-                            {
-                                "uuid": existing_uuid,
-                                "uri": _get_uri(item) or canonical_key,
-                                "reason": "content",
-                            }
-                        )
-                elif changed_enricher:
-                    if (
-                        max_updates is not None
-                        and (stats.assets_changed_content + stats.assets_changed_enricher)
-                        >= max_updates
-                    ):
-                        stats.errors.append("ingest aborted: max_updates exceeded")
-                        break
-                    # Update last enricher checksum on the existing asset
-                    existing.last_enricher_checksum = incoming_enricher  # type: ignore[attr-defined]
-                    # Downgrade state if previously ready
-                    if getattr(existing, "state", None) == "ready":
-                        existing.state = "enriching"  # type: ignore[attr-defined]
-                    # Ensure the session tracks the mutation within this UnitOfWork
-                    self.db.add(existing)
-                    stats.assets_changed_enricher += 1
-                    stats.assets_updated += 1
-                    if updated_assets is not None:
-                        existing_uuid = str(getattr(existing, "uuid", getattr(existing, "id", "")))
-                        updated_assets.append(
-                            {
-                                "uuid": existing_uuid,
-                                "uri": _get_uri(item) or canonical_key,
-                                "reason": "enricher",
-                            }
-                        )
-                else:
-                    stats.assets_skipped += 1
+                # Existing asset found — do not mutate during collection ingest.
+                stats.assets_skipped += 1
                 continue
 
             if max_new is not None and stats.assets_ingested >= max_new:
                 stats.errors.append("ingest aborted: max_new exceeded")
                 break
 
-            uri_val = _get_uri(item) or canonical_key
+            # Persist values for verbose output
+            canonical_uri_val = _get_uri(item) or canonical_key
             size_val = _get_size(item)
 
             asset = Asset(
@@ -475,7 +537,9 @@ class CollectionIngestService:
                 collection_uuid=collection.uuid,
                 canonical_key=canonical_key,
                 canonical_key_hash=canonical_key_hash,
-                uri=uri_val,
+                # Persist source_uri in DB; canonical_uri is derived only for enrichment/runtime
+                uri=source_uri_val or canonical_uri_val,
+                canonical_uri=canonical_uri_val,
                 size=size_val,
                 state="new",
                 approved_for_broadcast=False,
@@ -489,13 +553,34 @@ class CollectionIngestService:
                 asset.hash_sha256 = incoming_hash
             if incoming_enricher is not None:
                 asset.last_enricher_checksum = incoming_enricher
+            # Map common enricher-derived labels onto asset fields
+            try:
+                labels = getattr(item, "raw_labels", None)
+                duration_val = _extract_label_value(labels, "duration_ms")
+                if duration_val is not None:
+                    try:
+                        asset.duration_ms = int(duration_val)
+                    except Exception:
+                        pass
+                video_codec_val = _extract_label_value(labels, "video_codec")
+                if video_codec_val is not None:
+                    asset.video_codec = video_codec_val
+                audio_codec_val = _extract_label_value(labels, "audio_codec")
+                if audio_codec_val is not None:
+                    asset.audio_codec = audio_codec_val
+                container_val = _extract_label_value(labels, "container")
+                if container_val is not None:
+                    asset.container = container_val
+            except Exception:
+                pass
             repo.create(asset)
             stats.assets_ingested += 1
             if created_assets is not None:
                 created_assets.append(
                     {
                         "uuid": str(asset.uuid),
-                        "uri": uri_val,
+                        "source_uri": source_uri_val or "",
+                        "canonical_uri": canonical_uri_val,
                     }
                 )
 

@@ -53,12 +53,27 @@ class FFprobeEnricher(BaseEnricher):
             EnricherError: If enrichment fails
         """
         try:
-            # Only process file:// URIs
-            if not discovered_item.path_uri.startswith("file://"):
+            # Accept either file:// URIs or direct filesystem paths
+            raw = getattr(discovered_item, "path_uri", "") or ""
+            if not raw:
                 return discovered_item
 
-            # Extract file path from URI
-            file_path = Path(discovered_item.path_uri[7:])  # Remove "file://" prefix
+            file_path: Path | None = None
+
+            if raw.startswith("file://"):
+                # Extract file path from URI (robustly parse and unquote)
+                from urllib.parse import urlparse, unquote
+
+                parsed = urlparse(raw)
+                # Prefer parsed.path; on Windows a leading "/C:/..." may be present
+                path_str = unquote(parsed.path or raw[7:])
+                # Normalize Windows drive form: "/C:/..." -> "C:/..."
+                if path_str.startswith("/") and len(path_str) > 3 and path_str[2] == ":":
+                    path_str = path_str[1:]
+                file_path = Path(path_str)
+            else:
+                # Treat as direct filesystem path
+                file_path = Path(raw)
 
             if not file_path.exists():
                 raise EnricherError(f"File does not exist: {file_path}")
@@ -79,10 +94,13 @@ class FFprobeEnricher(BaseEnricher):
     def get_config_schema(cls) -> EnricherConfig:
         """Return configuration schema for the FFprobe enricher."""
         return EnricherConfig(
-            required_params=[
-                {"name": "ffprobe_path", "description": "Path to the FFprobe executable"}
-            ],
+            required_params=[],
             optional_params=[
+                {
+                    "name": "ffprobe_path",
+                    "description": "Path to the FFprobe executable",
+                    "default": "ffprobe",
+                },
                 {
                     "name": "timeout",
                     "description": "Timeout in seconds for FFprobe operations",
@@ -119,6 +137,20 @@ class FFprobeEnricher(BaseEnricher):
             EnricherError: If FFprobe fails
         """
         try:
+            # Ensure ffprobe is available
+            try:
+                import shutil
+
+                if not shutil.which(self.ffprobe_path):
+                    raise EnricherError(
+                        "FFprobe executable not found. Install ffprobe and ensure it is on PATH, "
+                        "or configure ffprobe_path."
+                    )
+            except EnricherError:
+                raise
+            except Exception:
+                # Fall through to subprocess; FileNotFoundError will be handled explicitly
+                pass
             # Build FFprobe command
             cmd = [
                 self.ffprobe_path,
@@ -181,6 +213,11 @@ class FFprobeEnricher(BaseEnricher):
 
             return metadata
 
+        except FileNotFoundError:
+            raise EnricherError(
+                "FFprobe executable not found. Install ffprobe and ensure it is on PATH, or "
+                "configure ffprobe_path."
+            ) from None
         except subprocess.TimeoutExpired:
             raise EnricherError("FFprobe timed out") from None
         except json.JSONDecodeError as e:

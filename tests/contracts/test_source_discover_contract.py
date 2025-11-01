@@ -227,3 +227,22 @@ class TestSourceDiscoverContract:
              patch("retrovue.adapters.registry.get_importer", return_value=MagicMock(list_collections=lambda: [])):
             result = self.runner.invoke(app, ["discover", "test-source", "--test-db"])
             assert result.exit_code == 0
+
+    def test_source_discover_http_status_exposed_in_json(self):
+        """
+        Contract: When the importer fails with an HTTP error, the JSON error payload SHOULD include http_status if detectable.
+        """
+        with (
+            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm(source=MagicMock())),
+            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+        ):
+            mock_discover.side_effect = Exception(
+                "Failed to fetch libraries: 530 Server Error: <none> for url: https://example"
+            )
+            result = self.runner.invoke(app, ["discover", "test-source", "--json"])
+
+        assert result.exit_code == 1
+        data = json.loads(result.stdout)
+        assert data.get("status") == "error"
+        # Should contain the extracted status code
+        assert data.get("http_status") == 530

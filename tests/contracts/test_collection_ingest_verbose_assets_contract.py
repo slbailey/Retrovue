@@ -2,8 +2,8 @@
 Contract tests for per-run asset change detail when using --verbose-assets.
 
 Covers:
-- Created assets list with {uuid, uri}
-- Updated assets list with {uuid, uri, reason}
+- Created assets list with {uuid, source_uri, canonical_uri}
+- Updated assets list with {uuid, source_uri, canonical_uri, reason}
 - Default output unchanged when flag not provided
 """
 
@@ -29,6 +29,11 @@ class _FakeImporter:
 
     def discover(self) -> list[dict[str, Any]]:
         return list(self._items)
+
+    def resolve_local_uri(self, item: dict[str, Any], *, collection=None, path_mappings=None) -> str:
+        # Simulate mapping to a canonical local path (native path, no scheme)
+        p = item.get("path") or item.get("path_uri") or item.get("uri") or ""
+        return p
 
 
 def _make_collection(source_id: str):
@@ -88,8 +93,11 @@ class TestCollectionIngestVerboseAssets:
         assert "created_assets" in payload
         assert "updated_assets" in payload
         assert len(payload["created_assets"]) == 2
-        uris = {a["uri"] for a in payload["created_assets"]}
-        assert uris == {"/media/new1.mkv", "/media/new2.mkv"}
+        # URIs present and correct (canonical is native path)
+        src_uris = {a["source_uri"] for a in payload["created_assets"]}
+        canon_uris = {a["canonical_uri"] for a in payload["created_assets"]}
+        assert src_uris == {"/media/new1.mkv", "/media/new2.mkv"}
+        assert canon_uris == {"/media/new1.mkv", "/media/new2.mkv"}
         # UUIDs should be present and non-empty strings
         for a in payload["created_assets"]:
             assert isinstance(a.get("uuid"), str) and len(a["uuid"]) > 0
@@ -97,7 +105,7 @@ class TestCollectionIngestVerboseAssets:
     @patch("retrovue.cli.commands.collection.session")
     @patch("retrovue.cli.commands.collection.resolve_collection_selector")
     @patch("retrovue.cli.commands.collection.get_importer")
-    def test_collection_ingest_verbose_returns_updated_assets(self, mock_get_importer, mock_resolve, mock_session):
+    def test_collection_ingest_verbose_returns_no_updates_for_existing(self, mock_get_importer, mock_resolve, mock_session):
         # Arrange DB and collection
         db = MagicMock()
         mock_session.return_value.__enter__.return_value = db
@@ -136,14 +144,8 @@ class TestCollectionIngestVerboseAssets:
         assert result.exit_code == 0
         payload = json.loads(result.stdout)
         assert payload["status"] == "success"
-        assert "updated_assets" in payload
-        reasons = {a["reason"] for a in payload["updated_assets"]}
-        assert reasons == {"content", "enricher"}
-        uris = {a["uri"] for a in payload["updated_assets"]}
-        assert uris == {"/media/existing1.mkv", "/media/existing2.mkv"}
-        # UUIDs should be present
-        for a in payload["updated_assets"]:
-            assert isinstance(a.get("uuid"), str) and len(a["uuid"]) > 0
+        # Under tightened contract, existing assets are skipped and not updated
+        assert payload.get("updated_assets") == []
 
     @patch("retrovue.cli.commands.collection.session")
     @patch("retrovue.cli.commands.collection.resolve_collection_selector")

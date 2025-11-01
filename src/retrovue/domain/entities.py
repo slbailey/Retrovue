@@ -139,6 +139,7 @@ class Asset(Base):
     canonical_key: Mapped[str] = mapped_column(Text, nullable=False)
     canonical_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     uri: Mapped[str] = mapped_column(Text, nullable=False)
+    canonical_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
     size: Mapped[int] = mapped_column(BigInteger, nullable=False)  # size in bytes
     state: Mapped[str] = mapped_column(
         SQLEnum("new", "enriching", "ready", "retired", name="asset_state"),
@@ -213,6 +214,7 @@ class Asset(Base):
         Index("ix_assets_operator_verified", "operator_verified"),
         Index("ix_assets_discovered_at", "discovered_at"),
         Index("ix_assets_is_deleted", "is_deleted"),
+        Index("ix_assets_collection_canonical_uri", "collection_uuid", "canonical_uri"),
         # Partial schedulable index (hot path)
         Index(
             "ix_assets_schedulable",

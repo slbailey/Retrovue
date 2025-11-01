@@ -14,6 +14,16 @@ Importers are loaded dynamically at runtime, and operators configure them throug
 
 ## Concepts
 
+### Two-URI Model
+
+During ingest, RetroVue persists two URIs on each Asset:
+- **source_uri**: Source-native reference (e.g., `plex://12345` or `file:///...`) provided by the importer.
+- **canonical_uri**: Local `file://` URI used by enrichers and playout, derived by the importer via `resolve_local_uri(...)` and collection `PathMapping`.
+
+Your importer must:
+- Return a stable `source_uri` as part of discovery (via `DiscoveredItem.path_uri` or item dict `path_uri`).
+- Implement `resolve_local_uri(item, *, collection, path_mappings)` to translate to a local file URI suitable for enrichment.
+
 ### Importer Type (code)
 
 An _importer type_ is a Python implementation that knows how to talk to a specific upstream system.

@@ -42,7 +42,8 @@ At the domain level, an Importer is defined by its ability to:
 
 - verify a collection can be ingested,
 - enumerate available collections,
-- and drive ingestion of a collection (full or partial).
+- drive ingestion of a collection (full or partial), and
+- resolve a local URI to enrich/play content from the discovered source URI.
 
 **ImporterInterface** is the required runtime contract that RetroVue orchestration calls.
 
@@ -52,7 +53,7 @@ Third-party importers SHOULD subclass it, but if they don't, they MUST still sat
 
 Orchestration may call these behaviors at different granularities. For the developer-facing method signatures and CLI wiring (including `get_config_schema()`, filtering by title/season/episode, etc.), see the [Importer Development Guide](../developer/Importer.md).
 
-All importers MUST implement the `ImporterInterface` protocol:
+All importers MUST implement the `ImporterInterface` protocol, including URI resolution:
 
 ```python
 class ImporterInterface(Protocol):
@@ -70,9 +71,17 @@ class ImporterInterface(Protocol):
     def enable_asset_group(self, group_id: str) -> bool: ...
 
     def disable_asset_group(self, group_id: str) -> bool: ...
+
+    def resolve_local_uri(
+        self, item: DiscoveredItem | dict, *, collection: Any | None = None, path_mappings: list[tuple[str, str]] | None = None
+    ) -> str: ...
 ```
 
-**Note:** RetroVue orchestration may call importer behavior at two granularities: discovery / asset fetch (per collection, per title/season/episode), and full ingest execution of that collection. For clarity, `ImporterInterface` here reflects the semantic responsibilities at the domain level. For method signatures and CLI-driven calling patterns, see [Importer Development Guide](../developer/Importer.md).
+**Dual-URI Responsibility:**
+
+- Importer returns a stable, source-native `source_uri` for each discovered item (e.g., `plex://12345`, `file:///...`).
+- Importer implements `resolve_local_uri(...)` to convert that discovered item into a local `file://` canonical URI using `PathMapping` and any upstream lookups required.
+- Ingest persists both URIs: `source_uri` (unchanged) and `canonical_uri` (normalized local URI). Enrichers run against `canonical_uri`.
 
 ### Interface Responsibility Boundaries
 
@@ -90,8 +99,9 @@ The `ImporterInterface` defines three distinct responsibility areas with differe
 - `get_help()`: Provide usage information
 - These operations MUST NOT perform external system calls or database modifications
 
-**Control Operations** (State-modifying):
+**Control/Resolution Operations**:
 
+- `resolve_local_uri(...)`: Resolve a discovered item to a local `file://` URI for enrichment/playout
 - `enable_asset_group()` / `disable_asset_group()`: Modify collection state
 - These operations operate within Unit of Work boundaries and MUST NOT persist directly to authoritative tables
 

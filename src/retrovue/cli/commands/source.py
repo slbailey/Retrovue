@@ -1681,19 +1681,29 @@ def discover_collections(
             raise typer.Exit(1)
         except Exception as e:
             if json_output:
-                typer.echo(
-                    json.dumps(
-                        {
-                            "status": "error",
-                            "source": source_id,
-                            "total": 0,
-                            "collections_added": 0,
-                            "collections": [],
-                            "error": str(e),
-                        },
-                        indent=2,
-                    )
-                )
+                import re
+
+                # Try to extract an HTTP status code from the error message
+                http_status = None
+                m = re.search(r"\b(\d{3})\b", str(e))
+                if m:
+                    try:
+                        http_status = int(m.group(1))
+                    except Exception:
+                        http_status = None
+
+                payload = {
+                    "status": "error",
+                    "source": source_id,
+                    "total": 0,
+                    "collections_added": 0,
+                    "collections": [],
+                    "error": str(e),
+                }
+                if http_status is not None:
+                    payload["http_status"] = http_status
+
+                typer.echo(json.dumps(payload, indent=2))
             else:
                 typer.echo(f"Error discovering collections: {e}", err=True)
             raise typer.Exit(1)

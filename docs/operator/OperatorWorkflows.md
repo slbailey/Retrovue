@@ -1,4 +1,4 @@
-_Related: [Operator CLI](CLI.md) • [Domain: Enricher](../domain/Enricher.md) • [Runtime: Channel manager](../runtime/ChannelManager.md)_
+_Related: [Operator CLI](CLI.md) • [Content Library Workflow](ContentLibraryWorkflow.md) • [Domain: Enricher](../domain/Enricher.md) • [Runtime: Channel manager](../runtime/ChannelManager.md)_
 
 # Operator workflows
 
