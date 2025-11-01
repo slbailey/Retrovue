@@ -21,6 +21,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+import hashlib
+import os
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -382,6 +384,8 @@ class CollectionIngestService:
             pipeline = []
             pipeline_signature = []
 
+        
+
         # Compute a stable checksum for the pipeline
         import json as _json
         from hashlib import sha256 as _sha256
@@ -430,6 +434,8 @@ class CollectionIngestService:
                     path_mappings.append((plex_p.replace("\\", "/"), local_p))
         except Exception:
             path_mappings = []
+
+        
 
         def _get_uri(item: Any) -> str | None:
             if isinstance(item, dict):
@@ -488,6 +494,7 @@ class CollectionIngestService:
                             setattr(item, "path_uri", local_uri)
                     except Exception:
                         pass
+                
             except Exception:
                 pass
             # Apply enricher pipeline to each discovered item (best-effort)
@@ -551,11 +558,40 @@ class CollectionIngestService:
             incoming_enricher = _get_enricher_checksum(item)
             if incoming_hash is not None:
                 asset.hash_sha256 = incoming_hash
+            else:
+                # Native hash computation (baked-in): compute SHA-256 if we have a local path
+                def _to_native_path(p: str) -> str:
+                    if isinstance(p, str) and p.startswith("file://"):
+                        from urllib.parse import urlparse, unquote
+
+                        parsed = urlparse(p)
+                        s = unquote(parsed.path or p[7:])
+                        if s.startswith("/") and len(s) > 3 and s[2] == ":":
+                            s = s[1:]
+                        return s
+                    return p
+
+                try:
+                    candidate_path = _to_native_path(canonical_uri_val)
+                    if isinstance(candidate_path, str) and os.path.exists(candidate_path):
+                        hasher = hashlib.sha256()
+                        # Read in 2 MiB chunks for reasonable throughput
+                        with open(candidate_path, "rb") as fh:
+                            while True:
+                                chunk = fh.read(2 * 1024 * 1024)
+                                if not chunk:
+                                    break
+                                hasher.update(chunk)
+                        asset.hash_sha256 = hasher.hexdigest()
+                except Exception:
+                    # Best-effort; leave hash unset on failures
+                    pass
             if incoming_enricher is not None:
                 asset.last_enricher_checksum = incoming_enricher
             # Map common enricher-derived labels onto asset fields
             try:
                 labels = getattr(item, "raw_labels", None)
+                
                 duration_val = _extract_label_value(labels, "duration_ms")
                 if duration_val is not None:
                     try:
@@ -571,6 +607,7 @@ class CollectionIngestService:
                 container_val = _extract_label_value(labels, "container")
                 if container_val is not None:
                     asset.container = container_val
+                
             except Exception:
                 pass
             repo.create(asset)

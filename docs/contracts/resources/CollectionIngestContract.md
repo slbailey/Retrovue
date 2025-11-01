@@ -6,7 +6,8 @@ Defines the behavioral rules for `retrovue collection ingest` including discover
 
 This contract explicitly specifies how URIs are persisted during ingest:
 - `source_uri`: Source-native locator provided by the importer (e.g., `plex://12345`).
-- `canonical_uri`: Locally-resolvable file URI derived during ingest via importer path resolution and `PathMapping`.
+- `canonical_uri`: Locally-resolvable native filesystem path derived during ingest via importer path
+  resolution and `PathMapping` (e.g., `R:\media\tv\...` on Windows, `/mnt/media/...` on Linux).
 
 ## Commands
 
@@ -31,12 +32,14 @@ This contract explicitly specifies how URIs are persisted during ingest:
 - Collection ingest MAY ONLY create new `Asset` rows. It MUST NOT mutate existing assets.
 - New `Asset` rows include:
   - `source_uri`: persisted verbatim from the importer (unique per `(collection_uuid, source_uri)`).
-  - `canonical_uri`: persisted from the resolved local URI (normalized `file://`).
+  - `canonical_uri`: persisted from the resolved local path (native OS path; not `file://`).
   - Canonical identity: `canonical_key` and `canonical_key_hash` are derived from canonical path + collection.
+  - `hash_sha256`: computed natively by ingest at create-time when the local file is reachable; otherwise left null.
 
 4) Enrichment
 - Attached ingest-scope enrichers run in priority order.
 - Enricher outputs update technical fields (e.g., `duration_ms`, `video_codec`, `audio_codec`, `container`).
+  Hash computation is not an enricher responsibility.
 - A stable `last_enricher_checksum` is stored for change detection.
 - Enricher dependency errors (e.g., FFprobe not installed) MUST be surfaced as readable messages in `stats.errors`. Ingest continues for other items without crashing.
 

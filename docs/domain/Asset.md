@@ -51,7 +51,9 @@ Asset is the atomic unit of broadcastable content in RetroVue. It bridges ingest
 - **video_codec** (String(50), nullable): Video codec information
 - **audio_codec** (String(50), nullable): Audio codec information
 - **container** (String(50), nullable): Container format
-- **hash_sha256** (String(64), nullable): SHA256 hash for content integrity and change detection
+- **hash_sha256** (String(64), nullable): SHA256 hash for content integrity and change detection.
+  Computed natively at ingest create-time when a local filesystem path is available. If the
+  file is not reachable at ingest time, this may remain null.
 
 ### Change tracking fields
 
@@ -154,9 +156,9 @@ Assets are identified by canonical identity within a collection:
 
 **Content Change Detection**:
 
-- `hash_sha256` tracks content signature
-- Ingest compares current hash with stored hash
-- Changed assets re-process, resetting state to `new` or `enriching`
+- `hash_sha256` tracks the content signature and is computed at create-time by ingest.
+- Future `asset update` flows will compare a freshly computed hash with the stored value to
+  detect content changes and trigger re-processing where appropriate.
 
 **Enricher Change Detection**:
 
