@@ -11,6 +11,7 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from ..importers.base import DiscoveredItem
 from .base import BaseEnricher, EnricherConfig, EnricherConfigurationError, EnricherError
@@ -62,8 +63,6 @@ class FFprobeEnricher(BaseEnricher):
 
             if raw.startswith("file://"):
                 # Extract file path from URI (robustly parse and unquote)
-                from urllib.parse import urlparse, unquote
-
                 parsed = urlparse(raw)
                 # Prefer parsed.path; on Windows a leading "/C:/..." may be present
                 path_str = unquote(parsed.path or raw[7:])

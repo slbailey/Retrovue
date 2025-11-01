@@ -75,7 +75,7 @@ class TestCollectionIngestWithRealImporter:
 
         # Arrange importer that emits two items
         items = [
-            {"path": "/media/a.mkv", "hash_sha256": "h1"},
+            {"path": "/media/a.mkv"},
             {"path": "/media/b.mkv"},
         ]
         importer = _FakeImporter("filesystem", items)
@@ -111,7 +111,7 @@ class TestCollectionIngestWithRealImporter:
 
         # Arrange importer that emits two items
         items = [
-            {"path": "/media/a.mkv", "hash_sha256": "h1"},
+            {"path": "/media/a.mkv"},
             {"path": "/media/b.mkv"},
         ]
         importer = _FakeImporter("filesystem", items)
@@ -119,9 +119,7 @@ class TestCollectionIngestWithRealImporter:
 
         # Existing asset objects returned by repository lookup
         existing1 = MagicMock()
-        existing1.hash_sha256 = "h1"  # same hash -> no update
         existing2 = MagicMock()
-        existing2.hash_sha256 = None
         db.scalar.side_effect = [existing1, existing2]
 
         # Act

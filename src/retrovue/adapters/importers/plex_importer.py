@@ -1205,7 +1205,7 @@ class PlexImporter(BaseImporter):
                 suffix = None
                 if collection is not None and hasattr(collection, "name"):
                     # Normalize collection name to match PathMapping convention (lowercase + underscores)
-                    coll_name = str(getattr(collection, "name"))
+                    coll_name = str(collection.name)
                     coll_name = coll_name.strip().lower().replace(" ", "_")
                 else:
                     coll_name = "unknown"

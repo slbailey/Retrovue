@@ -164,7 +164,6 @@ class Asset(Base):
     video_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
     audio_codec: Mapped[str | None] = mapped_column(String(50), nullable=True)
     container: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    hash_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_deleted: Mapped[bool] = mapped_column(
         Boolean, server_default=sa.text("false"), nullable=False

@@ -21,16 +21,14 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
-import hashlib
-import os
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ....adapters.registry import ENRICHERS
 from ....domain.entities import Asset, Collection
 from ....infra.canonical import canonical_hash, canonical_key_for
 from ....infra.exceptions import IngestError
-from ....adapters.registry import ENRICHERS
 
 
 class _AssetRepository:
@@ -454,11 +452,6 @@ class CollectionIngestService:
             size_val = getattr(item, "size", 0)
             return int(size_val) if size_val is not None else 0
 
-        def _get_hash_sha256(item: Any) -> str | None:
-            if isinstance(item, dict):
-                return item.get("hash_sha256") or item.get("content_hash")
-            return getattr(item, "hash_sha256", None)
-
         def _get_enricher_checksum(item: Any) -> str | None:
             if isinstance(item, dict):
                 return item.get("enricher_checksum") or item.get("last_enricher_checksum")
@@ -491,7 +484,7 @@ class CollectionIngestService:
                         if isinstance(item, dict):
                             item["path_uri"] = local_uri
                         else:
-                            setattr(item, "path_uri", local_uri)
+                            item.path_uri = local_uri
                     except Exception:
                         pass
                 
@@ -512,7 +505,7 @@ class CollectionIngestService:
             # Attach pipeline checksum so ingest can detect enricher changes
             try:
                 if pipeline_checksum:
-                    setattr(item, "enricher_checksum", pipeline_checksum)
+                    item.enricher_checksum = pipeline_checksum
             except Exception:
                 pass
             try:
@@ -554,38 +547,7 @@ class CollectionIngestService:
                 discovered_at=datetime.now(UTC),
             )
             # Populate optional incoming fields when creating a new asset
-            incoming_hash = _get_hash_sha256(item)
             incoming_enricher = _get_enricher_checksum(item)
-            if incoming_hash is not None:
-                asset.hash_sha256 = incoming_hash
-            else:
-                # Native hash computation (baked-in): compute SHA-256 if we have a local path
-                def _to_native_path(p: str) -> str:
-                    if isinstance(p, str) and p.startswith("file://"):
-                        from urllib.parse import urlparse, unquote
-
-                        parsed = urlparse(p)
-                        s = unquote(parsed.path or p[7:])
-                        if s.startswith("/") and len(s) > 3 and s[2] == ":":
-                            s = s[1:]
-                        return s
-                    return p
-
-                try:
-                    candidate_path = _to_native_path(canonical_uri_val)
-                    if isinstance(candidate_path, str) and os.path.exists(candidate_path):
-                        hasher = hashlib.sha256()
-                        # Read in 2 MiB chunks for reasonable throughput
-                        with open(candidate_path, "rb") as fh:
-                            while True:
-                                chunk = fh.read(2 * 1024 * 1024)
-                                if not chunk:
-                                    break
-                                hasher.update(chunk)
-                        asset.hash_sha256 = hasher.hexdigest()
-                except Exception:
-                    # Best-effort; leave hash unset on failures
-                    pass
             if incoming_enricher is not None:
                 asset.last_enricher_checksum = incoming_enricher
             # Map common enricher-derived labels onto asset fields

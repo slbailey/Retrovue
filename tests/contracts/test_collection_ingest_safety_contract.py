@@ -26,7 +26,7 @@ class TestCollectionIngestSafetyContract:
 
         # Three new items to ingest
         items = [
-            {"uri": f"/media/m{i}.mkv", "size": 100 + i, "hash_sha256": f"h{i}"}
+            {"uri": f"/media/m{i}.mkv", "size": 100 + i}
             for i in range(3)
         ]
 
@@ -68,7 +68,7 @@ class TestCollectionIngestSafetyContract:
 
         # Three existing items that will trigger updates (changed content hash)
         items = [
-            {"uri": f"/media/e{i}.mkv", "size": 200 + i, "hash_sha256": f"new{i}"}
+            {"uri": f"/media/e{i}.mkv", "size": 200 + i}
             for i in range(3)
         ]
 
@@ -79,7 +79,6 @@ class TestCollectionIngestSafetyContract:
 
         # Existing asset objects
         existing = MagicMock()
-        existing.hash_sha256 = "old"
         existing.state = "ready"
         existing.uuid = uuid.uuid4()
 

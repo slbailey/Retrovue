@@ -154,7 +154,8 @@ def show_collection(
         if test_db and not json_output:
             typer.echo("Using test database environment", err=True)
 
-        from ...domain.entities import Collection, Enricher as EnricherRow, PathMapping
+        from ...domain.entities import Enricher as EnricherRow
+        from ...domain.entities import PathMapping
 
         try:
             # Resolve collection via shared helper

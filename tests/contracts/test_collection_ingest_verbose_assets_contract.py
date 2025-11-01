@@ -72,8 +72,8 @@ class TestCollectionIngestVerboseAssets:
 
         # Importer emits two new items
         items = [
-            {"path": "/media/new1.mkv", "hash_sha256": "h1"},
-            {"path": "/media/new2.mkv", "hash_sha256": "h2"},
+            {"path": "/media/new1.mkv"},
+            {"path": "/media/new2.mkv"},
         ]
         importer = _FakeImporter("filesystem", items)
         mock_get_importer.return_value = importer
@@ -116,7 +116,7 @@ class TestCollectionIngestVerboseAssets:
 
         # Importer emits two existing items with different changes
         items = [
-            {"path": "/media/existing1.mkv", "hash_sha256": "newhash"},  # content change
+            {"path": "/media/existing1.mkv"},  # content change scenario not used anymore
             {"path": "/media/existing2.mkv", "enricher_checksum": "e2"},  # enricher change
         ]
         importer = _FakeImporter("filesystem", items)
@@ -125,12 +125,10 @@ class TestCollectionIngestVerboseAssets:
         # Existing assets returned in order: two lookups
         existing1 = MagicMock()
         existing1.uuid = uuid.uuid4()
-        existing1.hash_sha256 = "oldhash"
         existing1.last_enricher_checksum = None
 
         existing2 = MagicMock()
         existing2.uuid = uuid.uuid4()
-        existing2.hash_sha256 = None
         existing2.last_enricher_checksum = "e1"
 
         db.scalar.side_effect = [existing1, existing2]

@@ -1211,7 +1211,6 @@ class TestCollectionIngestDuplicateHandling:
             "season": 1,
             "episode": 1,
             "file_path": "/path/to/episode.mkv",
-            "hash_sha256": "abc123def456"
         }
     
     def _setup_session_mock(self, mock_session):
@@ -2048,12 +2047,11 @@ class TestMilestone2DAssetChangeDetection:
              patch.object(svc, "canonical_hash", return_value="abc123"):
 
             existing = MagicMock(spec=Asset)
-            existing.hash_sha256 = "oldhash"
             existing.last_enricher_checksum = "enc1"
             mock_repo_get.return_value = existing
 
             importer = self._make_importer([
-                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "newhash", "enricher_checksum": "enc1"}
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "enricher_checksum": "enc1"}
             ])
             mock_get_importer.return_value = importer
 
@@ -2089,12 +2087,11 @@ class TestMilestone2DAssetChangeDetection:
              patch.object(svc, "canonical_hash", return_value="abc123"):
 
             existing = MagicMock(spec=Asset)
-            existing.hash_sha256 = "hash1"
             existing.last_enricher_checksum = "enc1"
             mock_repo_get.return_value = existing
 
             importer = self._make_importer([
-                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc2"}
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "enricher_checksum": "enc2"}
             ])
             mock_get_importer.return_value = importer
 
@@ -2130,12 +2127,11 @@ class TestMilestone2DAssetChangeDetection:
              patch.object(svc, "canonical_hash", return_value="abc123"):
 
             existing = MagicMock(spec=Asset)
-            existing.hash_sha256 = "hash1"
             existing.last_enricher_checksum = "enc1"
             mock_repo_get.return_value = existing
 
             importer = self._make_importer([
-                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc1"}
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "enricher_checksum": "enc1"}
             ])
             mock_get_importer.return_value = importer
 
@@ -2171,7 +2167,7 @@ class TestMilestone3AAssetStateUpdate:
         return imp
 
     @patch("retrovue.cli.commands.collection.session")
-    def test_existing_asset_new_content_hash_is_skipped_and_not_mutated(self, mock_session):
+    def test_existing_asset_is_skipped_and_not_mutated(self, mock_session):
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
         from retrovue.cli.commands._ops import collection_ingest_service as svc
@@ -2190,14 +2186,13 @@ class TestMilestone3AAssetStateUpdate:
              patch.object(svc, "canonical_hash", return_value="abc123"):
 
             existing = MagicMock(spec=Asset)
-            existing.hash_sha256 = "oldhash"
             existing.last_enricher_checksum = "enc1"
             existing.state = "ready"
             existing.approved_for_broadcast = True
             mock_repo_get.return_value = existing
 
             importer = self._make_importer([
-                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "newhash", "enricher_checksum": "enc1"}
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "enricher_checksum": "enc1"}
             ])
             mock_get_importer.return_value = importer
 
@@ -2213,7 +2208,6 @@ class TestMilestone3AAssetStateUpdate:
             assert data["stats"]["assets_skipped"] == 1
             assert data["stats"]["assets_changed_content"] == 0
             # No mutation side-effects
-            assert existing.hash_sha256 == "oldhash"
             assert existing.state == "ready"
             assert existing.approved_for_broadcast is True
             # No DB add for updates

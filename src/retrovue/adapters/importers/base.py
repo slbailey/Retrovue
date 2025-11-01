@@ -155,7 +155,7 @@ class ImporterInterface(Protocol):
         ...
 
     def resolve_local_uri(
-        self, item: "DiscoveredItem | dict", *, collection: Any | None = None, path_mappings: list[tuple[str, str]] | None = None
+        self, item: DiscoveredItem | dict, *, collection: Any | None = None, path_mappings: list[tuple[str, str]] | None = None
     ) -> str:
         """
         Resolve a local file URI suitable for enrichment.
