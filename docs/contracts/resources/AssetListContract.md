@@ -27,6 +27,16 @@ The noun (asset) MUST come before the verb (list).
 
 Renaming, reordering, or collapsing this verb into flags is a breaking change and requires updating this contract.
 
+### Default Behavior
+
+When invoked with no filtering flags, `retrovue asset list` MUST list only assets that are broadcast-ready by default. Broadcast-ready assets are defined as assets where:
+
+- `state = 'ready'`
+- `approved_for_broadcast = true`
+- `is_deleted = false`
+
+This default optimizes for the most common operator workflow of finding schedulable assets. Other lifecycle stages can be included via explicit flags (see Parameters).
+
 ## Parameters
 
 ### Filtering Options
@@ -85,21 +95,24 @@ If filtering parameters are invalid or collection resolution is ambiguous, the o
 
 ### Human-Readable Output
 
-The human-readable output MUST include:
+The human-readable output MUST be operator-usable. Internal UUIDs alone are insufficient.
 
 - **Summary**: Total count of matching assets
-- **Asset List**: Each asset with key information:
-  - UUID
-  - URI (file path)
-  - Title (if available)
+- **Minimum columns per asset** (MUST):
+  - Canonical ID (canonical_key)
+  - Title (title name if available)
+  - Type (title.kind: TV Show, Movie, etc.)
   - State
-  - Size
-  - Duration
-  - Collection name
+  - Approved (approved_for_broadcast)
+  - Path/URI
+
+Additional fields MAY be shown when available (e.g., duration, size, collection name).
 
 ### JSON Output
 
-When `--json` is passed, all output MUST be valid JSON with the following structure:
+When `--json` is passed, all output MUST be valid JSON with the following structure.
+The JSON MUST include all relevant fields to reconstruct human context; the CLI
+may choose a subset for human-readable display.
 
 ```json
 {
@@ -112,11 +125,21 @@ When `--json` is passed, all output MUST be valid JSON with the following struct
       "size": 1234567890,
       "duration_ms": 3600000,
       "state": "ready",
-      "canonical": true,
       "approved_for_broadcast": true,
+      "canonical_key": "canon:tvshows/airplane-2012/season-1/episode-1",
+      "canonical_uri": "rv://assets/abc123",
       "collection": {
         "uuid": "collection-uuid",
         "name": "TV Shows"
+      },
+      "title": {
+        "name": "Airplane (2012)",
+        "kind": "movie",
+        "year": 2012
+      },
+      "episode": {
+        "season": 1,
+        "number": 1
       },
       "discovered_at": "2024-01-01T12:00:00Z"
     }
@@ -234,4 +257,3 @@ Follow this lifecycle for any change:
 - [Asset Contract](AssetContract.md) - Overview of all Asset operations
 - [Asset Domain Documentation](../domain/Asset.md) - Core domain model
 - [Collection List Contract](CollectionListContract.md) - Collection listing operations
-

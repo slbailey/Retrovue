@@ -52,7 +52,7 @@ Collection: TV Shows
   ID: 4b2b05e7-d7d2-414a-a587-3f5df9b53f44
   External ID: plex-5063d926-1
   Source: My Plex Server (plex-5063d926)
-  Type: plex
+  Content Type: show
   Sync Enabled: true
   Ingestible: true
   Path Mappings:
@@ -74,6 +74,7 @@ Collection: TV Shows
   "source_id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
   "source_name": "My Plex Server",
   "source_type": "plex",
+  "content_type": "show",
   "sync_enabled": true,
   "ingestible": true,
   "path_mappings": {
@@ -118,7 +119,7 @@ Collection: TV Shows
 - **B-1:** The command MUST accept `<collection_id>` as any of: full UUID, external ID (e.g. Plex library key), or case-insensitive display name. Collection name matching MUST be case-insensitive.
 - **B-2:** If multiple collections match the provided name (case-insensitive), the command MUST exit with code 1 and emit: "Multiple collections named '<name>' exist. Please specify the UUID." Collection name matching MUST be case-insensitive. Resolution MUST NOT prefer one collection over another, even if one has exact casing match.
 - **B-3:** If no collection matches the provided identifier, the command MUST exit with code 1 and emit: "Error: Collection 'X' not found."
-- **B-4:** When `--json` is supplied, output MUST include fields: `"id"`, `"external_id"`, `"name"`, `"source_id"`, `"source_name"`, `"source_type"`, `"sync_enabled"`, `"ingestible"`, `"path_mappings"`, `"stats"`, `"last_ingest_time"`, `"created_at"`, and `"updated_at"`.
+- **B-4:** When `--json` is supplied, output MUST include fields: `"id"`, `"external_id"`, `"name"`, `"source_id"`, `"source_name"`, `"source_type"`, `"content_type"`, `"sync_enabled"`, `"ingestible"`, `"path_mappings"`, `"stats"`, `"last_ingest_time"`, `"created_at"`, and `"updated_at"`.
 - **B-5:** The command MUST display `sync_enabled` and `ingestible` status clearly in both human-readable and JSON output, as these are critical prerequisites for ingest operations.
 - **B-6:** If `ingestible=false`, the output SHOULD include diagnostic information about why the collection is not ingestible (e.g., missing path mappings, invalid configuration).
 - **B-7:** UUID resolution MUST be exact match (case-sensitive).

@@ -134,6 +134,22 @@ Collections follow a specific lifecycle pattern:
 
 ---
 
+## Collection Content Types
+
+Some sources (e.g., Plex) present collections with a content/library type. Retrovue persists this in `Collection.config["type"]` and surfaces it in `collection show` as `content_type`.
+
+Authoritative list (from Plex library section `Directory/@type`):
+
+- movie
+- show
+- artist
+- photo
+
+Other upstream values may appear in rare cases; when present they SHOULD be passed through as-is.
+
+Contracts:
+- `collection show` MUST include `content_type` in JSON when available and display it in human-readable output.
+
 ## See Also
 
 - [Collection Domain Documentation](../domain/Collection.md) - Core domain model and operations
