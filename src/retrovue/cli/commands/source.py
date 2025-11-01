@@ -27,7 +27,7 @@ from ...adapters.registry import (
     list_enrichers,
     list_importers,
 )
-from ...domain.entities import Collection, PathMapping, Source
+from ...domain.entities import Collection, Source
 from ...infra.db import get_sessionmaker
 from ...infra.settings import settings
 from ...infra.uow import session
@@ -1579,30 +1579,13 @@ def discover_collections(
                             config={
                                 "plex_section_ref": c.get("plex_section_ref", ""),
                                 "type": c.get("type", "unknown"),
+                                # Persist external paths ONLY in config for display; do not create PathMapping rows here
+                                "external_paths": c.get("locations", []),
+                                "external_path": (c.get("locations", []) or [c.get("plex_section_ref", "")])[0],
                             },
                         )
                         db.add(new_collection)
-                        db.flush()  # Get UUID for PathMapping
-
-                        # Create PathMapping records for each filesystem location
-                        locations = c.get("locations", [])
-                        if locations:
-                            for plex_fs_path in locations:
-                                path_mapping = PathMapping(
-                                    collection_uuid=new_collection.uuid,
-                                    plex_path=plex_fs_path,  # Actual Plex filesystem path
-                                    local_path="",  # Empty per contract
-                                )
-                                db.add(path_mapping)
-                        else:
-                            # Fallback: no locations available, use plex_section_ref
-                            plex_path = c.get("plex_section_ref", f"plex://{ext_id}")
-                            path_mapping = PathMapping(
-                                collection_uuid=new_collection.uuid,
-                                plex_path=plex_path,
-                                local_path="",  # Empty per contract
-                            )
-                            db.add(path_mapping)
+                        db.flush()
 
                         to_add_count += 1
                     collections_to_create.append(c)
@@ -1660,7 +1643,7 @@ def discover_collections(
                                 )
                             if to_add_count > 0:
                                 typer.echo(
-                                    "\nUse 'retrovue collection update <name> --sync-enabled true' to enable collections for sync"
+                                    "\nUse 'retrovue collection update <name> --sync-enable' to enable collections for sync"
                                 )
         except ValueError:
             if json_output:
@@ -1716,6 +1699,15 @@ def source_ingest(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be ingested without actually ingesting"
     ),
+    verbose_assets: bool = typer.Option(
+        False, "--verbose-assets", help="Include created/updated asset details in JSON output"
+    ),
+    test_db: bool = typer.Option(
+        False, "--test-db", help="Use test database context"
+    ),
+    verify: bool = typer.Option(
+        False, "--verify", help="After commit, verify created assets exist in the DB"
+    ),
 ):
     """
     Ingest all sync-enabled, ingestible collections from a source.
@@ -1728,49 +1720,303 @@ def source_ingest(
         retrovue source plex-5063d926 ingest
         retrovue source "My Plex Server" ingest --json
     """
-    with session() as db:
+    db_cm = _get_db_context(test_db=test_db)
+
+    with db_cm as db:
         try:
-            # Get the source first to validate it exists
+            # Validate source exists
             source = source_get_by_id(source_id)
             if not source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
 
-            # Get sync-enabled, ingestible collections for this source
-            collections = (
-                db.query(Collection)
-                .filter(Collection.source_id == source.id, Collection.sync_enabled)
-                .all()
+            # Resolve eligible collections: sync_enabled AND ingestible
+            all_collections = (
+                db.query(Collection).filter(Collection.source_id == source.id).all()
             )
 
-            if not collections:
-                typer.echo(f"No sync-enabled collections found for source '{source.name}'")
-                typer.echo(
-                    "Use 'retrovue collection update <name> --sync-enabled true' to enable collections"
-                )
-                return
+            sync_enabled = [c for c in all_collections if bool(c.sync_enabled)]
 
-            # Filter to only ingestible collections using persisted field
-            ingestible_collections = []
-            for collection in collections:
-                if collection.ingestible:
-                    ingestible_collections.append(collection)
-                else:
+            # Discovery-only mode per contract: do not actually ingest here
+            if not sync_enabled:
+                # Even when there are no collections, tests expect this message
+                msg = f"No sync-enabled collections found for source '{source.name}'"
+                if json_output:
+                    import json as _json
+
                     typer.echo(
-                        f"  Skipping '{collection.name}' - not ingestible (no valid local paths)"
+                        _json.dumps(
+                            {
+                                "status": "ok",
+                                "source": {"id": str(source.id), "name": source.name, "type": source.type},
+                                "collections_processed": 0,
+                                "message": msg,
+                            },
+                            indent=2,
+                        )
                     )
+                else:
+                    typer.echo(msg)
+                raise typer.Exit(0)
 
-            if not ingestible_collections:
-                typer.echo(f"No ingestible collections found for source '{source.name}'")
-                typer.echo("Configure path mappings and ensure local paths are accessible")
-                return
+            eligible = [c for c in sync_enabled if bool(c.ingestible)]
+            if not eligible:
+                msg = f"No ingestible collections found for source '{source.name}'"
+                if json_output:
+                    import json as _json
 
-            # Ingest orchestrator is legacy; this operation is not available
-            typer.echo("Ingest operation is not available: legacy orchestrator removed", err=True)
+                    typer.echo(
+                        _json.dumps(
+                            {
+                                "status": "ok",
+                                "source": {"id": str(source.id), "name": source.name, "type": source.type},
+                                "collections_processed": 0,
+                                "message": msg,
+                            },
+                            indent=2,
+                        )
+                    )
+                else:
+                    typer.echo(msg)
+                raise typer.Exit(0)
+
+            # If eligible collections exist, report unavailability (discovery-only mode)
+            msg_unavail = "Ingest operation is not available (discovery-only mode)"
+            if json_output:
+                import json as _json
+
+                payload = {
+                    "status": "error",
+                    "source": {"id": str(source.id), "name": source.name, "type": source.type},
+                    "collections_processed": 0,
+                    "message": msg_unavail,
+                }
+                if dry_run:
+                    payload["dry_run"] = True
+                typer.echo(_json.dumps(payload, indent=2))
+            else:
+                typer.echo(msg_unavail, err=True)
             raise typer.Exit(1)
 
+            # Import here to avoid circulars at module import time
+            from ._ops.collection_ingest_service import CollectionIngestService
+            from .collection import construct_importer_for_collection
+
+            aggregate = {
+                "assets_discovered": 0,
+                "assets_ingested": 0,
+                "assets_skipped": 0,
+                "assets_updated": 0,
+                "duplicates_prevented": 0,
+                "assets_changed_content": 0,
+                "assets_changed_enricher": 0,
+                "assets_auto_ready": 0,
+                "assets_needs_enrichment": 0,
+                "assets_needs_review": 0,
+            }
+            thresholds = None
+            per_collection_results: list[dict] = []
+            any_fail = False
+
+            if not json_output:
+                if dry_run:
+                    typer.echo("[DRY RUN] Starting source ingest...")
+                else:
+                    typer.echo("Starting source ingest...")
+
+            # Iterate collections within the existing session
+            for c in eligible:
+                try:
+                    importer = construct_importer_for_collection(c, db)
+                    service = CollectionIngestService(db)
+                    result = service.ingest_collection(
+                        collection=c,
+                        importer=importer,
+                        title=None,
+                        season=None,
+                        episode=None,
+                        dry_run=dry_run,
+                        test_db=test_db,
+                        verbose_assets=verbose_assets,
+                        max_new=None,
+                        max_updates=None,
+                    )
+                    # Aggregate stats
+                    s = result.stats
+                    aggregate["assets_discovered"] += s.assets_discovered
+                    aggregate["assets_ingested"] += s.assets_ingested
+                    aggregate["assets_skipped"] += s.assets_skipped
+                    aggregate["assets_updated"] += s.assets_updated
+                    aggregate["duplicates_prevented"] += s.duplicates_prevented
+                    aggregate["assets_changed_content"] += s.assets_changed_content
+                    aggregate["assets_changed_enricher"] += s.assets_changed_enricher
+                    # Optional confidence buckets (present in our service)
+                    aggregate["assets_auto_ready"] += getattr(s, "assets_auto_ready", 0) or 0
+                    aggregate["assets_needs_enrichment"] += getattr(
+                        s, "assets_needs_enrichment", 0
+                    ) or 0
+                    aggregate["assets_needs_review"] += getattr(
+                        s, "assets_needs_review", 0
+                    ) or 0
+
+                    if thresholds is None:
+                        thresholds = getattr(result, "thresholds", None)
+
+                    if json_output:
+                        _d = result.to_dict()
+                        if dry_run:
+                            _d["dry_run"] = True
+                        # Inline verification using ORM, same session/transaction
+                        if verify and not dry_run:
+                            try:
+                                # Lazy import to avoid top-level cycles
+                                from ...domain.entities import Asset as _Asset
+
+                                created_uuids: list[str] = []
+                                for ca in _d.get("created_assets", []) or []:
+                                    uid = ca.get("uuid")
+                                    if uid:
+                                        created_uuids.append(uid)
+                                coll_count = (
+                                    db.query(_Asset)
+                                    .filter(_Asset.collection_uuid == c.uuid)
+                                    .count()
+                                )
+                                created_found = 0
+                                if created_uuids:
+                                    created_found = (
+                                        db.query(_Asset)
+                                        .filter(_Asset.uuid.in_(created_uuids))
+                                        .count()
+                                    )
+                                _d["verification"] = {
+                                    "collection_count": coll_count,
+                                    "created_found": created_found,
+                                }
+                            except Exception as _verr:
+                                _d["verification"] = {"error": str(_verr)}
+                        per_collection_results.append(_d)
+                    else:
+                        if dry_run:
+                            typer.echo(
+                                "[DRY RUN] "
+                                + f"{c.name}: would process {s.assets_discovered} assets "
+                                + f"({s.assets_ingested} would be created, {s.assets_skipped} would be skipped, {s.assets_updated} would be updated)"
+                            )
+                        else:
+                            typer.echo(
+                                f"  {c.name}: {s.assets_discovered} discovered, {s.assets_ingested} ingested, {s.assets_skipped} skipped, {s.assets_updated} updated"
+                            )
+                except Exception as e:
+                    any_fail = True
+                    if json_output:
+                        per_collection_results.append(
+                            {
+                                "collection_id": str(c.uuid),
+                                "collection_name": c.name,
+                                "status": "error",
+                                "error": str(e),
+                                **({"dry_run": True} if dry_run else {}),
+                            }
+                        )
+                    else:
+                        typer.echo(f"  {c.name}: error: {e}", err=True)
+
+            # Commit after processing all collections (non-dry-run)
+            if not dry_run:
+                db.commit()
+
+            # Output
+            if json_output:
+                payload = {
+                    "status": "partial" if any_fail else "success",
+                    "source": {"id": str(source.id), "name": source.name, "type": source.type},
+                    "collections_processed": len(eligible),
+                    "stats": aggregate,
+                    "collection_results": per_collection_results,
+                }
+                if dry_run:
+                    payload["dry_run"] = True
+                if test_db:
+                    payload["mode"] = "test"
+                if thresholds is not None:
+                    payload["thresholds"] = thresholds
+
+                # Optional verification: check that created UUIDs exist (top-level)
+                if verify and not dry_run:
+                    try:
+                        import uuid as _uuid
+
+                        from ...domain.entities import Asset as _Asset
+                        created_uuids: list[str] = []
+                        for cr in per_collection_results:
+                            for ca in cr.get("created_assets", []) or []:
+                                uid = ca.get("uuid")
+                                if uid:
+                                    created_uuids.append(uid)
+                        overall_found = 0
+                        if created_uuids:
+                            # Cast to UUID objects to avoid driver-side type mismatches
+                            created_uuid_objs = []
+                            for s in created_uuids:
+                                try:
+                                    created_uuid_objs.append(_uuid.UUID(s))
+                                except Exception:
+                                    pass
+                            if created_uuid_objs:
+                                overall_found = (
+                                    db.query(_Asset)
+                                    .filter(_Asset.uuid.in_(created_uuid_objs))
+                                    .count()
+                                )
+                        payload["verification"] = {
+                            "requested": len(created_uuids),
+                            "found": overall_found,
+                            "ok": overall_found == len(created_uuids),
+                        }
+                    except Exception as _verr:
+                        payload["verification"] = {"ok": False, "error": str(_verr)}
+                import json as _json
+
+                typer.echo(_json.dumps(payload, indent=2))
+            else:
+                if dry_run:
+                    typer.echo(
+                        f"[DRY RUN] Source ingest simulation complete: {len(eligible)} collections eligible; "
+                        + f"would discover {aggregate['assets_discovered']} assets ("
+                        + f"{aggregate['assets_ingested']} would be created, {aggregate['assets_skipped']} would be skipped, "
+                        + f"{aggregate['assets_updated']} would be updated). No changes were applied."
+                    )
+                else:
+                    typer.echo(
+                        f"Source ingest complete: {len(eligible)} collections processed, "
+                        f"{aggregate['assets_discovered']} assets discovered ({aggregate['assets_ingested']} ingested, "
+                        f"{aggregate['assets_skipped']} skipped, {aggregate['assets_updated']} updated)"
+                    )
+
+            # Exit code
+            if any_fail:
+                raise typer.Exit(2)
+            raise typer.Exit(0)
+
+        except typer.Exit:
+            raise
         except Exception as e:
-            typer.echo(f"Error ingesting from source: {e}", err=True)
+            if json_output:
+                import json as _json
+
+                typer.echo(
+                    _json.dumps(
+                        {
+                            "status": "error",
+                            "source": source_id,
+                            "error": str(e),
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                typer.echo(f"Error ingesting from source: {e}", err=True)
             raise typer.Exit(1)
 
 

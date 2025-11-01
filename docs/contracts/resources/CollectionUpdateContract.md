@@ -9,7 +9,7 @@ Define the behavioral contract for updating collection configuration and state. 
 ## Command Shape
 
 ```
-retrovue collection update <collection_id> [--enable-sync] [--disable-sync] [--add-enricher <enricher_id>] [--delete-enricher <enricher_id>] [--list-enrichers] [--path-mapping <local_path>] [--priority <n>] [--test-db] [--dry-run] [--json]
+retrovue collection update <collection_id> [--sync-enable] [--sync-disable] [--add-enricher <enricher_id>] [--delete-enricher <enricher_id>] [--list-enrichers] [--path-mapping <local_path|DELETE>] [--priority <n>] [--test-db] [--dry-run] [--json]
 ```
 
 ### Required Parameters
@@ -20,8 +20,8 @@ retrovue collection update <collection_id> [--enable-sync] [--disable-sync] [--a
 
 **Sync Management:**
 
-- `--enable-sync`: Enable sync for the collection (requires `ingestible=true`)
-- `--disable-sync`: Disable sync for the collection (requires `sync_enabled=true`)
+- `--sync-enable`: Enable sync for the collection (requires `ingestible=true`)
+- `--sync-disable`: Disable sync for the collection (requires `sync_enabled=true`)
 
 **Enricher Management:**
 
@@ -32,7 +32,8 @@ retrovue collection update <collection_id> [--enable-sync] [--disable-sync] [--a
 
 **Path Mapping:**
 
-- `--path-mapping <local_path>`: Set the local path for the collection's path mapping. This updates the `local_path` field in the PathMapping record and triggers revalidation of the collection's `ingestible` status.
+- `--path-mapping <local_path|DELETE>`: Set the local path for the collection's path mapping, or clear it with `DELETE`. Updating sets `local_path` only (does not change the external path). `DELETE` sets the mapping's `local_path` to null (keeps the external path) and sets `ingestible=false`.
+  
 
 **Common Flags:**
 
@@ -42,10 +43,10 @@ retrovue collection update <collection_id> [--enable-sync] [--disable-sync] [--a
 
 **Mutual Exclusivity:**
 
-- `--enable-sync` and `--disable-sync` MUST NOT be provided together. If both are provided, the command MUST exit with code 1 and emit: "Error: Cannot specify both --enable-sync and --disable-sync. Use one flag only."
+- `--sync-enable` and `--sync-disable` MUST NOT be provided together. If both are provided, the command MUST exit with code 1 and emit: "Error: Cannot specify both --sync-enable and --sync-disable. Use one flag only."
 - `--add-enricher` and `--delete-enricher` MAY be provided together in a single command to perform multiple enricher operations atomically.
 - `--list-enrichers` MAY be combined with other flags, but when `--list-enrichers` is provided, the command MUST display enricher information even if no other operations are performed.
-- At least one operation flag (`--enable-sync`, `--disable-sync`, `--add-enricher`, `--delete-enricher`, `--list-enrichers`, or `--path-mapping`) MUST be provided. If none are provided, the command MUST exit with code 1 and emit: "Error: Must specify at least one operation: --enable-sync, --disable-sync, --add-enricher, --delete-enricher, --list-enrichers, or --path-mapping."
+- At least one operation flag (`--sync-enable`, `--sync-disable`, `--add-enricher`, `--delete-enricher`, `--list-enrichers`, or `--path-mapping`) MUST be provided. If none are provided, the command MUST exit with code 1 and emit: "Error: Must specify at least one operation: --sync-enable, --sync-disable, --add-enricher, --delete-enricher, --list-enrichers, or --path-mapping."
 
 ---
 
@@ -53,8 +54,8 @@ retrovue collection update <collection_id> [--enable-sync] [--disable-sync] [--a
 
 ### Prerequisite Validation
 
-- **Enable Sync Prerequisite**: `--enable-sync` MAY only be executed if the collection's `ingestible` field is `true`. If `ingestible=false`, the command MUST exit with code 1 and emit: "Error: Cannot enable sync for collection 'X'. Collection is not ingestible. Check path mappings and prerequisites with 'retrovue collection show <id>'."
-- **Disable Sync Prerequisite**: `--disable-sync` MAY only be executed if the collection's `sync_enabled` field is `true`. If `sync_enabled=false`, the command MUST exit with code 1 and emit: "Error: Cannot disable sync for collection 'X'. Collection is not currently sync-enabled."
+- **Enable Sync Prerequisite**: `--sync-enable` MAY only be executed if the collection's `ingestible` field is `true`. If `ingestible=false`, the command MUST exit with code 1 and emit: "Error: Cannot enable sync for collection 'X'. Collection is not ingestible. Check path mappings and prerequisites with 'retrovue collection show <id>'."
+- **Disable Sync Prerequisite**: `--sync-disable` MAY only be executed if the collection's `sync_enabled` field is `true`. If `sync_enabled=false`, the command MUST exit with code 1 and emit: "Error: Cannot disable sync for collection 'X'. Collection is not currently sync-enabled."
 - **Idempotent Operations**: Enabling an already-enabled collection or disabling an already-disabled collection MUST succeed with exit code 0 and MUST be treated as a no-op (no database changes, but operation is considered successful).
 - **Enricher Validation**: `--add-enricher` requires that the enricher exists and is available. If the enricher does not exist, the command MUST exit with code 1 and emit: "Error: Enricher '<enricher_id>' not found."
 - **Enricher Priority**: When using `--add-enricher`, the `--priority` flag MUST be provided. If `--add-enricher` is specified without `--priority`, the command MUST exit with code 1 and emit: "Error: --priority is required when using --add-enricher."
@@ -62,7 +63,7 @@ retrovue collection update <collection_id> [--enable-sync] [--disable-sync] [--a
 - **Enricher Removal**: Removing an enricher that is not attached to the collection MUST be treated as idempotent (no error, operation succeeds with no changes).
 - **Path Mapping Validation**: `--path-mapping` MUST validate that the provided local path exists and is accessible before updating the PathMapping record. If the path does not exist or is not accessible, the command MUST exit with code 1 and emit: "Error: Local path '<local_path>' does not exist or is not accessible."
 - **Ingestible Revalidation**: After updating a path mapping, the collection's `ingestible` status MUST be revalidated by calling the importer's `validate_ingestible()` method. This revalidation determines whether the collection meets all prerequisites for ingestion.
-- **Path Mapping Requirement**: A collection MUST have a PathMapping record before `--path-mapping` can be used. If no PathMapping exists for the collection, the command MUST exit with code 1 and emit: "Error: Collection 'X' does not have a path mapping. Path mappings are created during source discovery."
+- **Path Mapping Requirement**: A collection MUST have a PathMapping record before `--path-mapping` or `--path-mapping-plex` can be used. If no PathMapping exists for the collection, the command MUST exit with code 1 and emit: "Error: Collection 'X' does not have a path mapping. Path mappings are created during source discovery."
 
 ### Update Model
 
@@ -190,6 +191,28 @@ Successfully updated path mapping for collection "TV Shows"
 }
 ```
 
+**Apply Enrichers JSON Output:**
+
+```json
+{
+  "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
+  "external_id": "plex-5063d926-1",
+  "name": "TV Shows",
+  "operation": "apply-enrichers",
+  "enrichment": {
+    "pipeline_checksum": "<hex>",
+    "stats": {
+      "assets_considered": 120,
+      "assets_enriched": 118,
+      "assets_auto_ready": 110,
+      "errors": []
+    }
+  },
+  "updated": true,
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+
 **Idempotent Operation (Already in Target State):**
 
 ```json
@@ -221,6 +244,31 @@ Successfully updated path mapping for collection "TV Shows"
 ```
 
 **List Enrichers JSON Output:**
+**Auto-Enrichment on Update (implicit):**
+
+When enrichers are attached to the collection, `collection update` automatically applies the
+ingest-scope pipeline to existing assets that need enrichment (state='new' or outdated/missing
+`last_enricher_checksum`). The JSON output includes an `enrichment` object summarizing the run:
+
+```json
+{
+  "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
+  "external_id": "plex-5063d926-1",
+  "name": "TV Shows",
+  "operation": "update",
+  "enrichment": {
+    "pipeline_checksum": "<hex>",
+    "stats": {
+      "assets_considered": 120,
+      "assets_enriched": 118,
+      "assets_auto_ready": 110,
+      "errors": []
+    }
+  },
+  "updated": true,
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
 
 ```json
 {
@@ -276,7 +324,7 @@ Successfully updated path mapping for collection "TV Shows"
 
 ### Database Changes
 
-1. **Enable Sync** (`--enable-sync`):
+1. **Enable Sync** (`--sync-enable`):
 
    - Collection's `sync_enabled` field set to `true`
    - Updated timestamp refreshed
@@ -319,7 +367,8 @@ Successfully updated path mapping for collection "TV Shows"
 - Updated timestamp reflects state change time
 - Enricher attachments affect enrichment pipeline execution during ingest
 - Path mapping updates trigger `ingestible` revalidation, which may change the collection's eligibility for ingest operations
-- No impact on existing assets or ingested content (enricher and path mapping changes apply to future ingest operations)
+- Applying enrichers (`--apply-enrichers`) updates existing assets in-place and may auto-promote
+  eligible assets to `state=ready` with `approved_for_broadcast=true` when confidence ≥ threshold.
 - Path mapping changes may affect the importer's ability to resolve content locations
 
 ---
@@ -328,10 +377,11 @@ Successfully updated path mapping for collection "TV Shows"
 
 - **B-1:** The command MUST accept `<collection_id>` as any of: full UUID, external ID (e.g. Plex library key), or case-insensitive display name. Collection name matching MUST be case-insensitive. If multiple collections match the provided name (case-insensitive), the command MUST exit with code 1 and emit: "Multiple collections named '<name>' exist. Please specify the UUID." Resolution MUST NOT prefer one collection over another, even if one has exact casing match.
 - **B-2:** If no collection matches the provided identifier, the command MUST exit with code 1 and emit: "Error: Collection 'X' not found."
-- **B-3:** At least one operation flag (`--enable-sync`, `--disable-sync`, `--add-enricher`, `--delete-enricher`, `--list-enrichers`, or `--path-mapping`) MUST be provided. If none are provided, the command MUST exit with code 1 and emit: "Error: Must specify at least one operation: --enable-sync, --disable-sync, --add-enricher, --delete-enricher, --list-enrichers, or --path-mapping."
-- **B-4:** If both `--enable-sync` and `--disable-sync` are provided, the command MUST exit with code 1 and emit: "Error: Cannot specify both --enable-sync and --disable-sync. Use one flag only."
-- **B-5:** For `--enable-sync`, if `ingestible=false`, the command MUST exit with code 1 and emit: "Error: Cannot enable sync for collection 'X'. Collection is not ingestible. Check path mappings and prerequisites with 'retrovue collection show <id>'."
-- **B-6:** For `--disable-sync`, if `sync_enabled=false`, the command MUST exit with code 1 and emit: "Error: Cannot disable sync for collection 'X'. Collection is not currently sync-enabled."
+- **B-3:** If no operation flags are provided, the command MUST still apply attached ingest-scope enrichers to existing assets needing enrichment and report enrichment stats. If no enrichers are attached, the command MAY be a no-op.
+ - **B-20:** When `--apply-enrichers` is provided, the command MUST apply the attached ingest-scope enrichers to assets needing enrichment (state='new' or outdated checksum) and include enrichment stats in JSON output.
+- **B-4:** If both `--sync-enable` and `--sync-disable` are provided, the command MUST exit with code 1 and emit: "Error: Cannot specify both --sync-enable and --sync-disable. Use one flag only."
+- **B-5:** For `--sync-enable`, if `ingestible=false`, the command MUST exit with code 1 and emit: "Error: Cannot enable sync for collection 'X'. Collection is not ingestible. Check path mappings and prerequisites with 'retrovue collection show <id>'."
+- **B-6:** For `--sync-disable`, if `sync_enabled=false`, the command MUST exit with code 1 and emit: "Error: Cannot disable sync for collection 'X'. Collection is not currently sync-enabled."
 - **B-7:** If `--enable-sync` is provided for a collection that is already `sync_enabled=true`, the command MUST succeed with exit code 0, MUST NOT modify the database, and MUST indicate that the collection is already enabled.
 - **B-8:** If `--disable-sync` is provided for a collection that is already `sync_enabled=false`, the command MUST succeed with exit code 0, MUST NOT modify the database, and MUST indicate that the collection is already disabled.
 - **B-9:** When `--add-enricher` is provided, the `--priority` flag MUST also be provided. If `--add-enricher` is specified without `--priority`, the command MUST exit with code 1 and emit: "Error: --priority is required when using --add-enricher."
@@ -369,6 +419,7 @@ Successfully updated path mapping for collection "TV Shows"
 - **D-17:** After updating a path mapping, the collection's `ingestible` status MUST be revalidated by calling the importer's `validate_ingestible()` method, and the collection's `ingestible` field MUST be updated to reflect the validation result.
 - **D-18:** Path mapping updates and `ingestible` revalidation MUST occur within the same transaction boundary, ensuring atomicity.
 - **D-19:** On transaction failure, ALL changes MUST be rolled back with no partial state updates.
+ - **D-20:** The enrichment helper MUST NOT commit; the CLI command commits after successful application.
 
 ---
 
@@ -407,60 +458,60 @@ Future related tests (integration or scenario-level) MAY reference these same ru
 
 ```bash
 # Enable sync for a collection
-retrovue collection update "TV Shows" --enable-sync
+retrovue collection update "TV Shows" --sync-enable
 
 # Enable sync with JSON output
-retrovue collection update "TV Shows" --enable-sync --json
+retrovue collection update "TV Shows" --sync-enable --json
 
 # Enable sync by UUID
-retrovue collection update 4b2b05e7-d7d2-414a-a587-3f5df9b53f44 --enable-sync
+retrovue collection update 4b2b05e7-d7d2-414a-a587-3f5df9b53f44 --sync-enable
 
 # Dry-run enable sync
-retrovue collection update "TV Shows" --enable-sync --dry-run
+retrovue collection update "TV Shows" --sync-enable --dry-run
 ```
 
 ### Disable Sync
 
 ```bash
 # Disable sync for a collection
-retrovue collection update "TV Shows" --disable-sync
+retrovue collection update "TV Shows" --sync-disable
 
 # Disable sync with JSON output
-retrovue collection update "TV Shows" --disable-sync --json
+retrovue collection update "TV Shows" --sync-disable --json
 
 # Disable sync by external ID
-retrovue collection update plex-5063d926-1 --disable-sync
+retrovue collection update plex-5063d926-1 --sync-disable
 ```
 
 ### Error Cases
 
 ```bash
 # Invalid: Collection not found
-retrovue collection update "Non-existent" --enable-sync
+retrovue collection update "Non-existent" --sync-enable
 # Error: Collection 'Non-existent' not found.
 
 # Invalid: Ambiguous name
-retrovue collection update "Movies" --enable-sync
+retrovue collection update "Movies" --sync-enable
 # Error: Multiple collections named 'Movies' exist. Please specify the UUID.
 
 # Invalid: No operation specified
 retrovue collection update "TV Shows"
-# Error: Must specify either --enable-sync or --disable-sync.
+# Error: Must specify at least one operation: --sync-enable, --sync-disable, --add-enricher, --delete-enricher, --list-enrichers, or --path-mapping.
 
 # Invalid: Conflicting flags
-retrovue collection update "TV Shows" --enable-sync --disable-sync
-# Error: Cannot specify both --enable-sync and --disable-sync. Use one flag only.
+retrovue collection update "TV Shows" --sync-enable --sync-disable
+# Error: Cannot specify both --sync-enable and --sync-disable. Use one flag only.
 
 # Invalid: Enable sync when not ingestible
-retrovue collection update "TV Shows" --enable-sync
+retrovue collection update "TV Shows" --sync-enable
 # Error: Cannot enable sync for collection 'TV Shows'. Collection is not ingestible. Check path mappings and prerequisites with 'retrovue collection show <id>'.
 
 # Invalid: Disable sync when not enabled
-retrovue collection update "TV Shows" --disable-sync
+retrovue collection update "TV Shows" --sync-disable
 # Error: Cannot disable sync for collection 'TV Shows'. Collection is not currently sync-enabled.
 
 # Valid: Idempotent operation (already enabled)
-retrovue collection update "TV Shows" --enable-sync
+retrovue collection update "TV Shows" --sync-enable
 # Success: Collection "TV Shows" is already sync-enabled. No changes were made.
 ```
 
@@ -509,7 +560,7 @@ retrovue collection update "TV Shows" --delete-enricher enricher-ffprobe-a1b2c3d
 ### Path Mapping Management
 
 ```bash
-# Set path mapping for collection
+# Set local path mapping for a collection (does not modify external path)
 retrovue collection update "TV Shows" --path-mapping /media/tv-shows
 
 # Set path mapping with JSON output
@@ -518,8 +569,8 @@ retrovue collection update "TV Shows" --path-mapping /media/tv-shows --json
 # Set path mapping by UUID
 retrovue collection update 4b2b05e7-d7d2-414a-a587-3f5df9b53f44 --path-mapping /media/tv-shows
 
-# Dry-run path mapping update
-retrovue collection update "TV Shows" --path-mapping /media/tv-shows --dry-run
+# Delete the mapping (collection becomes non-ingestible)
+retrovue collection update "TV Shows" --path-mapping DELETE
 ```
 
 ### Error Cases for Path Mapping

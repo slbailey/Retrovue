@@ -2233,14 +2233,13 @@ class TestMilestone3AAssetStateUpdate:
              patch.object(svc, "canonical_hash", return_value="abc123"):
 
             existing = MagicMock(spec=Asset)
-            existing.hash_sha256 = "hash1"
             existing.last_enricher_checksum = "enc1"
             existing.state = "ready"
             existing.approved_for_broadcast = True
             mock_repo_get.return_value = existing
 
             importer = self._make_importer([
-                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc2"}
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "enricher_checksum": "enc2"}
             ])
             mock_get_importer.return_value = importer
 
@@ -2281,14 +2280,13 @@ class TestMilestone3AAssetStateUpdate:
              patch.object(svc, "canonical_hash", return_value="abc123"):
 
             existing = MagicMock(spec=Asset)
-            existing.hash_sha256 = "hash1"
             existing.last_enricher_checksum = "enc1"
             existing.state = "ready"
             existing.approved_for_broadcast = True
             mock_repo_get.return_value = existing
 
             importer = self._make_importer([
-                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "hash_sha256": "hash1", "enricher_checksum": "enc1"}
+                {"path_uri": "/media/TV/The Show/S01E01.mkv", "size": 100, "enricher_checksum": "enc1"}
             ])
             mock_get_importer.return_value = importer
 

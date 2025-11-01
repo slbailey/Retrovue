@@ -35,6 +35,7 @@ This contract explicitly specifies how URIs are persisted during ingest:
   - `canonical_uri`: persisted from the resolved local path (native OS path; not `file://`).
   - Canonical identity: `canonical_key` and `canonical_key_hash` are derived from canonical path + collection.
   - `hash_sha256`: computed natively by ingest at create-time when the local file is reachable; otherwise left null.
+  - Initial lifecycle state and approval decided by confidence scoring (see 5) Confidence & Auto-State).
 
 4) Enrichment
 - Attached ingest-scope enrichers run in priority order.
@@ -51,20 +52,48 @@ This contract explicitly specifies how URIs are persisted during ingest:
 - If importer cannot resolve a local URI for an ingestible collection, ingest fails with a validation error referencing `PathMapping`.
 - Importer/network errors are returned with appropriate exit code and surfaced in `--json` mode.
 
+7) Confidence Scoring & Auto-State
+- The ingest service MUST compute a confidence score in [0.0, 1.0] using deterministic signals from normalized metadata and basic media probes.
+- Default thresholds:
+  - `auto_ready_threshold = 0.80`
+  - `review_threshold = 0.50`
+- New asset creation rules:
+  - If score ≥ `auto_ready_threshold`: create with `state=ready` and `approved_for_broadcast=true`.
+  - If `review_threshold` ≤ score < `auto_ready_threshold`: create with `state=new` and `approved_for_broadcast=false`.
+  - If score < `review_threshold`: create with `state=new`, `approved_for_broadcast=false`, and mark for operator attention.
+- Thresholds MAY be overridden per-run via CLI flags and/or configuration, but MUST be reported in output.
+- For existing assets matched as unchanged, no state/approval changes are made. For changed assets, see Asset ingest update rules in the Asset Confidence contract.
+
 ## Output
 
 ### Human
-- Prints scope and summary stats (discovered/ingested/skipped). No updates are performed during ingest.
+- Prints scope and summary stats (discovered/ingested/skipped/updated), with confidence outcome
+  summaries: auto-ready, needs-enrichment, needs-review.
 
 ### JSON (`--json`)
-- Returns an object with `status`, `scope`, `collection_id`, `collection_name`, `stats`, and optional `last_ingest_time`.
+- Returns an object with `status`, `scope`, `collection_id`, `collection_name`, `stats`, `thresholds`, and optional `last_ingest_time`.
+- `stats` MUST include deterministic keys:
+  - `assets_discovered`, `assets_ingested`, `assets_skipped`, `assets_updated`, `duplicates_prevented`
+  - `assets_auto_ready`, `assets_needs_enrichment`, `assets_needs_review`
+- `thresholds` MUST include: `{ "auto_ready": float, "review": float }`
 - When `--verbose-assets` is provided:
-  - `created_assets[]` entries SHOULD include `uuid`, `source_uri`, `canonical_uri`.
-  - `updated_assets[]` MUST be an empty list (updates are disallowed during ingest).
+  - `created_assets[]` SHOULD include `uuid`, `source_uri`, `canonical_uri`, `state`, `approved_for_broadcast`, and `confidence`.
+  - `updated_assets[]` SHOULD include `uuid` and reason for update when applicable.
 
 ## Safety
 - `--dry-run` must execute discovery and enrichment preparation without any DB writes.
 - Transactions are atomic; partial writes are rolled back on error.
+- `state=enriching` is reserved for periods when enrichment is actively running; ingest must not
+  set `enriching` at creation time.
+ - Full-file content hashing (e.g., SHA-256 over entire media files) MUST NOT be performed
+   during ingest. Change detection MUST rely on lightweight signals (e.g., size, mtime,
+   probe signatures) or importer-provided versioning. Heavy hashing MAY be done offline in
+   maintenance workflows, but it is out of scope for ingest.
+
+## Lifecycle Notes
+- This file updates prior guidance that "new assets MUST NOT be in ready state at creation".
+  With confidence scoring active, creation in `ready` with `approved_for_broadcast=true` is allowed
+  when score ≥ `auto_ready_threshold`.
 
 ## Notes
 - This contract supersedes prior ambiguity about `uri` by explicitly separating `source_uri` and `canonical_uri` and assigning importer vs ingest responsibilities.

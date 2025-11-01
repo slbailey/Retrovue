@@ -38,7 +38,7 @@ retrovue source discover <source_id> [--json] [--test-db] [--dry-run]
 - Newly discovered collections start with `enabled=False`
 - Existing collections are updated with current metadata
 - Duplicate collections are skipped with notification
-- Path mappings created with empty `local_path` values
+- No PathMapping records are created during discovery. The external path (e.g., plex path) is persisted in the collection's config for display purposes. PathMapping rows are only created via `retrovue collection update --path-mapping` and removed via `--path-mapping DELETE`.
 - Importer must be interface compliant (ImporterInterface). Implementations that subclass BaseImporter are considered compliant by construction. Non-compliant importers MUST cause the command to fail with exit code 1.
 - Collection discovery uses importer's discovery capability to enumerate collections
 
@@ -56,7 +56,7 @@ Successfully added 3 collections from 'My Plex Server':
   • TV Shows (ID: 2) - Disabled by default
   • Music (ID: 3) - Disabled by default
 
-Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync
+Use 'retrovue collection update <name> --sync-enable' to enable collections for sync
 ```
 
 **Dry-run Output:**
@@ -165,7 +165,7 @@ Discovered collections from 'My Plex Server' (dry-run):
 - **D-1:** Collection discovery MUST occur within a single transaction boundary.
 - **D-2:** Newly discovered collections MUST be persisted with `sync_enabled=False`.
 - **D-3:** Discovery MUST NOT flip existing collections from `sync_enabled=False` to `sync_enabled=True`.
-- **D-4:** PathMapping records MUST be created with empty `local_path` for new collections.
+- **D-4:** Discovery MUST NOT create PathMapping records. External paths are stored in collection configuration metadata to enable human display. PathMapping records are created only via `collection update --path-mapping` and removed via `--path-mapping DELETE`.
 - **D-5:** On transaction failure, ALL changes MUST be rolled back with no partial persistence.
 - **D-6:** Duplicate external ID checking MUST prevent duplicate collection creation.
 - **D-7:** Collection metadata MUST be updated for existing collections.

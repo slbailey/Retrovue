@@ -16,12 +16,11 @@ from datetime import datetime
 @dataclass
 class DiscoveredItem:
     """Standard format for discovered content items."""
-    path_uri: str                    # URI to the content
-    provider_key: str | None = None   # Provider-specific identifier
+    path_uri: str                      # URI to the content
+    provider_key: str | None = None    # Provider-specific identifier
     raw_labels: list[str] | None = None  # Extracted metadata labels
     last_modified: datetime | None = None  # Last modification time
-    size: int | None = None           # File size in bytes
-    hash_sha256: str | None = None    # Content hash
+    size: int | None = None            # File size in bytes
 
 class Importer(Protocol):
     """Protocol that all importers must implement."""
@@ -145,7 +144,7 @@ enricher = get_enricher("ffprobe")
 - `root_paths` (list[str]): List of directories to scan
 - `glob_patterns` (list[str], optional): File patterns to match
 - `include_hidden` (bool, optional): Include hidden files
-- `calculate_hash` (bool, optional): Calculate SHA-256 hashes
+  
 
 **Example**:
 
@@ -154,8 +153,7 @@ importer = FilesystemImporter(
     source_name="My Media Library",
     root_paths=["/media/movies", "/media/tv"],
     glob_patterns=["**/*.mp4", "**/*.mkv"],
-    include_hidden=False,
-    calculate_hash=True
+    include_hidden=False
 )
 ```
 

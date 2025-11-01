@@ -42,7 +42,7 @@ class FilesystemImporter(BaseImporter):
         root_paths: list[str] | None = None,
         glob_patterns: list[str] | None = None,
         include_hidden: bool = False,
-        calculate_hash: bool = True,
+        calculate_hash: bool = False,
     ):
         """
         Initialize the filesystem importer.
@@ -52,7 +52,7 @@ class FilesystemImporter(BaseImporter):
             root_paths: List of root directories to scan (default: current directory)
             glob_patterns: List of glob patterns to match (default: common video extensions)
             include_hidden: Whether to include hidden files and directories
-            calculate_hash: Whether to calculate SHA-256 hash of files
+            calculate_hash: Deprecated; full-file hashing is not performed during ingest
         """
         super().__init__(
             source_name=source_name,

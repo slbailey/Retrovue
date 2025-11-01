@@ -23,7 +23,7 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ....domain.entities import Collection, PathMapping, Source
+from ....domain.entities import Asset, Collection, PathMapping, Source
 from .confirmation import PendingDeleteSummary, SourceImpact
 
 
@@ -248,8 +248,21 @@ def delete_one_source_transactionally(db: Session, source_id: str) -> dict[str, 
             .count()
         )
 
+        # Pre-check for dependent assets to avoid FK violations and produce friendly message
+        assets_count = (
+            db.query(Asset)
+            .join(Collection, Asset.collection_uuid == Collection.uuid)
+            .filter(Collection.source_id == source_id)
+            .count()
+        )
+        if assets_count > 0:
+            raise RuntimeError(
+                f"Cannot delete source: {assets_count} assets still reference its collections. "
+                f"Wipe or migrate those collections first."
+            )
+
         # Phase 2: Execute operation
-        # Delete the source (cascade will handle collections and path mappings)
+        # Delete the source (collections and path mappings must be non-referenced)
         db.delete(source)
         db.flush()  # Ensure the deletion is visible within the transaction
 
@@ -283,7 +296,9 @@ def delete_one_source_transactionally(db: Session, source_id: str) -> dict[str, 
 
         logger = logging.getLogger(__name__)
         logger.error(
-            f"source_deletion_failed: source_id={source_id}, error={str(e)}, collections_count={collections_count if 'collections_count' in locals() else 0}, path_mappings_count={path_mappings_count if 'path_mappings_count' in locals() else 0}"
+            f"source_deletion_failed: source_id={source_id}, error={str(e)}, "
+            f"collections_count={collections_count if 'collections_count' in locals() else 0}, "
+            f"path_mappings_count={path_mappings_count if 'path_mappings_count' in locals() else 0}"
         )
         raise
 
@@ -374,12 +389,23 @@ def perform_source_deletions(
                     f"individual_source_deletion_failed: source_id={str(source.id)}, source_name={source.name}, error={str(e)}"
                 )
 
+                # Reset the session to a clean state before continuing
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
                 result = {
                     "deleted": False,
                     "source_id": str(source.id),
                     "source_name": source.name,
                     "source_type": source.type,
-                    "skipped_reason": f"deletion failed: {e}",
+                    "skipped_reason": (
+                        "dependencies present: assets still reference collections; "
+                        "wipe collections first"
+                        if "assets still reference" in str(e)
+                        else f"deletion failed: {e}"
+                    ),
                 }
                 results.append(result)
 

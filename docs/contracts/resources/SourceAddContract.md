@@ -99,7 +99,7 @@ Successfully created plex source: My Plex Server
 Discovering collections from Plex server...
   Discovered and persisted 3 collections (all disabled by default)
 
-Use 'retrovue collection update <name> --sync-enabled true' to enable collections for sync
+Use 'retrovue collection update <name> --sync-enable' to enable collections for sync
 ```
 
 ### JSON Output

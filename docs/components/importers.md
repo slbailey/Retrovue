@@ -20,12 +20,11 @@ from datetime import datetime
 @dataclass
 class DiscoveredItem:
     """Standard format for discovered content items."""
-    path_uri: str                    # URI to the content
-    provider_key: str | None = None   # Provider-specific identifier
+    path_uri: str                      # URI to the content
+    provider_key: str | None = None    # Provider-specific identifier
     raw_labels: list[str] | None = None  # Extracted metadata labels
     last_modified: datetime | None = None  # Last modification time
-    size: int | None = None           # File size in bytes
-    hash_sha256: str | None = None    # Content hash
+    size: int | None = None            # File size in bytes
 
 class Importer(Protocol):
     """Protocol that all importers must implement."""
@@ -52,7 +51,6 @@ class Importer(Protocol):
 **Features**:
 
 - **Glob pattern matching** for file discovery
-- **SHA-256 hash calculation** for content integrity
 - **Metadata extraction** from filenames
 - **Hidden file filtering** options
 
@@ -65,8 +63,7 @@ from retrovue.adapters.importers.filesystem_importer import FilesystemImporter
 importer = FilesystemImporter(
     root_paths=["/media/movies", "/media/tv"],
     glob_patterns=["**/*.mp4", "**/*.mkv"],
-    include_hidden=False,
-    calculate_hash=True
+    include_hidden=False
 )
 
 discovered_items = importer.discover()
@@ -77,7 +74,6 @@ discovered_items = importer.discover()
 - `root_paths`: List of directories to scan
 - `glob_patterns`: File patterns to match (default: common video extensions)
 - `include_hidden`: Whether to include hidden files
-- `calculate_hash`: Whether to calculate SHA-256 hashes
 
 **Example Output**:
 
@@ -87,8 +83,7 @@ DiscoveredItem(
     provider_key="/media/movies/Avengers.Endgame.2019.1080p.mkv",
     raw_labels=["Avengers", "Endgame", "2019", "1080p"],
     last_modified=datetime(2024, 1, 15, 14, 30, 0),
-    size=8589934592,  # 8GB
-    hash_sha256="a1b2c3d4e5f6..."
+    size=8589934592  # 8GB
 )
 ```
 
@@ -134,8 +129,7 @@ DiscoveredItem(
     provider_key="12345",  # Plex rating key
     raw_labels=["Action", "Adventure", "Marvel", "2019"],
     last_modified=datetime(2024, 1, 15, 14, 30, 0),
-    size=8589934592,
-    hash_sha256=None  # Not calculated by Plex importer
+    size=8589934592
 )
 ```
 
@@ -185,8 +179,7 @@ class CustomImporter:
                 provider_key=self._get_provider_key(item),
                 raw_labels=self._extract_labels(item),
                 last_modified=self._get_modified_time(item),
-                size=self._get_size(item),
-                hash_sha256=self._calculate_hash(item)
+                size=self._get_size(item)
             )
         except Exception as e:
             print(f"Warning: Failed to process item {item}: {e}")
@@ -271,8 +264,7 @@ class JellyfinImporter:
                 provider_key=item['Id'],
                 raw_labels=labels,
                 last_modified=self._parse_date(item.get('DateCreated')),
-                size=media_sources[0].get('Size', 0),
-                hash_sha256=None  # Jellyfin doesn't provide hashes
+                size=media_sources[0].get('Size', 0)
             )
 
         except Exception as e:
@@ -331,8 +323,7 @@ class DatabaseImporter:
                 provider_key=str(item_id),
                 raw_labels=labels,
                 last_modified=self._parse_timestamp(modified),
-                size=size,
-                hash_sha256=None
+                size=size
             )
 
         except Exception as e:

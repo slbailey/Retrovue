@@ -51,9 +51,7 @@ Asset is the atomic unit of broadcastable content in RetroVue. It bridges ingest
 - **video_codec** (String(50), nullable): Video codec information
 - **audio_codec** (String(50), nullable): Audio codec information
 - **container** (String(50), nullable): Container format
-- **hash_sha256** (String(64), nullable): SHA256 hash for content integrity and change detection.
-  Computed natively at ingest create-time when a local filesystem path is available. If the
-  file is not reachable at ingest time, this may remain null.
+
 
 ### Change tracking fields
 
@@ -123,8 +121,10 @@ Procedural lifecycle control keeps the ingest and enrichment pipeline predictabl
 - Check constraint: `chk_canon_hash_len` enforces canonical key hash length of 64 characters
 - Check constraint: `chk_canon_hash_hex` enforces canonical key hash is hexadecimal
 - Unique constraint: `ix_assets_collection_canonical_unique` on `(collection_uuid, canonical_key_hash)` prevents duplicate assets
-- Unique constraint: `ix_assets_collection_uri_unique` on `(collection_uuid, uri)` prevents duplicate URIs per collection
-- Newly ingested assets enter as `new` or `enriching`, never `ready`
+- Unique constraint: `ix_assets_collection_source_uri_unique` on `(collection_uuid, source_uri)` prevents duplicate source URIs per collection
+- Newly ingested assets may be created as `ready` with `approved_for_broadcast=true` when
+  confidence ≥ `auto_ready_threshold`; otherwise they enter as `new` or `enriching` per the
+  Asset Confidence contract
 - Every asset belongs to exactly one collection via `collection_uuid`
 
 ### Canonical key system
@@ -156,9 +156,10 @@ Assets are identified by canonical identity within a collection:
 
 **Content Change Detection**:
 
-- `hash_sha256` tracks the content signature and is computed at create-time by ingest.
-- Future `asset update` flows will compare a freshly computed hash with the stored value to
-  detect content changes and trigger re-processing where appropriate.
+- Full-file hashing MUST NOT be performed during ingest.
+- Change detection uses lightweight fingerprints such as `(size_bytes, mtime_ns)` and
+  optional media probe signatures (e.g., codec/container/duration tuples) or importer-provided
+  version tokens/etags. Implementations SHOULD avoid any O(file_size) operations on ingest paths.
 
 **Enricher Change Detection**:
 

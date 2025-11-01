@@ -27,6 +27,14 @@ This defines what RetroVue is responsible for and what it is not.
 - Enrichers operate on objects and return updated objects. They do not persist or assume ownership of durability.
 - Producer plugins may not launch ffmpeg themselves.
 
+## External systems boundary (Importer-only rule)
+
+- Core code MUST NOT reference external systems (e.g., Plex, Jellyfin) or their schemas/paths directly.
+- All interactions with external data sources MUST go through Importers.
+- Core persistence models store RetroVue-native identifiers and normalized fields only.
+- Path mappings are operator-provided bridges; core does not synthesize or mutate external paths.
+- Any required external identifiers live in `ProviderRef` tables managed by importers.
+
 See also:
 
 - [Plugin authoring](../developer/PluginAuthoring.md)

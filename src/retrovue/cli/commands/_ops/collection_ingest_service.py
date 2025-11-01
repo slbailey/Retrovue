@@ -60,6 +60,9 @@ class IngestStats:
     assets_changed_enricher: int = 0
     assets_updated: int = 0
     duplicates_prevented: int = 0
+    assets_auto_ready: int = 0
+    assets_needs_enrichment: int = 0
+    assets_needs_review: int = 0
     errors: list[str] = None
 
     def __post_init__(self):
@@ -83,6 +86,7 @@ class CollectionIngestResult:
     # Verbose-only fields (included in JSON only when populated by verbose flag)
     created_assets: list[dict[str, str]] | None = None
     updated_assets: list[dict[str, str]] | None = None
+    thresholds: dict[str, float] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary matching contract JSON output format."""
@@ -99,9 +103,15 @@ class CollectionIngestResult:
                 "assets_changed_enricher": self.stats.assets_changed_enricher,
                 "assets_updated": self.stats.assets_updated,
                 "duplicates_prevented": self.stats.duplicates_prevented,
+                "assets_auto_ready": self.stats.assets_auto_ready,
+                "assets_needs_enrichment": self.stats.assets_needs_enrichment,
+                "assets_needs_review": self.stats.assets_needs_review,
                 "errors": self.stats.errors,
             },
         }
+
+        if self.thresholds is not None:
+            result["thresholds"] = self.thresholds
 
         if self.last_ingest_time:
             result["last_ingest_time"] = self.last_ingest_time.isoformat() + "Z"
@@ -467,6 +477,40 @@ class CollectionIngestService:
                     return label[len(prefix) :]
             return None
 
+        # Default thresholds (may be overridden by CLI in future)
+        auto_ready_threshold: float = 0.80
+        review_threshold: float = 0.50
+
+        def _compute_confidence(it: Any) -> float:
+            score = 0.0
+            try:
+                size_ok = _get_size(it) > 0
+                if size_ok:
+                    score += 0.2
+                labels = getattr(it, "raw_labels", None) if not isinstance(it, dict) else it.get("raw_labels")
+                # Lightweight features
+                dur = _extract_label_value(labels, "duration_ms")
+                if dur is not None:
+                    try:
+                        if int(dur) > 0:
+                            score += 0.3
+                    except Exception:
+                        pass
+                if _extract_label_value(labels, "video_codec") is not None:
+                    score += 0.2
+                if _extract_label_value(labels, "audio_codec") is not None:
+                    score += 0.1
+                if _extract_label_value(labels, "container") is not None:
+                    score += 0.1
+            except Exception:
+                pass
+            # Clamp 0..1
+            if score < 0.0:
+                return 0.0
+            if score > 1.0:
+                return 1.0
+            return score
+
         for item in discovered_items or []:
             stats.assets_discovered += 1
             # Capture source_uri before any local resolution
@@ -532,6 +576,24 @@ class CollectionIngestService:
             canonical_uri_val = _get_uri(item) or canonical_key
             size_val = _get_size(item)
 
+            confidence_val = _compute_confidence(item)
+
+            # Decide initial lifecycle by confidence
+            if confidence_val >= auto_ready_threshold:
+                initial_state = "ready"
+                initial_approved = True
+                stats.assets_auto_ready += 1
+            elif confidence_val >= review_threshold:
+                # Not auto-ready: remain NEW until enrichment actually runs
+                initial_state = "new"
+                initial_approved = False
+                stats.assets_needs_enrichment += 1
+            else:
+                # Low confidence: also start NEW (no implicit enriching state)
+                initial_state = "new"
+                initial_approved = False
+                stats.assets_needs_review += 1
+
             asset = Asset(
                 uuid=uuid.uuid4(),
                 collection_uuid=collection.uuid,
@@ -541,8 +603,8 @@ class CollectionIngestService:
                 uri=source_uri_val or canonical_uri_val,
                 canonical_uri=canonical_uri_val,
                 size=size_val,
-                state="new",
-                approved_for_broadcast=False,
+                state=initial_state,
+                approved_for_broadcast=initial_approved,
                 operator_verified=False,
                 discovered_at=datetime.now(UTC),
             )
@@ -572,7 +634,15 @@ class CollectionIngestService:
                 
             except Exception:
                 pass
-            repo.create(asset)
+            # Persist when not a dry run
+            if not dry_run:
+                repo.create(asset)
+                # Force a flush so upstream callers can verify within the same transaction
+                try:
+                    self.db.flush()
+                except Exception:
+                    # Allow upstream to surface; we keep stats consistent with actual persistence
+                    raise
             stats.assets_ingested += 1
             if created_assets is not None:
                 created_assets.append(
@@ -580,6 +650,9 @@ class CollectionIngestService:
                         "uuid": str(asset.uuid),
                         "source_uri": source_uri_val or "",
                         "canonical_uri": canonical_uri_val,
+                        "state": asset.state,
+                        "approved_for_broadcast": asset.approved_for_broadcast,
+                        "confidence": confidence_val,
                     }
                 )
 
@@ -593,6 +666,7 @@ class CollectionIngestService:
             episode=episode,
             created_assets=created_assets,
             updated_assets=updated_assets,
+            thresholds={"auto_ready": auto_ready_threshold, "review": review_threshold},
         )
 
         return result

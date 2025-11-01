@@ -127,7 +127,6 @@ Represents a single media file we know about.
 - `size` - File size in bytes
 - `duration_ms` - Runtime (populated by enrichment)
 - `video_codec`, `audio_codec`, `container` - Technical details
-- `hash_sha256` - Content fingerprint
 - `canonical` - Whether this asset is approved for scheduling and playout.
   - `canonical=True` means "this asset is broadcast-ready and safe for downstream systems to use without human intervention."
   - `canonical=False` means "this asset exists but is not yet approved; it may still be in review or be unsuitable for air."

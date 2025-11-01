@@ -13,7 +13,7 @@ NOTE: This command operates at the source level and iterates across all enabled 
 **CLI Syntax:**
 
 ```
-retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--json]
+retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--json] [--verify]
 ```
 
 - `<source_id>`: The UUID or database identifier for the source to ingest
@@ -21,6 +21,8 @@ retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--js
 - `--dry-run`: Show intended ingest actions without modifying the database
 - `--test-db`: Direct all actions at the isolated test database environment
 - `--json`: Output information in a structured JSON format for automation
+- `--verify`: Diagnostic-only. After ingest, verify created assets exist in the same session and
+  include verification counts in JSON output (see Verification section). No effect on exit codes.
 
 **Scope Restrictions:**
 
@@ -89,6 +91,27 @@ retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--js
   - `"errors"`: [array of error objects/messages]
 - Must include all the information from the human-readable output in a machine-consumable way.
 
+#### Verification (only when `--verify` is provided)
+
+When `--verify` is passed, additional verification fields are included to aid troubleshooting:
+
+- Top-level:
+  - `"verification"`: `{ "requested": <int>, "found": <int>, "ok": <bool> }`
+    - `requested`: number of created Asset UUIDs reported by per-collection results
+    - `found`: count of those UUIDs present in the database using the same session
+    - `ok`: `true` when `found == requested`
+
+- Per-collection (each entry in `collection_results[]`):
+  - `"verification"`: `{ "collection_count": <int>, "created_found": <int> }`
+    - `collection_count`: total `assets` rows for that collection UUID at verification time
+    - `created_found`: how many of that entry's `created_assets[].uuid` exist in the database
+
+Notes:
+- Verification fields appear only with `--verify` and only in JSON output. They do not alter
+  normal output shape or exit codes.
+- Verification queries run in the same transaction/session as ingest to avoid read-your-writes
+  visibility issues.
+
 ---
 
 ## Exit Codes
@@ -105,7 +128,10 @@ retrovue source ingest <source_id>|"<source name>" [--dry-run] [--test-db] [--js
 
 - **SINGLE TRANSACTION BOUNDARY**: The entire source ingest operation MUST be wrapped in a single Unit of Work, ensuring atomicity across all collections. If any collection ingest fails fatally, the entire source ingest operation MUST be rolled back.
 - For each eligible collection (`sync_enabled=true` AND `ingestible=true`), the ingest process follows the exact same rules as defined in the [Collection Ingest](CollectionIngestContract.md).
-- New Assets MUST be created with state = `new` and MUST NOT be in `ready` state at creation time. If enrichers are attached to the collection, assets MAY transition through `enriching` state during active enrichment processing, but MUST NOT remain in `enriching` state after enrichment completes.
+- New Assets follow collection-level confidence scoring rules at creation time:
+  - If score ≥ `auto_ready_threshold`: create with `state=ready` and `approved_for_broadcast=true`.
+  - If `review_threshold` ≤ score < `auto_ready_threshold`: create with `state=enriching` and `approved_for_broadcast=false`.
+  - If score < `review_threshold`: create with `state=enriching`, `approved_for_broadcast=false`, and flag for operator attention.
 - Duplicate detection logic MUST prevent the creation of duplicate Asset records within each collection, following the Collection Ingest contract rules.
 - Any enrichment hooks MAY run during ingest per collection, following the same per-asset failure handling.
 - Assets created by this operation MUST NOT be marked as approved for broadcast automatically.

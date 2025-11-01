@@ -63,6 +63,8 @@ Collections:
   Type: plex
   Sync Enabled: true
   Ingestible: true
+  Path Mappings:
+    • /media/tv_shows -> (unmapped)
   Assets: 2,931
   Last Ingest: 2024-01-15 10:30:00
   Created: 2024-01-15 10:30:00
@@ -146,7 +148,10 @@ Total: 0 collections
       "assets_count": 2931,
       "last_ingest_time": "2024-01-15T10:30:00Z",
       "created_at": "2024-01-15T10:30:00Z",
-      "updated_at": "2024-01-20T14:22:00Z"
+      "updated_at": "2024-01-20T14:22:00Z",
+      "mapping_pairs": [
+        { "plex_path": "/media/tv_shows", "local_path": null }
+      ]
     },
     {
       "id": "8c3d16f8-e8e3-525b-b698-4g6ef0c64e55",

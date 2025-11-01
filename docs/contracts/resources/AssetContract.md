@@ -20,6 +20,8 @@ This document provides an overview of all Asset domain testing contracts. Indivi
 - **[Asset Show](AssetShowContract.md)**: Displaying detailed asset information
 - **[Asset List](AssetListContract.md)**: Listing assets with filtering options
 - **[Asset Update](AssetUpdateContract.md)**: Updating asset metadata and configuration
+- **[Asset Tagging](AssetTaggingContract.md)**: Replace-or-set tags on assets with normalized semantics
+- **[Asset Confidence & Auto-State](AssetConfidenceContract.md)**: Confidence scoring during ingest to auto-approve or route for review
 
 ---
 
@@ -169,6 +171,9 @@ The following rules apply to all Asset operations:
 - **Assets with `approved_for_broadcast=true` MUST be in `ready` state**
 - **Soft-deleted assets (`is_deleted=true`) are excluded from normal operations**
 
+Planned extension (see Asset Confidence & Auto-State): confidence scoring during ingest may
+determine initial `state` and `approved_for_broadcast`, with importer-stable thresholds.
+
 ---
 
 ## See Also
@@ -178,4 +183,6 @@ The following rules apply to all Asset operations:
 - [Source Contracts](SourceContract.md) - Source-level operations that manage collections
 - [CLI Contract](README.md) - General CLI command standards
 - [Unit of Work](../_ops/UnitOfWorkContract.md) - Transaction management requirements
+ - [Asset Tagging](AssetTaggingContract.md)
+ - [Asset Confidence & Auto-State](AssetConfidenceContract.md)
 

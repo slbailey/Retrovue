@@ -74,10 +74,10 @@ Bash
 retrovue collection list --source "Local Media"
 
 # Provide a local path mapping (unlocks ingestible=true)
-retrovue collection update "Movies" --local-path "/media/movies"
+retrovue collection update "Movies" --path-mapping "/media/movies"
 
-# Enable sync (requires ingestible=true or --local-path in same command)
-retrovue collection update "Movies" --sync-enabled true
+# Enable sync (requires ingestible=true or --path-mapping in same command)
+retrovue collection update "Movies" --sync-enable
 ```
 
 PowerShell
@@ -86,10 +86,10 @@ PowerShell
 retrovue collection list --source "Local Media"
 
 # Provide a local path mapping (unlocks ingestible=true)
-retrovue collection update "Movies" --local-path "C:\\Media\\Movies"
+retrovue collection update "Movies" --path-mapping "C:\\Media\\Movies"
 
-# Enable sync (requires ingestible=true or --local-path in same command)
-retrovue collection update "Movies" --sync-enabled true
+# Enable sync (requires ingestible=true or --path-mapping in same command)
+retrovue collection update "Movies" --sync-enable
 ```
 
 Verification: `retrovue collection list --source "Local Media"` should show Sync=Enabled and Ingestable=Yes for the target collection.
@@ -205,7 +205,7 @@ Guidance
 
 ### Troubleshooting
 
-- “Not ingestible” when enabling sync: add `--local-path` with a readable directory.
+- “Not ingestible” when enabling sync: add `--path-mapping` with a readable directory.
 - “Source not found”: use the exact name, external ID, or UUID.
 - Ingest dry-run shows actions but does not write; drop `--dry-run` to execute.
 - Use `--json` everywhere for scripts/automation.

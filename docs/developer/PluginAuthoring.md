@@ -23,7 +23,7 @@ The plugin must expose:
     - display label
     - source_path or equivalent remote path info
 - `discover()` method that returns DiscoveredItem objects
-  - Returns list of DiscoveredItem objects with path_uri, provider_key, size, hash_sha256
+  - Returns list of DiscoveredItem objects with path_uri, provider_key, size, last_modified
   - The ingest orchestrator handles duplicate detection automatically based on canonical key
 
 The importer must NOT decide which collections sync. RetroVue handles that via `sync_enabled`.

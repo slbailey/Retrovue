@@ -20,7 +20,7 @@ This document references the CLI contract. The CLI contract is the source of tru
    - `retrovue source discover <source_id>`
 4. View collections and enable ingest on specific ones:
    - `retrovue collection list --source <source_id>`
-   - `retrovue collection update <collection_id> --sync-enabled true --local-path /mnt/media/...`
+   - `retrovue collection update <collection_id> --sync-enable --local-path /mnt/media/...`
 5. Ingest:
    - `retrovue collection <collection_id> ingest`  
      or  

@@ -86,7 +86,6 @@ The human-readable output MUST include:
 - **Approved for Broadcast**: Broadcast approval status
 - **Collection**: Collection name and UUID
 - **Technical Metadata**: Video codec, audio codec, container
-- **Content Hash**: SHA256 hash (if available)
 - **Discovery Timestamp**: When asset was first discovered
 - **Delete Status**: Soft delete status (if applicable)
 - **Relationships**: Episodes, markers, review queue items (if applicable)
@@ -104,7 +103,6 @@ When `--json` is passed, all output MUST be valid JSON with the following struct
   "video_codec": "h264",
   "audio_codec": "aac",
   "container": "mp4",
-  "hash_sha256": "abc123...",
   "state": "ready",
   "canonical": true,
   "approved_for_broadcast": true,

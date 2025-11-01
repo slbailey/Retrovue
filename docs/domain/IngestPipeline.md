@@ -383,8 +383,8 @@ Fatal stop conditions are:
 - `retrovue source list-types` shows all importer types currently available to this build and loaded into the registry.
 - `retrovue source discover <source_id>` discovers and adds Collections from a Source.
 - `retrovue collection list --source <source_id>` shows Collections, including sync_enabled, ingestible status, and path mappings.
-- `retrovue collection update <collection_id> --sync-enabled=false` disables ingest for that Collection.
-- `retrovue collection update <collection_id> --local-path "R:\Media\TV"` configures path mapping.
+- `retrovue collection update <collection_id> --sync-disable` disables ingest for that Collection.
+- `retrovue collection update <collection_id> --path-mapping "R:\\Media\\TV"` configures path mapping.
 - `retrovue source <source_id> ingest` ingests all eligible Collections under that Source.
 - `retrovue source <source_id> attach-enricher <enricher_id> --priority <n>` attaches an enricher to all collections in a source.
 - `retrovue collection <collection_id> ingest` ingests just that Collection.
