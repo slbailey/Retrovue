@@ -215,6 +215,7 @@ def show_collection(
                 "source_id": str(collection.source_id),
                 "sync_enabled": collection.sync_enabled,
                 "ingestible": collection.ingestible,
+                "content_type": (getattr(collection, "config", {}) or {}).get("type"),
                 "config": getattr(collection, "config", {}) or {},
                 "path_mappings": mapping_pairs,
                 "enrichers": enricher_details,
@@ -235,6 +236,12 @@ def show_collection(
             console.print(f"Source ID: {collection.source_id}")
             console.print(f"Sync Enabled: {'Yes' if collection.sync_enabled else 'No'}")
             console.print(f"Ingestible: {'Yes' if collection.ingestible else 'No'}")
+            try:
+                ctype = (getattr(collection, "config", {}) or {}).get("type")
+                if ctype:
+                    console.print(f"Content Type: {ctype}")
+            except Exception:
+                pass
 
             # Path mappings table
             table_pm = Table(title="Path Mappings")

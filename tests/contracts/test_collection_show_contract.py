@@ -29,6 +29,7 @@ class TestCollectionShowContract:
             collection.source_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
             collection.config = {
                 "plex_section_ref": "library://sections/1",
+                "type": "show",
                 "enrichers": [
                     {"enricher_id": "enricher-ffprobe-1", "priority": 1},
                     {"enricher_id": "enricher-qc-2", "priority": 2},
@@ -76,6 +77,8 @@ class TestCollectionShowContract:
         assert payload["sync_enabled"] is True
         assert payload["ingestible"] is True
         assert isinstance(payload.get("config"), dict)
+        # Content type is surfaced (from config.type)
+        assert payload.get("content_type") == "show"
         # Path mappings key present (may be empty depending on DB state)
         assert isinstance(payload.get("path_mappings"), list)
         # Enrichers present with resolved details
@@ -97,7 +100,7 @@ class TestCollectionShowContract:
             collection.sync_enabled = False
             collection.ingestible = False
             collection.source_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
-            collection.config = {"enrichers": [{"enricher_id": "enricher-ffprobe-1", "priority": 5}]}
+            collection.config = {"type": "movie", "enrichers": [{"enricher_id": "enricher-ffprobe-1", "priority": 5}]}
             resolve.return_value = collection
 
             fake_db.query.return_value.filter.return_value.all.return_value = []
@@ -114,6 +117,8 @@ class TestCollectionShowContract:
         assert result.exit_code == 0
         assert "Movies" in result.stdout
         assert "enricher-ffprobe-1" in result.stdout or "FFprobe" in result.stdout
+        # Content type appears in human-readable output
+        assert "movie" in result.stdout.lower()
 
     def test_show_collection_supports_test_db(self):
         with patch("retrovue.cli.commands.collection._get_db_context") as get_ctx, patch(
