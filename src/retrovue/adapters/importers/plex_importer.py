@@ -335,7 +335,7 @@ class PlexClient:
         """
         try:
             url = f"{self.base_url}/library/metadata/{rating_key}"
-            params = {
+            params: dict[str, str | int] = {
                 "X-Plex-Token": self.token,
                 "includeGuids": 1,
                 "includeMarkers": 1,
@@ -1208,29 +1208,32 @@ class PlexImporter(BaseImporter):
 
             # Build editorial from detailed metadata, falling back to listing item
             editorial: dict[str, Any] = {}
-            editorial["title"] = detailed.get("title") or title
-            if detailed.get("originalTitle"):
-                editorial["original_title"] = detailed.get("originalTitle")
-            if detailed.get("year") or year:
+            meta: dict[str, Any] = detailed or {}
+            editorial["title"] = meta.get("title") or title
+            if meta.get("originalTitle"):
+                editorial["original_title"] = meta.get("originalTitle")
+            if meta.get("year") or year:
                 try:
-                    editorial["production_year"] = int(detailed.get("year") or year)
+                    _yr = meta.get("year") or year
+                    if _yr is not None:
+                        editorial["production_year"] = int(str(_yr))
                 except Exception:
                     pass
-            if detailed.get("originallyAvailableAt"):
-                editorial["release_date"] = detailed.get("originallyAvailableAt")
+            if meta.get("originallyAvailableAt"):
+                editorial["release_date"] = meta.get("originallyAvailableAt")
             # Description
-            editorial["description"] = detailed.get("summary") or item.get("summary")
+            editorial["description"] = meta.get("summary") or item.get("summary")
             # Content rating
-            cr = detailed.get("content_rating") or detailed.get("contentRating") or item.get("contentRating")
+            cr = meta.get("content_rating") or meta.get("contentRating") or item.get("contentRating")
             if cr:
                 editorial["content_rating"] = {"system": "PLEX", "code": cr}
             # Studio
-            if detailed.get("studio"):
-                editorial["studio"] = detailed.get("studio")
+            if meta.get("studio"):
+                editorial["studio"] = meta.get("studio")
             # Countries
             try:
-                countries = detailed.get("country_tags") or [
-                    c.get("tag") for c in detailed.get("Country", []) if c.get("tag")
+                countries = meta.get("country_tags") or [
+                    c.get("tag") for c in meta.get("Country", []) if c.get("tag")
                 ]
                 if countries:
                     editorial["countries"] = countries
@@ -1238,17 +1241,17 @@ class PlexImporter(BaseImporter):
                 pass
             # Genres
             try:
-                genres = detailed.get("genres") or []
+                genres = meta.get("genres") or []
                 if not genres:
-                    genres = [g.get("tag") for g in detailed.get("Genre", []) if g.get("tag")]
+                    genres = [g.get("tag") for g in meta.get("Genre", []) if g.get("tag")]
                 if genres:
                     editorial["genres"] = genres
             except Exception:
                 pass
             # Collections
             try:
-                collections = detailed.get("collection_tags") or [
-                    c.get("tag") for c in detailed.get("Collection", []) if c.get("tag")
+                collections = meta.get("collection_tags") or [
+                    c.get("tag") for c in meta.get("Collection", []) if c.get("tag")
                 ]
                 if collections:
                     editorial["collections"] = collections
@@ -1256,24 +1259,24 @@ class PlexImporter(BaseImporter):
                 pass
             # Directors, Writers, Cast
             try:
-                directors = detailed.get("director_tags") or [
-                    d.get("tag") for d in detailed.get("Director", []) if d.get("tag")
+                directors = meta.get("director_tags") or [
+                    d.get("tag") for d in meta.get("Director", []) if d.get("tag")
                 ]
                 if directors:
                     editorial["directors"] = directors
             except Exception:
                 pass
             try:
-                writers = detailed.get("writer_tags") or [
-                    w.get("tag") for w in detailed.get("Writer", []) if w.get("tag")
+                writers = meta.get("writer_tags") or [
+                    w.get("tag") for w in meta.get("Writer", []) if w.get("tag")
                 ]
                 if writers:
                     editorial["writers"] = writers
             except Exception:
                 pass
             try:
-                cast = detailed.get("cast_tags") or [
-                    r.get("tag") for r in detailed.get("Role", []) if r.get("tag")
+                cast = meta.get("cast_tags") or [
+                    r.get("tag") for r in meta.get("Role", []) if r.get("tag")
                 ]
                 if cast:
                     editorial["cast"] = cast
@@ -1281,9 +1284,9 @@ class PlexImporter(BaseImporter):
                 pass
             # Runtime (ms and seconds)
             try:
-                dur_ms = detailed.get("duration")
+                dur_ms = meta.get("duration")
                 if dur_ms is None:
-                    media_list = detailed.get("Media") or []
+                    media_list = meta.get("Media") or []
                     if media_list and isinstance(media_list[0], dict):
                         dur_ms = media_list[0].get("duration")
                 if dur_ms is not None:
@@ -1292,20 +1295,22 @@ class PlexImporter(BaseImporter):
             except Exception:
                 pass
             # Episode/Show specifics
-            if series_title or detailed.get("grandparentTitle") or detailed.get("parentTitle"):
+            if series_title or meta.get("grandparentTitle") or meta.get("parentTitle"):
                 editorial["series_title"] = (
-                    detailed.get("grandparentTitle")
-                    or detailed.get("parentTitle")
+                    meta.get("grandparentTitle")
+                    or meta.get("parentTitle")
                     or series_title
                 )
             try:
-                if detailed.get("parentIndex"):
-                    editorial["season_number"] = int(detailed.get("parentIndex"))
+                _pidx = meta.get("parentIndex")
+                if _pidx is not None:
+                    editorial["season_number"] = int(str(_pidx))
             except Exception:
                 pass
             try:
-                if detailed.get("index"):
-                    editorial["episode_number"] = int(detailed.get("index"))
+                _eidx = meta.get("index")
+                if _eidx is not None:
+                    editorial["episode_number"] = int(str(_eidx))
             except Exception:
                 pass
             # Library name for operator visibility (can be ignored downstream if redundant)
