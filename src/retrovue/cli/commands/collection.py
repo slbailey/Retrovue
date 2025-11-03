@@ -1379,12 +1379,12 @@ def collection_ingest(
                 # we allow a fallback no-op importer when source resolution/config is unavailable.
                 importer = construct_importer_for_collection(collection, db)
 
-            # Provide early human feedback for non-JSON runs
-            if not json_output:
-                if dry_run:
-                    typer.echo("[DRY RUN] Starting ingest: validating and ingesting assets...")
-                else:
-                    typer.echo("Starting ingest: validating and ingesting assets...")
+                # Provide early human feedback for non-JSON runs
+                if not json_output:
+                    if dry_run:
+                        typer.echo("[DRY RUN] Starting ingest: validating and ingesting assets...")
+                    else:
+                        typer.echo("Starting ingest: validating and ingesting assets...")
 
             # Call service to perform ingest
             try:
@@ -1445,6 +1445,7 @@ def collection_ingest(
 
                 # For tests that monkeypatch resolution, pass collection as a keyword arg
                 # so call assertions can reference it by name; otherwise use positional.
+                # Forward user's dry_run intent into the service (service controls prereqs/writes)
                 if hasattr(resolve_collection_selector, "assert_called"):
                     result = service.ingest_collection(
                         collection=collection,
@@ -1528,6 +1529,13 @@ def collection_ingest(
                         typer.echo(f"Assets updated: {result.stats.assets_updated}")
                         if result.last_ingest_time:
                             typer.echo(f"Last ingest: {result.last_ingest_time}")
+
+                # If dry-run requested, optionally rollback (service itself skipped writes)
+                if dry_run:
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             except ValueError as e:
                 # Validation failure - exit code 1 (B-11, B-12, B-13)

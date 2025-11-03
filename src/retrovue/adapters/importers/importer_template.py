@@ -78,6 +78,14 @@ class YourImporterName(BaseImporter):
             # for item_data in self._scan_source():
             #     item = self._create_discovered_item(item_data)
             #     if item:
+            #         # Populate editorial with basic fields
+            #         item.editorial = {
+            #             "title": item_data.get("title"),
+            #             "year": item_data.get("year"),
+            #             "genres": item_data.get("genres"),
+            #         }
+            #         # Optional: attach a sidecar dict matching docs/metadata/sidecar-spec.md
+            #         # item.sidecar = {...}
             #         discovered_items.append(item)
 
             # Example: Return discovered items
@@ -519,14 +527,17 @@ class YourImporterName(BaseImporter):
             # provider_key = item_data["id"]
             # labels = self._extract_labels_from_metadata(item_data)
             #
-            # return DiscoveredItem(
+            # di = DiscoveredItem(
             #     path_uri=path_uri,
             #     provider_key=provider_key,
             #     raw_labels=labels,
             #     last_modified=datetime.fromisoformat(item_data["updated_at"]),
             #     size=item_data.get("size"),
-            #     hash_sha256=item_data.get("hash")
+            #     hash_sha256=item_data.get("hash"),
             # )
+            # di.editorial = {"title": item_data.get("title"), "year": item_data.get("year")}
+            # di.sidecar = item_data.get("sidecar")  # Optional
+            # return di
 
             return None  # Replace with actual implementation
 

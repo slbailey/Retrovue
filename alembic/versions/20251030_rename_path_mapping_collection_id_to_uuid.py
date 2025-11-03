@@ -5,16 +5,17 @@ Revises: a5c7b3f0c1d2
 Create Date: 2025-10-30 12:00:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b1c2d3e4f5a6"
-down_revision: Union[str, Sequence[str], None] = "a5c7b3f0c1d2"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "a5c7b3f0c1d2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -75,6 +76,7 @@ def downgrade() -> None:
 
     with op.batch_alter_table("path_mappings") as batch_op:
         batch_op.alter_column("collection_uuid", new_column_name="collection_id")
+
 
 
 

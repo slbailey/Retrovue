@@ -7,11 +7,13 @@ This module tests all the business operations in the library service.
 import uuid
 
 import pytest
+
 pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 
-from retrovue.content_manager.library_service import LibraryService
-from retrovue.domain.entities import Episode
-from retrovue.shared.types import ReviewStatus
+from retrovue.content_manager.library_service import LibraryService  # noqa: E402
+
+from retrovue.domain.entities import Episode  # noqa: E402
+from retrovue.shared.types import ReviewStatus  # noqa: E402
 
 
 class TestLibraryService:

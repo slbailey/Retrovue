@@ -12,9 +12,8 @@ These tests verify CLI behavior, validation, output formats, and error handling.
 """
 
 import json
-import pytest
-import uuid
-from unittest.mock import patch, MagicMock, ANY
+from unittest.mock import ANY, MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app
@@ -419,7 +418,7 @@ class TestSourceAddContract:
             mock_db.refresh.return_value = None
             
             # Mock SourceService
-            mock_source_service = MagicMock()
+            _mock_source_service = MagicMock()
             
             # Mock importer
             mock_importer = MagicMock()

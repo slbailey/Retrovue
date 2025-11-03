@@ -9,6 +9,7 @@ import json
 import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.source import app

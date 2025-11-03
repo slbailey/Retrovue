@@ -20,9 +20,9 @@ Rules enforced here include:
 from unittest.mock import patch
 from uuid import uuid4
 
+from retrovue.cli.commands.assets import app
 from typer.testing import CliRunner
 
-from retrovue.cli.commands.assets import app
 from retrovue.domain.entities import Asset
 
 

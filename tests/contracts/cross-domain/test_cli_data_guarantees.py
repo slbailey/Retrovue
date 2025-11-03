@@ -7,8 +7,9 @@ transactional integrity, and proper error handling across domains.
 """
 
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

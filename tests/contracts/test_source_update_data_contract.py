@@ -5,9 +5,9 @@ Tests the data contract rules (D-#) defined in SourceUpdateContract.md.
 These tests verify database operations, transaction safety, and data integrity.
 """
 
-import json
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.source import app

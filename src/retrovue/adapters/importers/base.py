@@ -44,6 +44,15 @@ class DiscoveredItem:
     hash_sha256: str | None = None
     """SHA-256 hash of the content"""
 
+    # Optional structured editorial metadata extracted by the importer
+    editorial: dict[str, Any] | None = None
+    # Optional probed technical metadata (e.g., ffprobe results)
+    probed: dict[str, Any] | None = None
+    # Optional sidecar payload (already following RetroVue sidecar spec)
+    sidecar: dict[str, Any] | None = None
+    # Optional raw source payload (e.g., full Plex metadata document)
+    source_payload: dict[str, Any] | None = None
+
     def __post_init__(self) -> None:
         """Validate the discovered item after initialization."""
         if not self.path_uri:
@@ -51,6 +60,21 @@ class DiscoveredItem:
 
         if self.size is not None and self.size < 0:
             raise ValueError("size must be non-negative")
+
+    def to_ingest_payload(self, importer_name: str | None, asset_type: str | None) -> dict[str, Any]:
+        """Build a handler-compatible ingest payload dict.
+
+        Returns keys: importer_name, asset_type, source_uri, editorial, probed, sidecars.
+        """
+        return {
+            "importer_name": importer_name,
+            "asset_type": asset_type,
+            "source_uri": self.path_uri,
+            "editorial": self.editorial,
+            "probed": self.probed,
+            "sidecars": [self.sidecar] if self.sidecar else [],
+            "source_payload": self.source_payload,
+        }
 
 
 class ImporterInterface(Protocol):

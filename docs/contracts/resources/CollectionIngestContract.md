@@ -64,6 +64,36 @@ This contract explicitly specifies how URIs are persisted during ingest:
 - Thresholds MAY be overridden per-run via CLI flags and/or configuration, but MUST be reported in output.
 - For existing assets matched as unchanged, no state/approval changes are made. For changed assets, see Asset ingest update rules in the Asset Confidence contract.
 
+### Metadata handling (NEW)
+
+B-20. For each discovered item, the ingest orchestration MUST construct an ingest payload containing:
+
+- importer_name
+- asset_type (best-effort, may fall back to ingest scope)
+- source_uri (as discovered, before local resolution)
+- editorial (if present on the item)
+- probed (if present on the item)
+- sidecar(s) (if present on the item or produced by an enricher)
+
+B-21. The ingest orchestration MUST pass the payload to the unified metadata handler
+`retrovue.usecases.metadata_handler.handle_ingest(...)` **before** creating the `Asset` record.
+
+B-22. The handler’s output is authoritative for per-domain metadata. The orchestration MUST persist any
+returned domains to their dedicated tables:
+
+- `asset_editorial(payload jsonb)`
+- `asset_probed(payload jsonb)`
+- `asset_station_ops(payload jsonb)`
+- `asset_relationships(payload jsonb)`
+- `asset_sidecar(payload jsonb)`
+
+B-23. Each metadata table MUST have an `asset_uuid` FK → `asset.uuid` with `ON DELETE CASCADE`. Deleting
+the asset MUST delete the attached metadata rows.
+
+B-24. Dry-run (`--dry-run`) MUST execute the full metadata handler and produce fully resolved metadata
+in the CLI output, but MUST NOT commit the `asset` row nor any of the metadata tables (entire transaction
+is rolled back).
+
 ## Output
 
 ### Human

@@ -6,8 +6,8 @@ These tests verify database operations, transaction safety, data integrity, and 
 """
 
 import json
-import pytest
-from unittest.mock import patch, MagicMock, ANY
+from unittest.mock import ANY, MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

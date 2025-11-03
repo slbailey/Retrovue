@@ -10,7 +10,6 @@ import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
-
 from retrovue.cli.commands.plex import app
 
 

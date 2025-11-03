@@ -7,13 +7,18 @@ and as-run log generation through UUID-based correlation.
 from datetime import UTC, datetime
 
 import pytest
-pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 
-from retrovue.domain.entities import Asset
-from retrovue.infra.db import Base
-from retrovue.schedule_manager.models import BroadcastChannel, BroadcastPlaylogEvent, CatalogAsset
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+from retrovue.schedule_manager.models import (  # noqa: E402
+    BroadcastChannel,
+    BroadcastPlaylogEvent,
+    CatalogAsset,
+)
+from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+
+from retrovue.domain.entities import Asset  # noqa: E402
+from retrovue.infra.db import Base  # noqa: E402
 
 
 class TestComplianceReporting:

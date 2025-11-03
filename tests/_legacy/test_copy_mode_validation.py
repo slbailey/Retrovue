@@ -1,7 +1,6 @@
 """Tests for copy mode validation."""
 
 import pytest
-
 from src.retrovue.validation.copy_mode import CopyModeUnsupportedError, can_copy, validate_copy_mode
 
 

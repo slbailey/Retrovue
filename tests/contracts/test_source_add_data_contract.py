@@ -6,10 +6,8 @@ Tests the data contract rules (D-#) defined in SourceAddContract.md.
 These tests verify database operations, transaction safety, and data integrity.
 """
 
-import json
-import pytest  # type: ignore[import-not-found]
-import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner  # type: ignore[import-not-found]
 
 from retrovue.cli.main import app

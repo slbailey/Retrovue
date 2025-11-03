@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from retrovue.adapters.enrichers.ffprobe_enricher import FFprobeEnricher
 from retrovue.adapters.enrichers.base import EnricherError
+from retrovue.adapters.enrichers.ffprobe_enricher import FFprobeEnricher
 from retrovue.adapters.importers.base import DiscoveredItem
 
 

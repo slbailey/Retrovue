@@ -17,8 +17,8 @@ from typer.testing import CliRunner
 src_path = Path(__file__).parent.parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from retrovue.cli.main import app
-from retrovue.infra.uow import session
+from retrovue.cli.main import app  # noqa: E402
+from retrovue.infra.uow import session  # noqa: E402
 
 
 class TestCLI:
@@ -222,7 +222,7 @@ class TestUoW:
         mock_session_local.return_value = mock_session
         
         with pytest.raises(ValueError):
-            with session() as db:
+            with session() as _db:
                 raise ValueError("Test error")
         
         # Verify rollback was called

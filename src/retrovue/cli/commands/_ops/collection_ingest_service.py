@@ -22,13 +22,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from retrovue.infra.metadata.persistence import persist_asset_metadata
 
 from ....adapters.registry import ENRICHERS
 from ....domain.entities import Asset, Collection
 from ....infra.canonical import canonical_hash, canonical_key_for
 from ....infra.exceptions import IngestError
+from ....usecases.metadata_handler import handle_ingest
+
+logger = structlog.get_logger(__name__)
 
 
 class _AssetRepository:
@@ -216,7 +222,7 @@ def validate_prerequisites(
             raise ValueError(
                 f"Collection '{collection.name}' is not sync-enabled. "
                 "Use targeted ingest (--title/--season/--episode) for surgical operations, "
-                f"or enable sync with 'retrovue collection update {collection.uuid} --enable-sync'."
+                f"or enable sync with 'retrovue collection update {collection.uuid} --sync-enable'."
             )
 
     # All ingest requires ingestible (B-12, B-13)
@@ -534,24 +540,188 @@ class CollectionIngestService:
                 
             except Exception:
                 pass
-            # Apply enricher pipeline to each discovered item (best-effort)
-            if pipeline:
+            # Snapshot importer editorial BEFORE pipeline runs
+            try:
                 try:
-                    enriched = item
-                    for _, _, enr in pipeline:
-                        try:
-                            enriched = enr.enrich(enriched)
-                        except Exception as enr_exc:
-                            stats.errors.append(str(enr_exc))
-                    item = enriched
+                    importer_editorial = (
+                        item.get("editorial") if isinstance(item, dict) else getattr(item, "editorial", None)
+                    )
+                except Exception:
+                    importer_editorial = None
+            except Exception:
+                importer_editorial = None
+
+            # Apply enricher pipeline (unchanged order)
+            try:
+                if pipeline:
+                    try:
+                        enriched = item
+                        for _, _, enr in pipeline:
+                            try:
+                                enriched = enr.enrich(enriched)
+                            except Exception as enr_exc:
+                                stats.errors.append(str(enr_exc))
+                        item = enriched
+                    except Exception:
+                        pass
+                # Attach pipeline checksum so ingest can detect enricher changes
+                try:
+                    if pipeline_checksum:
+                        item.enricher_checksum = pipeline_checksum
                 except Exception:
                     pass
-            # Attach pipeline checksum so ingest can detect enricher changes
-            try:
-                if pipeline_checksum:
-                    item.enricher_checksum = pipeline_checksum
             except Exception:
                 pass
+
+            # Build payload for unified metadata handler AFTER pipeline
+            try:
+                asset_type_val = None
+                try:
+                    if isinstance(item, dict):
+                        asset_type_val = item.get("asset_type")
+                    else:
+                        asset_type_val = getattr(item, "asset_type", None)
+                except Exception:
+                    asset_type_val = None
+
+                # Enriched editorial after pipeline
+                try:
+                    enriched_editorial = (
+                        item.get("editorial") if isinstance(item, dict) else getattr(item, "editorial", None)
+                    )
+                except Exception:
+                    enriched_editorial = None
+
+                # Debug output removed
+
+                # If both are missing, derive a minimal editorial from labels
+                editorial_val = enriched_editorial or importer_editorial
+                if editorial_val is None:
+                    try:
+                        labels = item.get("raw_labels") if isinstance(item, dict) else getattr(item, "raw_labels", None)
+                        if labels:
+                            ed: dict[str, Any] = {}
+                            for lbl in labels:
+                                if not isinstance(lbl, str):
+                                    continue
+                                if lbl.startswith("title:"):
+                                    ed["title"] = lbl.split(":", 1)[1]
+                                elif lbl.startswith("year:"):
+                                    val = lbl.split(":", 1)[1]
+                                    try:
+                                        ed["production_year"] = int(val)
+                                    except Exception:
+                                        pass
+                                elif lbl.startswith("season:"):
+                                    val = lbl.split(":", 1)[1]
+                                    try:
+                                        ed["season_number"] = int(val)
+                                    except Exception:
+                                        pass
+                                elif lbl.startswith("episode:"):
+                                    val = lbl.split(":", 1)[1]
+                                    try:
+                                        ed["episode_number"] = int(val)
+                                    except Exception:
+                                        pass
+                                elif lbl.startswith("library:"):
+                                    ed["library_name"] = lbl.split(":", 1)[1]
+                            editorial_val = ed if ed else None
+                    except Exception:
+                        pass
+
+                # Probe and sidecars after pipeline (enrichers may add them)
+                try:
+                    probed_val = item.get("probed") if isinstance(item, dict) else getattr(item, "probed", None)
+                except Exception:
+                    probed_val = None
+
+                sidecars_val = []
+                try:
+                    if isinstance(item, dict):
+                        if item.get("sidecars"):
+                            sidecars_val = item.get("sidecars") or []
+                        elif item.get("sidecar"):
+                            sidecars_val = [item.get("sidecar")]
+                    else:
+                        scs = getattr(item, "sidecars", None)
+                        if scs:
+                            sidecars_val = list(scs)
+                        else:
+                            sc = getattr(item, "sidecar", None)
+                            if sc:
+                                sidecars_val = [sc]
+                except Exception:
+                    sidecars_val = []
+
+                # Optional sections that enrichers or importers may provide
+                try:
+                    station_ops_val = (
+                        item.get("station_ops") if isinstance(item, dict) else getattr(item, "station_ops", None)
+                    )
+                except Exception:
+                    station_ops_val = None
+                try:
+                    relationships_val = (
+                        item.get("relationships") if isinstance(item, dict) else getattr(item, "relationships", None)
+                    )
+                except Exception:
+                    relationships_val = None
+                try:
+                    source_payload_val = (
+                        item.get("source_payload") if isinstance(item, dict) else getattr(item, "source_payload", None)
+                    )
+                except Exception:
+                    source_payload_val = None
+
+                payload = {
+                    "importer_name": getattr(importer, "name", None) or getattr(importer, "__class__", type("", (), {})) .__name__,
+                    "asset_type": asset_type_val or scope,
+                    "source_uri": source_uri_val or _get_uri(item) or "",
+                    "editorial": editorial_val,
+                    "importer_editorial": importer_editorial,
+                    "probed": probed_val,
+                    "sidecars": sidecars_val,
+                    "station_ops": station_ops_val or {},
+                    "relationships": relationships_val or {},
+                    "source_payload": source_payload_val or {},
+                }
+                # NOTE:
+                # At this point, importer + enrichers may both have added metadata.
+                # The handler must MERGE (not replace) editorial/probed/sidecars.
+                ingest_result = handle_ingest(payload)
+
+                # Optionally honor canonical_uri from handler if provided
+                try:
+                    if isinstance(ingest_result, dict):
+                        handler_curi = ingest_result.get("canonical_uri")
+                        canonical_uri_override = handler_curi if handler_curi else None
+                    else:
+                        canonical_uri_override = None
+                except Exception:
+                    canonical_uri_override = None
+
+                # Prefer handler-resolved sections from handler; fallback to our computed
+                try:
+                    handler_editorial = (
+                        (ingest_result.get("resolved_fields") or {}).get("editorial")
+                        if isinstance(ingest_result, dict)
+                        else {}
+                    ) or (ingest_result.get("editorial") if isinstance(ingest_result, dict) else {}) or {}
+                    merged_editorial = handler_editorial or (editorial_val or {})
+                    handler_resolved_fields = (
+                        ingest_result.get("resolved_fields") if isinstance(ingest_result, dict) else {}
+                    ) or {}
+                except Exception:
+                    merged_editorial = editorial_val or {}
+                    handler_resolved_fields = {}
+            except ValueError as ve:
+                # Validation error (e.g., bad sidecar) — record and skip this item
+                stats.errors.append(str(ve))
+                continue
+            except Exception:
+                # Non-fatal: proceed with legacy path
+                canonical_uri_override = None
             try:
                 canonical_key = canonical_key_for(item, collection=collection, provider=provider)
                 canonical_key_hash = canonical_hash(canonical_key)
@@ -573,7 +743,7 @@ class CollectionIngestService:
                 break
 
             # Persist values for verbose output
-            canonical_uri_val = _get_uri(item) or canonical_key
+            canonical_uri_val = canonical_uri_override or _get_uri(item) or canonical_key
             size_val = _get_size(item)
 
             confidence_val = _compute_confidence(item)
@@ -637,6 +807,21 @@ class CollectionIngestService:
             # Persist when not a dry run
             if not dry_run:
                 repo.create(asset)
+                # <-- NEW: write handler output into child tables
+                try:
+                    if isinstance(ingest_result, dict):
+                        rf = handler_resolved_fields if isinstance(handler_resolved_fields, dict) else {}
+                        persist_asset_metadata(
+                            self.db,
+                            asset,
+                            editorial=ingest_result.get("editorial"),
+                            probed=rf.get("probed"),
+                            station_ops=rf.get("station_ops"),
+                            relationships=rf.get("relationships"),
+                            sidecar=rf.get("sidecar"),
+                        )
+                except Exception as meta_exc:
+                    stats.errors.append(f"metadata persistence failed: {meta_exc}")
                 # Force a flush so upstream callers can verify within the same transaction
                 try:
                     self.db.flush()
@@ -645,16 +830,30 @@ class CollectionIngestService:
                     raise
             stats.assets_ingested += 1
             if created_assets is not None:
-                created_assets.append(
-                    {
-                        "uuid": str(asset.uuid),
-                        "source_uri": source_uri_val or "",
-                        "canonical_uri": canonical_uri_val,
-                        "state": asset.state,
-                        "approved_for_broadcast": asset.approved_for_broadcast,
-                        "confidence": confidence_val,
-                    }
-                )
+                asset_record = {
+                    "uuid": str(asset.uuid),
+                    "source_uri": source_uri_val or "",
+                    "canonical_uri": canonical_uri_val,
+                    "state": asset.state,
+                    "approved_for_broadcast": asset.approved_for_broadcast,
+                    "confidence": confidence_val,
+                    # Expose merged editorial (importer + sidecar + enrichers + ops)
+                    "editorial": merged_editorial,
+                }
+                try:
+                    if handler_resolved_fields:
+                        if handler_resolved_fields.get("probed"):
+                            asset_record["probed"] = handler_resolved_fields.get("probed")
+                        if handler_resolved_fields.get("station_ops"):
+                            asset_record["station_ops"] = handler_resolved_fields.get("station_ops")
+                        if handler_resolved_fields.get("relationships"):
+                            asset_record["relationships"] = handler_resolved_fields.get("relationships")
+                        # Surface sidecar as sidecars for output consistency
+                        if handler_resolved_fields.get("sidecar"):
+                            asset_record["sidecars"] = handler_resolved_fields.get("sidecar")
+                except Exception:
+                    pass
+                created_assets.append(asset_record)
 
         result = CollectionIngestResult(
             collection_id=str(collection.uuid),

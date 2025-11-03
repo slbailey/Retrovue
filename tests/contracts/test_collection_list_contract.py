@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Mapping
 from types import SimpleNamespace
-from typing import Mapping
 from unittest.mock import MagicMock, patch
 
 from retrovue.cli.main import app

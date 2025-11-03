@@ -320,49 +320,75 @@ class PlexClient:
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch library items: {e}") from e
 
-    def get_episode_metadata(self, rating_key: int) -> dict[str, Any]:
+    def get_metadata(self, rating_key: int) -> dict[str, Any]:
         """
-        Get metadata for a specific episode by rating key.
+        Get detailed metadata for a specific item (episode or movie) by rating key.
 
         Args:
-            rating_key: The Plex rating key for the episode
+            rating_key: The Plex rating key for the item
 
         Returns:
-            Dictionary containing episode metadata
+            Dictionary containing item metadata
 
         Raises:
             ImporterError: If the request fails
         """
         try:
             url = f"{self.base_url}/library/metadata/{rating_key}"
-            params = {"X-Plex-Token": self.token}
-            response = self.session.get(
-                url, params=params, headers={"X-Plex-Token": self.token}, timeout=20
-            )
+            params = {
+                "X-Plex-Token": self.token,
+                "includeGuids": 1,
+                "includeMarkers": 1,
+                "includePreferences": 1,
+                "includeConcerts": 1,
+                "includeChapters": 1,
+                "includeFields": "summary,genre,contentRating,Media",
+            }
+            # Reuse session headers; do not override here
+            response = self.session.get(url, params=params, timeout=20)
             response.raise_for_status()
+
+            # Debug output removed
 
             # Parse XML response
             import xml.etree.ElementTree as ET
 
             root = ET.fromstring(response.content)
 
-            # Find the Video element
-            video = root.find("Video")
+            # Find the Video element (support nested structures)
+            video = root.find(".//Video")
             if video is None:
-                raise ImporterError(f"No video found for rating key {rating_key}")
+                logger.warning(
+                    "Plex metadata for ratingKey=%s had no <Video> element",
+                    rating_key,
+                )
+                return {}
 
             # Extract metadata
             metadata: dict[str, Any] = {
                 "ratingKey": video.get("ratingKey"),
                 "title": video.get("title"),
+                "originalTitle": video.get("originalTitle"),
                 "grandparentTitle": video.get("grandparentTitle"),
                 "parentIndex": video.get("parentIndex"),
                 "index": video.get("index"),
                 "summary": video.get("summary"),
                 "year": video.get("year"),
+                "contentRating": video.get("contentRating"),
+                "originallyAvailableAt": video.get("originallyAvailableAt"),
+                "studio": video.get("studio"),
                 "duration": video.get("duration"),
                 "Media": [],
+                "genres": [],
             }
+
+            # Provide simplified keys in addition to raw attribute names
+            if metadata.get("contentRating"):
+                metadata["content_rating"] = metadata["contentRating"]
+            if metadata.get("originalTitle"):
+                metadata["original_title"] = metadata["originalTitle"]
+            if metadata.get("originallyAvailableAt"):
+                metadata["release_date"] = metadata["originallyAvailableAt"]
 
             # Extract Media information
             for media in video.findall("Media"):
@@ -385,10 +411,50 @@ class PlexClient:
 
                 metadata["Media"].append(media_info)
 
+            # Extract Genre tags
+            try:
+                genres = []
+                for genre in video.findall("Genre"):
+                    tag = genre.get("tag")
+                    if tag:
+                        genres.append(tag)
+                metadata["genres"] = genres
+            except Exception:
+                pass
+
+            # Additional tag arrays
+            def _extract_tags(tag_name: str) -> list[str]:
+                tags: list[str] = []
+                try:
+                    for el in video.findall(tag_name):
+                        t = el.get("tag")
+                        if t:
+                            tags.append(t)
+                except Exception:
+                    pass
+                return tags
+
+            metadata["country_tags"] = _extract_tags("Country")
+            metadata["collection_tags"] = _extract_tags("Collection")
+            metadata["director_tags"] = _extract_tags("Director")
+            metadata["writer_tags"] = _extract_tags("Writer")
+            metadata["cast_tags"] = _extract_tags("Role")
+
+            # Warn if detailed fields are missing
+            if not (metadata.get("summary") or metadata.get("contentRating") or (metadata.get("genres") or [])):
+                logger.warning(
+                    "Plex metadata had no summary/genres/contentRating",
+                    extra={"rating_key": rating_key},
+                )
+
             return metadata
 
         except requests.RequestException as e:
             raise ImporterError(f"Failed to fetch episode metadata: {e}") from e
+
+    # Backward compatibility shim
+    def get_episode_metadata(self, rating_key: int) -> dict[str, Any]:
+        return self.get_metadata(rating_key)
 
     def find_episode_by_sse(self, series_title: str, season: int, episode: int) -> dict[str, Any]:
         """
@@ -1127,6 +1193,149 @@ class PlexImporter(BaseImporter):
                 except (ValueError, TypeError):
                     pass
 
+            # Always fetch full metadata first, then build editorial from it
+            detailed: dict[str, Any] | None = None
+            try:
+                rk_val = item.get("ratingKey")
+                if rk_val is not None:
+                    # Use episode-compatible shim (delegates to generic)
+                    detailed = self.client.get_episode_metadata(int(str(rk_val))) or {}
+            except Exception as e:
+                logger.warning(
+                    f"Plex detailed metadata fetch failed for ratingKey={item.get('ratingKey')}: {e}"
+                )
+                detailed = {}
+
+            # Build editorial from detailed metadata, falling back to listing item
+            editorial: dict[str, Any] = {}
+            editorial["title"] = detailed.get("title") or title
+            if detailed.get("originalTitle"):
+                editorial["original_title"] = detailed.get("originalTitle")
+            if detailed.get("year") or year:
+                try:
+                    editorial["production_year"] = int(detailed.get("year") or year)
+                except Exception:
+                    pass
+            if detailed.get("originallyAvailableAt"):
+                editorial["release_date"] = detailed.get("originallyAvailableAt")
+            # Description
+            editorial["description"] = detailed.get("summary") or item.get("summary")
+            # Content rating
+            cr = detailed.get("content_rating") or detailed.get("contentRating") or item.get("contentRating")
+            if cr:
+                editorial["content_rating"] = {"system": "PLEX", "code": cr}
+            # Studio
+            if detailed.get("studio"):
+                editorial["studio"] = detailed.get("studio")
+            # Countries
+            try:
+                countries = detailed.get("country_tags") or [
+                    c.get("tag") for c in detailed.get("Country", []) if c.get("tag")
+                ]
+                if countries:
+                    editorial["countries"] = countries
+            except Exception:
+                pass
+            # Genres
+            try:
+                genres = detailed.get("genres") or []
+                if not genres:
+                    genres = [g.get("tag") for g in detailed.get("Genre", []) if g.get("tag")]
+                if genres:
+                    editorial["genres"] = genres
+            except Exception:
+                pass
+            # Collections
+            try:
+                collections = detailed.get("collection_tags") or [
+                    c.get("tag") for c in detailed.get("Collection", []) if c.get("tag")
+                ]
+                if collections:
+                    editorial["collections"] = collections
+            except Exception:
+                pass
+            # Directors, Writers, Cast
+            try:
+                directors = detailed.get("director_tags") or [
+                    d.get("tag") for d in detailed.get("Director", []) if d.get("tag")
+                ]
+                if directors:
+                    editorial["directors"] = directors
+            except Exception:
+                pass
+            try:
+                writers = detailed.get("writer_tags") or [
+                    w.get("tag") for w in detailed.get("Writer", []) if w.get("tag")
+                ]
+                if writers:
+                    editorial["writers"] = writers
+            except Exception:
+                pass
+            try:
+                cast = detailed.get("cast_tags") or [
+                    r.get("tag") for r in detailed.get("Role", []) if r.get("tag")
+                ]
+                if cast:
+                    editorial["cast"] = cast
+            except Exception:
+                pass
+            # Runtime (ms and seconds)
+            try:
+                dur_ms = detailed.get("duration")
+                if dur_ms is None:
+                    media_list = detailed.get("Media") or []
+                    if media_list and isinstance(media_list[0], dict):
+                        dur_ms = media_list[0].get("duration")
+                if dur_ms is not None:
+                    editorial["runtime_ms"] = int(dur_ms)
+                    editorial["runtime_seconds"] = int(dur_ms) // 1000
+            except Exception:
+                pass
+            # Episode/Show specifics
+            if series_title or detailed.get("grandparentTitle") or detailed.get("parentTitle"):
+                editorial["series_title"] = (
+                    detailed.get("grandparentTitle")
+                    or detailed.get("parentTitle")
+                    or series_title
+                )
+            try:
+                if detailed.get("parentIndex"):
+                    editorial["season_number"] = int(detailed.get("parentIndex"))
+            except Exception:
+                pass
+            try:
+                if detailed.get("index"):
+                    editorial["episode_number"] = int(detailed.get("index"))
+            except Exception:
+                pass
+            # Library name for operator visibility (can be ignored downstream if redundant)
+            if library.get("title"):
+                editorial["library_name"] = library.get("title")
+
+            # Debug output removed
+
+            # Populate content rating from item if present
+            cr_item = item.get("contentRating")
+            if cr_item:
+                editorial["content_rating"] = {"system": "TV", "code": cr_item}
+
+            # Try to populate genres/summary/contentRating from detailed metadata only if missing
+            # Always attempt a per-item metadata fetch and merge rich fields
+            # Label whether detailed metadata was present
+            try:
+                rk = item.get("ratingKey")
+                if rk is not None:
+                    meta = detailed or {}
+                    has_details = bool(
+                        isinstance(meta, dict)
+                        and (meta.get("summary") or meta.get("contentRating") or (meta.get("genres") or []))
+                    )
+                    raw_labels.append("plex_meta:ok" if has_details else "plex_meta:empty")
+            except Exception:
+                pass
+            # Remove None values
+            editorial = {k: v for k, v in editorial.items() if v is not None}
+
             return DiscoveredItem(
                 path_uri=path_uri,
                 provider_key=item.get("ratingKey"),
@@ -1134,6 +1343,9 @@ class PlexImporter(BaseImporter):
                 last_modified=last_modified,
                 size=int(file_size) if file_size else None,
                 hash_sha256=None,  # Plex doesn't provide file hashes
+                editorial=editorial,
+                sidecar=None,
+                source_payload=detailed or {},
             )
 
         except Exception as e:

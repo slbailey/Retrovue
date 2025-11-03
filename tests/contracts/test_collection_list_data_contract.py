@@ -6,9 +6,8 @@ These tests verify database operations, transaction safety, data integrity, and 
 """
 
 import json
-import pytest
-import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app
@@ -71,8 +70,8 @@ class TestCollectionListDataContract:
             
             assert result.exit_code == 0
             data = json.loads(result.stdout)
-            assert data[0]["sync_enabled"] == False
-            assert data[0]["ingestible"] == False
+            assert data[0]["sync_enabled"] is False
+            assert data[0]["ingestible"] is False
 
     # D-3: Asset counts from persisted rows
     def test_d3_asset_counts_from_persisted_rows(self):

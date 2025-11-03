@@ -11,9 +11,8 @@ ensuring it returns {"series": [...]} format.
 import json
 from unittest.mock import patch
 
-from typer.testing import CliRunner
-
 from retrovue.cli.commands.assets import app
+from typer.testing import CliRunner
 
 
 class TestCLIAssetsSeriesJsonAll:

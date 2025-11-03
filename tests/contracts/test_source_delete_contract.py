@@ -8,7 +8,6 @@ docs/contracts/resources/SourceDeleteContract.md (B-1 through B-8).
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.source import app

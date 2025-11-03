@@ -29,6 +29,7 @@ from sqlalchemy import (
     Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -190,6 +191,23 @@ class Asset(Base):
     )
     provider_refs: Mapped[list[ProviderRef]] = relationship("ProviderRef", back_populates="asset")
 
+    # Metadata child tables (one-to-one, cascade delete via FK)
+    editorial_meta: Mapped[AssetEditorial | None] = relationship(
+        "AssetEditorial", uselist=False, back_populates="asset", cascade="all, delete-orphan"
+    )
+    probed_meta: Mapped[AssetProbed | None] = relationship(
+        "AssetProbed", uselist=False, back_populates="asset", cascade="all, delete-orphan"
+    )
+    station_ops_meta: Mapped[AssetStationOps | None] = relationship(
+        "AssetStationOps", uselist=False, back_populates="asset", cascade="all, delete-orphan"
+    )
+    relationships_meta: Mapped[AssetRelationships | None] = relationship(
+        "AssetRelationships", uselist=False, back_populates="asset", cascade="all, delete-orphan"
+    )
+    sidecar_meta: Mapped[AssetSidecar | None] = relationship(
+        "AssetSidecar", uselist=False, back_populates="asset", cascade="all, delete-orphan"
+    )
+
     __table_args__ = (
         # Uniques
         UniqueConstraint(
@@ -227,6 +245,71 @@ class Asset(Base):
 
     def __repr__(self) -> str:
         return f"<Asset(uuid={self.uuid}, uri={self.uri}, size={self.size}, state={self.state}, approved_for_broadcast={self.approved_for_broadcast})>"
+
+
+class AssetEditorial(Base):
+    __tablename__ = "asset_editorial"
+
+    asset_uuid: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), primary_key=True
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        PG_JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
+    )
+
+    asset: Mapped[Asset] = relationship("Asset", back_populates="editorial_meta")
+
+
+class AssetProbed(Base):
+    __tablename__ = "asset_probed"
+
+    asset_uuid: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), primary_key=True
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        PG_JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
+    )
+
+    asset: Mapped[Asset] = relationship("Asset", back_populates="probed_meta")
+
+
+class AssetStationOps(Base):
+    __tablename__ = "asset_station_ops"
+
+    asset_uuid: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), primary_key=True
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        PG_JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
+    )
+
+    asset: Mapped[Asset] = relationship("Asset", back_populates="station_ops_meta")
+
+
+class AssetRelationships(Base):
+    __tablename__ = "asset_relationships"
+
+    asset_uuid: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), primary_key=True
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        PG_JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
+    )
+
+    asset: Mapped[Asset] = relationship("Asset", back_populates="relationships_meta")
+
+
+class AssetSidecar(Base):
+    __tablename__ = "asset_sidecar"
+
+    asset_uuid: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), primary_key=True
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        PG_JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
+    )
+
+    asset: Mapped[Asset] = relationship("Asset", back_populates="sidecar_meta")
 
 
 class EpisodeAsset(Base):

@@ -6,9 +6,8 @@ docs/contracts/resources/SourceDiscoverContract.md (B-1 through B-10).
 """
 
 import json
-from unittest.mock import MagicMock, patch, ANY
+from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.source import app

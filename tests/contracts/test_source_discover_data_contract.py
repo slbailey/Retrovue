@@ -8,7 +8,6 @@ docs/contracts/resources/SourceDiscoverContract.md (D-1 through D-9).
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.source import app
@@ -112,7 +111,7 @@ class TestSourceDiscoverDataContract:
             existing_collection.sync_enabled = False
             
             # Setup mock chain: query(Source) -> source, query(Collection) -> existing_collection
-            from retrovue.domain.entities import Source, Collection
+            from retrovue.domain.entities import Collection, Source
             
             # Create separate mock chains for Source and Collection queries
             source_query = MagicMock()
@@ -266,7 +265,7 @@ class TestSourceDiscoverDataContract:
             existing_collection.sync_enabled = False
             
             # Setup mock chain: query(Source) -> source, query(Collection) -> existing_collection
-            from retrovue.domain.entities import Source, Collection
+            from retrovue.domain.entities import Collection, Source
             
             source_query = MagicMock()
             source_query.filter.return_value.first.return_value = mock_source

@@ -100,6 +100,23 @@ Enricher-specific configuration is stored in the Enricher `config` field:
 
 ---
 
+## Metadata domains
+
+E-10. Enrichers MUST NOT overwrite domains they don’t own.
+
+- If an enricher provides **technical** metadata (ffprobe), it MUST write to `probed`.
+- If an enricher provides **editorial** metadata (e.g. TMDB), it MUST write to `editorial`.
+- If an enricher provides station-level or packaging metadata, it MUST write to `station_ops`.
+
+E-11. When an enricher attaches metadata to an item, and the item already has a value at that domain,
+the enricher MUST perform a deep merge (object/object recursive merge, last-writer-wins on scalars)
+instead of replacement.
+
+E-12. Enrichers MUST leave `sidecar` intact unless they specifically extend it. (Sidecar is the canonical
+merge surface for importer + enrichers.)
+
+---
+
 ## Contract Test Requirements
 
 Each Enricher contract must have exactly two test files:

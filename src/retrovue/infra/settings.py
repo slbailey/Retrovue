@@ -9,8 +9,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from pydantic import ConfigDict, Field
-from pydantic_settings import BaseSettings
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     allowed_origins: str = Field(default="*", alias="ALLOWED_ORIGINS")  # Comma-separated origins
     env: str = Field(default="dev", alias="ENV")  # dev|prod|test
 
-    model_config = ConfigDict(env_file=".env", case_sensitive=False)
+    model_config: SettingsConfigDict = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
 
 def _resolve_env_file() -> str | None:
@@ -61,4 +61,4 @@ def _resolve_env_file() -> str | None:
 
 # Global settings instance (load from best-effort .env discovery)
 _env_file = _resolve_env_file()
-settings = Settings(_env_file=_env_file) if _env_file else Settings()
+settings = Settings(_env_file=_env_file) if _env_file else Settings()  # type: ignore[call-arg]

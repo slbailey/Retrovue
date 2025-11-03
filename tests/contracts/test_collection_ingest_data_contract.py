@@ -19,11 +19,11 @@ Phase 3 Coverage (requires Asset domain):
 - D-13, D-14, D-15, D-16, D-17: Asset lifecycle and time tracking tests (implemented)
 """
 
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock, call
-from typer.testing import CliRunner
+from unittest.mock import MagicMock, patch
+
 from sqlalchemy.orm.exc import NoResultFound
+from typer.testing import CliRunner
 
 from retrovue.cli.main import app
 
@@ -430,8 +430,7 @@ class TestCollectionIngestDataContract:
             mock_service.return_value.ingest_collection.assert_called_once()
             
             # Verify service was called with database session (for persistence)
-            call_args = mock_service.return_value.ingest_collection.call_args
-            # Service receives collection and db session (implementation detail)
+            assert mock_service.return_value.ingest_collection.called
 
     # D-5c: Validation Before Enumeration
     def test_d5c_validate_ingestible_before_enumerate_assets(self):
@@ -743,7 +742,10 @@ class TestCollectionIngestDuplicateHandlingDataContract:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d9_canonical_identity_uniqueness_within_collection(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-9: For a given collection, there MUST be at most one Asset per canonical identity."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -795,7 +797,10 @@ class TestCollectionIngestDuplicateHandlingDataContract:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d10_content_change_detection_skips_unchanged(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-10: Assets with unchanged content MUST be skipped."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -840,7 +845,10 @@ class TestCollectionIngestDuplicateHandlingDataContract:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d10_content_change_detection_updates_changed(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-10: Assets with changed content MUST be updated."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -886,7 +894,10 @@ class TestCollectionIngestDuplicateHandlingDataContract:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d11_reingestion_on_content_change(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-11: Content changes MUST trigger re-ingestion."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -932,7 +943,10 @@ class TestCollectionIngestDuplicateHandlingDataContract:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d11_reingestion_on_enricher_change(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-11: Enricher changes MUST trigger re-ingestion."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -978,7 +992,10 @@ class TestCollectionIngestDuplicateHandlingDataContract:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d12_enricher_change_detection_compares_config(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-12: Enricher change detection MUST compare current collection enricher config with asset's last-ingested config."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -1059,7 +1076,10 @@ class TestCollectionIngestAssetLifecycleAndTimeTracking:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d13_new_assets_start_in_new_state(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-13: Every new Asset MUST begin in lifecycle state 'new' and MUST NOT be in 'ready' state at creation time."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1107,7 +1127,10 @@ class TestCollectionIngestAssetLifecycleAndTimeTracking:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d14_updated_assets_reset_to_new_if_ready(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-14: Updated assets MUST have their lifecycle state reset to 'new' if they were previously in 'ready' state."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1157,8 +1180,12 @@ class TestCollectionIngestAssetLifecycleAndTimeTracking:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d15_last_ingest_time_updated_atomically_in_same_transaction(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-15: The collection's last_ingest_time field MUST be updated atomically within the same transaction as asset creation/updates."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
         from datetime import datetime
+
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1206,8 +1233,12 @@ class TestCollectionIngestAssetLifecycleAndTimeTracking:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d16_last_ingest_time_updated_even_if_all_skipped(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-16: The last_ingest_time update MUST occur regardless of whether any assets were actually ingested, updated, or skipped."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
         from datetime import datetime
+
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1255,7 +1286,10 @@ class TestCollectionIngestAssetLifecycleAndTimeTracking:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_d17_asset_update_timestamps_refreshed_on_reingestion(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """D-17: Asset update timestamps MUST be refreshed when assets are re-ingested due to content or enricher changes."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)

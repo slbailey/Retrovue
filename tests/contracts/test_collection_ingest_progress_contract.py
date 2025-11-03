@@ -1,5 +1,6 @@
 import uuid
 from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

@@ -4,16 +4,17 @@ Tests for ingest API endpoints.
 This module tests the ingest pipeline API functionality.
 """
 import pytest
+
 pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 
-import uuid
-from unittest.mock import patch
+import uuid  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
+from fastapi.testclient import TestClient  # noqa: E402
+from retrovue.api.routers.ingest import router  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
-from retrovue.api.routers.ingest import router
-from retrovue.domain.entities import Asset
+from retrovue.domain.entities import Asset  # noqa: E402
 
 
 class TestIngestAPI:

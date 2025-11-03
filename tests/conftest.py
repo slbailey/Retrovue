@@ -7,8 +7,8 @@ This module provides global pytest configuration and fixtures.
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from retrovue.infra.settings import settings
 from retrovue.infra import db as db_module
+from retrovue.infra.settings import settings
 
 
 def pytest_ignore_collect(collection_path, config):

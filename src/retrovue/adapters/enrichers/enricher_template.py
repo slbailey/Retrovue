@@ -75,8 +75,22 @@ class YourEnricherName(BaseEnricher):
             # Example: Convert metadata to labels
             additional_labels = self._metadata_to_labels(metadata)
 
-            # Return enriched item
-            return self._create_enriched_item(discovered_item, additional_labels)
+            # Build new item preserving importer-provided metadata.
+            # Enrichers must add to metadata, not overwrite importer/editorial.
+            # Use a deep merge if you read from an external API.
+            return DiscoveredItem(
+                path_uri=discovered_item.path_uri,
+                provider_key=discovered_item.provider_key,
+                raw_labels=(discovered_item.raw_labels or []) + additional_labels,
+                last_modified=discovered_item.last_modified,
+                size=discovered_item.size,
+                hash_sha256=discovered_item.hash_sha256,
+                editorial=getattr(discovered_item, "editorial", None),
+                sidecar=getattr(discovered_item, "sidecar", None),
+                source_payload=getattr(discovered_item, "source_payload", None),
+                # Optionally include probed if this enricher produced technical data
+                probed=None,
+            )
 
         except Exception as e:
             raise EnricherError(f"Failed to enrich item: {str(e)}") from e
@@ -226,6 +240,55 @@ class YourEnricherName(BaseEnricher):
 # TODO: Register your enricher type
 # from .base import register_enricher_type
 # register_enricher_type(YourEnricherName)
+# -----------------------------------------------------------------------------
+# Example: Minimal enricher demonstrating merge rules
+# -----------------------------------------------------------------------------
+
+class ExampleEnricher(BaseEnricher):
+    """Template for enrichers.
+
+    RULES:
+    - Do NOT overwrite importer/editorial fields.
+    - If you add technical/media data, put it under `probed`.
+    - If you add bolt-on JSON, use `sidecar`.
+    """
+
+    name = "example"
+    scope = "ingest"
+
+    def enrich(self, discovered_item: DiscoveredItem) -> DiscoveredItem:
+        try:
+            # pretend we fetched some extra data
+            extra_editorial = {
+                "tagline": "A classic.",
+            }
+            extra_probed = {
+                "duration_ms": 1234,
+            }
+
+            # merge editorial (shallow is fine here, real enrichers can deep-merge)
+            base_editorial = discovered_item.editorial or {}
+            merged_editorial = {**base_editorial, **extra_editorial}
+
+            # merge probed (same idea)
+            base_probed = discovered_item.probed or {}
+            merged_probed = {**base_probed, **extra_probed}
+
+            return DiscoveredItem(
+                path_uri=discovered_item.path_uri,
+                provider_key=discovered_item.provider_key,
+                raw_labels=(discovered_item.raw_labels or []),
+                last_modified=discovered_item.last_modified,
+                size=discovered_item.size,
+                hash_sha256=discovered_item.hash_sha256,
+                editorial=merged_editorial,
+                sidecar=discovered_item.sidecar,
+                source_payload=discovered_item.source_payload,
+                probed=merged_probed,
+            )
+        except Exception as exc:
+            raise EnricherError(str(exc)) from exc
+
 
 
 # =============================================================================

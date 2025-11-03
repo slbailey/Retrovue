@@ -7,14 +7,12 @@ Per rules in .cursor/rules/20-tests-source-ingest-contract.mdc:
 - Exit codes/messages are deterministic based on collection eligibility and source presence
 """
 
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
-from sqlalchemy.orm.exc import NoResultFound
 
 from retrovue.cli.main import app
-from retrovue.infra.exceptions import IngestError
 
 
 class TestSourceIngestDataContract:

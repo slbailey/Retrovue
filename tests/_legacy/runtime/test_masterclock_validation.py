@@ -22,7 +22,7 @@ def test_masterclock_monotonic(iterations: int = 1000) -> dict[str, Any]:
     Returns:
         Test results dictionary
     """
-    clock = MasterClock()
+    _clock = MasterClock()
     results = {
         "test_name": "masterclock-monotonic",
         "iterations": iterations,
@@ -36,7 +36,7 @@ def test_masterclock_monotonic(iterations: int = 1000) -> dict[str, Any]:
     # Test 1: Time monotonicity
     times = []
     for _ in range(iterations):
-        times.append(clock.now_utc())
+        times.append(_clock.now_utc())
     
     # Check for backward time movement
     for i in range(1, len(times)):
@@ -46,14 +46,14 @@ def test_masterclock_monotonic(iterations: int = 1000) -> dict[str, Any]:
                                               (times[i] - times[i-1]).total_seconds())
     
     # Test 2: seconds_since with past timestamp
-    past_time = clock.now_utc() - timedelta(seconds=1)
-    seconds_past = clock.seconds_since(past_time)
+    past_time = _clock.now_utc() - timedelta(seconds=1)
+    seconds_past = _clock.seconds_since(past_time)
     if seconds_past < 0:
         results["negative_seconds_since"] += 1
     
     # Test 3: seconds_since with future timestamp (should clamp to 0.0)
-    future_time = clock.now_utc() + timedelta(seconds=5)
-    seconds_future = clock.seconds_since(future_time)
+    future_time = _clock.now_utc() + timedelta(seconds=5)
+    seconds_future = _clock.seconds_since(future_time)
     if seconds_future != 0.0:
         results["future_timestamp_behavior"] = "incorrect"
         results["passed"] = False
@@ -81,7 +81,7 @@ def test_masterclock_timezone_resolution(timezones: list[str] = None) -> dict[st
             "Invalid/Timezone", "US/Eastrn", "Bad/Zone", "America/NonExistent"
         ]
     
-    clock = MasterClock()
+    _clock = MasterClock()
     results = {
         "test_name": "masterclock-timezone-resolution",
         "timezones_tested": len(timezones),
@@ -95,7 +95,7 @@ def test_masterclock_timezone_resolution(timezones: list[str] = None) -> dict[st
     for tz in timezones:
         try:
             # Test now_local with this timezone
-            local_time = clock.now_local(tz)
+            local_time = _clock.now_local(tz)
             
             # Check if it's timezone-aware
             if local_time.tzinfo is not None:
@@ -106,7 +106,7 @@ def test_masterclock_timezone_resolution(timezones: list[str] = None) -> dict[st
         except Exception:
             # If exception, check if it falls back to UTC
             try:
-                local_time = clock.now_local(tz)
+                local_time = _clock.now_local(tz)
                 if local_time.tzinfo == UTC:
                     results["fallback_to_utc"].append(tz)
                 else:
@@ -119,7 +119,7 @@ def test_masterclock_timezone_resolution(timezones: list[str] = None) -> dict[st
     try:
         # Test around DST transition (March 10, 2024 2:00 AM)
         dst_time = datetime(2024, 3, 10, 1, 30, 0, tzinfo=UTC)
-        local_dst = clock.to_channel_time(dst_time, valid_tz)
+        local_dst = _clock.to_channel_time(dst_time, valid_tz)
         results["dst_boundary_tests"].append({
             "timezone": valid_tz,
             "utc_time": dst_time.isoformat(),
@@ -147,7 +147,7 @@ def test_masterclock_logging() -> dict[str, Any]:
     Returns:
         Test results dictionary
     """
-    clock = MasterClock()
+    _clock = MasterClock()
     results = {
         "test_name": "masterclock-logging",
         "utc_timestamps": [],
@@ -168,8 +168,8 @@ def test_masterclock_logging() -> dict[str, Any]:
     
     for event in events:
         # Get both UTC and local timestamps
-        utc_time = clock.now_utc()
-        local_time = clock.now_local("America/New_York")
+        utc_time = _clock.now_utc()
+        local_time = _clock.now_local("America/New_York")
         
         # Check timezone awareness
         if utc_time.tzinfo is None or local_time.tzinfo is None:
@@ -216,7 +216,7 @@ def test_masterclock_scheduler_alignment() -> dict[str, Any]:
     Returns:
         Test results dictionary
     """
-    clock = MasterClock()
+    _clock = MasterClock()
     results = {
         "test_name": "masterclock-scheduler-alignment",
         "boundary_tests": [],
@@ -302,7 +302,7 @@ def test_masterclock_stability(iterations: int = 10000, minutes: int = None) -> 
     Returns:
         Test results dictionary
     """
-    clock = MasterClock()
+    _clock = MasterClock()
     results = {
         "test_name": "masterclock-stability",
         "iterations": iterations,
@@ -321,7 +321,7 @@ def test_masterclock_stability(iterations: int = 10000, minutes: int = None) -> 
     
     for i in range(iterations):
         tz = results["timezones_tested"][i % len(results["timezones_tested"])]
-        clock.now_local(tz)
+        _clock.now_local(tz)
         
         # Sample performance at start and end
         if i == 100:
@@ -345,7 +345,7 @@ def test_masterclock_stability(iterations: int = 10000, minutes: int = None) -> 
     
     # Check timezone cache size
     results["memory_usage"] = {
-        "cached_timezones": len(clock.timezone_cache),
+        "cached_timezones": len(_clock.timezone_cache),
         "cache_hit_ratio": "N/A"  # Would need more sophisticated tracking
     }
     
@@ -359,7 +359,7 @@ def test_masterclock_consistency() -> dict[str, Any]:
     Returns:
         Test results dictionary
     """
-    clock = MasterClock()
+    _clock = MasterClock()
     results = {
         "test_name": "masterclock-consistency",
         "component_timestamps": [],
@@ -373,8 +373,8 @@ def test_masterclock_consistency() -> dict[str, Any]:
     timestamps = []
     for _i in range(100):
         # Simulate ProgramDirector and ChannelManager asking for time
-        pd_time = clock.now_utc()
-        cm_time = clock.now_utc()
+        pd_time = _clock.now_utc()
+        cm_time = _clock.now_utc()
         
         timestamps.extend([pd_time, cm_time])
     
@@ -414,7 +414,7 @@ def test_masterclock_serialization() -> dict[str, Any]:
     Returns:
         Test results dictionary
     """
-    clock = MasterClock()
+    _clock = MasterClock()
     results = {
         "test_name": "masterclock-serialization",
         "serialization_tests": [],
@@ -425,10 +425,10 @@ def test_masterclock_serialization() -> dict[str, Any]:
     
     # Test various timestamp types
     test_cases = [
-        ("utc_now", clock.now_utc()),
-        ("local_ny", clock.now_local("America/New_York")),
-        ("local_london", clock.now_local("Europe/London")),
-        ("local_tokyo", clock.now_local("Asia/Tokyo"))
+        ("utc_now", _clock.now_utc()),
+        ("local_ny", _clock.now_local("America/New_York")),
+        ("local_london", _clock.now_local("Europe/London")),
+        ("local_tokyo", _clock.now_local("Asia/Tokyo"))
     ]
     
     for name, original_dt in test_cases:

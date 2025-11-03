@@ -101,6 +101,15 @@ Enrichers are **not allowed** to:
 - **Modify external systems** or upstream content
 - **Block operations** - failures must be graceful
 
+### Metadata domains (authoring rules)
+
+- Write to the correct domain:
+  - Technical media data → `probed`
+  - Editorial data (titles, seasons, synopsis) → `editorial`
+  - Station-level/packaging data → `station_ops`
+- Do not overwrite whole domains: perform a deep merge (object/object recursive, last-writer-wins on scalars) when a domain already exists on the item.
+- Leave `sidecar` intact unless you are explicitly extending it; sidecar is the canonical merge surface across importer and enrichers.
+
 ---
 
 ## Enricher Interface

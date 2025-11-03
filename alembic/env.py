@@ -2,8 +2,8 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
 from alembic import context  # type: ignore
+from sqlalchemy import engine_from_config, pool
 
 # Ensure "src" is on path (adjust if needed)
 HERE = os.path.dirname(__file__)
@@ -12,10 +12,10 @@ if SYS_SRC not in sys.path:
     sys.path.insert(0, SYS_SRC)
 
 # Pull your app's settings & metadata
-from retrovue.infra.settings import settings
-from retrovue.infra.db import Base  # Base.metadata is target_metadata
 # Import models so autogenerate can see them
-from retrovue.domain.entities import *  # noqa
+from retrovue.domain.entities import *  # noqa: E402,F401,F403
+from retrovue.infra.db import Base  # Base.metadata is target_metadata  # noqa: E402
+from retrovue.infra.settings import settings  # noqa: E402
 
 config = context.config
 

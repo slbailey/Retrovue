@@ -5,10 +5,8 @@ Tests the data persistence and transaction aspects of the source delete command 
 docs/contracts/resources/SourceDeleteContract.md (D-1 through D-10).
 """
 
-import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from retrovue.cli.commands.source import app

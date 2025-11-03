@@ -19,11 +19,11 @@ Phase 3 Coverage (requires Asset domain):
 """
 
 import json
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import MagicMock, patch
+
+import pytest
 from typer.testing import CliRunner
-from sqlalchemy.orm.exc import NoResultFound
 
 from retrovue.cli.main import app
 from retrovue.infra.exceptions import IngestError
@@ -55,7 +55,7 @@ class TestCollectionIngestContract:
         """
         collection_id = str(uuid.uuid4())
         with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
-             patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service, \
+             patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService"), \
              patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer:
             
             mock_collection = MagicMock()
@@ -218,27 +218,7 @@ class TestCollectionIngestContract:
             assert "not found" in result.stdout.lower() or "not found" in result.stderr.lower()
 
     # B-2: Full Collection Ingest
-    def test_b2_full_collection_ingest_no_flags(self):
-        """
-        Contract B-2: If no --title is provided, command MUST ingest entire collection.
-        """
-        collection_id = str(uuid.uuid4())
-        with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
-             patch("retrovue.cli.commands.collection.get_importer") as mock_get_importer, \
-             patch("retrovue.cli.commands.collection.resolve_collection_selector") as mock_resolve:
-
-            mock_collection = MagicMock()
-            mock_collection.id = collection_id
-            mock_collection.name = "TV Shows"
-            mock_collection.sync_enabled = True
-            mock_collection.ingestible = True
-            mock_collection.source_id = str(uuid.uuid4())
-            mock_resolve.return_value = mock_collection
-            
-            # Mock importer
-            mock_importer = MagicMock()
-            mock_importer.validate_ingestible.return_value = True
-            mock_get_importer.return_value = mock_importer
+    # Removed duplicate test definition; single canonical case exists below
             
     def test_b2_full_collection_ingest_no_flags(self):
         """
@@ -334,7 +314,7 @@ class TestCollectionIngestContract:
         """
         collection_id = str(uuid.uuid4())
         with patch("retrovue.cli.commands.collection._get_db_context", return_value=self._make_session_cm()), \
-             patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService") as mock_service:
+             patch("retrovue.cli.commands._ops.collection_ingest_service.CollectionIngestService"):
             
             mock_collection = MagicMock()
             mock_collection.id = collection_id
@@ -763,7 +743,7 @@ class TestCollectionIngestContract:
                 mock_service.return_value.ingest_collection.side_effect = ValueError(
                     "Collection 'TV Shows' is not sync-enabled. "
                     "Use targeted ingest (--title/--season/--episode) for surgical operations, "
-                    f"or enable sync with 'retrovue collection update {collection_id} --enable-sync'."
+                    f"or enable sync with 'retrovue collection update {collection_id} --sync-enable'."
                 )
                 
                 result = self.runner.invoke(app, ["collection", "ingest", collection_id])
@@ -1225,7 +1205,10 @@ class TestCollectionIngestDuplicateHandling:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b16_duplicate_detection_prevents_second_asset_record(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-16: Duplicate detection MUST prevent creating a second Asset record for the same canonical identity."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1281,7 +1264,10 @@ class TestCollectionIngestDuplicateHandling:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b16_duplicate_detection_silent_operation(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-16: Duplicate encounters MUST NOT be treated as operator-visible errors."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1326,7 +1312,10 @@ class TestCollectionIngestDuplicateHandling:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b17_skip_unchanged_assets(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-17: Assets with unchanged content AND unchanged enrichers MUST be skipped."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -1368,7 +1357,10 @@ class TestCollectionIngestDuplicateHandling:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b17_skip_unchanged_assets_json_output(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-17: JSON output MUST include correct assets_skipped count."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -1415,7 +1407,10 @@ class TestCollectionIngestDuplicateHandling:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b18_update_changed_content(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-18: Assets with changed content MUST be updated."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -1457,7 +1452,10 @@ class TestCollectionIngestDuplicateHandling:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b18_update_changed_enrichers(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-18: Assets with unchanged content but changed enrichers MUST be updated."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -1499,7 +1497,10 @@ class TestCollectionIngestDuplicateHandling:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b18_update_changed_content_and_enrichers(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-18: Assets with both changed content and enrichers MUST be updated."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         mock_resolve.return_value = self.collection
@@ -1573,8 +1574,12 @@ class TestCollectionIngestTimeTrackingAndStatistics:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b19_last_ingest_time_updated_on_successful_completion(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-19: Upon successful completion, last_ingest_time MUST be updated to current timestamp."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
         from datetime import datetime
+
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1620,8 +1625,12 @@ class TestCollectionIngestTimeTrackingAndStatistics:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b19_last_ingest_time_updated_even_if_all_skipped(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-19: last_ingest_time MUST be updated even if all assets were skipped."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
         from datetime import datetime
+
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1669,7 +1678,10 @@ class TestCollectionIngestTimeTrackingAndStatistics:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b20_output_includes_statistics_distinguishing_asset_types(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-20: Output MUST include statistics distinguishing between new, skipped, and updated assets."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1715,8 +1727,12 @@ class TestCollectionIngestTimeTrackingAndStatistics:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_b21_json_output_includes_last_ingest_time(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """B-21: JSON output MUST include last_ingest_time field."""
-        from retrovue.cli.commands._ops.collection_ingest_service import CollectionIngestResult, IngestStats
         from datetime import datetime
+
+        from retrovue.cli.commands._ops.collection_ingest_service import (
+            CollectionIngestResult,
+            IngestStats,
+        )
         
         # Setup mocks
         self._setup_session_mock(mock_session)
@@ -1808,7 +1824,7 @@ class TestCollectionIngestCanonicalKey:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_canonical_key_windows_path_normalization(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """Verify that Windows paths are normalized correctly."""
-        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        from retrovue.infra.canonical import canonical_key_for
         
         # Test Windows path normalization
         windows_path = r"C:\Movies\The Matrix.mkv"
@@ -1829,7 +1845,7 @@ class TestCollectionIngestCanonicalKey:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_canonical_key_posix_path_normalization(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """Verify that POSIX paths are normalized correctly."""
-        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        from retrovue.infra.canonical import canonical_key_for
         
         # Test POSIX path normalization
         posix_path = "/mnt/data/MOVIES/THE_MATRIX.MKV"
@@ -1847,7 +1863,7 @@ class TestCollectionIngestCanonicalKey:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_canonical_key_smb_path_normalization(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """Verify that SMB paths are normalized correctly."""
-        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        from retrovue.infra.canonical import canonical_key_for
         
         # Test SMB path normalization
         smb_path = "smb://SERVER/Share/Video.mkv"
@@ -1866,7 +1882,7 @@ class TestCollectionIngestCanonicalKey:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_canonical_key_duplicate_path_equivalence(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """Verify that normalized equivalent paths map to the same hash."""
-        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        from retrovue.infra.canonical import canonical_hash, canonical_key_for
         
         # Test different path formats that should map to the same canonical key
         path1 = r"C:\Movies\video.mkv"
@@ -1897,7 +1913,7 @@ class TestCollectionIngestCanonicalKey:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_canonical_key_missing_fields_raises_error(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """Verify that missing fields raise IngestError."""
-        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        from retrovue.infra.canonical import canonical_key_for
         from retrovue.infra.exceptions import IngestError
         
         # Test with item that has no usable fields
@@ -1914,7 +1930,7 @@ class TestCollectionIngestCanonicalKey:
     @patch('retrovue.cli.commands.collection.CollectionIngestService')
     def test_canonical_key_mixed_path_formats(self, mock_service_class, mock_resolve, mock_get_importer, mock_session):
         """Verify canonicalization of mixed paths."""
-        from retrovue.infra.canonical import canonical_key_for, canonical_hash
+        from retrovue.infra.canonical import canonical_key_for
         
         # Test various path formats
         test_paths = [
@@ -2028,9 +2044,9 @@ class TestMilestone2DAssetChangeDetection:
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_different_hash_is_skipped_no_update(self, mock_session):
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
-        from retrovue.cli.commands._ops import collection_ingest_service as svc
 
         runner = CliRunner()
 
@@ -2069,9 +2085,9 @@ class TestMilestone2DAssetChangeDetection:
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_different_enricher_is_skipped_no_update(self, mock_session):
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
-        from retrovue.cli.commands._ops import collection_ingest_service as svc
 
         runner = CliRunner()
 
@@ -2109,9 +2125,9 @@ class TestMilestone2DAssetChangeDetection:
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_no_diffs_increments_skipped(self, mock_session):
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
-        from retrovue.cli.commands._ops import collection_ingest_service as svc
 
         runner = CliRunner()
 
@@ -2168,9 +2184,9 @@ class TestMilestone3AAssetStateUpdate:
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_is_skipped_and_not_mutated(self, mock_session):
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
-        from retrovue.cli.commands._ops import collection_ingest_service as svc
 
         runner = CliRunner()
 
@@ -2215,9 +2231,9 @@ class TestMilestone3AAssetStateUpdate:
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_new_enricher_is_skipped_and_not_mutated(self, mock_session):
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
-        from retrovue.cli.commands._ops import collection_ingest_service as svc
 
         runner = CliRunner()
 
@@ -2262,9 +2278,9 @@ class TestMilestone3AAssetStateUpdate:
 
     @patch("retrovue.cli.commands.collection.session")
     def test_existing_asset_no_changes_keeps_state_and_no_add(self, mock_session):
+        from retrovue.cli.commands._ops import collection_ingest_service as svc
         from retrovue.cli.main import app
         from retrovue.domain.entities import Asset
-        from retrovue.cli.commands._ops import collection_ingest_service as svc
 
         runner = CliRunner()
 

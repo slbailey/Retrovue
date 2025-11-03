@@ -6,9 +6,8 @@ These tests verify that source-collection interactions maintain consistency,
 transactional integrity, and proper error handling across domains.
 """
 
-import json
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

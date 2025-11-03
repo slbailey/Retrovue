@@ -8,9 +8,9 @@ a specific series, ensuring correct numeric types and sorting.
 import json
 from unittest.mock import patch
 
+from retrovue.cli.commands.assets import app
 from typer.testing import CliRunner
 
-from retrovue.cli.commands.assets import app
 from retrovue.domain.entities import Asset, EntityType, ProviderRef
 
 

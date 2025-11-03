@@ -9,11 +9,11 @@ import os
 from collections.abc import Generator
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command
-from alembic.config import Config
 from retrovue.infra.settings import settings
 
 

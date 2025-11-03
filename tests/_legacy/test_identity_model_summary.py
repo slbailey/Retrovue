@@ -8,7 +8,6 @@ This test validates what is currently working and what needs to be implemented
 to fully comply with the identity model documentation.
 """
 
-from retrovue.domain.entities import Asset
 from retrovue.schedule_manager.models import (
     BroadcastChannel,
     BroadcastPlaylogEvent,
@@ -17,6 +16,8 @@ from retrovue.schedule_manager.models import (
     BroadcastTemplateBlock,
     CatalogAsset,
 )
+
+from retrovue.domain.entities import Asset
 
 
 class TestIdentityModelSummary:
@@ -45,7 +46,7 @@ class TestIdentityModelSummary:
         for model, name in broadcast_models:
             pk_columns = [col for col in model.__table__.columns if col.primary_key]
             assert len(pk_columns) == 1, f"{name} should have exactly one primary key"
-            assert pk_columns[0].type.python_type == int, f"{name} primary key should be INTEGER"
+            assert pk_columns[0].type.python_type is int, f"{name} primary key should be INTEGER"
         
         # Test 3: Broadcast models are missing UUID columns (needs implementation)
         missing_uuid_models = []
@@ -64,18 +65,18 @@ class TestIdentityModelSummary:
         # Test 4: Foreign key relationships use INTEGER references (correct)
         # Check BroadcastScheduleDay foreign keys
         schedule_day_columns = {col.name: col for col in BroadcastScheduleDay.__table__.columns}
-        assert schedule_day_columns['channel_id'].type.python_type == int
-        assert schedule_day_columns['template_id'].type.python_type == int
+        assert schedule_day_columns['channel_id'].type.python_type is int
+        assert schedule_day_columns['template_id'].type.python_type is int
         
         # Check BroadcastPlaylogEvent foreign keys
         playlog_columns = {col.name: col for col in BroadcastPlaylogEvent.__table__.columns}
-        assert playlog_columns['channel_id'].type.python_type == int
-        assert playlog_columns['asset_id'].type.python_type == int
+        assert playlog_columns['channel_id'].type.python_type is int
+        assert playlog_columns['asset_id'].type.python_type is int
         
         # Test 5: CatalogAsset has source_ingest_asset_id for lineage (correct)
         catalog_columns = {col.name: col for col in CatalogAsset.__table__.columns}
         assert 'source_ingest_asset_id' in catalog_columns
-        assert catalog_columns['source_ingest_asset_id'].type.python_type == int
+        assert catalog_columns['source_ingest_asset_id'].type.python_type is int
     
     def test_implementation_requirements(self):
         """Document what needs to be implemented for full compliance."""
@@ -136,12 +137,12 @@ class TestIdentityModelSummary:
         
         for model in broadcast_models:
             pk_columns = [col for col in model.__table__.columns if col.primary_key]
-            assert pk_columns[0].type.python_type == int
+            assert pk_columns[0].type.python_type is int
         
         # 2. Foreign key consistency
         schedule_day_columns = {col.name: col for col in BroadcastScheduleDay.__table__.columns}
-        assert schedule_day_columns['channel_id'].type.python_type == int
-        assert schedule_day_columns['template_id'].type.python_type == int
+        assert schedule_day_columns['channel_id'].type.python_type is int
+        assert schedule_day_columns['template_id'].type.python_type is int
         
         # 3. Asset dual key
         asset_columns = {col.name: col for col in Asset.__table__.columns}

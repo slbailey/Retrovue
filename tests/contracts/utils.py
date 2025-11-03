@@ -7,7 +7,8 @@ representations.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 
 def assert_contains_fields(obj: Mapping[str, Any], expected: Mapping[str, Any]) -> None:

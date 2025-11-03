@@ -77,14 +77,34 @@ class FFprobeEnricher(BaseEnricher):
             if not file_path.exists():
                 raise EnricherError(f"File does not exist: {file_path}")
 
-            # Run FFprobe to get metadata
+            # Run FFprobe to get metadata (raw ffprobe JSON)
             metadata = self._run_ffprobe(file_path)
 
             # Convert metadata to labels
             additional_labels = self._metadata_to_labels(metadata)
 
-            # Return enriched item
-            return self._create_enriched_item(discovered_item, additional_labels)
+            # NEW: build a probed payload from ffprobe
+            probed_from_ffprobe = self._metadata_to_probed(metadata)
+
+            # Merge with any existing probed on the item (maybe an importer added some)
+            existing_probed = getattr(discovered_item, "probed", None)
+            merged_probed = self._deep_merge_dicts(existing_probed, probed_from_ffprobe)
+
+            # finally create the new item – do NOT touch editorial / sidecar
+            new_item = DiscoveredItem(
+                path_uri=discovered_item.path_uri,
+                provider_key=discovered_item.provider_key,
+                raw_labels=(discovered_item.raw_labels or []) + additional_labels,
+                last_modified=discovered_item.last_modified,
+                size=discovered_item.size,
+                hash_sha256=discovered_item.hash_sha256,
+                editorial=getattr(discovered_item, "editorial", None),
+                sidecar=getattr(discovered_item, "sidecar", None),
+                source_payload=getattr(discovered_item, "source_payload", None),
+                probed=merged_probed,
+            )
+
+            return new_item
 
         except Exception as e:
             raise EnricherError(f"Failed to enrich item: {str(e)}") from e
@@ -169,48 +189,11 @@ class FFprobeEnricher(BaseEnricher):
             if result.returncode != 0:
                 raise EnricherError(f"FFprobe failed: {result.stderr}")
 
-            # Parse JSON output
-            data = json.loads(result.stdout)
+            # Parse JSON output and return the full ffprobe document
+            from typing import cast
+            data = cast(dict[str, Any], json.loads(result.stdout))
 
-            # Extract relevant metadata
-            metadata = {}
-
-            # Duration from format
-            if "format" in data and "duration" in data["format"]:
-                metadata["duration"] = data["format"]["duration"]
-
-            # Container format
-            if "format" in data and "format_name" in data["format"]:
-                metadata["container"] = data["format"]["format_name"]
-
-            # Stream information
-            if "streams" in data:
-                video_streams = [s for s in data["streams"] if s.get("codec_type") == "video"]
-                audio_streams = [s for s in data["streams"] if s.get("codec_type") == "audio"]
-
-                # Video codec
-                if video_streams:
-                    video_stream = video_streams[0]
-                    if "codec_name" in video_stream:
-                        metadata["video_codec"] = video_stream["codec_name"]
-
-                    # Resolution
-                    if "width" in video_stream and "height" in video_stream:
-                        width = video_stream["width"]
-                        height = video_stream["height"]
-                        metadata["resolution"] = f"{width}x{height}"
-
-                # Audio codec
-                if audio_streams:
-                    audio_stream = audio_streams[0]
-                    if "codec_name" in audio_stream:
-                        metadata["audio_codec"] = audio_stream["codec_name"]
-
-            # Chapter information
-            if "chapters" in data:
-                metadata["chapters"] = data["chapters"]
-
-            return metadata
+            return data
 
         except FileNotFoundError:
             raise EnricherError(
@@ -224,6 +207,120 @@ class FFprobeEnricher(BaseEnricher):
         except Exception as e:
             raise EnricherError(f"FFprobe execution failed: {e}") from e
 
+    def _deep_merge_dicts(self, base: dict | None, extra: dict | None) -> dict:
+        """
+        Merge two dicts without losing data. Values from `extra` win only when
+        they are scalars; nested dicts are merged recursively.
+        """
+        if base is None:
+            base = {}
+        if extra is None:
+            return dict(base)
+
+        merged = dict(base)
+        for key, val in extra.items():
+            if (
+                key in merged
+                and isinstance(merged[key], dict)
+                and isinstance(val, dict)
+            ):
+                merged[key] = self._deep_merge_dicts(merged[key], val)
+            else:
+                merged[key] = val
+        return merged
+
+    def _metadata_to_probed(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """
+        Convert raw ffprobe JSON into the structured 'probed' shape our
+        ingest/handler expects.
+
+        We keep it small and predictable:
+        {
+            "duration_ms": ...,
+            "bitrate": ...,
+            "container": ...,
+            "video": {
+                "codec": ...,
+                "width": ...,
+                "height": ...,
+                "fps": ...,
+            },
+            "audio": [
+                {"codec": ..., "channels": ..., "sample_rate": ..., "language": ...},
+                ...
+            ],
+        }
+        """
+        if not meta:
+            return {}
+
+        probed: dict[str, Any] = {}
+
+        # format-level stuff
+        fmt = meta.get("format") or {}
+        if "duration" in fmt:
+            try:
+                dur_sec = float(fmt["duration"])
+                probed["duration_ms"] = int(dur_sec * 1000)
+            except Exception:
+                pass
+
+        if "bit_rate" in fmt:
+            try:
+                probed["bitrate"] = int(fmt["bit_rate"])
+            except Exception:
+                probed["bitrate"] = fmt["bit_rate"]
+
+        if "format_name" in fmt:
+            probed["container"] = fmt["format_name"]
+
+        # streams
+        streams = meta.get("streams") or []
+        video_block: dict[str, Any] = {}
+        audio_blocks: list[dict[str, Any]] = []
+
+        for st in streams:
+            codec_type = st.get("codec_type")
+            if codec_type == "video" and not video_block:
+                video_block["codec"] = st.get("codec_name")
+                video_block["width"] = st.get("width")
+                video_block["height"] = st.get("height")
+
+                # fps can come as "r_frame_rate": "24000/1001"
+                r_frame_rate = st.get("r_frame_rate") or st.get("avg_frame_rate")
+                if r_frame_rate and r_frame_rate != "0/0":
+                    try:
+                        num, den = r_frame_rate.split("/")
+                        fps = float(num) / float(den)
+                        video_block["fps"] = fps
+                    except Exception:
+                        pass
+
+                # sometimes bit_rate is on the stream
+                if st.get("bit_rate"):
+                    try:
+                        video_block["bitrate"] = int(st["bit_rate"])
+                    except Exception:
+                        video_block["bitrate"] = st["bit_rate"]
+
+            elif codec_type == "audio":
+                ab: dict[str, Any] = {
+                    "codec": st.get("codec_name"),
+                    "channels": st.get("channels"),
+                    "sample_rate": st.get("sample_rate"),
+                }
+                if st.get("tags") and st["tags"].get("language"):
+                    ab["language"] = st["tags"]["language"]
+                audio_blocks.append({k: v for k, v in ab.items() if v is not None})
+
+        if video_block:
+            # drop Nones
+            probed["video"] = {k: v for k, v in video_block.items() if v is not None}
+        if audio_blocks:
+            probed["audio"] = audio_blocks
+
+        return {k: v for k, v in probed.items() if v is not None}
+
     def _metadata_to_labels(self, metadata: dict[str, Any]) -> list[str]:
         """
         Convert metadata dictionary to label list.
@@ -236,30 +333,39 @@ class FFprobeEnricher(BaseEnricher):
         """
         labels = []
 
-        # Add duration if available
-        if "duration" in metadata:
-            duration_ms = int(float(metadata["duration"]) * 1000)
-            labels.append(f"duration_ms:{duration_ms}")
+        # Duration from format
+        fmt = metadata.get("format") or {}
+        if "duration" in fmt:
+            try:
+                duration_ms = int(float(fmt["duration"]) * 1000)
+                labels.append(f"duration_ms:{duration_ms}")
+            except Exception:
+                pass
 
-        # Add video codec if available
-        if "video_codec" in metadata:
-            labels.append(f"video_codec:{metadata['video_codec']}")
+        # Container format
+        if "format_name" in fmt:
+            labels.append(f"container:{fmt['format_name']}")
 
-        # Add audio codec if available
-        if "audio_codec" in metadata:
-            labels.append(f"audio_codec:{metadata['audio_codec']}")
+        # Streams
+        streams = metadata.get("streams") or []
+        video_streams = [s for s in streams if s.get("codec_type") == "video"]
+        audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
 
-        # Add container format if available
-        if "container" in metadata:
-            labels.append(f"container:{metadata['container']}")
+        if video_streams:
+            vs = video_streams[0]
+            if vs.get("codec_name"):
+                labels.append(f"video_codec:{vs['codec_name']}")
+            if vs.get("width") and vs.get("height"):
+                labels.append(f"resolution:{vs['width']}x{vs['height']}")
 
-        # Add resolution if available
-        if "resolution" in metadata:
-            labels.append(f"resolution:{metadata['resolution']}")
+        if audio_streams:
+            as_ = audio_streams[0]
+            if as_.get("codec_name"):
+                labels.append(f"audio_codec:{as_['codec_name']}")
 
-        # Add chapter markers if available
-        if "chapters" in metadata:
-            chapter_count = len(metadata["chapters"])
-            labels.append(f"chapters:{chapter_count}")
+        # Chapters count
+        chapters = metadata.get("chapters") or []
+        if isinstance(chapters, list) and chapters:
+            labels.append(f"chapters:{len(chapters)}")
 
         return labels

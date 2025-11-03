@@ -9,7 +9,6 @@ import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from src.retrovue.streaming.watchdog import MPEGTSWatchdog
 
 

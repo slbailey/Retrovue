@@ -6,12 +6,14 @@ to prevent deletion of assets that are referenced by episodes.
 """
 
 import pytest
+
 pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 
-from uuid import uuid4
+from uuid import uuid4  # noqa: E402
 
-from retrovue.content_manager.library_service import LibraryService
-from retrovue.domain.entities import Asset, Episode, EpisodeAsset, Season, Title
+from retrovue.content_manager.library_service import LibraryService  # noqa: E402
+
+from retrovue.domain.entities import Asset, Episode, EpisodeAsset, Season, Title  # noqa: E402
 
 
 class TestAssetHardDeleteGuards:

@@ -39,7 +39,7 @@ def test_filters_include_enriching_and_not_approved():
     # Arrange: simulate DB returning a mix of assets
     enriching = _asset(uuid="a" * 36, state="enriching", approved_for_broadcast=False)
     ready_unapproved = _asset(uuid="b" * 36, state="ready", approved_for_broadcast=False)
-    ready_ok = _asset(uuid="c" * 36, state="ready", approved_for_broadcast=True)
+    _ready_ok = _asset(uuid="c" * 36, state="ready", approved_for_broadcast=True)
 
     fake_db = MagicMock()
     fake_db.execute.return_value.scalars.return_value = _ScalarResult([enriching, ready_unapproved])

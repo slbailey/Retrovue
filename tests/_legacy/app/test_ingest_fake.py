@@ -6,9 +6,10 @@ to verify the complete ingest pipeline works correctly.
 """
 
 import pytest
+
 pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
 
-from retrovue.content_manager.ingest_service import IngestService
+from retrovue.content_manager.ingest_service import IngestService  # noqa: E402
 
 
 class TestFakeImporterIngest:

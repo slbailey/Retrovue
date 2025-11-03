@@ -30,6 +30,23 @@ The importer must NOT decide which collections sync. RetroVue handles that via `
 
 The importer must NOT assume filesystem paths are directly readable. RetroVue will provide the resolved `local_path` mapping per collection.
 
+### Discovered items MUST be handler-ready
+
+Importers MUST return discovered items that can be turned into a handler payload without additional guessing in the ingest service.
+
+A discovered item SHOULD provide:
+
+- `path_uri` (source-native: e.g. `plex://39593` or real path)
+- `editorial` (light, source-derived: title, year, series, season/episode, library/bucket)
+- `sidecar` (optional) — when the source already exposes structured metadata
+- `probed` is OPTIONAL for importers; enrichers MAY attach it later
+
+Importers that subclass the base importer SHOULD implement or use a helper like:
+`DiscoveredItem.to_ingest_payload(importer_name, asset_type)` which returns the dict expected by
+`retrovue.usecases.metadata_handler.handle_ingest(...)`.
+
+Note on domains: importers and enrichers must add to the correct metadata domain (editorial, probed, station_ops) rather than overwriting existing values. When a domain already exists, perform a deep merge (object/object recursive, last-writer-wins on scalars). Do not replace the `sidecar` unless explicitly extending it.
+
 ## Enricher plugins
 
 An enricher is always called "enricher". We do not use alternate terms.

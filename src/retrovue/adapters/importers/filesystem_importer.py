@@ -503,6 +503,30 @@ class FilesystemImporter(BaseImporter):
             # Extract basic labels from filename
             raw_labels = self._extract_filename_labels(file_path.name)
 
+            # Build basic editorial from filename and fs attributes
+            editorial: dict[str, Any] = {
+                "title": file_path.stem,
+                "size": size,
+                "modified": last_modified.isoformat(),
+            }
+            # Try loading a JSON/YAML sidecar adjacent to the file
+            sidecar: dict[str, Any] | None = None
+            try:
+                for ext in (".retrovue.json", ".json", ".yaml", ".yml"):
+                    candidate = file_path.with_suffix(file_path.suffix + ext) if ext.startswith(".") else None
+                    if candidate and candidate.exists():
+                        if candidate.suffix.lower() in (".json", ".retrovue.json"):
+                            import json as _json
+                            with candidate.open("r", encoding="utf-8") as fp:
+                                sidecar = _json.load(fp)
+                        elif candidate.suffix.lower() in (".yaml", ".yml"):
+                            import yaml as _yaml  # type: ignore
+                            with candidate.open("r", encoding="utf-8") as fp:
+                                sidecar = _yaml.safe_load(fp)
+                        break
+            except Exception:
+                sidecar = None
+
             return DiscoveredItem(
                 path_uri=path_uri,
                 provider_key=str(file_path),  # Use file path as provider key
@@ -510,6 +534,8 @@ class FilesystemImporter(BaseImporter):
                 last_modified=last_modified,
                 size=size,
                 hash_sha256=hash_sha256,
+                editorial=editorial,
+                sidecar=sidecar,
             )
 
         except Exception as e:

@@ -6,9 +6,8 @@ These tests verify CLI behavior, filtering, output formats, and read-only operat
 """
 
 import json
-import pytest
-import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
 
 from retrovue.cli.main import app

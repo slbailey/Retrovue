@@ -8,13 +8,9 @@ import uuid
 from datetime import UTC
 
 import pytest
-pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from retrovue.domain.entities import Asset
-from retrovue.infra.db import Base
-from retrovue.schedule_manager.models import (
+pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+from retrovue.schedule_manager.models import (  # noqa: E402
     BroadcastChannel,
     BroadcastPlaylogEvent,
     BroadcastScheduleDay,
@@ -22,6 +18,11 @@ from retrovue.schedule_manager.models import (
     BroadcastTemplateBlock,
     CatalogAsset,
 )
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+
+from retrovue.domain.entities import Asset  # noqa: E402
+from retrovue.infra.db import Base  # noqa: E402
 
 
 class TestIdentityModel:
@@ -352,7 +353,7 @@ class TestIdentityModelCompliance:
             assert len(pk_columns) == 1, f"{model.__name__} should have exactly one primary key"
             
             pk_column = pk_columns[0]
-            assert pk_column.type.python_type == int, f"{model.__name__} primary key should be INTEGER, not {pk_column.type}"
+            assert pk_column.type.python_type is int, f"{model.__name__} primary key should be INTEGER, not {pk_column.type}"
     
     def test_asset_has_correct_dual_key_structure(self):
         """Test that Asset entity has the correct dual-key structure."""
@@ -362,7 +363,7 @@ class TestIdentityModelCompliance:
         # Should have id column (INTEGER PK)
         assert 'id' in asset_columns
         assert asset_columns['id'].primary_key
-        assert asset_columns['id'].type.python_type == int
+        assert asset_columns['id'].type.python_type is int
         
         # Should have uuid column (UUID, unique)
         assert 'uuid' in asset_columns
@@ -377,19 +378,19 @@ class TestIdentityModelCompliance:
         
         # channel_id should be INTEGER FK
         assert 'channel_id' in schedule_day_columns
-        assert schedule_day_columns['channel_id'].type.python_type == int
+        assert schedule_day_columns['channel_id'].type.python_type is int
         
         # template_id should be INTEGER FK
         assert 'template_id' in schedule_day_columns
-        assert schedule_day_columns['template_id'].type.python_type == int
+        assert schedule_day_columns['template_id'].type.python_type is int
         
         # Check BroadcastPlaylogEvent foreign keys
         playlog_columns = {col.name: col for col in BroadcastPlaylogEvent.__table__.columns}
         
         # channel_id should be INTEGER FK
         assert 'channel_id' in playlog_columns
-        assert playlog_columns['channel_id'].type.python_type == int
+        assert playlog_columns['channel_id'].type.python_type is int
         
         # asset_id should be INTEGER FK
         assert 'asset_id' in playlog_columns
-        assert playlog_columns['asset_id'].type.python_type == int
+        assert playlog_columns['asset_id'].type.python_type is int

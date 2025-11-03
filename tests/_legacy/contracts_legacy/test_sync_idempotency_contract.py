@@ -12,9 +12,9 @@ Implementation rules:
 """
 
 import pytest
+from tests.cli.utils import run_cli
 
 from retrovue.domain import entities
-from tests.cli.utils import run_cli
 
 
 @pytest.mark.asyncio
