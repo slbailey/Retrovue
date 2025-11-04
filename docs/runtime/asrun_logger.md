@@ -1,6 +1,6 @@
 # RetroVue Runtime — AsRunLogger
 
-_Related: [Runtime: Channel manager](ChannelManager.md) • [Runtime: Schedule service](schedule_service.md) • [Runtime: Master clock](MasterClock.md)_
+_Related: [Runtime: Channel manager](ChannelManager.md) • [Runtime: Schedule service](schedule_service.md) • [Domain: MasterClock](../domain/MasterClock.md)_
 
 > Records what actually aired for compliance, reporting, and audit.
 
@@ -203,7 +203,7 @@ This ensures accurate compliance reporting while maintaining the integrity of th
 | ------------------------------------------ | --------------------------------------------------- |
 | **[ScheduleService](schedule_service.md)** | Provides broadcast_day_for() for day classification |
 | **[ChannelManager](ChannelManager.md)**    | Provides playback events and timing information     |
-| **[MasterClock](MasterClock.md)**          | Provides consistent timestamps for all log entries  |
+| **[MasterClock](../domain/MasterClock.md)**          | Provides consistent timestamps for all log entries  |
 | **[ProgramDirector](program_director.md)** | Coordinates emergency response logging              |
 
 _Document version: v0.1 · Last updated: 2025-10-24_

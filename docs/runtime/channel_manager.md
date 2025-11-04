@@ -1,6 +1,6 @@
 # RetroVue Runtime — ChannelManager
 
-_Related: [Runtime: Schedule service](schedule_service.md) • [Runtime: Program director](program_director.md) • [Runtime: Master clock](MasterClock.md)_
+_Related: [Runtime: Schedule service](schedule_service.md) • [Runtime: Program director](program_director.md) • [Domain: MasterClock](../domain/MasterClock.md)_
 
 > Per-channel board operator that executes scheduled content playback on the air.
 
@@ -217,7 +217,7 @@ ChannelManager operates on BroadcastChannel entities using UUID identifiers for 
 | Component                                  | Relationship                                                |
 | ------------------------------------------ | ----------------------------------------------------------- |
 | **[ScheduleService](schedule_service.md)** | Provides ScheduledSegments for playout execution            |
-| **[MasterClock](MasterClock.md)**          | Provides authoritative station time for offset calculations |
+| **[MasterClock](../domain/MasterClock.md)**          | Provides authoritative station time for offset calculations |
 | **[ProgramDirector](program_director.md)** | Sets global mode and emergency overrides                    |
 | **[AsRunLogger](AsRunLogging.md)**         | Receives playback events for compliance logging             |
 

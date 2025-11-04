@@ -1,4 +1,4 @@
-_Related: [Runtime: Channel manager](ChannelManager.md) • [Runtime: Master clock](MasterClock.md) • [Operator workflows](../operator/OperatorWorkflows.md)_
+_Related: [Runtime: Channel manager](ChannelManager.md) • [Domain: MasterClock](../domain/MasterClock.md) • [Operator workflows](../operator/OperatorWorkflows.md)_
 
 # As-run logging
 
@@ -41,6 +41,6 @@ The as-run logging layer must be able to answer:
 
 See also:
 
-- [Master clock](MasterClock.md)
+- [Domain: MasterClock](../domain/MasterClock.md)
 - [Channel manager](ChannelManager.md)
 - [Operator workflows](../operator/OperatorWorkflows.md)

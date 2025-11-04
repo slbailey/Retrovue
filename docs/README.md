@@ -28,7 +28,7 @@ How RetroVue behaves at runtime. ChannelManager, ffmpeg lifecycle, timing.
 
 - [Channel manager](runtime/ChannelManager.md)
 - [Producer lifecycle](runtime/ProducerLifecycle.md)
-- [Master clock](runtime/MasterClock.md)
+- [MasterClock](domain/MasterClock.md)
 - [As-run logging](runtime/AsRunLogging.md)
 
 ## Operator

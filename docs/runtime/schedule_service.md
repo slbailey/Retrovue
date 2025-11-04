@@ -1,6 +1,6 @@
 # RetroVue Runtime — ScheduleService
 
-_Related: [Runtime: Channel manager](ChannelManager.md) • [Runtime: Master clock](MasterClock.md) • [Runtime: Program director](program_director.md)_
+_Related: [Runtime: Channel manager](ChannelManager.md) • [Domain: MasterClock](../domain/MasterClock.md) • [Runtime: Program director](program_director.md)_
 
 > Station's programming authority for "what should air, and when."
 
@@ -210,7 +210,7 @@ ScheduleService operates on BroadcastChannel entities using UUID identifiers for
 
 | Component                                  | Relationship                                                      |
 | ------------------------------------------ | ----------------------------------------------------------------- |
-| **[MasterClock](MasterClock.md)**          | Provides authoritative station time for all scheduling operations |
+| **[MasterClock](../domain/MasterClock.md)**          | Provides authoritative station time for all scheduling operations |
 | **[ChannelManager](ChannelManager.md)**    | Consumes ScheduledSegments for playout execution                  |
 | **[AsRunLogger](AsRunLogging.md)**         | Uses broadcast_day_for() for compliance reporting                 |
 | **[ProgramDirector](program_director.md)** | Queries ScheduleService for current airing status                 |

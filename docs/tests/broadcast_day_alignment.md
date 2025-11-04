@@ -1,6 +1,6 @@
 # Broadcast Day Alignment Testing
 
-_Related: [Runtime: Master clock](../runtime/MasterClock.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Contributing: Runtime](../contributing/CONTRIBUTING_RUNTIME.md)_
+_Related: [Domain: MasterClock](../domain/MasterClock.md) • [Runtime: Channel manager](../runtime/ChannelManager.md) • [Contributing: Runtime](../contributing/CONTRIBUTING_RUNTIME.md)_
 
 This document describes the `retrovue test broadcast-day-alignment` command, which validates ScheduleService's broadcast-day logic and rollover handling.
 
@@ -274,7 +274,7 @@ retrovue test broadcast-day-alignment --timezone "Asia/Tokyo"
 
 ## See also
 
-- [Runtime: Master clock](../runtime/MasterClock.md) - Authoritative time source
+- [Domain: MasterClock](../domain/MasterClock.md) - Authoritative time source
 - [Runtime: Schedule service](../runtime/schedule_service.md) - Broadcast day logic
 - [Runtime: Channel manager](../runtime/ChannelManager.md) - Playback execution
 - [Contributing: Runtime](../contributing/CONTRIBUTING_RUNTIME.md) - Runtime development process
