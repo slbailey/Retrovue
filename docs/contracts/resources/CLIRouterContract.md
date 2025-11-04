@@ -49,6 +49,8 @@ Nested routes like `retro channel <id> schedule-template list` are NOT supported
 retrovue schedule-template list --channel-id <id>
 ```
 
+**Future Enhancement**: Nested routing support may be added in future versions (e.g., `retrovue channel <id> schedule-template list`) to provide more intuitive command hierarchies for resource-specific operations.
+
 ## Documentation Requirements
 
 ### R-7: CLI Documentation Location
@@ -72,6 +74,22 @@ Behavioral contracts (rules, guarantees, exit codes) MUST remain in `docs/contra
 ### R-10: Documentation Mapping
 
 The router MUST track `doc_path` for each registered command group. This enables automated documentation validation and discovery.
+
+### R-10a: Documentation Link Validation (Dev-Time)
+
+The router MUST provide a `validate_documentation_links()` method that verifies all registered command groups have corresponding markdown files in `docs/cli/`. This is an optional dev-time check that can be run during development or CI to ensure documentation mapping is correct.
+
+**Example usage:**
+```python
+router = get_router(app)
+# ... register all commands ...
+validation = router.validate_documentation_links()
+if not all(validation.values()):
+    missing = [name for name, valid in validation.items() if not valid]
+    raise ValueError(f"Missing CLI docs: {missing}")
+```
+
+**Future Enhancement**: CLI documentation generation via static parser walk - a future tool could automatically generate or update `docs/cli/*.md` files by parsing the Typer command definitions, ensuring documentation stays in sync with implementation.
 
 ## Router Implementation
 
