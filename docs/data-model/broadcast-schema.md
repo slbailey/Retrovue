@@ -13,23 +13,22 @@ These tables live in Postgres and are created by Alembic migrations. Runtime cod
 ## Conventions
 
 - **timestamptz columns** are station audit timestamps, default NOW() on write.
-- **"broadcast day"** refers to the 06:00 → 06:00 programming day (rollover_minutes).
+- **"broadcast day"** refers to the 06:00 → 06:00 programming day (programming_day_start).
 - **"canonical"** means "approved for air".
 
 ## Tables
 
 ### channel
 
-Defines channel timing policy and operational parameters. Each channel represents a broadcast stream with its own schedule, timezone, and grid configuration.
+Defines channel timing policy and operational parameters. Each channel represents a broadcast stream with its own schedule and grid configuration.
 
 | Column              | Type        | Description                                                                  | Required? | Who writes it                       | Who reads it                                             |
 | ------------------- | ----------- | ---------------------------------------------------------------------------- | --------- | ----------------------------------- | -------------------------------------------------------- |
 | id                  | INTEGER     | Primary key                                                                  | Yes       | retrovue CLI / infra.admin_services | ScheduleService, runtime/ChannelManager, reporting       |
 | name                | TEXT        | Channel name (unique)                                                        | Yes       | retrovue CLI / infra.admin_services | ScheduleService, runtime/ChannelManager, ProgramDirector |
-| timezone            | TEXT        | IANA timezone string                                                         | Yes       | retrovue CLI / infra.admin_services | ScheduleService, runtime/ChannelManager                  |
 | grid_size_minutes   | INTEGER     | Programming grid size in minutes                                             | Yes       | retrovue CLI / infra.admin_services | ScheduleService                                          |
 | grid_offset_minutes | INTEGER     | Grid offset from hour boundary                                               | Yes       | retrovue CLI / infra.admin_services | ScheduleService                                          |
-| rollover_minutes    | INTEGER     | Minutes after local midnight for broadcast day rollover (e.g. 360 for 06:00) | Yes       | retrovue CLI / infra.admin_services | ScheduleService                                          |
+| broadcast_day_start | TEXT        | Local-time anchor for broadcast day start (HH:MM, e.g. "06:00")             | Yes       | retrovue CLI / infra.admin_services | ScheduleService                                          |
 | is_active           | BOOLEAN     | Channel operational status                                                   | Yes       | retrovue CLI / infra.admin_services | ScheduleService, runtime/ChannelManager                  |
 | created_at          | TIMESTAMPTZ | Creation timestamp                                                           | Yes       | Database                            | Audit, reporting                                         |
 
@@ -131,10 +130,9 @@ erDiagram
     channel {
         int id PK
         text name
-        text timezone
         int grid_size_minutes
         int grid_offset_minutes
-        int rollover_minutes
+        text broadcast_day_start
         boolean is_active
         timestamptz created_at
     }
@@ -187,7 +185,7 @@ erDiagram
 
 **Key Invariants:**
 
-- Each channel has policy (timezone, grid, rollover).
+- Each channel has policy (grid, broadcast_day_start).
 - Each broadcast day for a channel is assigned exactly one template.
 - Each template is broken into time blocks with rule_json.
 - rule_json selects from the broadcast catalog (catalog_asset) using tags.

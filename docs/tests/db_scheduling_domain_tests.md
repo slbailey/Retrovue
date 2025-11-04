@@ -13,7 +13,7 @@ This document defines the testing requirements and best practices for the Broadc
 - Alembic migrations are designed for Postgres and may use Postgres-specific features
 - Production environment uses Postgres, so tests must match production behavior
 - SQLite has different constraint handling and data type behavior that could mask issues
-- Postgres-specific features like timezone handling are critical for broadcast scheduling
+- Postgres-specific time functions are critical for broadcast scheduling
 
 ### Migration Management
 
@@ -143,8 +143,7 @@ def cleanup_test_data(session):
 **Channel Creation**: Validate channel creation with all required fields:
 
 - Name uniqueness and validation
-- Timezone validation (IANA timezone strings)
-- Grid configuration (size, offset, rollover)
+- Grid configuration (size, offset, anchor)
 - Active status management
 
 **Channel Relationships**: Test foreign key relationships:
@@ -156,8 +155,7 @@ def cleanup_test_data(session):
 **Channel Configuration**: Validate timing and grid settings:
 
 - Grid size and offset calculations
-- Rollover time handling
-- Timezone conversion accuracy
+- Broadcast day anchor handling
 
 ### Broadcast Template Tests
 
@@ -316,7 +314,7 @@ def cleanup_test_data(session):
 
 **Realistic Data**: Use realistic test data that matches production scenarios:
 
-- Real timezone strings
+- Representative local-time scenarios
 - Valid date formats
 - Realistic content tags
 - Proper file paths
@@ -377,7 +375,6 @@ def cleanup_test_data(session):
 
 **Invalid Data**: Test error handling for invalid data:
 
-- Invalid timezone strings
 - Malformed date formats
 - Invalid JSON in rule_json
 - Constraint violation handling
@@ -390,11 +387,10 @@ def cleanup_test_data(session):
 
 ### Edge Cases
 
-**Timezone Handling**: Test timezone edge cases:
+**Time Handling**: Test edge cases:
 
 - Daylight saving time transitions
-- UTC conversion accuracy
-- Rollover time handling
+- Rollover handling across the broadcast day boundary
 
 **Date Boundaries**: Test date boundary handling:
 

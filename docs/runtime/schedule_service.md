@@ -52,14 +52,14 @@ Given a UTC timestamp, return the broadcast day label (a date) for that channel.
 
 **Steps:**
 
-1. Convert when_utc (aware datetime in UTC) to channel-local using MasterClock.to_channel_time()
+1. Convert when_utc (aware datetime in UTC) to local time
 2. If local_time.time() >= 06:00, broadcast day label is local_time.date()
 3. Else, broadcast day label is (local_time.date() - 1 day)
 4. Return that label as a date object
 
 #### `broadcast_day_window(channel_id, when_utc) -> tuple[datetime, datetime]`
 
-Return (start_local, end_local) for the broadcast day that contains when_utc, in channel-local tz, tz-aware datetimes.
+Return (start_local, end_local) for the broadcast day that contains when_utc, in local time (tz-aware datetimes).
 
 - start_local = YYYY-MM-DD 06:00:00
 - end_local = (YYYY-MM-DD+1) 05:59:59.999999
@@ -103,17 +103,14 @@ This maintains broadcast discipline and prevents double-scheduling conflicts.
 
 ## Implementation Notes
 
-- All APIs ALWAYS accept or return tz-aware datetimes
-- If something naive is passed in, raise ValueError
-- These APIs MUST use MasterClock for timezone conversion
-- No direct datetime.now() or manual tz math is allowed
-- Use the already-implemented MasterClock.to_channel_time()
+- APIs accept/return tz-aware UTC datetimes; local-time projections are derived using the system's local timezone.
+- If something naive is passed in, raise ValueError.
+- Avoid manual timezone arithmetic; prefer standard library conversions.
 
 ### Channel Timing Policy
 
 Each channel carries its own timing policy configuration:
 
-- **timezone**: IANA timezone string (e.g. "America/New_York"). Used with MasterClock for all conversions.
 - **grid_slot_size_minutes**: Natural planning granularity.
   - Examples:
     - 30 for traditional half-hour grids
@@ -123,9 +120,9 @@ Each channel carries its own timing policy configuration:
   - Examples:
     - 0 means :00/:30
     - 5 means :05/:35 (classic TBS-style)
-- **broadcast_day_rollover_minutes_local**: Minute after local midnight when a new broadcast day begins for that channel.
-  - Default: 360 (6:00am).
-  - Could be 365 (6:05am), 300 (5:00am), etc.
+- **broadcast_day_start**: Local-time anchor when a new broadcast day begins for that channel (HH:MM).
+  - Default: 06:00.
+  - Examples: 06:05, 05:00, etc.
 
 ScheduleService is responsible for honoring these policies when generating future schedule blocks and playout segments.
 
@@ -135,7 +132,7 @@ In v0.1, most channels will likely use:
 
 - grid_slot_size_minutes = 30
 - grid_slot_offset_minutes = 0
-- broadcast_day_rollover_minutes_local = 360
+- broadcast_day_start = 06:00
 
 But the design and interfaces assume per-channel flexibility so we don't have to redesign later.
 

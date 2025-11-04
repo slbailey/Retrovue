@@ -12,7 +12,7 @@ Reusable, channel-specific plan for EPG layout and inputs to playlog building.
 - **channel_id (UUID, FK Channel.id)** — required
 - **name (str)**
 - **version (int)** — increment on material change
-- **daypart_rules (json)** — array of `{name, start_time, end_time}` in channel timezone
+- **daypart_rules (json)** — array of `{name, start_time, end_time}` in local time
 - **block_slots (json)** — ordered slots per daypart; each has:
   - **program_ref** (slug or external selector)
   - **duration_blocks** (int ≥1, multiples of channel grid_block_minutes)

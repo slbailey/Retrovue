@@ -36,10 +36,9 @@ retrovue channel list [--json] [--test-db]
 Channels:
   ID: 7
   Name: RetroToons
-  Timezone: America/New_York
   Grid Size (min): 30
   Grid Offset (min): 0
-  Rollover (min): 360
+  Broadcast day start: 06:00
   Active: true
 
 Total: 1 channels
@@ -55,10 +54,9 @@ Total: 1 channels
     {
       "id": 7,
       "name": "RetroToons",
-      "timezone": "America/New_York",
       "grid_size_minutes": 30,
       "grid_offset_minutes": 0,
-      "rollover_minutes": 360,
+      "broadcast_day_start": "06:00",
       "is_active": true,
       "created_at": "2025-01-01T12:00:00Z",
       "updated_at": null
@@ -89,7 +87,7 @@ Total: 1 channels
 
 ## Data Contract Rules (D-#)
 
-- **D-1:** Reflects `broadcast_channels` rows at query time.
+- **D-1:** Reflects `channels` rows at query time.
 - **D-2:** Includes correct latest metadata fields.
 - **D-3:** No fabricated data; derived fields computed from stored values only.
 - **D-4:** Test DB isolation preserved.

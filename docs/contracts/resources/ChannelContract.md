@@ -45,7 +45,7 @@ Each Channel operation follows the standard contract pattern:
 - **Clear error handling:** Failed operations provide actionable diagnostics
 - **Unit of Work:** All database-modifying operations are wrapped in atomic transactions
 - **Optimistic locking:** Updates require a version precondition and fail on conflict
-- **Effective-dated changes:** Timezone and programming_day_start edits are effective-dated and trigger rebuilds (no retro reinterpretation)
+- **Effective-dated changes:** `programming_day_start` edits MAY be effective-dated and trigger rebuilds (no retro reinterpretation)
 
 ---
 
@@ -73,7 +73,7 @@ Each Channel operation follows the standard contract pattern:
 
 ### Effective-Dated Mutations
 
-- Timezone and `programming_day_start` changes MUST specify an `effective_date` and trigger horizon/EPG rebuilds from that date forward
+- `programming_day_start` changes MAY specify an `effective_date` and trigger horizon/EPG rebuilds from that date forward
 
 ### Optimistic Locking
 
@@ -87,13 +87,13 @@ Each Channel operation follows the standard contract pattern:
 - Always validate the Channel row.
 - Cross-validate `ScheduleTemplate`/`ScheduleDay` alignment:
   - On demand via `validate` command, and
-  - On `update` when `--timezone` or `--rollover-minutes` are provided with `--effective-date`.
+  - On `update` when `--effective-date` is provided for changes that impact alignment.
 - On such updates, return `impacted_entities` (IDs and counts). Do not auto-rebuild; report only.
 
-## Timezone & Calendar Policy
+## Calendar Policy
 
-- Use Python `zoneinfo` with an allowlist; reject `Etc/GMT±N`.
-- DST handling uses timezone rules for ambiguous/non-existent local times; never assume 60-minute hours; all schedule math is block-based.
+- Interpret inputs/outputs in local time; store timestamps in UTC.
+- Never assume 60-minute hours during DST; schedule math is block-based.
 
 ## Observability & Ops
 
@@ -109,7 +109,6 @@ Each Channel operation follows the standard contract pattern:
 ## Channel-Specific Guardrails
 
 - Slug: lowercase kebab-case, unique, immutable; title ≤ 120 chars, slug ≤ 64 chars
-- Timezone: valid IANA; disallow `Etc/GMT±N`; DST-safe computations
 - Grid: `grid_block_minutes ∈ {15,30,60}`
 - Offsets: integers 0–59, sorted, unique; every `offset % grid == 0`; 1–6 entries; same set repeats each hour
 - Programming day start: minute aligns to grid and is in offsets; seconds `== 00`
@@ -117,7 +116,6 @@ Each Channel operation follows the standard contract pattern:
 - Revalidation: grid/offset changes require revalidation; mark `ScheduleTemplate`/`ScheduleDay` as needs-review
 - Delete gate: no dependents (templates, days, EPG rows, playout configs, broadcast bindings, ad/avail policies)
 - Backfill: when activating, backfill horizons/EPG for the standard window
-- Tzdata updates: invalidate cached offsets and schedule rebuilds
 - Lints (non-fatal): warn if grid=60 with non-zero offsets; warn on sparse/nonstandard offset sets
 
 ---
@@ -144,7 +142,7 @@ Each Channel contract should have exactly two test files:
 
 ## Channel Lifecycle
 
-1. **Creation**: Channel is created with grid, offsets, timezone, and anchor
+1. **Creation**: Channel is created with grid, offsets, and anchor
 2. **Configuration**: Templates/days aligned and validated against channel invariants
 3. **Horizon/EPG**: Generated and maintained using channel scheduling parameters
 4. **Archival**: `is_active=false` excludes channel from future generations (historical rows retained)

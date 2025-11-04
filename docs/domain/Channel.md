@@ -5,7 +5,8 @@ _Related: [Architecture](../overview/architecture.md) • [Contracts](../contrac
 ## Purpose
 
 Define the canonical, persisted Channel entity. Channel is the time root for interpreting
-schedule templates and building programming horizons in a specific IANA timezone.
+schedule templates and building programming horizons in local time (inputs/outputs in
+local time; timestamps stored in UTC).
 
 ## Persistence model
 
@@ -14,7 +15,6 @@ Scheduling-centric fields persisted on Channel:
 - **id (UUID)** — primary key
 - **slug (str, unique)** — lowercase kebab-case machine id; immutable post-create
 - **title (str)** — operator-facing label
-- **timezone (IANA string)** — station clock; all schedule math interprets in this zone
 - **grid_block_minutes (int)** — base grid size; allowed: 15, 30, or 60
 - **kind (str)** — lightweight label; `network` | `premium` | `specialty` (non-functional in v0.1)
 - **programming_day_start (time)** — e.g., `06:00:00`; daypart anchor
@@ -35,10 +35,9 @@ Naming rules:
 ## Contract / interface
 
 - Channel provides the temporal context for:
-  - interpreting `ScheduleTemplate` dayparts and `block_slots` in `timezone`,
   - validating block alignment against `block_start_offsets_minutes`,
   - grid math using `grid_block_minutes`,
-  - computing programming day boundaries anchored by `programming_day_start`.
+  - computing programming day boundaries anchored by `programming_day_start` (local time).
 - Horizon builders and EPG generation consult only Channels where `is_active=true`.
 - CLI/Usecases expose CRUD-like operations; deletions require no dependent references.
 - A system-level `validateChannel(channelId)` use case recomputes and reports all invariant
@@ -46,30 +45,22 @@ Naming rules:
 
 ## Scheduling model
 
-- All dayparts and templates are channel-scoped and interpreted in `timezone`, anchored to
+- All dayparts and templates are channel-scoped and interpreted in local time, anchored to
   `programming_day_start`.
 - Block starts must align to the channel's allowed offsets; durations are expressed in grid
   blocks (not minutes).
 
 ### Time and calendar semantics
 
-- Dayparts and blocks are computed in the channel's IANA timezone using timezone-aware
-  arithmetic. All conversions MUST handle non-existent and ambiguous local times during DST
-  transitions (spring-forward and fall-back).
 - Programming days are anchored to `programming_day_start` in local time. A block belongs to
   the programming day whose anchor is the most recent at-or-before the block's start
-  timestamp (in channel local time), even when the block crosses wall-clock midnight.
+  timestamp, even when the block crosses wall-clock midnight.
 - On DST transitions, programming days may contain 23 or 25 wall-clock hours. Block math is
-  still derived from grid counts; do not assume 60-minute hours. Ambiguous/non-existent local
-  times must be disambiguated via timezone rules, not naive offsets.
-- Systems MAY cache resolved UTC offsets per date for performance, but MUST invalidate caches
-  when tzdata (IANA database) updates are detected.
+  derived from grid counts; do not assume 60-minute hours.
 
 ### Effective-dated changes
 
-- Timezone changes: post-create, timezone edits MUST be effective-dated. No retroactive
-  reinterpretation of historical horizons; force a full horizon/EPG rebuild starting at the
-  effective date.
+- (removed) Timezone edits are not configurable; all inputs are interpreted in local time.
 - Programming-day anchor (`programming_day_start`) changes: MUST be effective-dated and trigger
   dependent rebuilds from that date forward; prevent silent reassignment of historical blocks.
 
@@ -118,8 +109,7 @@ Validation guidelines:
 
 ### Input validation surface
 
-- Timezone MUST be validated against a known IANA set at write-time; reject `Etc/GMT±N` and
-  other footguns.
+- (removed) IANA timezone validation is not applicable.
 - `kind` is a forward-compatible enum; unknown values fail closed.
 - Title and slug constraints: enforce lowercase kebab-case for `slug` at write-time, maximum
   lengths, reserved words, and normalization; reject on violation.
@@ -139,7 +129,7 @@ Branding, overlays, content ratings, ad/avail policy, guide playout specifics.
     allocation.
 - Horizon window: default look-ahead and look-behind windows are implementation-defined (e.g.,
   14 days ahead, 1 day behind). Rebuild triggers include channel field changes (grid, offsets,
-  timezone, programming_day_start), tzdata updates, template edits, and content substitutions.
+  `programming_day_start`), template edits, and content substitutions.
 
 ## Concurrency & operations
 
@@ -158,7 +148,7 @@ Version semantics:
 ## Validator entrypoint
 
 - `validateChannel(channelId)` recomputes invariants and cross-validates dependent
-  `ScheduleTemplate`/`ScheduleDay` for block alignment and timezone policies. If
+  `ScheduleTemplate`/`ScheduleDay` for block alignment policies. If
   `grid_block_minutes`/offsets change, mark all dependents as `needs-review`.
   When validation flags `needs-review` or violations, emit a typed observability event such as
   `channel.validation.failed` for job runners/ops workflows.

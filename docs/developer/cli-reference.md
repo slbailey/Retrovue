@@ -47,8 +47,8 @@ Test broadcast day alignment for HBO-style 05:00–07:00 scenario.
 # Basic test with default settings
 retrovue test broadcast-day-alignment
 
-# Test with specific channel and timezone
-retrovue test broadcast-day-alignment --channel "hbo_east" --timezone "America/New_York"
+# Test with specific channel
+retrovue test broadcast-day-alignment --channel "hbo_east"
 
 # JSON output for programmatic use
 retrovue test broadcast-day-alignment --json
@@ -57,7 +57,6 @@ retrovue test broadcast-day-alignment --json
 **Options:**
 
 - `--channel, -c` - Test channel ID (default: "test_channel_1")
-- `--timezone, -t` - Channel timezone (default: "America/New_York")
 - `--json` - Output results in JSON format
 
 **Purpose:**
@@ -71,8 +70,8 @@ Test MasterClock functionality with live examples.
 # Basic MasterClock test
 retrovue test masterclock
 
-# Test with specific precision and timezone
-retrovue test masterclock --precision millisecond --timezone "America/New_York"
+# Test with specific precision
+retrovue test masterclock --precision millisecond
 
 # JSON output
 retrovue test masterclock --json
@@ -81,7 +80,6 @@ retrovue test masterclock --json
 **Options:**
 
 - `--precision, -p` - Time precision: second, millisecond, microsecond (default: millisecond)
-- `--timezone, -t` - Test timezone (default: "America/New_York")
 - `--json` - Output results in JSON format
 
 ### Assets Commands (Library Domain)
@@ -218,19 +216,17 @@ Create/define a station channel.
 ```bash
 # Create a new channel
 retrovue channel add --name "RetroVue-1" \
-  --timezone "America/New_York" \
-  --grid-size 30 \
-  --offset 0 \
-  --rollover 360
+  --grid-size-minutes 30 \
+  --grid-offset-minutes 0 \
+  --broadcast-day-start "06:00"
 ```
 
 **Options:**
 
 - `--name` - Channel identifier (required)
-- `--timezone` - IANA timezone string (required)
-- `--grid-size` - Planning granularity in minutes (default: 30)
-- `--offset` - Offset from top of hour in minutes (default: 0)
-- `--rollover` - Broadcast day start in minutes after midnight (default: 360)
+- `--grid-size-minutes` - Planning granularity in minutes (default: 30)
+- `--grid-offset-minutes` - Offset from top of hour in minutes (default: 0)
+- `--broadcast-day-start` - Broadcast day start in HH:MM local time (default: 06:00)
 
 **Purpose:**
 This is how you define "how the station rolls a day."
@@ -594,9 +590,8 @@ retrovue catalog list --canonical-only
 
 # 7. Create channel (Broadcast Domain)
 retrovue channel add --name "RetroVue-1" \
-  --timezone "America/New_York" \
-  --grid-size 30 \
-  --rollover 360
+  --grid-size-minutes 30 \
+  --broadcast-day-start "06:00"
 
 # 8. Create template (Broadcast Domain)
 retrovue template add --name "All Movies 24x7" \
