@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 
 """
 Create channels table.
@@ -21,7 +22,10 @@ depends_on: str | None = None
 
 
 def upgrade() -> None:
-    channel_kind = sa.Enum("network", "premium", "specialty", name="channel_kind")
+    # Ensure enum exists once; prevent duplicate creation on reruns
+    channel_kind = PG_ENUM(
+        "network", "premium", "specialty", name="channel_kind", create_type=False
+    )
     channel_kind.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
@@ -68,7 +72,9 @@ def downgrade() -> None:
     op.drop_table("channels")
 
     # Drop enum type if unused
-    channel_kind = sa.Enum("network", "premium", "specialty", name="channel_kind")
+    channel_kind = PG_ENUM(
+        "network", "premium", "specialty", name="channel_kind", create_type=False
+    )
     channel_kind.drop(op.get_bind(), checkfirst=True)
 
 

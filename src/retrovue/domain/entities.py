@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid as uuid_module
 from datetime import datetime
+from datetime import time as dt_time
 from typing import Any
 
 import sqlalchemy as sa
@@ -23,6 +24,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
 )
 from sqlalchemy import (
@@ -527,27 +529,37 @@ class PathMapping(Base):
         return f"<PathMapping(id={self.id}, collection_uuid={self.collection_uuid}, plex_path={self.plex_path}, local_path={self.local_path})>"
 
 
-class BroadcastChannel(Base):
-    """Broadcast channel model for scheduling."""
+class Channel(Base):
+    """Channel model for scheduling."""
 
-    __tablename__ = "broadcast_channels"
+    __tablename__ = "channels"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    timezone: Mapped[str] = mapped_column(String(255), nullable=False)
-    grid_size_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    grid_offset_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    rollover_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
+    )
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    grid_block_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(
+        SQLEnum("network", "premium", "specialty", name="channel_kind", native_enum=True),
+        nullable=False,
+    )
+    programming_day_start: Mapped[dt_time] = mapped_column(Time(timezone=False), nullable=False)
+    block_start_offsets_minutes: Mapped[dict[str, Any] | list[int]] = mapped_column(
+        PG_JSONB, nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("true"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (UniqueConstraint("name", name="uq_broadcast_channels_name"),)
+    __table_args__ = (
+        UniqueConstraint("slug", name="ix_channels_slug"),
+    )
 
     def __repr__(self) -> str:
-        return f"<BroadcastChannel(id={self.id}, name={self.name}, timezone={self.timezone})>"
+        return f"<Channel(id={self.id}, slug={self.slug}, title={self.title})>"
 
 
 class Enricher(Base):
