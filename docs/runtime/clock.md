@@ -10,12 +10,12 @@ _MasterClock is RetroVue's authoritative station time source for all runtime com
 
 ## Overview
 
-MasterClock provides consistent, timezone-aware time across the entire system. It serves as the single source of truth for temporal operations, ensuring all components operate with synchronized time.
+MasterClock provides consistent, tz-aware time across the entire system. It serves as the single source of truth for temporal operations, ensuring all components operate with synchronized time.
 
 ## Core Responsibilities
 
-- **Time Authority**: Provide authoritative UTC and local time
-- **Timezone Conversion**: Handle timezone conversions safely
+- **Time Authority**: Provide authoritative UTC and local (system) time
+- **Timezone Conversion**: Convert between UTC and local safely
 - **Time Calculations**: Calculate time differences with proper clamping
 - **Consistency**: Ensure all components see the same "now"
 
@@ -25,13 +25,9 @@ MasterClock provides consistent, timezone-aware time across the entire system. I
 
 Returns current UTC time as an aware datetime (tzinfo=UTC). This is the authoritative station time.
 
-### `now_local(channel_tz: str | None = None) -> datetime`
+### `now_local() -> datetime`
 
-Returns current time for the given channel timezone as an aware datetime.
-
-- If channel_tz is None, default to system/station timezone
-- If the timezone string is invalid, fall back to UTC
-- Uses Python's zoneinfo for tz conversion
+Returns current time in the system/station timezone as an aware datetime.
 
 ### `seconds_since(dt: datetime) -> float`
 
@@ -42,12 +38,13 @@ Returns max(0, now_utc() - dt_in_utc).total_seconds()
 - If dt is in the future, return 0.0 instead of a negative number
 - This gives ChannelManager a sane non-negative playout offset
 
-### `to_channel_time(dt: datetime, channel_tz: str) -> datetime`
+### `to_local(dt_utc: datetime) -> datetime`
 
-Converts an aware UTC datetime to an aware datetime in that channel's timezone.
+Converts an aware UTC datetime to an aware datetime in the system local timezone. Raises ValueError on naive input.
 
-- If channel_tz is invalid, fall back to UTC
-- If dt is naive, raise ValueError
+### `to_utc(dt_local: datetime) -> datetime`
+
+Converts an aware local datetime to an aware UTC datetime. Raises ValueError on naive input.
 
 ## Design Principles
 
@@ -78,8 +75,8 @@ class ScheduleService:
         # Get authoritative time
         now_utc = self.clock.now_utc()
 
-        # Get channel-specific time
-        channel_time = self.clock.now_local("America/New_York")
+        # Derive local time (system timezone) if needed
+        local_time = self.clock.now_local()
 
         # Calculate offset for mid-program joins
         offset_seconds = self.clock.seconds_since(program_start_time)
@@ -116,7 +113,7 @@ class AsRunLogger:
     def log_event(self, event: str, channel: str):
         # Get both UTC and local timestamps
         utc_time = self.clock.now_utc()
-        local_time = self.clock.now_local("America/New_York")
+        local_time = self.clock.now_local()
 
         # Log with consistent timestamps
         self._write_log({
@@ -149,8 +146,7 @@ The MasterClock implementation is validated through comprehensive testing that e
 
 ### Timezone Safety
 
-- Invalid timezones fall back to UTC gracefully
-- DST transitions are handled correctly
+- DST transitions are handled by the platform timezone rules
 - All returned datetimes are timezone-aware
 
 ### Consistency
@@ -161,7 +157,7 @@ The MasterClock implementation is validated through comprehensive testing that e
 
 ### Broadcast Day Boundaries
 
-- ScheduleService does the broadcast-day classification. MasterClock does NOT know about broadcast days; it only knows "what time is it (UTC + channel local)."
+- ScheduleService does the broadcast-day classification. MasterClock does NOT know about broadcast days; it only knows "what time is it (UTC + system local)."
 - This keeps boundaries clear between time authority and scheduling logic.
 
 ### Passive Design
@@ -204,8 +200,8 @@ The following CLI commands are available for testing MasterClock functionality:
 # Basic functionality test
 retrovue test masterclock
 
-# Test with specific precision and timezone
-retrovue test masterclock --precision microsecond --timezone "Europe/London"
+# Test with specific precision
+retrovue test masterclock --precision microsecond
 
 # Get JSON output for programmatic use
 retrovue test masterclock --json
@@ -217,8 +213,7 @@ retrovue test masterclock --json
 # Test time monotonicity
 retrovue test masterclock-monotonic
 
-# Test timezone resolution
-retrovue test masterclock-timezone-resolution
+# (deprecated) timezone resolution tests — local-time only policy
 
 # Test logging timestamps
 retrovue test masterclock-logging
