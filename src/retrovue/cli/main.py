@@ -1,8 +1,11 @@
 """
-Main CLI application using Typer.
+Main CLI application using Typer with router-based command dispatch.
 
 This module provides the command-line interface for Retrovue,
 calling application services and outputting JSON when requested.
+
+All command groups are registered through the centralized CliRouter,
+ensuring explicit registration and documentation mapping.
 """
 
 from __future__ import annotations
@@ -14,19 +17,62 @@ import retrovue.adapters.importers  # noqa: F401
 
 from .commands import asset as asset_cmd
 from .commands import channel, collection, enricher, producer, runtime, source
+from .router import get_router
 
 app = typer.Typer(help="RetroVue operator CLI")
 
-# Add command groups
-app.add_typer(source.app, name="source", help="Source and collection management operations")
+# Initialize router and register all command groups
+router = get_router(app)
 
-# Add new command groups per CLI contract
-app.add_typer(enricher.app, name="enricher", help="Enricher management operations")
-app.add_typer(producer.app, name="producer", help="Producer management operations")
-app.add_typer(collection.app, name="collection", help="Collection management operations")
-app.add_typer(asset_cmd.app, name="asset", help="Asset inspection and review operations")
-app.add_typer(channel.app, name="channel", help="Broadcast channel operations")
-app.add_typer(runtime.app, name="runtime", help="Runtime diagnostics and validation operations")
+# Register command groups with explicit documentation mapping
+router.register(
+    "source",
+    source.app,
+    help_text="Source and collection management operations",
+    doc_path="source.md",
+)
+
+router.register(
+    "channel",
+    channel.app,
+    help_text="Broadcast channel operations",
+    doc_path="channel.md",
+)
+
+router.register(
+    "collection",
+    collection.app,
+    help_text="Collection management operations",
+    doc_path="collection.md",
+)
+
+router.register(
+    "asset",
+    asset_cmd.app,
+    help_text="Asset inspection and review operations",
+    doc_path="asset.md",
+)
+
+router.register(
+    "enricher",
+    enricher.app,
+    help_text="Enricher management operations",
+    doc_path="enricher.md",
+)
+
+router.register(
+    "producer",
+    producer.app,
+    help_text="Producer management operations",
+    doc_path="producer.md",
+)
+
+router.register(
+    "runtime",
+    runtime.app,
+    help_text="Runtime diagnostics and validation operations",
+    doc_path="runtime.md",
+)
 
 
 @app.callback()

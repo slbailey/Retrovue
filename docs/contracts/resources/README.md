@@ -78,6 +78,7 @@ Contracts fall into two categories based on what they govern:
 **Examples**:
 
 - `MasterClockContract.md` - Runtime time source validation and diagnostics
+- `CLIRouterContract.md` - CLI command dispatch and registration architecture
 - Future: `ScheduleServiceContract.md`, `ChannelManagerContract.md`, etc.
 
 **Characteristics**:
@@ -95,6 +96,37 @@ Contracts fall into two categories based on what they govern:
 - Different contract patterns reflect these different use cases
 
 ---
+
+## Documentation Split: CLI Reference vs Contracts
+
+Retrovue separates **command syntax** from **behavioral specifications**:
+
+### `docs/cli/` - Command Syntax Reference
+
+**Purpose**: How to type commands, what flags are available, usage examples
+
+**Contains**:
+- Command syntax and grammar
+- Available flags and arguments
+- Usage examples
+- Command discovery and navigation
+
+**Use when**: You need to know "how to type the command" or "what flags are available"
+
+**See**: [CLI Reference](../../cli/README.md)
+
+### `docs/contracts/resources/` - Behavioral Specifications
+
+**Purpose**: What the command guarantees, what rules it follows, exit codes, data effects
+
+**Contains**:
+- Behavior Rules (B-#) - CLI behavior requirements
+- Data Rules (D-#) - Persistence and integrity guarantees
+- Exit code specifications
+- Safety and confirmation requirements
+- Output format schemas
+
+**Use when**: You need to know "what the command guarantees" or "what rules it must follow"
 
 ## CLI Contract Overview
 
