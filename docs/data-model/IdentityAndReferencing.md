@@ -45,7 +45,7 @@ catalog_asset also stores **source_ingest_asset_id** (INTEGER FK to assets.id) f
 
 ### Operational implications
 
-BroadcastChannel uses the same pattern: **id** (INTEGER PK) for joins/scheduling, plus a **uuid** for external identity and logging.
+Channel uses the same pattern: **id** (INTEGER PK) for joins/scheduling, plus a **uuid** for external identity and logging.
 
 BroadcastPlaylogEvent is expected to carry both its own **id** (INTEGER PK) and a stable **uuid** for audit of "what aired at a specific wallclock time."
 

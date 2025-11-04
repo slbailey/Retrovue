@@ -19,7 +19,7 @@ Core concepts RetroVue is built on. These define what the system is, not how it 
 - [Source](domain/Source.md)
 - [Enricher](domain/Enricher.md)
 - [Playout pipeline](domain/PlayoutPipeline.md)
-- [Broadcast channel](domain/BroadcastChannel.md)
+- [Channel](domain/Channel.md)
 - (Scheduling / EPG / Playlog docs also belong here)
 
 ## Runtime

@@ -42,6 +42,7 @@ Major layers:
 
 See also:
 
+- [Scheduling system architecture](SchedulingSystem.md) - Detailed scheduling system architecture
 - [Data flow](DataFlow.md)
 - [Playout pipeline](../domain/PlayoutPipeline.md)
 - [Channel manager](../runtime/ChannelManager.md)

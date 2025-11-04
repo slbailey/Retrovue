@@ -129,9 +129,9 @@ Viewers never talk to Producers directly; they attach via the stream endpoint ex
 
 ## Runtime Data Model
 
-ChannelManager operates on BroadcastChannel entities and tracks runtime state:
+ChannelManager operates on Channel entities and tracks runtime state:
 
-- **BroadcastChannel.uuid** - External stable identifier for channel operations
+- **Channel.uuid** - External stable identifier for channel operations
 - **viewer_count** - number of active ViewerSessions for this channel
 - **producer_status** - current Producer state (stopped, starting, running, stopping, error)
 - **current_mode** - mode (normal / emergency / guide)
@@ -210,7 +210,7 @@ ChannelManager is how a RetroVue channel actually goes on-air.
 
 **First viewer starts Producer, last viewer stops Producer** - this fanout rule is enforced by ChannelManager.
 
-ChannelManager operates on BroadcastChannel entities using UUID identifiers for external operations and logs.
+ChannelManager operates on Channel entities using UUID identifiers for external operations and logs.
 
 ## Cross-References
 

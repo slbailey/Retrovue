@@ -64,3 +64,4 @@ def discover_collections(db: Session, *, source_id: str) -> list[dict[str, Any]]
 
 __all__ = ["discover_collections"]
 
+

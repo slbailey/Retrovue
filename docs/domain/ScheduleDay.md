@@ -4,7 +4,7 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 ## Purpose
 
-BroadcastScheduleDay represents the assignment of a BroadcastTemplate to a BroadcastChannel for a specific broadcast date. This is planning-time logic that creates the link between programming structure (templates) and actual scheduling execution.
+BroadcastScheduleDay represents the assignment of a BroadcastTemplate to a Channel for a specific broadcast date. This is planning-time logic that creates the link between programming structure (templates) and actual scheduling execution.
 
 ## Core model / scope
 
@@ -20,7 +20,7 @@ BroadcastScheduleDay enables:
 BroadcastScheduleDay is managed by SQLAlchemy with the following fields:
 
 - **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
-- **channel_id** (Integer, required, foreign key): Reference to BroadcastChannel
+- **channel_id** (Integer, required, foreign key): Reference to Channel
 - **template_id** (Integer, required, foreign key): Reference to BroadcastTemplate
 - **schedule_date** (Text, required): Broadcast date in "YYYY-MM-DD" format
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp

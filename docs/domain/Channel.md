@@ -1,4 +1,4 @@
-_Related: [Architecture](../overview/architecture.md) • [Contracts](../contracts/README.md) • [ScheduleTemplate](ScheduleTemplate.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Contracts](../contracts/README.md) • [ScheduleTemplate](ScheduleTemplate.md) • [Operator CLI](../operator/CLI.md)_
 
 # Domain — Channel
 
@@ -6,7 +6,7 @@ _Related: [Architecture](../overview/architecture.md) • [Contracts](../contrac
 
 Define the canonical, persisted Channel entity. Channel is the time root for interpreting
 schedule templates and building programming horizons in local time (inputs/outputs in
-local time; timestamps stored in UTC).
+local time; timestamps stored in UTC). Channel defines a persistent broadcast entity with channel identity, configuration, and operational parameters for channels such as "RetroToons" or "MidnightMovies".
 
 ## Persistence model
 
@@ -23,6 +23,8 @@ Scheduling-centric fields persisted on Channel:
 - **is_active (bool)** — included in horizon builders when true
 - **created_at / updated_at (timestamps)** — audit fields (UTC)
 - **version (int)** — optional optimistic-locking counter for concurrent updates
+
+The table is named `channels` (plural). Schema migration is handled through Alembic. Postgres is the authoritative backing store.
 
 Constraints (guardrails):
 
@@ -42,6 +44,8 @@ Naming rules:
 - CLI/Usecases expose CRUD-like operations; deletions require no dependent references.
 - A system-level `validateChannel(channelId)` use case recomputes and reports all invariant
   violations across dependent `ScheduleTemplate` and `ScheduleDay` assignments.
+- ScheduleService consumes Channel records to determine current programming. It generates schedule data using the channel's grid configuration for accurate block-based scheduling.
+- Channel provides the identity and context for scheduling operations. ScheduleService is authoritative for what to play.
 
 ## Scheduling model
 
@@ -64,6 +68,16 @@ Naming rules:
 - Programming-day anchor (`programming_day_start`) changes: MUST be effective-dated and trigger
   dependent rebuilds from that date forward; prevent silent reassignment of historical blocks.
 
+## Execution model
+
+ChannelManager uses Channel to know how to interpret 'now' and how to cut the day (rollover). A Channel continues to exist even when nobody is watching and ffmpeg is torn down.
+
+Channel has relationships with schedule data through BroadcastScheduleDay, which links channels to templates for specific broadcast dates.
+
+## Failure / fallback behavior
+
+If channel configuration is invalid, the system falls back to default programming or the most recent valid configuration.
+
 ## Operator workflows
 
 Operators manage Channels via standard workflows:
@@ -71,6 +85,30 @@ Operators manage Channels via standard workflows:
 - Create, update, list, show, validate
 - Archive via `is_active=false`
 - Delete (only if no dependencies reference the channel)
+
+### CLI command examples
+
+**Create Channel**: Use `retrovue channel create` with required parameters:
+
+```bash
+retrovue channel create --slug "retrotoons" --title "RetroToons" \
+  --grid-block-minutes 30 --programming-day-start "06:00:00" \
+  --block-start-offsets-minutes "[0,30]" --active
+```
+
+**List channels**: Use `retrovue channel list` to see all channels in table format, or `retrovue channel list --json` for machine-readable output.
+
+**Inspect channel**: Use `retrovue channel show --id <uuid>` or `retrovue channel show --slug <slug>` to see detailed channel information.
+
+**Activate/deactivate**: Use `retrovue channel update --id <uuid> --active` or `--inactive` to toggle is_active status.
+
+**Adjust scheduling**: Use `retrovue channel update --id <uuid>` with new grid parameters to modify schedule block alignment and day cutover behavior.
+
+**Retire channel**: Use `retrovue channel update --id <uuid> --inactive` to remove from routing and scheduling, or `retrovue channel delete --id <uuid>` to permanently remove (only if no dependencies exist).
+
+**Update channel**: Use `retrovue channel update --id <uuid>` with any combination of fields to modify channel properties.
+
+All operations use UUID identifiers for channel identification. The CLI provides both human-readable and JSON output formats.
 
 ### Lifecycle and referential integrity
 

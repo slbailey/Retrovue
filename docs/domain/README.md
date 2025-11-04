@@ -34,7 +34,7 @@ RetroVue follows Domain-Driven Design (DDD) principles, where the domain model r
 
 ### Broadcast Operations Domain
 
-- **[BroadcastChannel](BroadcastChannel.md)** - Channel identity and configuration
+- **[Channel](Channel.md)** - Channel identity and configuration
 - **[Scheduling](Scheduling.md)** - Planning-time logic for future air
 - **[PlaylogEvent](PlaylogEvent.md)** - Scheduled, timestamped playout units
 - **[PlayoutPipeline](PlayoutPipeline.md)** - How scheduled content becomes streams
@@ -84,7 +84,7 @@ The system enforces clear boundaries based on asset state:
 
 ### For Operators
 
-1. **Focus on operational domains** - BroadcastChannel, Scheduling, PlayoutPipeline
+1. **Focus on operational domains** - Channel, Scheduling, PlayoutPipeline
 2. **Understand state transitions** - How assets become ready for broadcast
 3. **Learn the constraints** - What can and cannot be scheduled
 

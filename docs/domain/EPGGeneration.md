@@ -10,7 +10,7 @@ The Electronic Program Guide (EPG) provides viewers with information about what'
 
 The EPG is built from the following data sources:
 
-- **BroadcastChannel**: Defines the channels and their timing policies
+- **Channel**: Defines the channels and their timing policies
 - **BroadcastPlaylogEvent**: Records what was actually played and when
 - **Asset**: Contains the metadata for scheduled content
 - **Schedule state**: Live scheduling information managed by ScheduleService
@@ -29,8 +29,8 @@ If EPG data is unavailable, the system falls back to basic channel information o
 
 ## Naming rules
 
-- **BroadcastChannel.id** (INTEGER PK) is the canonical channel identity for internal operations
-- **BroadcastChannel.uuid** is the external identity we surface to logs/clients for correlation
+- **Channel.id** (INTEGER PK) is the canonical channel identity for internal operations
+- **Channel.uuid** is the external identity we surface to logs/clients for correlation
 - Any earlier channels table with UUID PK is deprecated
 - EPG generation follows the same identity rules as other broadcast domain entities
 

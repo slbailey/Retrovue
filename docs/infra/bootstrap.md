@@ -456,9 +456,9 @@ alembic upgrade head
 
 This creates the complete Broadcast Domain schema including:
 
-- `broadcast_channels` - Channel configuration and timing policy
-- `broadcast_template` - Reusable daypart templates
-- `broadcast_template_block` - Time blocks within templates with content rules
+- `channels` - Channel configuration and timing policy
+- `schedule_template` - Reusable daypart templates
+- `schedule_template_block` - Time blocks within templates with content rules
 - `broadcast_schedule_day` - Template assignments to channels for specific dates
 - `catalog_asset` - Broadcast-approved catalog entries
 - `broadcast_playlog_event` - Generated playout events
@@ -467,7 +467,7 @@ This creates the complete Broadcast Domain schema including:
 
 The `presets/` directory contains default configuration templates for seeding common broadcast scenarios. These presets provide:
 
-- **Default Template Blocks**: Pre-configured `broadcast_template_block` entries for common programming patterns
+- **Default Template Blocks**: Pre-configured `schedule_template_block` entries for common programming patterns
 - **Channel Templates**: Standard channel configurations for different time zones and grid sizes
 - **Rule Sets**: Common content selection rules for various programming types
 

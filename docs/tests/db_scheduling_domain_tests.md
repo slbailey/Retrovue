@@ -61,8 +61,8 @@ command.upgrade(alembic_cfg, "head")
 tests/
 ├── test_scheduling_domain/
 │   ├── test_broadcast_channel.py
-│   ├── test_broadcast_template.py
-│   ├── test_broadcast_template_block.py
+│   ├── test_schedule_template.py
+│   ├── test_schedule_template_block.py
 │   ├── test_broadcast_schedule_day.py
 │   ├── test_catalog_asset.py
 │   ├── test_broadcast_playlog_event.py
@@ -125,11 +125,11 @@ def cleanup_test_data(session):
     # Delete dependent records first
     session.query(BroadcastPlaylogEvent).delete()
     session.query(BroadcastScheduleDay).delete()
-    session.query(BroadcastTemplateBlock).delete()
+    session.query(ScheduleTemplateBlock).delete()
 
     # Delete parent records
     session.query(BroadcastTemplate).delete()
-    session.query(BroadcastChannel).delete()
+    session.query(Channel).delete()
 
     session.commit()
 ```

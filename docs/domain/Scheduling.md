@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+_Related: [Scheduling system architecture](../architecture/SchedulingSystem.md) • [Architecture overview](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
 
 # Domain — Scheduling
 
@@ -14,9 +14,9 @@ The Broadcast Scheduling Domain defines the core data models that enable RetroVu
 
 The Broadcast Scheduling Domain consists of six primary models that work together to define the complete scheduling infrastructure:
 
-- **BroadcastChannel** - Channel configuration and timing policy
+- **Channel** - Channel configuration and timing policy
 - **BroadcastTemplate** - Reusable daypart programming templates
-- **BroadcastTemplateBlock** - Time blocks within templates with content selection rules
+- **ScheduleTemplateBlock** - Time blocks within templates with content selection rules
 - **BroadcastScheduleDay** - Template assignments to channels for specific dates
 - **Asset** - Broadcast-approved content (airable content)
 - **BroadcastPlaylogEvent** - Generated playout events (what was actually played)
@@ -27,8 +27,8 @@ These entities work together in a specific flow:
 
 **Channel → Template → ScheduleDay → PlaylogEvent**
 
-1. **BroadcastChannel** defines the channel identity and timing configuration
-2. **BroadcastTemplate** and **BroadcastTemplateBlock** define programming structure and content selection rules
+1. **Channel** defines the channel identity and timing configuration
+2. **BroadcastTemplate** and **ScheduleTemplateBlock** define programming structure and content selection rules
 3. **BroadcastScheduleDay** binds templates to channels for specific broadcast dates
 4. **Asset** provides the approved content available for scheduling (must be in `ready` state)
 5. **BroadcastPlaylogEvent** represents the generated playout schedule that ChannelManager executes
@@ -38,10 +38,10 @@ These entities work together in a specific flow:
 ScheduleService is the primary consumer of the Broadcast Scheduling Domain models. It:
 
 - Reads BroadcastScheduleDay to determine active templates
-- Retrieves BroadcastTemplateBlock entries for content selection rules
+- Retrieves ScheduleTemplateBlock entries for content selection rules
 - Queries Asset for eligible content (`state='ready'` and `approved_for_broadcast=true`)
 - Generates BroadcastPlaylogEvent records as scheduling output
-- Uses BroadcastChannel configuration for timing and grid alignment
+- Uses Channel configuration for timing and grid alignment
 
 **Critical Rules:**
 
@@ -50,15 +50,15 @@ ScheduleService is the primary consumer of the Broadcast Scheduling Domain model
 
 ProgramDirector coordinates multiple channels and may reference:
 
-- BroadcastChannel records for channel configuration
+- Channel records for channel configuration
 - BroadcastScheduleDay assignments for cross-channel programming
-- BroadcastTemplateBlock rules for content conflict resolution
+- ScheduleTemplateBlock rules for content conflict resolution
 - Asset records for content availability and approval status
 
 ChannelManager executes playout but does not modify any Broadcast Scheduling Domain models. It:
 
 - Reads BroadcastPlaylogEvent records for playout instructions
-- References BroadcastChannel configuration for channel identity
+- References Channel configuration for channel identity
 - Uses Asset file paths for content playback
 
 **Critical Rule:**
@@ -79,6 +79,8 @@ All scheduling logic, operator tooling, and documentation MUST refer to the Broa
 
 ## See also
 
+- [Scheduling system architecture](../architecture/SchedulingSystem.md) - Comprehensive scheduling system architecture
+- [Scheduling roadmap](../architecture/SchedulingRoadmap.md) - Implementation roadmap
 - [Schedule day](ScheduleDay.md) - Template assignments to channels
 - [Playlog event](PlaylogEvent.md) - Generated playout events
 - [Playout pipeline](PlayoutPipeline.md) - Live stream generation

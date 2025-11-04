@@ -4,11 +4,11 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 ## Purpose
 
-BroadcastTemplateBlock represents a single slot inside a schedule template. It can point to a series, a movie block, a themed block ("Action Hour"), or another rule. This is planning-time logic that defines when content should be played and what rules should be used to select that content.
+ScheduleTemplateBlock represents a single slot inside a schedule template. It can point to a series, a movie block, a themed block ("Action Hour"), or another rule. This is planning-time logic that defines when content should be played and what rules should be used to select that content.
 
 ## Core model / scope
 
-BroadcastTemplateBlock enables:
+ScheduleTemplateBlock enables:
 
 - Time-based programming structure (e.g., "6:00 AM - 12:00 PM: Morning News")
 - Content selection rules for each time period
@@ -17,7 +17,7 @@ BroadcastTemplateBlock enables:
 
 ## Contract / interface
 
-BroadcastTemplateBlock is managed by SQLAlchemy with the following fields:
+ScheduleTemplateBlock is managed by SQLAlchemy with the following fields:
 
 - **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
 - **template_id** (Integer, required, foreign key): Reference to parent BroadcastTemplate
@@ -26,11 +26,11 @@ BroadcastTemplateBlock is managed by SQLAlchemy with the following fields:
 - **rule_json** (Text, required): JSON configuration defining content selection rules
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 
-BroadcastTemplateBlock has a many-to-one relationship with BroadcastTemplate. Multiple blocks can exist within a single template to define complex programming patterns.
+ScheduleTemplateBlock has a many-to-one relationship with BroadcastTemplate. Multiple blocks can exist within a single template to define complex programming patterns.
 
 ## Execution model
 
-ScheduleService consumes BroadcastTemplateBlock records to determine content selection rules for specific time periods. When generating schedules, ScheduleService:
+ScheduleService consumes ScheduleTemplateBlock records to determine content selection rules for specific time periods. When generating schedules, ScheduleService:
 
 1. Identifies the active template for a channel and date via BroadcastScheduleDay
 2. Retrieves all blocks for that template
@@ -46,7 +46,7 @@ If template blocks are missing or invalid, the system falls back to default prog
 
 ## Naming rules
 
-The canonical name for this concept in code and documentation is BroadcastTemplateBlock.
+The canonical name for this concept in code and documentation is ScheduleTemplateBlock.
 
 Template blocks are content selection rules, not runtime components. They define "how to choose content" but do not execute content selection.
 

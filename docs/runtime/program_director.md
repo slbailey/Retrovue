@@ -103,7 +103,7 @@ The Program Director follows RetroVue's architectural patterns:
 
 All runtime information is stored in SQLAlchemy models. These represent the "source of truth" for what's currently playing and how the system is operating.
 
-### BroadcastChannel
+### Channel
 
 Represents a broadcast channel with its runtime state and configuration.
 
@@ -140,7 +140,7 @@ Represents an active viewer connection to a channel.
 
 **Relationships:**
 
-- Belongs to BroadcastChannel
+- Belongs to Channel
 - Links to Producer (through channel)
 
 ViewerSession is observational. It exists to track active viewers and drive fanout rules. It never influences scheduling and it cannot request content.
@@ -544,7 +544,7 @@ It follows RetroVue's architectural patterns and provides the runtime foundation
 
 In broadcast terms: Program Director is master control. It doesn't decide what's on the log — it makes sure the log actually goes to air, on time, synchronized, and recoverable.
 
-ProgramDirector operates on BroadcastChannel entities using UUID identifiers for external operations and logs.
+ProgramDirector operates on Channel entities using UUID identifiers for external operations and logs.
 
 ## Cross-References
 

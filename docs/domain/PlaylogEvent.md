@@ -23,7 +23,7 @@ BroadcastPlaylogEvent is managed by SQLAlchemy with the following fields:
 
 - **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
 - **uuid** (UUID, required, unique): Stable external identifier used for audit, cross-domain tracing, and as-run logs
-- **channel_id** (Integer, required, foreign key): Reference to BroadcastChannel
+- **channel_id** (Integer, required, foreign key): Reference to Channel
 - **asset_uuid** (UUID, required, foreign key): Reference to Asset UUID (primary key)
 - **start_utc** (DateTime(timezone=True), required): Event start time in UTC
 - **end_utc** (DateTime(timezone=True), required): Event end time in UTC
