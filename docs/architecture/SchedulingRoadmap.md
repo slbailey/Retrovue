@@ -17,6 +17,7 @@ The scheduling system architecture is documented, but implementation is in early
 **Goal**: Establish the basic template-to-schedule flow.
 
 **Components**:
+
 - Template creation and management
 - Daypart definition within templates
 - Grid block configuration
@@ -24,12 +25,14 @@ The scheduling system architecture is documented, but implementation is in early
 - Basic content selection rules (placeholder or fixed content)
 
 **Deliverables**:
+
 - CLI commands for template CRUD operations
 - CLI commands for schedule day creation
 - Contract tests for template and schedule operations
 - Database schema validation for template/schedule relationships
 
 **Success criteria**:
+
 - Operators can create a template with dayparts
 - Operators can instantiate a schedule from a template for a specific date
 - Schedule data is persisted correctly in the database
@@ -43,18 +46,21 @@ The scheduling system architecture is documented, but implementation is in early
 **Goal**: Generate Electronic Program Guide from schedule state.
 
 **Components**:
+
 - EPG generation service that reads schedule and playlog events
 - EPG view generation (coarse program-level information)
 - EPG horizon extension (2-3 days ahead)
 - EPG export format (XMLTV or similar)
 
 **Deliverables**:
+
 - EPG generation logic
 - CLI command to view/generate EPG
 - Contract tests for EPG generation
 - EPG displays correctly in test scenarios
 
 **Success criteria**:
+
 - EPG shows program-level schedule for a channel
 - EPG extends 2-3 days ahead
 - EPG reflects schedule state accurately
@@ -70,6 +76,7 @@ The scheduling system architecture is documented, but implementation is in early
 **Goal**: Generate fine-grained playout plans with specific assets.
 
 **Components**:
+
 - Playlog generation service
 - Rolling horizon logic (3-4 hours ahead)
 - Asset selection from schedule rules
@@ -78,6 +85,7 @@ The scheduling system architecture is documented, but implementation is in early
 - Master clock integration for timing
 
 **Deliverables**:
+
 - Playlog generation service
 - Rolling horizon maintenance
 - CLI command to view/generate playlog
@@ -85,6 +93,7 @@ The scheduling system architecture is documented, but implementation is in early
 - Playlog events created with correct timestamps
 
 **Success criteria**:
+
 - Playlog generates 3-4 hours ahead of current time
 - Playlog contains specific asset references
 - Playlog includes ad breaks and bumpers
@@ -102,6 +111,7 @@ The scheduling system architecture is documented, but implementation is in early
 **Goal**: Handle viewer joins with proper synchronization.
 
 **Components**:
+
 - Viewer join detection in ChannelManager
 - Grid block start calculation
 - Time offset calculation for mid-program joins
@@ -109,12 +119,14 @@ The scheduling system architecture is documented, but implementation is in early
 - Sync checkpoint logic (if needed for performance)
 
 **Deliverables**:
+
 - ChannelManager viewer join logic
 - Master clock offset calculation
 - Synchronized playback for all viewers
 - Contract tests for join behavior
 
 **Success criteria**:
+
 - Viewers joining mid-program see correct offset
 - All viewers see synchronized playback
 - Join time aligns with master clock
@@ -131,6 +143,7 @@ The scheduling system architecture is documented, but implementation is in early
 **Goal**: Record what actually aired.
 
 **Components**:
+
 - As-run log service
 - Event recording on asset start
 - Master clock timestamp capture
@@ -138,12 +151,14 @@ The scheduling system architecture is documented, but implementation is in early
 - Fallback condition logging
 
 **Deliverables**:
+
 - AsRunLogger implementation
 - Log storage mechanism
 - CLI command to view as-run logs
 - Contract tests for logging
 
 **Success criteria**:
+
 - Every asset start is logged with timestamp
 - Logs include channel, asset, and timing information
 - Logs can be queried for historical data
@@ -160,6 +175,7 @@ The scheduling system architecture is documented, but implementation is in early
 **Goal**: Implement smart content selection from schedule rules.
 
 **Components**:
+
 - Content selection engine
 - Series episode selection
 - Movie selection
@@ -168,12 +184,14 @@ The scheduling system architecture is documented, but implementation is in early
 - Underfill handling
 
 **Deliverables**:
+
 - Content selection service
 - Rule evaluation logic
 - CLI commands for rule testing
 - Contract tests for selection
 
 **Success criteria**:
+
 - Rules resolve to specific assets correctly
 - Rotation prevents too-frequent repeats
 - Conflicts are resolved appropriately
@@ -190,18 +208,21 @@ The scheduling system architecture is documented, but implementation is in early
 **Goal**: Add preemption, rebalancing, and dynamic updates.
 
 **Components**:
+
 - Preemption logic (breaking news scenarios)
 - Dynamic playlog updates
 - Content rebalancing mid-day
 - EPG updates for schedule changes
 
 **Deliverables**:
+
 - Preemption service
 - Dynamic update logic
 - CLI commands for manual preemption
 - Contract tests for preemption
 
 **Success criteria**:
+
 - Preemption updates playlog correctly
 - EPG reflects changes
 - All viewers see updated content
@@ -266,14 +287,17 @@ Before implementing all phases, validate the system with a minimal proof of conc
 ### High-risk areas
 
 1. **Master clock synchronization**: Critical for all timing-dependent features
+
    - **Mitigation**: Implement and test MasterClock thoroughly before Phase 3
    - **Validation**: Test timezone handling, DST transitions, monotonicity
 
 2. **Rolling horizon complexity**: Complex state management
+
    - **Mitigation**: Start with simple fixed-horizon, add rolling logic incrementally
    - **Validation**: Test horizon extension under various conditions
 
 3. **Content selection rules**: Complex logic with many edge cases
+
    - **Mitigation**: Start with simple rules, add complexity gradually
    - **Validation**: Comprehensive contract tests for rule evaluation
 
@@ -308,10 +332,12 @@ Before implementing all phases, validate the system with a minimal proof of conc
 ### Immediate priorities
 
 1. **Complete Phase 1**: Template and schedule foundation
+
    - This is the foundation for everything else
    - Establishes the data model and basic operations
 
 2. **Validate POC**: Run proof of concept with fixed content
+
    - Validates the architecture before adding complexity
    - Identifies any architectural issues early
 
@@ -339,4 +365,3 @@ Before implementing all phases, validate the system with a minimal proof of conc
 - [Developer roadmap](../developer/development-roadmap.md) - Overall project roadmap
 - [Runtime: ScheduleService](../runtime/schedule_service.md) - Schedule service implementation
 - [Domain: MasterClock](../domain/MasterClock.md) - Master clock implementation
-
