@@ -13,7 +13,7 @@ import typer
 import retrovue.adapters.importers  # noqa: F401
 
 from .commands import asset as asset_cmd
-from .commands import collection, enricher, producer, source
+from .commands import channel, collection, enricher, producer, source
 
 app = typer.Typer(help="RetroVue operator CLI")
 
@@ -25,6 +25,7 @@ app.add_typer(enricher.app, name="enricher", help="Enricher management operation
 app.add_typer(producer.app, name="producer", help="Producer management operations")
 app.add_typer(collection.app, name="collection", help="Collection management operations")
 app.add_typer(asset_cmd.app, name="asset", help="Asset inspection and review operations")
+app.add_typer(channel.app, name="channel", help="Broadcast channel operations")
 
 
 @app.callback()

@@ -1,205 +1,162 @@
 # Channel
 
+Status: Enforced
+
 ## Purpose
 
-Define the behavioral contract for channel management operations in RetroVue. This contract ensures safe channel configuration, enricher attachment, and channel listing operations.
+This document provides an overview of all Channel domain testing contracts. Individual Channel operations are covered by specific behavioral contracts that define exact CLI syntax, safety expectations, and data effects.
 
 ---
 
-## Command Shape
+## Scope
 
-```
-retrovue channel list [--json] [--test-db]
-retrovue channel attach-enricher <channel_id> <enricher_id> --priority <n> [--test-db] [--json]
-retrovue channel detach-enricher <channel_id> <enricher_id> [--test-db] [--json]
-```
+The Channel domain is covered by the following specific contracts:
 
-### Required Parameters
-
-- `channel_id`: Channel identifier (UUID, name, or external ID)
-- `enricher_id`: Enricher identifier to attach/detach
-- `--priority`: Execution priority for enricher (lower numbers run first)
-
-### Optional Parameters
-
-- `--json`: Output result in JSON format
-- `--test-db`: Direct command to test database environment
+- **[Channel Add](ChannelAddContract.md)**: Creating new channels
+- **[Channel Update](ChannelUpdateContract.md)**: Updating channel configuration/state
+- **[Channel List](ChannelListContract.md)**: Listing channels
+- **[Channel Show](ChannelShowContract.md)**: Displaying a channel
+- **[Channel Delete](ChannelDeleteContract.md)**: Deleting channels (guarded by dependency checks)
+- **[Channel Validate](ChannelValidateContract.md)**: Non-mutating validation/dry-run of channel invariants
 
 ---
 
-## Safety Expectations
+## Contract Structure
 
-### Channel Operations
+Each Channel operation follows the standard contract pattern:
 
-- **Non-destructive operations**: Channel listing and enricher management
-- **Idempotent**: Safe to run multiple times
-- **Test isolation**: `--test-db` prevents production data modification
-
-### Enricher Management
-
-- Enricher attachment requires priority specification
-- Detaching non-existent enrichers should be handled gracefully
-- Priority conflicts should be resolved automatically
-
----
-
-## Output Format
-
-### Human-Readable Output
-
-**Channel List:**
-
-```
-Channels:
-  • Channel 1 (ID: abc-123) - Active producer: LinearProducer
-  • Channel 2 (ID: def-456) - Active producer: PrevueProducer
-```
-
-**Enricher Operations:**
-
-```
-Successfully attached enricher 'metadata' to channel 'Channel 1' with priority 1
-Successfully detached enricher 'metadata' from channel 'Channel 1'
-```
-
-### JSON Output
-
-```json
-{
-  "channels": [
-    {
-      "channel_id": "abc-123",
-      "name": "Channel 1",
-      "active_producer": "LinearProducer",
-      "enrichers": [
-        {
-          "enricher_id": "metadata-001",
-          "name": "metadata",
-          "priority": 1
-        }
-      ]
-    }
-  ]
-}
-```
+1. **Command Shape**: Exact CLI syntax and required flags
+2. **Safety Expectations**: Confirmation prompts, dry-run behavior (where applicable)
+3. **Output Format**: Human-readable and JSON output structure
+4. **Exit Codes**: Success and failure exit codes
+5. **Data Effects**: What changes in the database
+6. **Behavior Contract Rules (B-#)**: Operator-facing behavior guarantees
+7. **Data Contract Rules (D-#)**: Persistence, lifecycle, and integrity guarantees
+8. **Test Coverage Mapping**: Explicit mapping from rule IDs to test files
 
 ---
 
-## Exit Codes
+## Design Principles
 
-- `0`: Operation completed successfully
-- `1`: Validation error, channel not found, or operation failure
-
----
-
-## Data Effects
-
-### Database Changes
-
-1. **Enricher Attachment**:
-
-   - ChannelEnricher record created
-   - Priority assigned and conflicts resolved
-   - Enricher becomes active for channel
-
-2. **Enricher Detachment**:
-   - ChannelEnricher record deleted
-   - Channel continues operation without enricher
-
-### Side Effects
-
-- No external system changes
-- Database transaction for enricher operations
-- Logging of enricher attachment/detachment
+- **Safety first:** No destructive operation runs against live data during automated tests
+- **One contract per noun/verb:** Each Channel operation has its own focused contract
+- **Mock-first validation:** All operations must first be tested using mock/test databases
+- **Idempotent where appropriate:** `list`/`show` are read-only and repeatable; `add`/`update` are deterministic with explicit validation and optimistic locking
+- **Clear error handling:** Failed operations provide actionable diagnostics
+- **Unit of Work:** All database-modifying operations are wrapped in atomic transactions
+- **Optimistic locking:** Updates require a version precondition and fail on conflict
+- **Effective-dated changes:** Timezone and programming_day_start edits are effective-dated and trigger rebuilds (no retro reinterpretation)
 
 ---
 
-## Behavior Contract Rules (B-#)
+## Common Safety Patterns
 
-- **B-1:** The `channel list` command MUST show all channels with their active producers and attached enrichers.
-- **B-2:** When `--json` is supplied, output MUST include fields `"channels"`, `"channel_id"`, `"name"`, `"active_producer"`, and `"enrichers"`.
-- **B-3:** The `attach-enricher` command MUST require `--priority` parameter.
-- **B-4:** On validation failure (channel not found), the command MUST exit with code `1` and print "Error: Channel 'X' not found".
-- **B-5:** The `detach-enricher` command MUST handle non-existent enrichers gracefully.
-- **B-6:** All commands MUST support `--test-db` for isolated testing.
+### Test Database Usage
 
----
+- `--test-db` flag directs operations to an isolated test environment
+- Test database must be completely isolated from production
+- No test data should persist between test sessions
 
-## Data Contract Rules (D-#)
+### Dry-run Support
 
-- **D-1:** Enricher attachment MUST occur within a single transaction boundary.
-- **D-2:** Priority conflicts MUST be resolved automatically (reassign existing priorities).
-- **D-3:** Enricher detachment MUST NOT affect other channels using the same enricher.
-- **D-4:** On transaction failure, ALL changes MUST be rolled back with no partial operations.
-- **D-5:** Channel listing MUST include all active enrichers with their priorities.
-- **D-6:** All operations run with `--test-db` MUST be isolated from production database.
+- Where applicable (e.g., destructive or wide-impact updates), a `--dry-run` mode SHOULD preview the intended changes without committing
 
----
+### Confirmation Models
 
-## Test Coverage Mapping
+- Destructive operations (e.g., delete) require confirmation prompts
+- `--yes` flag skips confirmations in non-interactive contexts
+- See [_ops/DestructiveOperationConfirmation.md](../_ops/DestructiveOperationConfirmation.md)
 
-- `B-1..B-6` → `test_channel_contract.py`
-- `D-1..D-6` → `test_channel_data_contract.py`
+### Pagination Guidance
 
-Each rule above MUST have explicit test coverage in its respective test file, following the contract test responsibilities in [README.md](./READMEContract.md).  
-Each test file MUST reference these rule IDs in docstrings or comments to provide bidirectional traceability.
+- `channel list` SHOULD support pagination to prevent unbounded responses in large deployments
 
-Future related tests (integration or scenario-level) MAY reference these same rule IDs for coverage mapping but must not redefine behavior.
+### Effective-Dated Mutations
+
+- Timezone and `programming_day_start` changes MUST specify an `effective_date` and trigger horizon/EPG rebuilds from that date forward
+
+### Optimistic Locking
+
+- `update` MUST include a `version` precondition; server increments by 1 on success (source of truth may be DB trigger or application layer)
 
 ---
 
-## Error Conditions
+## Validation Scope & Triggers
 
-### Validation Errors
+- Validate on `add`, `update`, and via explicit `retrovue channel validate`.
+- Always validate the Channel row.
+- Cross-validate `ScheduleTemplate`/`ScheduleDay` alignment:
+  - On demand via `validate` command, and
+  - On `update` when `--timezone` or `--rollover-minutes` are provided with `--effective-date`.
+- On such updates, return `impacted_entities` (IDs and counts). Do not auto-rebuild; report only.
 
-- Channel not found: "Error: Channel 'invalid-channel' not found"
-- Enricher not found: "Error: Enricher 'invalid-enricher' not found"
-- Missing priority: "Error: --priority is required for enricher attachment"
+## Timezone & Calendar Policy
 
-### Database Errors
+- Use Python `zoneinfo` with an allowlist; reject `Etc/GMT±N`.
+- DST handling uses timezone rules for ambiguous/non-existent local times; never assume 60-minute hours; all schedule math is block-based.
 
-- Transaction rollback on any persistence failure
-- Foreign key constraint violations handled gracefully
-- Priority conflict resolution
+## Observability & Ops
 
----
+- Emit `channel.validation.failed` with payload `{channel_id, codes:{by_code,count}, totals:{violations,warnings}}`.
+- Validator does not rebuild; separate job or update flow initiates rebuilds.
 
-## Examples
+## IDs
 
-### Channel Listing
-
-```bash
-# List all channels
-retrovue channel list
-
-# List with JSON output
-retrovue channel list --json
-
-# Test channel listing
-retrovue channel list --test-db
-```
-
-### Enricher Management
-
-```bash
-# Attach enricher with priority
-retrovue channel attach-enricher "Channel 1" "metadata-001" --priority 1
-
-# Detach enricher
-retrovue channel detach-enricher "Channel 1" "metadata-001"
-
-# Test enricher operations
-retrovue channel attach-enricher "Test Channel" "test-enricher" --priority 1 --test-db
-```
+- Validator and CLI use Channel integer `id`. Internal UUIDs never surface.
 
 ---
 
-## Safety Guidelines
+## Channel-Specific Guardrails
 
-- Always use `--test-db` for testing channel operations
-- Verify channel and enricher existence before operations
-- Check enricher priorities after attachment
-- Confirm channel configuration after changes
+- Slug: lowercase kebab-case, unique, immutable; title ≤ 120 chars, slug ≤ 64 chars
+- Timezone: valid IANA; disallow `Etc/GMT±N`; DST-safe computations
+- Grid: `grid_block_minutes ∈ {15,30,60}`
+- Offsets: integers 0–59, sorted, unique; every `offset % grid == 0`; 1–6 entries; same set repeats each hour
+- Programming day start: minute aligns to grid and is in offsets; seconds `== 00`
+- Active/archive: `is_active=false` excludes prospectively; historical rows retained
+- Revalidation: grid/offset changes require revalidation; mark `ScheduleTemplate`/`ScheduleDay` as needs-review
+- Delete gate: no dependents (templates, days, EPG rows, playout configs, broadcast bindings, ad/avail policies)
+- Backfill: when activating, backfill horizons/EPG for the standard window
+- Tzdata updates: invalidate cached offsets and schedule rebuilds
+- Lints (non-fatal): warn if grid=60 with non-zero offsets; warn on sparse/nonstandard offset sets
 
+---
+
+## Contract Test Requirements
+
+Each Channel contract should have exactly two test files:
+
+1. **CLI Contract Test**: `tests/contracts/test_channel_{verb}_contract.py`
+
+   - CLI syntax validation
+   - Flag behavior verification
+   - Output format validation
+   - Error message handling
+
+2. **Data Contract Test**: `tests/contracts/test_channel_{verb}_data_contract.py`
+
+   - Database state changes
+   - Transaction boundaries
+   - Data integrity verification
+   - Side effects validation
+
+---
+
+## Channel Lifecycle
+
+1. **Creation**: Channel is created with grid, offsets, timezone, and anchor
+2. **Configuration**: Templates/days aligned and validated against channel invariants
+3. **Horizon/EPG**: Generated and maintained using channel scheduling parameters
+4. **Archival**: `is_active=false` excludes channel from future generations (historical rows retained)
+5. **Deletion**: Only allowed with no dependencies (templates, days, EPG rows, playout configs, broadcast bindings, ad/avail policies)
+
+---
+
+## See Also
+
+- [Channel Domain Documentation](../../domain/Channel.md) - Core domain model and rules
+- [CLI Contract](README.md) - General CLI command standards
+- [Unit of Work](../_ops/UnitOfWorkContract.md) - Transaction management requirements
+- [_ops/DestructiveOperationConfirmation.md](../_ops/DestructiveOperationConfirmation.md) - Safe destructive operation pattern
 
 
