@@ -18,15 +18,42 @@ retrovue --help
 
 ## Command Structure
 
-The CLI is organized into command groups reflecting the domain separation:
+The CLI is organized into command groups reflecting the domain separation. There are two fundamental types of command groups:
 
-- `retrovue assets` - Library Domain (content discovery, metadata, library operations)
-- `retrovue catalog` - Broadcast Domain (airable, canonical-approved assets for scheduling)
-- `retrovue channel` - Broadcast Domain (channel configuration and management)
-- `retrovue template` - Broadcast Domain (template and block management)
-- `retrovue schedule` - Broadcast Domain (schedule assignment and management)
-- `retrovue review` - Review queue operations
-- `retrovue test` - Testing operations for runtime components
+### Domain Entity Commands
+
+These commands manage **persisted domain entities** that operators create, configure, and maintain. Each entity has CRUD operations (create, read, update, delete) and is stored in the database.
+
+- `retrovue channel` - Channel configuration and management (add, list, update, delete, show, validate)
+- `retrovue source` - Source management (add, list, discover, ingest)
+- `retrovue collection` - Collection management (list, show, update, ingest, wipe)
+- `retrovue asset` - Asset inspection and review operations
+- `retrovue enricher` - Enricher management (add, list, remove)
+- `retrovue producer` - Producer management (add, list, remove)
+
+**Pattern**: Domain entities have persistent state, support CRUD operations, and are managed by operators through the CLI.
+
+### Runtime Infrastructure Commands
+
+These commands provide **diagnostics and validation** for runtime system components that operate during broadcast execution. These components are not user-managed entities—they are infrastructure services that operators diagnose and validate.
+
+- `retrovue runtime` - Runtime diagnostics and validation operations
+  - `retrovue runtime masterclock` - Validate MasterClock time source behavior
+  - `retrovue runtime masterclock-monotonic` - Test time monotonicity
+  - `retrovue runtime masterclock-logging` - Validate logging timestamps
+  - `retrovue runtime masterclock-scheduler-alignment` - Validate scheduler time usage
+  - `retrovue runtime masterclock-stability` - Stress-test performance
+  - `retrovue runtime masterclock-consistency` - Test component time consistency
+  - `retrovue runtime masterclock-serialization` - Validate timestamp serialization
+  - `retrovue runtime masterclock-performance` - Performance benchmarking
+
+**Pattern**: Runtime infrastructure components (MasterClock, ScheduleService, ChannelManager, etc.) are system services that run during broadcast execution. They are not persisted entities—they are validated and diagnosed, not configured through CRUD operations.
+
+**Why this distinction matters**:
+
+- **Domain entities** represent business concepts that operators manage (channels, sources, assets)
+- **Runtime infrastructure** represents system components that execute the broadcast (time services, schedulers, playout managers)
+- Operators configure domain entities; they diagnose runtime infrastructure
 
 ## Global Options
 
@@ -37,50 +64,32 @@ All commands support these global options:
 
 ## Commands
 
-### Test Commands
+### Runtime Diagnostics Commands
 
-#### `retrovue test broadcast-day-alignment`
+#### `retrovue runtime masterclock`
 
-Test broadcast day alignment for HBO-style 05:00–07:00 scenario.
-
-```bash
-# Basic test with default settings
-retrovue test broadcast-day-alignment
-
-# Test with specific channel
-retrovue test broadcast-day-alignment --channel "hbo_east"
-
-# JSON output for programmatic use
-retrovue test broadcast-day-alignment --json
-```
-
-**Options:**
-
-- `--channel, -c` - Test channel ID (default: "test_channel_1")
-- `--json` - Output results in JSON format
-
-**Purpose:**
-Validates ScheduleService's broadcast-day logic and rollover handling. Tests the HBO-style 05:00–07:00 scenario to ensure proper broadcast day classification and seamless playback across the 06:00 rollover boundary.
-
-#### `retrovue test masterclock`
-
-Test MasterClock functionality with live examples.
+Validate MasterClock functionality and core behaviors.
 
 ```bash
-# Basic MasterClock test
-retrovue test masterclock
+# Basic MasterClock validation
+retrovue runtime masterclock
 
-# Test with specific precision
-retrovue test masterclock --precision millisecond
+# Validate with specific precision
+retrovue runtime masterclock --precision millisecond
 
 # JSON output
-retrovue test masterclock --json
+retrovue runtime masterclock --json
 ```
 
 **Options:**
 
 - `--precision, -p` - Time precision: second, millisecond, microsecond (default: millisecond)
 - `--json` - Output results in JSON format
+
+**Purpose:**
+Validates that MasterClock (the authoritative time source) correctly provides tz-aware timestamps, maintains monotonicity, rejects naive datetimes, and serves as the single source of "now" for all runtime components.
+
+See [MasterClock Contract](../contracts/resources/MasterClockContract.md) for complete validation rules and behavior specifications.
 
 ### Assets Commands (Library Domain)
 

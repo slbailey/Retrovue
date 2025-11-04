@@ -43,6 +43,59 @@ This naming convention:
 
 ---
 
+## Contract Types: Domain Entities vs Runtime Infrastructure
+
+Contracts fall into two categories based on what they govern:
+
+### Domain Entity Contracts
+
+**When to create**: For persisted domain entities that operators manage through CRUD operations.
+
+**Pattern**: `{Entity}{Verb}Contract.md` where `{Entity}` is a domain entity (Channel, Source, Collection, Asset, etc.)
+
+**Examples**:
+
+- `ChannelAddContract.md` - Create a new channel
+- `ChannelUpdateContract.md` - Update channel configuration
+- `ChannelListContract.md` - List channels
+- `SourceAddContract.md` - Register a new source
+- `CollectionIngestContract.md` - Ingest content from a collection
+
+**Characteristics**:
+
+- Entity has persistent state in the database
+- Operators perform CRUD operations (add, list, update, delete, show)
+- Commands mutate or query domain entity state
+- Contracts include Data Rules (D-#) for persistence guarantees
+- Usually have both CLI and Data contract tests
+
+### Runtime Infrastructure Contracts
+
+**When to create**: For runtime system components that operators diagnose and validate, but do not manage through CRUD operations.
+
+**Pattern**: `{Component}Contract.md` where `{Component}` is a runtime infrastructure component (MasterClock, ScheduleService, etc.)
+
+**Examples**:
+
+- `MasterClockContract.md` - Runtime time source validation and diagnostics
+- Future: `ScheduleServiceContract.md`, `ChannelManagerContract.md`, etc.
+
+**Characteristics**:
+
+- Component is a runtime service, not a persisted entity
+- Operators validate and diagnose, not configure
+- Commands are non-mutating validation/diagnostic operations
+- Contracts focus on Behavior Rules (B-#) for validation guarantees
+- Usually have CLI contract tests only (no data persistence to test)
+
+**Why this distinction matters**:
+
+- **Domain entities** are business concepts that operators actively manage and configure
+- **Runtime infrastructure** are system services that execute the broadcast—operators diagnose them, not configure them
+- Different contract patterns reflect these different use cases
+
+---
+
 ## CLI Contract Overview
 
 All Retrovue CLI commands follow a single consistent grammar:

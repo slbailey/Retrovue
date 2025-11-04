@@ -7,9 +7,9 @@ This module tests the FastAPI routes for Package CRUD operations.
 import uuid
 
 from fastapi.testclient import TestClient
-from retrovue.api.routes.packages import router
 from sqlalchemy.orm import Session
 
+from retrovue.api.routes.packages import router
 from retrovue.domain.package import AssetType, Package, PackageItem, PackageType
 
 
@@ -19,6 +19,7 @@ class TestPackageAPI:
     def test_list_packages_empty(self, temp_db_session: Session):
         """Test listing packages when none exist."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         app = FastAPI()
@@ -42,6 +43,7 @@ class TestPackageAPI:
     def test_list_packages_with_data(self, temp_db_session: Session):
         """Test listing packages with existing data."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         # Create test packages
@@ -85,6 +87,7 @@ class TestPackageAPI:
     def test_get_package_by_id(self, temp_db_session: Session):
         """Test getting a specific package by ID."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         # Create test package
@@ -122,6 +125,7 @@ class TestPackageAPI:
     def test_get_package_not_found(self, temp_db_session: Session):
         """Test getting a non-existent package."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         app = FastAPI()
@@ -143,6 +147,7 @@ class TestPackageAPI:
     def test_create_package(self, temp_db_session: Session):
         """Test creating a new package."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         app = FastAPI()
@@ -176,6 +181,7 @@ class TestPackageAPI:
     def test_update_package(self, temp_db_session: Session):
         """Test updating an existing package."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         # Create test package
@@ -216,6 +222,7 @@ class TestPackageAPI:
     def test_delete_package(self, temp_db_session: Session):
         """Test deleting a package."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         # Create test package
@@ -248,6 +255,7 @@ class TestPackageAPI:
     def test_add_package_item(self, temp_db_session: Session):
         """Test adding an item to a package."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         # Create test package
@@ -292,6 +300,7 @@ class TestPackageAPI:
     def test_remove_package_item(self, temp_db_session: Session):
         """Test removing an item from a package."""
         from fastapi import FastAPI
+
         from retrovue.api.routes.packages import get_db_session
         
         # Create test package with item

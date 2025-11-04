@@ -7,8 +7,8 @@ It shows typical usage patterns for different components.
 """
 
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 
 # Add the project root to the Python path
 project_root = Path(__file__).parent.parent
@@ -63,7 +63,7 @@ def demonstrate_schedule_service_usage():
     print(f"Program started {offset_seconds:.2f} seconds ago")
     
     # Convert between timezones for multi-channel operations
-    utc_program_time = datetime(2024, 1, 15, 20, 0, 0, tzinfo=timezone.utc)
+    utc_program_time = datetime(2024, 1, 15, 20, 0, 0, tzinfo=UTC)
     ny_program_time = clock.convert_timezone(utc_program_time, "UTC", "America/New_York")
     print(f"Program at 8 PM UTC is {ny_program_time.strftime('%I:%M %p %Z')} in New York")
 
@@ -163,7 +163,7 @@ def demonstrate_timezone_handling():
     
     # Test DST transition handling
     # Create a time during DST transition (second Sunday in March)
-    dst_transition = datetime(2024, 3, 10, 6, 0, 0, tzinfo=timezone.utc)
+    dst_transition = datetime(2024, 3, 10, 6, 0, 0, tzinfo=UTC)
     
     # Convert to New York time (should handle DST)
     ny_time = clock.convert_timezone(dst_transition, "UTC", "America/New_York")

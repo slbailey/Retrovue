@@ -10,8 +10,9 @@ mutual exclusivity between positional and flag arguments.
 
 from unittest.mock import patch
 
-from retrovue.cli.commands.assets import app
 from typer.testing import CliRunner
+
+from retrovue.cli.commands.assets import app
 
 
 class TestCLIAssetsSelectMutualExclusivity:

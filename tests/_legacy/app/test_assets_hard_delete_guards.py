@@ -12,7 +12,6 @@ pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; 
 from uuid import uuid4  # noqa: E402
 
 from retrovue.content_manager.library_service import LibraryService  # noqa: E402
-
 from retrovue.domain.entities import Asset, Episode, EpisodeAsset, Season, Title  # noqa: E402
 
 

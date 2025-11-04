@@ -6,12 +6,11 @@ This script provides instructions and automation for testing HLS playback
 in VLC Media Player.
 """
 
-import os
-import sys
 import subprocess
-import webbrowser
+import sys
 from pathlib import Path
 from urllib.parse import urljoin
+
 
 def check_vlc_installation():
     """Check if VLC is installed and available."""

@@ -6,12 +6,10 @@ This script tests HLS playlist generation using FFmpeg with the target flags
 specified in the playout documentation.
 """
 
-import os
-import sys
 import subprocess
-import tempfile
-import time
+import sys
 from pathlib import Path
+
 
 def create_test_video():
     """Create a test video file for HLS generation."""
@@ -84,7 +82,7 @@ def analyze_playlist(playlist_path: Path):
     print("Analyzing HLS playlist...")
     
     try:
-        with open(playlist_path, 'r') as f:
+        with open(playlist_path) as f:
             content = f.read()
         
         lines = content.strip().split('\n')
@@ -147,18 +145,18 @@ def test_vlc_compatibility(playlist_path: Path):
     if vlc_available:
         print("✅ VLC is available")
         print("📺 To test in VLC:")
-        print(f"   1. Open VLC Media Player")
-        print(f"   2. Go to: Media → Open Network Stream")
+        print("   1. Open VLC Media Player")
+        print("   2. Go to: Media → Open Network Stream")
         print(f"   3. Enter: file://{playlist_path.absolute()}")
-        print(f"   4. Click Play")
+        print("   4. Click Play")
     else:
         print("⚠️  VLC not found - install VLC to test playback")
         print("📺 Manual test instructions:")
-        print(f"   1. Install VLC Media Player")
-        print(f"   2. Open VLC")
-        print(f"   3. Go to: Media → Open Network Stream")
+        print("   1. Install VLC Media Player")
+        print("   2. Open VLC")
+        print("   3. Go to: Media → Open Network Stream")
         print(f"   4. Enter: file://{playlist_path.absolute()}")
-        print(f"   5. Click Play")
+        print("   5. Click Play")
 
 def cleanup_test_files():
     """Clean up test files."""

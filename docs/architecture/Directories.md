@@ -106,17 +106,54 @@ Keeps environment/runtime concerns out of domain/usecases.
 <summary><strong>What lives here</strong></summary>
 
 - Playout / channel / ffmpeg / "station is running" components
+- Runtime infrastructure services: MasterClock, ScheduleService, ChannelManager, ProgramDirector, AsRunLogger
 </details>
 
 <details>
 <summary><strong>Pattern</strong></summary>
 
 - Runtime orchestration—not the same as CLI, not the same as ingest
-- Can consume domain data, but isn't where we define domain  
+- Can consume domain data, but isn't where we define domain
+- Services that execute during broadcast, not persisted entities
 </details>
 
 **Why it exists:**  
 This is the "TV side" of your project (database of assets + playout/orchestration logic).
+
+---
+
+## Domain Entities vs Runtime Infrastructure
+
+### Domain Entities (`domain/`)
+
+**What they are**: Business concepts that operators manage and configure. Persisted in the database with CRUD operations.
+
+**Examples**: Channel, Source, Collection, Asset, Enricher, Producer
+
+**Characteristics**:
+- Have persistent state in database tables
+- Operators create, configure, update, delete through CLI
+- CLI commands: `retrovue channel add`, `retrovue source list`, etc.
+- Contracts: `{Entity}{Verb}Contract.md` (e.g., `ChannelAddContract.md`)
+- Have both CLI and Data contract tests
+
+### Runtime Infrastructure (`runtime/`)
+
+**What they are**: System services that execute during broadcast operation. Not persisted entities—they are infrastructure components.
+
+**Examples**: MasterClock (time authority), ScheduleService (scheduling logic), ChannelManager (playout execution), ProgramDirector (global coordination), AsRunLogger (compliance logging)
+
+**Characteristics**:
+- No database persistence—they are services that run
+- Operators diagnose and validate, not configure
+- CLI commands: `retrovue runtime masterclock` (validation), not `retrovue masterclock add`
+- Contracts: `{Component}Contract.md` (e.g., `MasterClockContract.md`)
+- Usually have CLI contract tests only (validation/diagnostics, not CRUD)
+
+**Why this distinction matters**:
+- **Domain entities** = "What operators configure" (channels, sources, assets)
+- **Runtime infrastructure** = "What makes the system run" (time services, schedulers, playout managers)
+- CLI reflects this: domain entities get CRUD commands; runtime infrastructure gets diagnostic commands under `retrovue runtime`
 
 ---
 

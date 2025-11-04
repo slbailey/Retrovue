@@ -1,6 +1,6 @@
 # MasterClock
 
-Status: Pending
+Status: Enforced
 
 ## Purpose
 
@@ -23,6 +23,7 @@ Applies to runtime components (ScheduleService, ChannelManager, ProgramDirector,
 - `seconds_since(dt: datetime) -> float` (non-negative offset; clamps future to 0.0)
 
 Notes:
+
 - No per-channel timezone. "Local" means system local timezone.
 - All datetimes are tz-aware; naive datetimes are rejected.
 
@@ -50,20 +51,23 @@ Notes:
 
 ## CLI Test Commands
 
-### `retrovue test masterclock`
+### `retrovue runtime masterclock`
 
 **Purpose**: Sanity-check core MasterClock behaviors.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock [--json] [--precision {second|millisecond|microsecond}]
+retrovue runtime masterclock [--json] [--precision {second|millisecond|microsecond}]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Infra or contract violation
 
 **JSON Output** (authoritative):
+
 ```json
 {
   "status": "ok",
@@ -76,6 +80,7 @@ retrovue test masterclock [--json] [--precision {second|millisecond|microsecond}
 ```
 
 **Behavior Rules**:
+
 - B-1: Validates MC-001 (tz-aware outputs)
 - B-2: Validates MC-002 (monotonicity)
 - B-3: Validates MC-003 (non-negative seconds_since)
@@ -84,20 +89,23 @@ retrovue test masterclock [--json] [--precision {second|millisecond|microsecond}
 
 ---
 
-### `retrovue test masterclock-monotonic`
+### `retrovue runtime masterclock-monotonic`
 
 **Purpose**: Proves time doesn't "run backward" and `seconds_since()` is never negative.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock-monotonic [--json]
+retrovue runtime masterclock-monotonic [--json]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Contract violation
 
 **JSON Output**:
+
 ```json
 {
   "status": "ok",
@@ -109,6 +117,7 @@ retrovue test masterclock-monotonic [--json]
 ```
 
 **Behavior Rules**:
+
 - B-6: Time never goes backward between consecutive calls (MC-002)
 - B-7: `seconds_since()` with future timestamps returns 0.0 (MC-003)
 - B-8: `seconds_since()` with past timestamps returns positive values (MC-003)
@@ -117,20 +126,23 @@ retrovue test masterclock-monotonic [--json]
 
 ---
 
-### `retrovue test masterclock-logging`
+### `retrovue runtime masterclock-logging`
 
 **Purpose**: Verifies timestamps for AsRunLogger are correct and consistent.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock-logging [--json]
+retrovue runtime masterclock-logging [--json]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Contract violation
 
 **JSON Output**:
+
 ```json
 {
   "status": "ok",
@@ -142,6 +154,7 @@ retrovue test masterclock-logging [--json]
 ```
 
 **Behavior Rules**:
+
 - B-9: All timestamps are timezone-aware (MC-001)
 - B-10: UTC and local timestamps are consistent
 - B-11: Millisecond precision is maintained
@@ -150,20 +163,23 @@ retrovue test masterclock-logging [--json]
 
 ---
 
-### `retrovue test masterclock-scheduler-alignment`
+### `retrovue runtime masterclock-scheduler-alignment`
 
 **Purpose**: Validates that ScheduleService obtains time only via MasterClock and preserves broadcast-day boundary logic. Also detects any use of non-MasterClock timestamps in scheduling logic and fails if found.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock-scheduler-alignment [--json]
+retrovue runtime masterclock-scheduler-alignment [--json]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Contract violation
 
 **JSON Output**:
+
 ```json
 {
   "status": "ok",
@@ -177,6 +193,7 @@ retrovue test masterclock-scheduler-alignment [--json]
 ```
 
 **Behavior Rules**:
+
 - B-12: Boundary conditions work correctly
 - B-13: DST edge cases are handled
 - B-14: Off-by-one errors are prevented
@@ -187,20 +204,23 @@ retrovue test masterclock-scheduler-alignment [--json]
 
 ---
 
-### `retrovue test masterclock-stability`
+### `retrovue runtime masterclock-stability`
 
 **Purpose**: Stress-tests that repeated tz conversion doesn't leak memory or fall off a performance cliff.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock-stability [--json] [--iterations <int>]
+retrovue runtime masterclock-stability [--json] [--iterations <int>]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Contract violation or performance degradation
 
 **JSON Output**:
+
 ```json
 {
   "status": "ok",
@@ -215,6 +235,7 @@ retrovue test masterclock-stability [--json] [--iterations <int>]
 ```
 
 **Behavior Rules**:
+
 - B-17: Performance remains stable over time
 - B-18: Memory usage doesn't grow unbounded
 - B-19: Timezone caching works efficiently
@@ -223,20 +244,23 @@ retrovue test masterclock-stability [--json] [--iterations <int>]
 
 ---
 
-### `retrovue test masterclock-consistency`
+### `retrovue runtime masterclock-consistency`
 
 **Purpose**: Makes sure different high-level components would see the "same now," not different shapes of time. Also verifies that timestamps from ProgramDirector and ChannelManager are tz-aware, serialize to ISO 8601 with offsets, and round-trip back into equivalent instants in UTC.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock-consistency [--json]
+retrovue runtime masterclock-consistency [--json]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Contract violation
 
 **JSON Output**:
+
 ```json
 {
   "status": "ok",
@@ -249,6 +273,7 @@ retrovue test masterclock-consistency [--json]
 ```
 
 **Behavior Rules**:
+
 - B-20: All timestamps are timezone-aware (MC-001)
 - B-21: Maximum skew between components is minimal
 - B-22: No naive datetimes are returned (MC-004)
@@ -258,20 +283,23 @@ retrovue test masterclock-consistency [--json]
 
 ---
 
-### `retrovue test masterclock-serialization`
+### `retrovue runtime masterclock-serialization`
 
 **Purpose**: Makes sure we can safely serialize timestamps and round-trip them.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock-serialization [--json]
+retrovue runtime masterclock-serialization [--json]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Contract violation
 
 **JSON Output**:
+
 ```json
 {
   "status": "ok",
@@ -283,6 +311,7 @@ retrovue test masterclock-serialization [--json]
 ```
 
 **Behavior Rules**:
+
 - B-24: Timezone information is preserved
 - B-25: Round-trip accuracy is maintained
 - B-26: ISO 8601 serialization works correctly
@@ -291,20 +320,23 @@ retrovue test masterclock-serialization [--json]
 
 ---
 
-### `retrovue test masterclock-performance`
+### `retrovue runtime masterclock-performance`
 
 **Purpose**: Performance benchmarking for MasterClock operations.
 
 **Command Shape**:
+
 ```bash
-retrovue test masterclock-performance [--json] [--iterations <int>]
+retrovue runtime masterclock-performance [--json] [--iterations <int>]
 ```
 
 **Exit Codes**:
+
 - `0`: All checks pass
 - `1`: Performance below threshold
 
 **JSON Output**:
+
 ```json
 {
   "status": "ok",
@@ -320,6 +352,7 @@ retrovue test masterclock-performance [--json] [--iterations <int>]
 ```
 
 **Behavior Rules**:
+
 - B-27: Performance metrics are within acceptable thresholds
 - B-28: Cache efficiency is maintained
 
@@ -330,6 +363,7 @@ retrovue test masterclock-performance [--json] [--iterations <int>]
 ### Common Failures
 
 **Direct datetime.now() usage**:
+
 ```json
 {
   "status": "error",
@@ -340,6 +374,7 @@ retrovue test masterclock-performance [--json] [--iterations <int>]
 ```
 
 **Naive timestamp acceptance**:
+
 ```json
 {
   "status": "error",
@@ -350,6 +385,7 @@ retrovue test masterclock-performance [--json] [--iterations <int>]
 ```
 
 **Performance degradation**:
+
 ```json
 {
   "status": "error",
@@ -361,6 +397,7 @@ retrovue test masterclock-performance [--json] [--iterations <int>]
 ```
 
 **Timezone conversion failure**:
+
 ```json
 {
   "status": "error",
@@ -384,14 +421,14 @@ retrovue test masterclock-performance [--json] [--iterations <int>]
 
 ## Test Coverage Mapping
 
-| Rule ID | Test Command | Assertion |
-|---------|--------------|-----------|
-| MC-001 | `test masterclock` | `tzinfo_ok` |
-| MC-002 | `test masterclock-monotonic` | `monotonic_ok` |
-| MC-003 | `test masterclock-monotonic` | `seconds_since_negative_ok` |
-| MC-004 | `test masterclock` | `naive_timestamp_rejected` |
-| MC-007 | `test masterclock` | `uses_masterclock_only` |
-| MC-007 | `test masterclock-scheduler-alignment` | `scheduler_uses_masterclock` |
+| Rule ID | Test Command                              | Assertion                    |
+| ------- | ----------------------------------------- | ---------------------------- |
+| MC-001  | `runtime masterclock`                     | `tzinfo_ok`                  |
+| MC-002  | `runtime masterclock-monotonic`           | `monotonic_ok`               |
+| MC-003  | `runtime masterclock-monotonic`           | `seconds_since_negative_ok`  |
+| MC-004  | `runtime masterclock`                     | `naive_timestamp_rejected`   |
+| MC-007  | `runtime masterclock`                     | `uses_masterclock_only`      |
+| MC-007  | `runtime masterclock-scheduler-alignment` | `scheduler_uses_masterclock` |
 
 ---
 

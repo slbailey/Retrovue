@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+
 from sqlalchemy import create_engine, text
+
 from retrovue.infra.settings import settings
 
 

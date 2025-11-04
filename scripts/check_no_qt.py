@@ -4,7 +4,6 @@ Anti-Qt guardrail script for Retrovue.
 Scans the repository for banned Qt/PySide terms and fails if found.
 """
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -62,7 +61,7 @@ def scan_file(file_path: Path) -> list:
     violations = []
     
     try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(file_path, encoding='utf-8', errors='ignore') as f:
             content = f.read()
             lines = content.splitlines()
             

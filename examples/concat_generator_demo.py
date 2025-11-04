@@ -8,11 +8,12 @@ with alternating episode segments and advertisements.
 
 import os
 import tempfile
+
 from retrovue.concat.generator import (
-    generate_concat_file,
-    validate_concat_file,
-    read_concat_file,
     cleanup_concat_file,
+    generate_concat_file,
+    read_concat_file,
+    validate_concat_file,
 )
 
 
@@ -50,7 +51,7 @@ def demo_concat_generator():
         try:
             # Display concat file content
             print("\n4. Concat file content:")
-            with open(concat_path, 'r') as f:
+            with open(concat_path) as f:
                 content = f.read()
                 print(content)
             
@@ -111,7 +112,7 @@ def demo_edge_cases():
         
         concat_path = generate_concat_file([segment_path], [])
         try:
-            with open(concat_path, 'r') as f:
+            with open(concat_path) as f:
                 content = f.read().strip()
             print(f"   [OK] Concat file content: {content}")
         finally:

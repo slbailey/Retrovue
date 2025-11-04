@@ -1,6 +1,9 @@
-from retrovue.cli.main import app
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
+
+from retrovue.cli.main import app
+
 
 def main():
     runner = CliRunner()

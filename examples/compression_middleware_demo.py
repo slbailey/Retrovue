@@ -8,6 +8,7 @@ This script shows how the ConditionalGZipMiddleware works to exclude
 
 from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
+
 from retrovue.web.server import ConditionalGZipMiddleware
 
 

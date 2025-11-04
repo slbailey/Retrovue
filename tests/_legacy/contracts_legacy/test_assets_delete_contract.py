@@ -17,8 +17,9 @@ from uuid import uuid4
 import pytest
 
 pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
-from retrovue.cli.commands.assets import app  # noqa: E402
 from typer.testing import CliRunner  # noqa: E402
+
+from retrovue.cli.commands.assets import app  # noqa: E402
 
 
 class TestAssetsDeleteContract:

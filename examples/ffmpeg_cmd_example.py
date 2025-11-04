@@ -6,7 +6,7 @@ This script demonstrates how to use the retrovue.streaming.ffmpeg_cmd module to 
 FFmpeg commands for MPEG-TS live streaming with concat demuxer.
 """
 
-from retrovue.streaming.ffmpeg_cmd import build_cmd, validate_cmd_args, get_cmd_summary
+from retrovue.streaming.ffmpeg_cmd import build_cmd, get_cmd_summary, validate_cmd_args
 
 
 def main():

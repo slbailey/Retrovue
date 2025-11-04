@@ -7,8 +7,9 @@ Note: Genre filtering is not yet implemented, so these tests verify the error ha
 
 from unittest.mock import patch
 
-from retrovue.cli.commands.assets import app
 from typer.testing import CliRunner
+
+from retrovue.cli.commands.assets import app
 
 
 class TestCLIAssetsSelectGenreRandom:

@@ -1,10 +1,11 @@
 """Demo script showing how to use the copy mode validation."""
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from retrovue.validation.copy_mode import can_copy, validate_copy_mode, CopyModeUnsupportedError
+from retrovue.validation.copy_mode import CopyModeUnsupportedError, can_copy, validate_copy_mode
 
 
 def demo_copy_mode_validation():
@@ -50,13 +51,13 @@ def demo_copy_mode_validation():
             try:
                 validate_copy_mode(video_codec, audio_codec)
                 print(f"[OK] Copy mode supported for {video_codec} + {audio_codec}")
-                return f"ffmpeg -c:v copy -c:a copy -f mpegts output.ts"
+                return "ffmpeg -c:v copy -c:a copy -f mpegts output.ts"
             except CopyModeUnsupportedError as e:
                 print(f"[NO] Copy mode not supported: {e}")
                 print("-> Switching to transcode mode...")
-                return f"ffmpeg -c:v libx264 -c:a aac -f mpegts output.ts"
+                return "ffmpeg -c:v libx264 -c:a aac -f mpegts output.ts"
         else:
-            return f"ffmpeg -c:v libx264 -c:a aac -f mpegts output.ts"
+            return "ffmpeg -c:v libx264 -c:a aac -f mpegts output.ts"
     
     # Example usage
     print("Building command for H.264 + AAC:")

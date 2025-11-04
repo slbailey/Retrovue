@@ -8,6 +8,7 @@ This test validates what is currently working and what needs to be implemented
 to fully comply with the identity model documentation.
 """
 
+from retrovue.domain.entities import Asset
 from retrovue.schedule_manager.models import (
     BroadcastChannel,
     BroadcastPlaylogEvent,
@@ -16,8 +17,6 @@ from retrovue.schedule_manager.models import (
     BroadcastTemplateBlock,
     CatalogAsset,
 )
-
-from retrovue.domain.entities import Asset
 
 
 class TestIdentityModelSummary:

@@ -6,10 +6,11 @@ This script shows how the MPEGTSStreamer works with the FFmpeg command builder.
 """
 
 import asyncio
-import tempfile
 import os
-from retrovue.streaming.mpegts_stream import MPEGTSStreamer
+import tempfile
+
 from retrovue.streaming.ffmpeg_cmd import build_cmd
+from retrovue.streaming.mpegts_stream import MPEGTSStreamer
 
 
 async def demo_streaming():
@@ -40,7 +41,7 @@ async def demo_streaming():
         print("In a real scenario, this would yield 1316-byte chunks from FFmpeg")
         
         # Show chunk size specification
-        print(f"\n4. Chunk size: 1316 bytes (7 × 188 bytes)")
+        print("\n4. Chunk size: 1316 bytes (7 × 188 bytes)")
         print("This ensures proper TS packet alignment for MPEG-TS streaming")
         
         # Show FastAPI integration example

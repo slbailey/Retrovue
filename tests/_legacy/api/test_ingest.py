@@ -11,9 +11,9 @@ import uuid  # noqa: E402
 from unittest.mock import patch  # noqa: E402
 
 from fastapi.testclient import TestClient  # noqa: E402
-from retrovue.api.routers.ingest import router  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from retrovue.api.routers.ingest import router  # noqa: E402
 from retrovue.domain.entities import Asset  # noqa: E402
 
 

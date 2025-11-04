@@ -13,9 +13,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock
 
-from retrovue.content_manager.ingest_service import IngestService
-
 from retrovue.adapters.importers.filesystem_importer import FilesystemImporter
+from retrovue.content_manager.ingest_service import IngestService
 
 
 class TestFilesystemPipeline:

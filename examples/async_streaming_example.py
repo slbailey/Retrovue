@@ -7,8 +7,9 @@ This demonstrates how to use the MPEGTSStreamer with FastAPI for IPTV streaming.
 
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-from retrovue.streaming.mpegts_stream import MPEGTSStreamer
+
 from retrovue.streaming.ffmpeg_cmd import build_cmd
+from retrovue.streaming.mpegts_stream import MPEGTSStreamer
 
 app = FastAPI()
 

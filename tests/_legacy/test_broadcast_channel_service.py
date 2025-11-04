@@ -10,13 +10,14 @@ from unittest.mock import patch
 import pytest
 
 pytestmark = pytest.mark.skip(reason="Legacy module quarantined in src_legacy/; do not depend on it.")
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.exc import IntegrityError  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
 from retrovue.schedule_manager.broadcast_channel_service import (  # noqa: E402
     BroadcastChannelService,  # noqa: E402
 )
 from retrovue.schedule_manager.models import BroadcastChannel  # noqa: E402
-from sqlalchemy import text  # noqa: E402
-from sqlalchemy.exc import IntegrityError  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
 
 
 class TestBroadcastChannelService:

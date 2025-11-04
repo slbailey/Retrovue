@@ -11,9 +11,9 @@ prints a deprecation warning and delegates to assets select.
 import json
 from unittest.mock import patch
 
-from retrovue.cli.commands.assets import app
 from typer.testing import CliRunner
 
+from retrovue.cli.commands.assets import app
 from retrovue.domain.entities import Asset, Provider, ProviderRef
 from retrovue.shared.types import EntityType as EntityTypeEnum
 

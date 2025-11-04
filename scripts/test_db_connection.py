@@ -9,8 +9,10 @@ and retry logic to ensure the CI fixes work correctly.
 import os
 import sys
 import time
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
+
 
 def test_database_connection():
     """Test database connection with improved timeout settings."""
