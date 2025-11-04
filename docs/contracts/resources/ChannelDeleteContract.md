@@ -65,7 +65,7 @@ Channel deleted: hbo
 
 ## Data Contract Rules (D-#)
 
-- **D-1:** One row removed from `broadcast_channels` when successful.
+- **D-1:** One row removed from `channels` when successful.
 - **D-2:** No orphaned references remain.
 - **D-3:** Test DB isolation preserved.
 

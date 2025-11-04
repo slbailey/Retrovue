@@ -9,7 +9,7 @@ Define the behavioral contract for updating an existing broadcast channel.
 ## Command Shape
 
 ```
-retrovue channel update --id <int> \
+retrovue channel update --id <uuid-or-slug> \
   [--version <int>] \
   [--name <string>] \
   [--grid-size-minutes <15|30|60>] \
@@ -22,7 +22,7 @@ retrovue channel update --id <int> \
 
 ### Parameters
 
-- `--id` (required): Channel integer identifier.
+- `--id` (required): Channel identifier: UUID or slug.
 - `--version` (recommended): Optimistic-lock precondition. Required when API enforces conflict detection.
 - Other flags optional; only provided fields are changed.
 - `--broadcast-day-start` (optional): New programming day anchor (HH:MM). If provided with `--effective-date`, changes apply prospectively from that date.
