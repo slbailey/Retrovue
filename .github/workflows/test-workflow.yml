@@ -165,24 +165,20 @@ jobs:
                       print(f'✅ Database connection successful (attempt {attempt + 1})')
                       
                       # Clean up test data
+                      # Note: broadcast_* and title/episode tables have been dropped
                       tables_to_clean = [
-                          'broadcast_playlog_event',
-                          'broadcast_schedule_day', 
-                          'broadcast_template_block',
-                          'broadcast_template',
-                          'catalog_asset',
-                          'broadcast_channel',
                           'path_mappings',
-                          'source_collections',
+                          'collections',
                           'sources',
                           'provider_refs',
                           'review_queue',
                           'markers',
-                          'episode_assets',
                           'assets',
-                          'episodes',
-                          'seasons',
-                          'titles'
+                          'asset_editorial',
+                          'asset_probed',
+                          'asset_relationships',
+                          'asset_sidecar',
+                          'asset_station_ops'
                       ]
                       
                       for table in tables_to_clean:

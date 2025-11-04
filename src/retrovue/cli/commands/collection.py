@@ -996,12 +996,8 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     """
     from ...domain.entities import (
         Asset,
-        Episode,
-        EpisodeAsset,
         PathMapping,
         ReviewQueue,
-        Season,
-        Title,
     )
 
     # Get collection info for reporting
@@ -1015,11 +1011,7 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     # Count what will be deleted
     stats = {
         "review_queue_entries": 0,
-        "episode_assets": 0,
         "assets": 0,
-        "episodes": 0,
-        "seasons": 0,
-        "titles": 0,
         "path_mappings": 0,
     }
 
@@ -1057,64 +1049,13 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     # Count entities that will be deleted
     stats["assets"] = len(collection_asset_uuids)
 
-    # Collect IDs of episodes, seasons, and titles that will be affected
-    collection_episode_ids = []
-    collection_season_ids = []
-    collection_title_ids = []
-
     if collection_asset_uuids:
-        # Count episode assets
-        stats["episode_assets"] = (
-            db.query(EpisodeAsset)
-            .filter(EpisodeAsset.asset_uuid.in_(collection_asset_uuids))
-            .count()
-        )
-
         # Count review queue entries
         stats["review_queue_entries"] = (
             db.query(ReviewQueue).filter(ReviewQueue.asset_uuid.in_(collection_asset_uuids)).count()
         )
-
-        # Get episodes that have these assets
-        episodes_with_assets = (
-            db.query(Episode)
-            .join(EpisodeAsset)
-            .filter(EpisodeAsset.asset_uuid.in_(collection_asset_uuids))
-            .all()
-        )
-        collection_episode_ids = list(
-            {episode.id: episode for episode in episodes_with_assets}.keys()
-        )
-        stats["episodes"] = len(collection_episode_ids)
-
-        # Get seasons that have these episodes
-        seasons_with_episodes = (
-            db.query(Season)
-            .join(Episode)
-            .join(EpisodeAsset)
-            .filter(EpisodeAsset.asset_uuid.in_(collection_asset_uuids))
-            .all()
-        )
-        collection_season_ids = list({season.id: season for season in seasons_with_episodes}.keys())
-        stats["seasons"] = len(collection_season_ids)
-
-        # Get titles that have these seasons
-        titles_with_seasons = (
-            db.query(Title)
-            .join(Season)
-            .join(Episode)
-            .join(EpisodeAsset)
-            .filter(EpisodeAsset.asset_uuid.in_(collection_asset_uuids))
-            .all()
-        )
-        collection_title_ids = list({title.id: title for title in titles_with_seasons}.keys())
-        stats["titles"] = len(collection_title_ids)
     else:
-        stats["episode_assets"] = 0
         stats["review_queue_entries"] = 0
-        stats["episodes"] = 0
-        stats["seasons"] = 0
-        stats["titles"] = 0
 
     # Path mappings are preserved for re-ingest
     stats["path_mappings"] = 0
@@ -1131,11 +1072,7 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
     typer.echo("")
     typer.echo("Items that will be deleted:")
     typer.echo(f"  Review queue entries: {stats['review_queue_entries']}")
-    typer.echo(f"  Episode-asset links: {stats['episode_assets']}")
     typer.echo(f"  Assets: {stats['assets']}")
-    typer.echo(f"  Episodes: {stats['episodes']}")
-    typer.echo(f"  Seasons: {stats['seasons']}")
-    typer.echo(f"  TV Shows/Titles: {stats['titles']}")
     typer.echo(f"  Path mappings: {stats['path_mappings']}")
     typer.echo("")
 
@@ -1163,48 +1100,12 @@ def execute_collection_wipe(db, collection, dry_run: bool, force: bool, json_out
             synchronize_session=False
         )
 
-    # 2. Delete episode-asset links
-    if stats["episode_assets"] > 0:
-        typer.echo(f"Deleting {stats['episode_assets']} episode-asset links...")
-        db.query(EpisodeAsset).filter(EpisodeAsset.asset_uuid.in_(collection_asset_uuids)).delete(
-            synchronize_session=False
-        )
-
-    # 3. Delete assets
+    # 2. Delete assets
     if stats["assets"] > 0:
         typer.echo(f"Deleting {stats['assets']} assets...")
         db.query(Asset).filter(Asset.uuid.in_(collection_asset_uuids)).delete(
             synchronize_session=False
         )
-
-    # 4. Delete orphaned episodes (episodes with no remaining assets)
-    typer.echo("Checking for orphaned episodes...")
-    orphaned_episodes = (
-        db.query(Episode).outerjoin(EpisodeAsset).filter(EpisodeAsset.episode_id.is_(None)).all()
-    )
-
-    if orphaned_episodes:
-        typer.echo(f"Deleting {len(orphaned_episodes)} orphaned episodes...")
-        for episode in orphaned_episodes:
-            db.delete(episode)
-
-    # 5. Delete orphaned seasons (seasons with no remaining episodes)
-    typer.echo("Checking for orphaned seasons...")
-    orphaned_seasons = db.query(Season).outerjoin(Episode).filter(Episode.id.is_(None)).all()
-
-    if orphaned_seasons:
-        typer.echo(f"Deleting {len(orphaned_seasons)} orphaned seasons...")
-        for season in orphaned_seasons:
-            db.delete(season)
-
-    # 6. Delete orphaned titles (titles with no remaining seasons)
-    typer.echo("Checking for orphaned titles...")
-    orphaned_titles = db.query(Title).outerjoin(Season).filter(Season.id.is_(None)).all()
-
-    if orphaned_titles:
-        typer.echo(f"Deleting {len(orphaned_titles)} orphaned titles...")
-        for title in orphaned_titles:
-            db.delete(title)
 
     # Commit all changes
     db.commit()

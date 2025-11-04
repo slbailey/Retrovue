@@ -46,8 +46,17 @@ from ..shared.types import (
 )
 
 
+# NOTE: Title/Season/Episode tables have been dropped - these classes are deprecated
+# Series/episode data is stored in asset_editorial.payload instead
+# These classes are kept for reference only and should not be used
 class Title(Base):
-    """Represents a title (movie or show) in the content library."""
+    """
+    DEPRECATED: Title table has been dropped.
+    
+    Represents a title (movie or show) in the content library.
+    Series/episode data is now stored in asset_editorial.payload (JSONB).
+    This class is kept for reference only and should not be used.
+    """
 
     __tablename__ = "titles"
 
@@ -60,21 +69,22 @@ class Title(Base):
     external_ids: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
-    seasons: Mapped[list[Season]] = relationship(
-        "Season", back_populates="title", cascade="all, delete-orphan", passive_deletes=True
-    )
-    episodes: Mapped[list[Episode]] = relationship(
-        "Episode", back_populates="title", cascade="all, delete-orphan", passive_deletes=True
-    )
-    provider_refs: Mapped[list[ProviderRef]] = relationship("ProviderRef", back_populates="title")
+    # Relationships removed - Title table is being dropped
+    # Series/episode data is stored in asset_editorial.payload instead
 
     def __repr__(self) -> str:
         return f"<Title(id={self.id}, kind={self.kind}, name={self.name}, year={self.year})>"
 
 
+# NOTE: Season table has been dropped
 class Season(Base):
-    """Represents a season of a show."""
+    """
+    DEPRECATED: Season table has been dropped.
+    
+    Represents a season of a show.
+    Series/episode data is now stored in asset_editorial.payload (JSONB).
+    This class is kept for reference only and should not be used.
+    """
 
     __tablename__ = "seasons"
 
@@ -87,18 +97,21 @@ class Season(Base):
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
-    title: Mapped[Title] = relationship("Title", back_populates="seasons")
-    episodes: Mapped[list[Episode]] = relationship(
-        "Episode", back_populates="season", cascade="all, delete-orphan", passive_deletes=True
-    )
+    # Relationships removed - Season table is being dropped
 
     def __repr__(self) -> str:
         return f"<Season(id={self.id}, title_id={self.title_id}, number={self.number})>"
 
 
+# NOTE: Episode table has been dropped
 class Episode(Base):
-    """Represents an episode of a show or a movie."""
+    """
+    DEPRECATED: Episode table has been dropped.
+    
+    Represents an episode of a show or a movie.
+    Series/episode data is now stored in asset_editorial.payload (JSONB).
+    This class is kept for reference only and should not be used.
+    """
 
     __tablename__ = "episodes"
 
@@ -116,13 +129,8 @@ class Episode(Base):
     external_ids: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
-    title: Mapped[Title] = relationship("Title", back_populates="episodes")
-    season: Mapped[Season | None] = relationship("Season", back_populates="episodes")
-    assets: Mapped[list[Asset]] = relationship(
-        "Asset", secondary="episode_assets", back_populates="episodes"
-    )
-    provider_refs: Mapped[list[ProviderRef]] = relationship("ProviderRef", back_populates="episode")
+    # Relationships removed - Episode table is being dropped
+    # Series/episode data is stored in asset_editorial.payload instead
 
     def __repr__(self) -> str:
         return f"<Episode(id={self.id}, title_id={self.title_id}, season_id={self.season_id}, number={self.number}, name={self.name})>"
@@ -181,9 +189,8 @@ class Asset(Base):
     )
 
     # Relationships
-    episodes: Mapped[list[Episode]] = relationship(
-        "Episode", secondary="episode_assets", back_populates="assets"
-    )
+    # Episode relationship removed - episodes table is being dropped
+    # Series/episode data is stored in asset_editorial.payload instead
     markers: Mapped[list[Marker]] = relationship(
         "Marker", back_populates="asset", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -314,8 +321,15 @@ class AssetSidecar(Base):
     asset: Mapped[Asset] = relationship("Asset", back_populates="sidecar_meta")
 
 
+# NOTE: EpisodeAsset table has been dropped
 class EpisodeAsset(Base):
-    """Junction table for episodes and assets (many-to-many relationship)."""
+    """
+    DEPRECATED: EpisodeAsset junction table has been dropped.
+    
+    Junction table for episodes and assets (many-to-many relationship).
+    Series/episode data is now stored in asset_editorial.payload (JSONB).
+    This class is kept for reference only and should not be used.
+    """
 
     __tablename__ = "episode_assets"
 
@@ -345,19 +359,13 @@ class ProviderRef(Base):
     raw: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Foreign key relationships (polymorphic)
-    title_id: Mapped[uuid_module.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("titles.id", ondelete="CASCADE"), nullable=True
-    )
-    episode_id: Mapped[uuid_module.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=True
-    )
+    # Note: title_id and episode_id foreign keys removed - titles/episodes tables dropped
+    # Series/episode data is stored in asset_editorial.payload instead
     asset_uuid: Mapped[uuid_module.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("assets.uuid", ondelete="CASCADE"), nullable=True
     )
 
     # Relationships
-    title: Mapped[Title | None] = relationship("Title", back_populates="provider_refs")
-    episode: Mapped[Episode | None] = relationship("Episode", back_populates="provider_refs")
     asset: Mapped[Asset | None] = relationship("Asset", back_populates="provider_refs")
 
     def __repr__(self) -> str:

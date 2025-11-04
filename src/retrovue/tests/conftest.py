@@ -118,14 +118,9 @@ def clean_db(db_session: Session):
     # We don't drop the schema, just clean the data
     with db_session.begin():
         # Delete in reverse dependency order to avoid foreign key constraints
-        db_session.execute(text("DELETE FROM broadcast_playlog_event"))
-        db_session.execute(text("DELETE FROM broadcast_schedule_day"))
-        db_session.execute(text("DELETE FROM broadcast_template_block"))
-        db_session.execute(text("DELETE FROM broadcast_template"))
-        db_session.execute(text("DELETE FROM catalog_asset"))
-        db_session.execute(text("DELETE FROM broadcast_channel"))
+        # Note: Broadcast tables (broadcast_*, catalog_asset) have been dropped and are not used
         db_session.execute(text("DELETE FROM path_mappings"))
-        db_session.execute(text("DELETE FROM source_collections"))
+        db_session.execute(text("DELETE FROM collections"))
         db_session.execute(text("DELETE FROM sources"))
         db_session.execute(text("DELETE FROM provider_refs"))  # Delete provider_refs first
         db_session.execute(text("DELETE FROM review_queue"))
@@ -155,26 +150,4 @@ def sample_asset_data():
     }
 
 
-@pytest.fixture
-def sample_catalog_asset_data():
-    """Provide sample catalog asset data for testing."""
-    return {
-        "title": "Test Movie",
-        "duration_ms": 120000,
-        "tags": "action,thriller",
-        "file_path": "/catalog/test_movie.mp4",
-        "canonical": True,
-    }
-
-
-@pytest.fixture
-def sample_broadcast_channel_data():
-    """Provide sample broadcast channel data for testing."""
-    return {
-        "name": "Test Channel",
-        "timezone": "America/New_York",
-        "grid_size_minutes": 30,
-        "grid_offset_minutes": 0,
-        "rollover_minutes": 360,  # 6:00 AM
-        "is_active": True,
-    }
+# Note: Broadcast domain fixtures removed - tables have been dropped and will be re-added when functionality is implemented

@@ -14,7 +14,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from retrovue.domain.entities import Asset, Episode, Marker, ReviewQueue, Season, Title
+from retrovue.domain.entities import Asset, Marker, ReviewQueue
 
 
 class TestAssetIdentity:
@@ -131,43 +131,6 @@ class TestCascadeBehavior:
         assert clean_db.execute(select(Marker).where(Marker.asset_id == asset.id)).scalar_one_or_none() is None
         assert clean_db.execute(select(ReviewQueue).where(ReviewQueue.asset_id == asset.id)).scalar_one_or_none() is None
     
-    def test_title_cascade_deletes_seasons_and_episodes(self, clean_db: Session):
-        """Test that deleting a Title cascades to delete Seasons and Episodes."""
-        # Create a Title
-        title = Title(
-            kind="show",
-            name="Test Show",
-            year=2023
-        )
-        clean_db.add(title)
-        clean_db.commit()
-        
-        # Create a Season attached to the Title
-        season = Season(
-            title_id=title.id,
-            number=1
-        )
-        clean_db.add(season)
-        
-        # Create an Episode attached to the Title
-        episode = Episode(
-            title_id=title.id,
-            season_id=season.id,
-            number=1,
-            name="Test Episode"
-        )
-        clean_db.add(episode)
-        clean_db.commit()
-        
-        # Verify they exist
-        assert clean_db.execute(select(Season).where(Season.title_id == title.id)).scalar_one_or_none() is not None
-        assert clean_db.execute(select(Episode).where(Episode.title_id == title.id)).scalar_one_or_none() is not None
-        
-        # Delete the Title
-        clean_db.delete(title)
-        clean_db.commit()
-        
-        # Assert the Season and Episode rows are gone (CASCADE works)
-        assert clean_db.execute(select(Season).where(Season.title_id == title.id)).scalar_one_or_none() is None
-        assert clean_db.execute(select(Episode).where(Episode.title_id == title.id)).scalar_one_or_none() is None
+    # Note: Title/Season/Episode cascade tests removed - these tables have been dropped
+    # Series/episode data is stored in asset_editorial.payload instead
 

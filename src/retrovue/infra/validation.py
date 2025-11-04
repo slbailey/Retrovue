@@ -11,11 +11,7 @@ from sqlalchemy.orm import Session
 from ..domain.entities import (
     Asset,
     Collection,
-    Episode,
-    EpisodeAsset,
     PathMapping,
-    Season,
-    Title,
 )
 from ..infra.exceptions import ValidationError
 
@@ -170,53 +166,9 @@ def validate_no_orphaned_records(db: Session) -> None:
     Raises:
         ValidationError: If orphaned records cannot be cleaned up
     """
-    # Check for orphaned episodes
-    orphaned_episodes = (
-        db.query(Episode).outerjoin(EpisodeAsset).filter(EpisodeAsset.episode_id.is_(None)).all()
-    )
-
-    if orphaned_episodes:
-        # Attempt to clean up orphaned episodes
-        for episode in orphaned_episodes:
-            db.delete(episode)
-        db.flush()
-
-    # Check for orphaned seasons
-    orphaned_seasons = db.query(Season).outerjoin(Episode).filter(Episode.id.is_(None)).all()
-
-    if orphaned_seasons:
-        # Attempt to clean up orphaned seasons
-        for season in orphaned_seasons:
-            db.delete(season)
-        db.flush()
-
-    # Check for orphaned titles
-    orphaned_titles = db.query(Title).outerjoin(Season).filter(Season.id.is_(None)).all()
-
-    if orphaned_titles:
-        # Attempt to clean up orphaned titles
-        for title in orphaned_titles:
-            db.delete(title)
-        db.flush()
-
-    # Final verification - if any orphaned records still exist, fail
-    final_orphaned_episodes = (
-        db.query(Episode).outerjoin(EpisodeAsset).filter(EpisodeAsset.episode_id.is_(None)).count()
-    )
-
-    final_orphaned_seasons = (
-        db.query(Season).outerjoin(Episode).filter(Episode.id.is_(None)).count()
-    )
-
-    final_orphaned_titles = db.query(Title).outerjoin(Season).filter(Season.id.is_(None)).count()
-
-    if final_orphaned_episodes > 0 or final_orphaned_seasons > 0 or final_orphaned_titles > 0:
-        raise ValidationError(
-            f"Failed to clean up orphaned data: "
-            f"{final_orphaned_episodes} episodes, "
-            f"{final_orphaned_seasons} seasons, "
-            f"{final_orphaned_titles} titles"
-        )
+    # Note: Title/Season/Episode orphaned record checks removed - these tables have been dropped
+    # Series/episode data is stored in asset_editorial.payload instead
+    # TODO: Add validation for orphaned assets if needed
 
 
 def validate_collection_preserved(db: Session, collection: Collection) -> None:

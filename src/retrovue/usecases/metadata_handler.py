@@ -136,7 +136,7 @@ def deep_merge_metadata(target: dict, incoming: dict) -> dict:
 
         if isinstance(existing, Mapping) and isinstance(value, Mapping):
             deep_merge_metadata(existing, value)  # type: ignore[arg-type]
-        elif isinstance(existing, list) and isinstance(value, (list, tuple)):
+        elif isinstance(existing, list) and isinstance(value, list | tuple):
             target[key] = _merge_array(existing, value)
         else:
             target[key] = value

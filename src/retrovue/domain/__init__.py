@@ -5,8 +5,9 @@ This layer contains the core business entities and domain logic,
 independent of any external concerns.
 """
 
-# TODO: Implement domain entities
-# - Title, Episode, Asset entities
+# Domain entities implemented in entities.py
+# Note: Title/Season/Episode tables removed - series/episode data stored in asset_editorial.payload
+# - Asset, Collection, Source entities
 # - Value objects (GUID, Path, etc.)
-# - Domain events
-# - Domain services
+# - Domain events (future)
+# - Domain services (future)

@@ -27,8 +27,11 @@ target_metadata = Base.metadata
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    """Exclude alembic_version table from autogenerate comparisons."""
+    """Exclude alembic_version table and deprecated tables from autogenerate comparisons."""
     if type_ == "table" and name == "alembic_version":
+        return False
+    # Exclude deprecated title/episode tables (dropped in migration d26f5c803f70)
+    if type_ == "table" and name in ("titles", "seasons", "episodes", "episode_assets"):
         return False
     return True
 
