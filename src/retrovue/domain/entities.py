@@ -602,3 +602,102 @@ class Enricher(Base):
 
     def __repr__(self) -> str:
         return f"<Enricher(id={self.id}, enricher_id={self.enricher_id}, type={self.type}, scope={self.scope}, name={self.name}, protected={self.protected_from_removal})>"
+
+
+class ScheduleTemplate(Base):
+    """Schedule template model for reusable programming patterns."""
+
+    __tablename__ = "schedule_templates"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("true"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    block_instances: Mapped[list[ScheduleTemplateBlockInstance]] = relationship(
+        "ScheduleTemplateBlockInstance", back_populates="template", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_schedule_templates_name", "name"),
+        Index("ix_schedule_templates_is_active", "is_active"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ScheduleTemplate(id={self.id}, name='{self.name}', is_active={self.is_active})>"
+
+
+class ScheduleTemplateBlock(Base):
+    """Standalone, reusable template block model (e.g., 'Morning Cartoons')."""
+
+    __tablename__ = "schedule_template_blocks"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)  # e.g., "Morning Cartoons"
+    rule_json: Mapped[str] = mapped_column(Text, nullable=False)  # JSON string defining constraints
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    template_instances: Mapped[list[ScheduleTemplateBlockInstance]] = relationship(
+        "ScheduleTemplateBlockInstance", back_populates="block"
+    )
+
+    __table_args__ = (
+        Index("ix_schedule_template_blocks_name", "name"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ScheduleTemplateBlock(id={self.id}, name='{self.name}')>"
+
+
+class ScheduleTemplateBlockInstance(Base):
+    """Junction table: template-specific instantiation of a template block with timing."""
+
+    __tablename__ = "schedule_template_block_instances"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
+    )
+    template_id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("schedule_templates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    block_id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("schedule_template_blocks.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    start_time: Mapped[str] = mapped_column(Text, nullable=False)  # "HH:MM" - template-specific timing
+    end_time: Mapped[str] = mapped_column(Text, nullable=False)  # "HH:MM" - template-specific timing
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    template: Mapped[ScheduleTemplate] = relationship("ScheduleTemplate", back_populates="block_instances")
+    block: Mapped[ScheduleTemplateBlock] = relationship("ScheduleTemplateBlock", back_populates="template_instances")
+
+    __table_args__ = (
+        Index("ix_schedule_template_block_instances_template_id", "template_id"),
+        Index("ix_schedule_template_block_instances_block_id", "block_id"),
+        Index("ix_schedule_template_block_instances_start_time", "start_time"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ScheduleTemplateBlockInstance(id={self.id}, template_id={self.template_id}, block_id={self.block_id}, start='{self.start_time}', end='{self.end_time}')>"

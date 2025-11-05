@@ -45,9 +45,10 @@ RetroVue follows Domain-Driven Design (DDD) principles, where the domain model r
 
 ### Scheduling Infrastructure Domain
 
-- **[ScheduleDay](ScheduleDay.md)** - Template assignments for specific dates
-- **[ScheduleTemplate](ScheduleTemplate.md)** - Reusable programming templates
-- **[ScheduleTemplateBlock](ScheduleTemplateBlock.md)** - Time blocks within templates
+- **[ScheduleTemplate](ScheduleTemplate.md)** - Reusable, channel-agnostic shells that define what *types* of content should appear
+- **[ScheduleTemplateBlock](ScheduleTemplateBlock.md)** - Time blocks within templates with content type constraints (guardrails)
+- **[SchedulePlan](SchedulePlan.md)** - Operator-created plans that fill templates with actual content selections
+- **[ScheduleDay](ScheduleDay.md)** - Resolved schedules for specific channel and date (generated from plans)
 - **[EPGGeneration](EPGGeneration.md)** - Electronic Program Guide generation
 
 ## Key Architectural Principles

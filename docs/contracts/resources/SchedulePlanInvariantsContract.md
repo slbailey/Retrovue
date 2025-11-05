@@ -1,0 +1,217 @@
+# Schedule Plan Invariants Contract
+
+_Related: [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: ScheduleTemplate](../../domain/ScheduleTemplate.md) • [Domain: ScheduleTemplateBlock](../../domain/ScheduleTemplateBlock.md) • [Domain: ScheduleDay](../../domain/ScheduleDay.md)_
+
+## Purpose
+
+This contract defines the critical invariants and constraints that must be enforced for the layered, template-based scheduling model. These invariants ensure system correctness, prevent scheduling conflicts, and maintain data integrity across ScheduleTemplate, ScheduleTemplateBlock, SchedulePlan, SchedulePlanBlockAssignment, and BroadcastScheduleDay.
+
+## Scope
+
+This contract applies to:
+
+- **ScheduleTemplate** - Reusable shells that define content type constraints
+- **ScheduleTemplateBlock** - Time blocks with content type constraints (guardrails)
+- **SchedulePlan** - Operator-created plans that fill templates with actual content
+- **SchedulePlanBlockAssignment** - Time slices within plan blocks with specific content
+- **BroadcastScheduleDay** - Resolved schedules for specific channel and date
+
+## Critical Invariants
+
+### I-1: Template Block Non-Overlap
+
+**Rule:** Blocks within a template MUST NOT have overlapping time periods.
+
+**Rationale:** Template blocks define exclusive time windows with their constraints. Overlapping blocks would create ambiguity about which constraints apply to a given time.
+
+**Enforcement:**
+- Database constraint or validation layer MUST prevent creation of overlapping blocks within the same template
+- Overlap detection MUST check: `(start_time < other.end_time) AND (end_time > other.start_time)`
+- Validation MUST occur before template activation or block creation
+
+**Test Coverage:** Tests must verify that:
+- Creating a block that overlaps an existing block fails with appropriate error
+- Edge cases (blocks that touch at boundaries) are handled correctly
+- Blocks in different templates can have overlapping times (they're independent)
+
+### I-2: Plan Assignment Constraint Compliance
+
+**Rule:** SchedulePlanBlockAssignment entries MUST respect the constraints defined in their parent ScheduleTemplateBlock's `rule_json`.
+
+**Rationale:** Template blocks define guardrails (e.g., "cartoons only"). Plan assignments must select content that complies with these guardrails.
+
+**Enforcement:**
+- When creating or updating a SchedulePlanBlockAssignment, the system MUST validate that the selected content matches the template block's `rule_json` constraints
+- Validation MUST check: content tags, ratings, duration limits, genre restrictions, etc. as defined in `rule_json`
+- Invalid assignments MUST be rejected with clear error messages
+
+**Test Coverage:** Tests must verify that:
+- Assignments that violate template block constraints are rejected
+- Assignments that comply with constraints are accepted
+- Edge cases (empty constraints, wildcard constraints) are handled correctly
+- Validation runs on both assignment creation and template block constraint updates
+
+### I-3: Plan Assignment Non-Overlap Within Block
+
+**Rule:** SchedulePlanBlockAssignment entries within the same plan and template block MUST NOT overlap.
+
+**Rationale:** Each time slice within a block must have exactly one content assignment. Overlapping assignments would create ambiguity about what content should play.
+
+**Enforcement:**
+- Database constraint or validation layer MUST prevent creation of overlapping assignments within the same `(plan_id, template_block_id)` combination
+- Overlap detection MUST check: `(start_time_offset < other.end_time_offset) AND (end_time_offset > other.start_time_offset)`
+- Assignments that touch at boundaries (e.g., one ends where another starts) are allowed
+
+**Test Coverage:** Tests must verify that:
+- Creating overlapping assignments within the same plan and block fails
+- Assignments in different plans can overlap (they're independent)
+- Assignments in different template blocks can overlap (they're independent)
+- Boundary cases (touching assignments) are handled correctly
+
+### I-4: Plan Priority Resolution
+
+**Rule:** When multiple SchedulePlans match for a channel and date, the plan with the highest `priority` value MUST be selected.
+
+**Rationale:** Plan layering allows more specific plans (e.g., "ChristmasPlan") to override general plans (e.g., "WeekdayPlan"). Priority determines which plan takes precedence.
+
+**Enforcement:**
+- Plan resolution MUST consider `is_active=true` plans only
+- Plan resolution MUST evaluate `cron_expression` and `start_date`/`end_date` to determine matching plans
+- Among matching plans, the plan with the highest `priority` MUST be selected
+- If multiple plans have the same priority, behavior MUST be deterministic (e.g., highest `id` or creation time)
+
+**Test Coverage:** Tests must verify that:
+- Higher priority plans override lower priority plans when both match
+- Inactive plans are excluded from resolution
+- Cron expressions correctly determine plan matching
+- Date ranges correctly determine plan matching
+- Priority tie-breaking is deterministic
+
+### I-5: ScheduleDay Immutability
+
+**Rule:** BroadcastScheduleDay records MUST be immutable once generated, unless manually overridden.
+
+**Rationale:** Schedule days represent "what will air" - once generated, they must remain stable for EPG and playout systems. Manual overrides are the exception.
+
+**Enforcement:**
+- ScheduleService MUST NOT modify existing BroadcastScheduleDay records during normal operation
+- Manual overrides MUST create new BroadcastScheduleDay records with `is_manual_override=true`
+- Regeneration MUST create a new BroadcastScheduleDay record (or delete and recreate) rather than modifying existing records
+- Historical records MUST be preserved for audit purposes
+
+**Test Coverage:** Tests must verify that:
+- ScheduleService does not modify existing schedule days during normal operation
+- Manual overrides create new records (not modify existing)
+- Regeneration creates new records or properly replaces existing ones
+- Historical records are preserved
+
+### I-6: Plan Template Relationship
+
+**Rule:** SchedulePlan MUST reference a valid ScheduleTemplate that is `is_active=true`.
+
+**Rationale:** Plans fill templates - they must reference valid, active templates to be usable.
+
+**Enforcement:**
+- Plan creation MUST validate that `template_id` references an existing ScheduleTemplate
+- Plan creation MUST validate that the referenced template has `is_active=true`
+- Plan updates MUST re-validate template relationship if `template_id` changes
+- Plans referencing inactive templates MUST be excluded from schedule generation
+
+**Test Coverage:** Tests must verify that:
+- Creating a plan with invalid `template_id` fails
+- Creating a plan with inactive template fails
+- Plans become unusable when their template is deactivated
+- Template deletion properly handles dependent plans
+
+### I-7: Assignment Template Block Relationship
+
+**Rule:** SchedulePlanBlockAssignment MUST reference a valid ScheduleTemplateBlock that belongs to the plan's template.
+
+**Rationale:** Assignments fill template blocks - they must reference blocks that exist in the plan's template.
+
+**Enforcement:**
+- Assignment creation MUST validate that `template_block_id` references a ScheduleTemplateBlock
+- Assignment creation MUST validate that the template block belongs to the plan's template
+- Assignment updates MUST re-validate template block relationship if `template_block_id` changes
+
+**Test Coverage:** Tests must verify that:
+- Creating an assignment with invalid `template_block_id` fails
+- Creating an assignment with a block from a different template fails
+- Assignment validation checks template block membership
+
+### I-8: Asset Eligibility
+
+**Rule:** Only assets with `state='ready'` and `approved_for_broadcast=true` are eligible for scheduling.
+
+**Rationale:** This is a critical system-wide rule that ensures only approved, fully-processed content can be scheduled.
+
+**Enforcement:**
+- ScheduleService MUST filter assets by `state='ready'` AND `approved_for_broadcast=true` when selecting content
+- Plan assignments MUST reference eligible assets only
+- Validation MUST reject assignments that reference ineligible assets
+
+**Test Coverage:** Tests must verify that:
+- Only eligible assets are considered during schedule generation
+- Assignments referencing ineligible assets are rejected
+- Asset state changes properly affect schedule generation
+
+## Validation Workflows
+
+### Dry Run and Preview
+
+**Rule:** The system MUST support dry-run and preview features that validate plans without generating actual schedule days.
+
+**Requirements:**
+- Preview MUST show how a plan resolves into a BroadcastScheduleDay
+- Preview MUST highlight constraint violations, gaps, and conflicts
+- Dry-run MUST validate all invariants without committing changes
+
+### Gap Detection
+
+**Rule:** The system SHOULD detect and warn about gaps in schedule coverage but MUST allow gaps (they don't violate invariants).
+
+**Requirements:**
+- Gaps are allowed (not an invariant violation)
+- Warnings SHOULD be generated for gaps in playout
+- Validation tools SHOULD highlight gaps for operator review
+
+### Rule Violation Reporting
+
+**Rule:** When plan assignments violate template block constraints, the system MUST provide clear, actionable error messages.
+
+**Requirements:**
+- Error messages MUST identify the specific constraint violated
+- Error messages MUST identify the specific assignment that violates the constraint
+- Error messages MUST suggest corrective actions
+
+## Out of Scope (v0.1)
+
+The following are NOT part of this contract:
+
+- Automatic content suggestion algorithms
+- Ad pod composition and timing
+- Real-time plan modification during active broadcast
+- Plan versioning and effective-dated changes
+- Template inheritance or composition
+
+## Test Coverage Requirements
+
+Each invariant (I-1 through I-8) MUST have corresponding test coverage that:
+
+1. **Validates the invariant holds** in normal operation
+2. **Verifies violation detection** when the invariant would be broken
+3. **Confirms error handling** provides clear feedback
+4. **Tests edge cases** and boundary conditions
+
+## Related Contracts
+
+- [UnitOfWorkContract](../_ops/UnitOfWorkContract.md) - Transaction boundaries for schedule operations
+- [ProductionSafety](../_ops/ProductionSafety.md) - Safety requirements for production operations
+
+## See Also
+
+- [Domain: SchedulePlan](../../domain/SchedulePlan.md) - Complete domain documentation
+- [Domain: ScheduleTemplate](../../domain/ScheduleTemplate.md) - Template structure
+- [Domain: ScheduleTemplateBlock](../../domain/ScheduleTemplateBlock.md) - Block constraints
+- [Domain: ScheduleDay](../../domain/ScheduleDay.md) - Resolved schedules
+

@@ -520,7 +520,7 @@ class FilesystemImporter(BaseImporter):
                             with candidate.open("r", encoding="utf-8") as fp:
                                 sidecar = _json.load(fp)
                         elif candidate.suffix.lower() in (".yaml", ".yml"):
-                            import yaml as _yaml  # type: ignore
+                            import yaml as _yaml  # type: ignore[import-untyped]
                             with candidate.open("r", encoding="utf-8") as fp:
                                 sidecar = _yaml.safe_load(fp)
                         break
