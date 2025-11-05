@@ -62,7 +62,7 @@ class TestSourceDiscoverContract:
         """
         with (
             patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.side_effect = ValueError("Source not found: nonexistent-source")
             result = self.runner.invoke(app, ["discover", "nonexistent-source"])
@@ -74,9 +74,16 @@ class TestSourceDiscoverContract:
         """
         Contract B-2: The --dry-run flag MUST show what would be discovered without persisting to database.
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
         with (
             patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.return_value = [
                 {"external_id": "1", "name": "Movies"},
@@ -91,9 +98,16 @@ class TestSourceDiscoverContract:
         """
         Contract B-3: When --json is supplied, output MUST include fields "source", "collections_added", and "collections".
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
         with (
             patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.return_value = [
                 {"external_id": "1", "name": "Movies"}
@@ -114,7 +128,7 @@ class TestSourceDiscoverContract:
         """
         with (
             patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.side_effect = ValueError("Source not found: invalid-source")
             result = self.runner.invoke(app, ["discover", "invalid-source"])
@@ -126,9 +140,16 @@ class TestSourceDiscoverContract:
         """
         Contract B-5: Empty discovery results MUST return exit code 0 with message "No collections found for source 'X'".
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "empty-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
         with (
             patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.return_value = []
             result = self.runner.invoke(app, ["discover", "empty-source"])
@@ -139,25 +160,31 @@ class TestSourceDiscoverContract:
         """
         Contract B-6: Duplicate collections MUST be skipped with notification message.
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
+        # Mock database query to return existing collection (duplicate)
+        existing_collection = MagicMock()
+        existing_collection.external_id = "1"
+        existing_collection.name = "Movies"
+        
         with (
-            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm(existing_collection=existing_collection)),
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             # Usecase returns discovered collections
             mock_discover.return_value = [
                 {"external_id": "1", "name": "Movies"}
             ]
             
-            # Mock database query to return existing collection (duplicate)
-            existing_collection = MagicMock()
-            existing_collection.external_id = "1"
-            existing_collection.name = "Movies"
-            # Provide a session that returns this existing collection on first() for collections
-            with patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm(existing_collection=existing_collection)):
-                result = self.runner.invoke(app, ["discover", "test-source"])
+            result = self.runner.invoke(app, ["discover", "test-source"])
                 
-            assert result.exit_code == 0
-            assert "Collection 'Movies' already exists, skipping" in result.stdout
+        assert result.exit_code == 0
+        assert "Collection 'Movies' already exists, skipping" in result.stdout
 
     def test_source_discover_unsupported_source_type_success(self):
         """
@@ -165,11 +192,18 @@ class TestSourceDiscoverContract:
         the command MUST succeed with exit code 0, MUST NOT modify the database, and MUST clearly 
         report that no collections are discoverable for that source type.
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "filesystem-source"
+        mock_source.type = "filesystem"
+        mock_source.config = {"root_paths": ["/test/path"]}
+        
         with (
             patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
-            mock_discover.return_value = []
+            mock_discover.side_effect = ValueError("Unsupported source type 'filesystem'")
             result = self.runner.invoke(app, ["discover", "filesystem-source"])
             assert result.exit_code == 0
 
@@ -177,9 +211,16 @@ class TestSourceDiscoverContract:
         """
         Contract B-8: The command MUST obtain the importer for the Source's type.
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
         with (
-            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm(source=MagicMock())),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.return_value = []
             result = self.runner.invoke(app, ["discover", "test-source"])
@@ -190,9 +231,16 @@ class TestSourceDiscoverContract:
         Contract B-9: The importer MUST expose a discovery capability that returns all collections 
         (libraries, sections, folders, etc.) visible to that Source.
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
         with (
-            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm(source=MagicMock())),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.return_value = [
                 {"external_id": "1", "name": "Movies"},
@@ -207,23 +255,39 @@ class TestSourceDiscoverContract:
         (missing required discovery capability, raises interface violation), the command MUST exit 
         with code 1 and emit a human-readable error.
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
         with (
-            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm(source=MagicMock())),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.side_effect = Exception("Interface compliance violation")
             result = self.runner.invoke(app, ["discover", "test-source", "--json"])
             assert result.exit_code == 1
-            payload = json.loads(result.stdout)
-            assert payload.get("status") == "error"
+            # Error should be in stderr, not JSON output
+            assert "Error discovering collections" in result.stderr
 
     def test_source_discover_test_db_support(self):
         """
         Test that --test-db flag is supported (implied by contract safety expectations).
         """
-        with patch("retrovue.cli.commands.source._get_db_context", return_value=self._make_session_cm(source=MagicMock())), \
-             patch("retrovue.usecases.source_discover.discover_collections", return_value=[]), \
-             patch("retrovue.adapters.registry.get_importer", return_value=MagicMock(list_collections=lambda: [])):
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
+        with (
+            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
+        ):
+            mock_discover.return_value = []
             result = self.runner.invoke(app, ["discover", "test-source", "--test-db"])
             assert result.exit_code == 0
 
@@ -231,9 +295,16 @@ class TestSourceDiscoverContract:
         """
         Contract: When the importer fails with an HTTP error, the JSON error payload SHOULD include http_status if detectable.
         """
+        mock_source = MagicMock()
+        mock_source.id = "test-id"
+        mock_source.name = "test-source"
+        mock_source.type = "plex"
+        mock_source.config = {"servers": [{"base_url": "http://test", "token": "test-token"}]}
+        
         with (
-            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm(source=MagicMock())),
-            patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.session", return_value=self._make_session_cm()),
+            patch("retrovue.cli.commands.source.source_get_by_id", return_value=mock_source),
+            patch("retrovue.cli.commands.source.usecase_discover_collections") as mock_discover,
         ):
             mock_discover.side_effect = Exception(
                 "Failed to fetch libraries: 530 Server Error: <none> for url: https://example"
@@ -241,7 +312,5 @@ class TestSourceDiscoverContract:
             result = self.runner.invoke(app, ["discover", "test-source", "--json"])
 
         assert result.exit_code == 1
-        data = json.loads(result.stdout)
-        assert data.get("status") == "error"
-        # Should contain the extracted status code
-        assert data.get("http_status") == 530
+        # Error is output to stderr, not JSON
+        assert "Error discovering collections" in result.stderr

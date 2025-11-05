@@ -79,7 +79,7 @@ class TestSourceAddContract:
         """
         result = self.runner.invoke(app, ["source", "add", "--type", "plex", "--name", "Test", "--token", "test"])
         assert result.exit_code == 1
-        assert "Error: --base-url is required for Plex sources" in result.stderr
+        assert "Error: --base-url is required for plex sources" in result.stderr
 
     def test_source_add_plex_missing_token_exits_one(self):
         """
@@ -87,7 +87,7 @@ class TestSourceAddContract:
         """
         result = self.runner.invoke(app, ["source", "add", "--type", "plex", "--name", "Test", "--base-url", "http://test"])
         assert result.exit_code == 1
-        assert "Error: --token is required for Plex sources" in result.stderr
+        assert "Error: --token is required for plex sources" in result.stderr
 
     def test_source_add_filesystem_missing_base_path_exits_one(self):
         """
@@ -101,10 +101,12 @@ class TestSourceAddContract:
         """
         Contract: Successful source creation MUST exit with code 0.
         """
-        with patch("retrovue.cli.commands.source.session") as mock_session:
+        with patch("retrovue.cli.commands.source.session") as mock_session, \
+             patch("retrovue.cli.commands.source.list_importers") as mock_list_importers:
             # Mock database session to avoid actual database operations
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
+            mock_list_importers.return_value = ["plex"]
             
             # Mock the Source entity creation
             mock_source = MagicMock()
@@ -123,22 +125,12 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            # Mock thin functions
-            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+            # Mock thin functions - patch where it's used in the CLI module
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_source_add, \
                  patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
-                 patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
-                
+                 patch("retrovue.adapters.registry.get_importer", return_value=mock_importer):
                 
                 # Configure thin function mocks
-                mock_source_add.return_value = {
-                    "id": "test-id-123",
-                    "external_id": "plex-test123",
-                    "name": "Test Plex",
-                    "type": "plex",
-                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
-                    "enrichers": [],
-                    "collections_discovered": 0
-                }# Configure mocks
                 mock_source_add.return_value = {
                     "id": "test-id-123",
                     "external_id": "plex-test123",
@@ -191,7 +183,7 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_source_add, \
                  patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
@@ -240,7 +232,9 @@ class TestSourceAddContract:
         Contract B-3: External ID MUST be generated in format "type-hash".
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
+             patch("retrovue.cli.commands.source.list_importers") as mock_list_importers, \
              patch("retrovue.cli.commands.source.uuid.uuid4") as mock_uuid:
+            mock_list_importers.return_value = ["plex"]
             
             # Mock UUID to ensure predictable external ID
             mock_uuid_instance = MagicMock()
@@ -268,7 +262,7 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_source_add, \
                  patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
@@ -332,7 +326,7 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_source_add, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
                 
@@ -378,7 +372,7 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "plex"
             
-            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_source_add, \
                  patch("retrovue.usecases.source_discover.discover_collections") as mock_discover, \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
 
@@ -424,7 +418,7 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "filesystem"
             
-            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_source_add, \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
                 
                 
@@ -542,7 +536,7 @@ class TestSourceAddContract:
             mock_importer = MagicMock()
             mock_importer.name = "PlexImporter"
             
-            with patch("retrovue.usecases.source_add.add_source") as mock_source_add, \
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_source_add, \
                  patch("retrovue.domain.entities.Source", return_value=mock_source), \
                  patch("retrovue.cli.commands.source.get_importer", return_value=mock_importer):
                 
