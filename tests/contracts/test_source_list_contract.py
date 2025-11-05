@@ -6,7 +6,7 @@ These tests verify CLI behavior, filtering, output formats, and read-only operat
 """
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from typer.testing import CliRunner
 
@@ -32,7 +32,7 @@ class TestSourceListContract:
         """
         Contract B-1: The command MUST return all known sources unless filtered.
         """
-        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+        with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_source_list:
             mock_source_list.return_value = [
                 {
                     "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
@@ -60,13 +60,13 @@ class TestSourceListContract:
             assert "My Plex Server" in result.stdout
             assert "Local Media Library" in result.stdout
             assert "Total: 2 sources configured" in result.stdout
-            mock_source_list.assert_called_once_with(source_type=None)
+            mock_source_list.assert_called_once_with(ANY, source_type=None)
 
     def test_source_list_type_filter_valid_type(self):
         """
         Contract B-2: --type MUST restrict results to sources whose type exactly matches a known importer type.
         """
-        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+        with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_source_list:
             mock_source_list.return_value = [
                 {
                     "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
@@ -85,7 +85,7 @@ class TestSourceListContract:
             assert "My Plex Server" in result.stdout
             assert "plex" in result.stdout
             assert "Total: 1 plex source configured" in result.stdout
-            mock_source_list.assert_called_once_with(source_type="plex")
+            mock_source_list.assert_called_once_with(ANY, source_type="plex")
 
     def test_source_list_type_filter_invalid_type_exits_one(self):
         """
@@ -104,7 +104,7 @@ class TestSourceListContract:
         """
         Contract B-4: --json MUST return valid JSON output with the required fields (status, total, sources).
         """
-        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+        with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_source_list:
             mock_source_list.return_value = [
                 {
                     "id": "4b2b05e7-d7d2-414a-a587-3f5df9b53f44",
@@ -142,7 +142,7 @@ class TestSourceListContract:
             assert "ingestible_collections" in source
             assert "created_at" in source
             assert "updated_at" in source
-            mock_source_list.assert_called_once_with(source_type=None)
+            mock_source_list.assert_called_once_with(ANY, source_type=None)
 
     def test_source_list_deterministic_ordering(self):
         """
@@ -179,7 +179,7 @@ class TestSourceListContract:
             }
         ]
         
-        with patch("retrovue.cli.commands.source.source_list", return_value=mock_sources_data):
+        with patch("retrovue.cli.commands.source.usecase_list_sources", return_value=mock_sources_data):
             result = self.runner.invoke(app, ["source", "list"])
             
             assert result.exit_code == 0
@@ -198,7 +198,7 @@ class TestSourceListContract:
         Contract B-6: When there are no results, output MUST still be structurally valid (empty table in human mode).
         """
         # Mock empty results
-        with patch("retrovue.cli.commands.source.source_list", return_value=[]):
+        with patch("retrovue.cli.commands.source.usecase_list_sources", return_value=[]):
             result = self.runner.invoke(app, ["source", "list"])
             
             assert result.exit_code == 0
@@ -208,7 +208,7 @@ class TestSourceListContract:
         """
         Contract B-6: When there are no results, output MUST still be structurally valid (empty list in JSON mode).
         """
-        with patch("retrovue.cli.commands.source.source_list") as mock_source_list:
+        with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_source_list:
             mock_source_list.return_value = []
 
             result = self.runner.invoke(app, ["source", "list", "--json"])
@@ -221,14 +221,14 @@ class TestSourceListContract:
             assert output["status"] == "ok"
             assert output["total"] == 0
             assert output["sources"] == []
-            mock_source_list.assert_called_once_with(source_type=None)
+            mock_source_list.assert_called_once_with(ANY, source_type=None)
 
     def test_source_list_read_only_operation(self):
         """
         Contract B-7: The command MUST be read-only and MUST NOT mutate database state, importer registry state, or collection ingest state.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -248,11 +248,12 @@ class TestSourceListContract:
 
             assert result.exit_code == 0
 
-            mock_db.query.assert_called()
+            # Verify usecase was called (read-only operation)
+            mock_list_sources.assert_called_once_with(mock_db, source_type=None)
+            # Verify no mutations occurred (usecase handles queries internally)
             mock_db.add.assert_not_called()
             mock_db.commit.assert_not_called()
             mock_db.delete.assert_not_called()
-            mock_list_sources.assert_called_once_with(mock_db, source_type=None)
 
     def test_source_list_test_db_mode(self):
         """
@@ -260,7 +261,7 @@ class TestSourceListContract:
         Contract B-9: --test-db MUST keep response shape and exit code behavior identical to production mode.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -288,7 +289,7 @@ class TestSourceListContract:
         Contract B-9: --test-db MUST keep response shape and exit code behavior identical to production mode.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -321,7 +322,7 @@ class TestSourceListContract:
         """
         Contract B-10: The command MUST NOT call external systems (importers, Plex APIs, filesystem scans, etc.). It is metadata-only.
         """
-        with patch("retrovue.cli.commands.source.source_list") as mock_source_list, \
+        with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_source_list, \
              patch("retrovue.cli.commands.source.get_importer") as mock_get_importer:
             mock_source_list.return_value = [
                 {
@@ -340,7 +341,7 @@ class TestSourceListContract:
             assert result.exit_code == 0
 
             mock_get_importer.assert_not_called()
-            mock_source_list.assert_called_once_with(source_type=None)
+            mock_source_list.assert_called_once_with(ANY, source_type=None)
 
     def test_source_list_test_db_session_failure_exits_one(self):
         """
@@ -389,7 +390,7 @@ class TestSourceListContract:
             }
         ]
         
-        with patch("retrovue.cli.commands.source.source_list", return_value=mock_sources_data):
+        with patch("retrovue.cli.commands.source.usecase_list_sources", return_value=mock_sources_data):
             result = self.runner.invoke(app, ["source", "list", "--json"])
             
             assert result.exit_code == 0
@@ -427,7 +428,7 @@ class TestSourceListContract:
             }
         ]
         
-        with patch("retrovue.cli.commands.source.source_list", return_value=mock_sources_data):
+        with patch("retrovue.cli.commands.source.usecase_list_sources", return_value=mock_sources_data):
             result = self.runner.invoke(app, ["source", "list", "--json"])
             
             assert result.exit_code == 0

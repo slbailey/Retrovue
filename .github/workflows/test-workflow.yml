@@ -135,6 +135,14 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
+      - name: Enforce SourceDelete contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: SourceDelete contract tests must pass"
+          pytest tests/contracts/test_source_delete_contract.py tests/contracts/test_source_delete_data_contract.py -v --tb=short
+          echo "✅ SourceDelete contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
       - name: Cleanup test database
         run: |
           echo "🧹 Cleaning up test database..."

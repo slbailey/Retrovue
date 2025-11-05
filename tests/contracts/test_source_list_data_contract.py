@@ -25,7 +25,7 @@ class TestSourceListDataContract:
         Contract D-1: The list of sources MUST reflect persisted Source records at the time of query.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -61,7 +61,7 @@ class TestSourceListDataContract:
         Contract D-2: Each returned source MUST include the correct latest type, name, and config-derived identity from the authoritative Source model.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -97,7 +97,7 @@ class TestSourceListDataContract:
         Contract D-3: The enabled_collections and ingestible_collections counts MUST be calculated from persisted Collection rows associated to that source.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -130,56 +130,38 @@ class TestSourceListDataContract:
         Contract D-4: The command MUST NOT infer or fabricate ingest state; it MUST use stored data only.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.cli.commands.source.SourceService") as mock_source_service_class:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list:
             
             # Mock database session
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock SourceService instance
-            mock_source_service = MagicMock()
-            mock_source_service_class.return_value = mock_source_service
-            
-            # Mock the return value from list_sources_with_collection_counts
-            mock_source_service.list_sources_with_collection_counts.return_value = [
+            # Mock the return value from usecase
+            mock_list.return_value = [
                 {
                     "id": "test-id",
                     "name": "Test Source",
                     "type": "plex",
+                    "created_at": "2024-01-15T10:30:00+00:00",
+                    "updated_at": "2024-01-20T14:45:00+00:00",
                     "enabled_collections": 0,
                     "ingestible_collections": 0,
-                    "created_at": "2024-01-15T10:30:00+00:00",
-                    "updated_at": "2024-01-20T14:45:00+00:00"
                 }
             ]
             
-            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
-                mock_list.return_value = [
-                    {
-                        "id": "test-id",
-                        "name": "Test Source",
-                        "type": "plex",
-                        "created_at": "2024-01-15T10:30:00+00:00",
-                        "updated_at": "2024-01-20T14:45:00+00:00",
-                        "enabled_collections": 0,
-                        "ingestible_collections": 0,
-                    }
-                ]
-                result = self.runner.invoke(app, ["source", "list"])
-                mock_list.assert_called_once_with(ANY, source_type=None)
+            result = self.runner.invoke(app, ["source", "list"])
             
             assert result.exit_code == 0
             
-            # Verify that SourceService was called (it's the internal service, not external inference)
-            mock_source_service_class.assert_called_once_with(mock_db)
-            mock_source_service.list_sources_with_collection_counts.assert_called_once_with(None)
+            # Verify that usecase was called (uses stored data, not external inference)
+            mock_list.assert_called_once_with(mock_db, source_type=None)
 
     def test_source_list_no_collection_creation_modification(self):
         """
         Contract D-5: The command MUST NOT create or modify Collections while counting or summarizing them.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -224,7 +206,7 @@ class TestSourceListDataContract:
             
             mock_test_db.query.return_value.all.return_value = [mock_test_source]
             
-            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+            with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list:
                 mock_list.return_value = [
                     {
                         "id": "test-only-id",
@@ -277,7 +259,7 @@ class TestSourceListDataContract:
             # All queries should return the same snapshot
             mock_db.query.return_value.all.return_value = [mock_source1, mock_source2]
             
-            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+            with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list:
                 mock_list.return_value = [
                     {
                         "id": "id1",
@@ -334,7 +316,7 @@ class TestSourceListDataContract:
             
             mock_db.query.return_value.all.return_value = [mock_source]
             
-            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+            with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list:
                 mock_list.return_value = [
                     {
                         "id": "test-id",
@@ -353,50 +335,35 @@ class TestSourceListDataContract:
             
             # Verify single transaction usage
             mock_session.assert_called_once()
-            mock_db.query.assert_called()
+            # Verify usecase was called (queries happen inside usecase)
+            mock_list.assert_called_once_with(mock_db, source_type=None)
 
     def test_source_list_collection_count_query_accuracy(self):
         """
         Contract: Collection counts MUST be calculated accurately from the database.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.cli.commands.source.SourceService") as mock_source_service_class:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list:
             
             # Mock database session
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock SourceService instance
-            mock_source_service = MagicMock()
-            mock_source_service_class.return_value = mock_source_service
-            
-            # Mock the return value from list_sources_with_collection_counts
-            mock_source_service.list_sources_with_collection_counts.return_value = [
+            # Mock the return value from usecase
+            mock_list.return_value = [
                 {
                     "id": "test-source-id",
                     "name": "Test Source",
                     "type": "plex",
-                    "enabled_collections": 5,  # 5 enabled collections
-                    "ingestible_collections": 3,  # 3 ingestible collections
+                    "enabled_collections": 5,
+                    "ingestible_collections": 3,
                     "created_at": "2024-01-15T10:30:00+00:00",
-                    "updated_at": "2024-01-20T14:45:00+00:00"
+                    "updated_at": "2024-01-20T14:45:00+00:00",
                 }
             ]
             
-            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
-                mock_list.return_value = [
-                    {
-                        "id": "test-source-id",
-                        "name": "Test Source",
-                        "type": "plex",
-                        "enabled_collections": 5,
-                        "ingestible_collections": 3,
-                        "created_at": "2024-01-15T10:30:00+00:00",
-                        "updated_at": "2024-01-20T14:45:00+00:00",
-                    }
-                ]
-                result = self.runner.invoke(app, ["source", "list", "--json"])
-                mock_list.assert_called_once_with(ANY, source_type=None)
+            result = self.runner.invoke(app, ["source", "list", "--json"])
+            mock_list.assert_called_once_with(mock_db, source_type=None)
             
             assert result.exit_code == 0
             
@@ -427,7 +394,7 @@ class TestSourceListDataContract:
             
             mock_db.query.return_value.all.return_value = [mock_source]
             
-            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+            with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list:
                 mock_list.return_value = [
                     {
                         "id": "integrity-test-id",
@@ -461,7 +428,7 @@ class TestSourceListDataContract:
         Contract: Empty database MUST be handled gracefully without errors.
         """
         with patch("retrovue.cli.commands.source.session") as mock_session, \
-             patch("retrovue.usecases.source_list.list_sources") as mock_list_sources:
+             patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list_sources:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
 
@@ -500,7 +467,7 @@ class TestSourceListDataContract:
             # Mock filtered query result
             mock_db.query.return_value.filter.return_value.all.return_value = [mock_plex_source]
             
-            with patch("retrovue.usecases.source_list.list_sources") as mock_list:
+            with patch("retrovue.cli.commands.source.usecase_list_sources") as mock_list:
                 mock_list.return_value = [
                     {
                         "id": "plex-id",

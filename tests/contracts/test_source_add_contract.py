@@ -79,7 +79,7 @@ class TestSourceAddContract:
         """
         result = self.runner.invoke(app, ["source", "add", "--type", "plex", "--name", "Test", "--token", "test"])
         assert result.exit_code == 1
-        assert "Error: --base-url is required for Plex sources" in result.stderr
+        assert "Error: --base-url is required for plex sources" in result.stderr
 
     def test_source_add_plex_missing_token_exits_one(self):
         """
@@ -87,7 +87,7 @@ class TestSourceAddContract:
         """
         result = self.runner.invoke(app, ["source", "add", "--type", "plex", "--name", "Test", "--base-url", "http://test"])
         assert result.exit_code == 1
-        assert "Error: --token is required for Plex sources" in result.stderr
+        assert "Error: --token is required for plex sources" in result.stderr
 
     def test_source_add_filesystem_missing_base_path_exits_one(self):
         """

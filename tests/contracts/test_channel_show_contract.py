@@ -80,8 +80,10 @@ def test_channel_show__test_db_isolation():
     runner = CliRunner()
     fake = _row("00000000-0000-0000-0000-000000000001", "HBO")
     mock_db = MagicMock(); mock_db.execute.return_value = _mock_exec_returning(fake)
-    with patch("retrovue.cli.commands.channel.session") as mock_sess:
-        mock_sess.return_value.__enter__.return_value = mock_db
+    mock_cm = MagicMock()
+    mock_cm.__enter__.return_value = mock_db
+    mock_cm.__exit__.return_value = False
+    with patch("retrovue.cli.commands.channel._get_db_context", return_value=mock_cm):
         res = runner.invoke(app, ["channel", "show", "hbo", "--test-db"]) 
     assert res.exit_code == 0
 
