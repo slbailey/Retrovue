@@ -128,7 +128,7 @@ def cleanup_test_data(session):
     session.query(ScheduleTemplateBlock).delete()
 
     # Delete parent records
-    session.query(BroadcastTemplate).delete()
+    session.query(ScheduleTemplate).delete()
     session.query(Channel).delete()
 
     session.commit()
@@ -157,7 +157,7 @@ def cleanup_test_data(session):
 - Grid size and offset calculations
 - Broadcast day anchor handling
 
-### Broadcast Template Tests
+### Schedule Template Tests
 
 **Template Creation**: Validate template creation and management:
 
@@ -177,7 +177,7 @@ def cleanup_test_data(session):
 - Template usage validation
 - Template dependency checking
 
-### Broadcast Template Block Tests
+### Schedule Template Block Tests
 
 **Block Creation**: Validate block creation within templates:
 
