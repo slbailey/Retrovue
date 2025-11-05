@@ -16,7 +16,16 @@ import typer
 import retrovue.adapters.importers  # noqa: F401
 
 from .commands import asset as asset_cmd
-from .commands import channel, collection, enricher, producer, runtime, source
+from .commands import (
+    channel,
+    collection,
+    enricher,
+    producer,
+    runtime,
+    schedule_template,
+    source,
+    template_block,
+)
 from .router import get_router
 
 app = typer.Typer(help="RetroVue operator CLI")
@@ -72,6 +81,20 @@ router.register(
     runtime.app,
     help_text="Runtime diagnostics and validation operations",
     doc_path="runtime.md",
+)
+
+router.register(
+    "schedule-template",
+    schedule_template.app,
+    help_text="Schedule template management operations",
+    doc_path="schedule-template.md",
+)
+
+router.register(
+    "template-block",
+    template_block.app,
+    help_text="Standalone template block management operations",
+    doc_path="template-block.md",
 )
 
 

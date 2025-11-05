@@ -4,7 +4,7 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 ## Purpose
 
-ScheduleTemplate represents a reusable programming template that defines daypart rules and content selection criteria. Templates are channel-agnostic scheduling patterns that can be assigned to any channel for specific broadcast dates via BroadcastScheduleDay. This is planning-time logic that defines the programming structure used by ScheduleService to generate playout schedules.
+ScheduleTemplate represents a reusable, channel-agnostic shell that defines what *types of content* should appear in a day. Think of this like a layout or blueprint — it includes one or more ScheduleTemplateBlocks that define constraints (e.g., "cartoons only" or "family-friendly content") but does NOT define actual content selections. Templates provide the structure that SchedulePlans fill with actual content choices made by operators.
 
 ## Persistence model
 
@@ -17,10 +17,12 @@ ScheduleTemplate is managed by SQLAlchemy with the following fields:
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 - **updated_at** (DateTime(timezone=True), required): Record last modification timestamp
 
-ScheduleTemplate has one-to-many relationships with:
+ScheduleTemplate has relationships with:
 
-- **ScheduleTemplateBlock**: Multiple blocks can exist within a single template to define complex programming patterns
-- **BroadcastScheduleDay**: Templates are assigned to channels for specific broadcast dates through schedule assignments
+- **ScheduleTemplateBlockInstance**: Junction table linking templates to standalone blocks with template-specific timing. Multiple instances can exist within a single template to define complex programming patterns (guardrails/constraints)
+- **ScheduleTemplateBlock**: Many-to-many relationship via ScheduleTemplateBlockInstance. Blocks are standalone and reusable across multiple templates
+- **SchedulePlan**: Plans created by operators that fill templates with actual content selections
+- **BroadcastScheduleDay**: Resolved schedules for specific channel and date (generated from plans using templates)
 
 ### Table name
 
@@ -39,30 +41,34 @@ The table is named `schedule_templates` (plural). Schema migration is handled th
 
 ## Contract / interface
 
-ScheduleTemplate provides the programming structure for schedule generation. It defines:
+ScheduleTemplate provides the programming structure (shell/blueprint) for schedule generation. It defines:
 
 - Template identity and metadata (name, description)
 - Template operational status (is_active)
-- Relationship to time blocks (ScheduleTemplateBlock)
-- Relationship to channel assignments (BroadcastScheduleDay)
+- Relationship to time blocks (ScheduleTemplateBlock) - these define constraints, not content
+- Relationship to plans (SchedulePlan) - these fill templates with actual content
+- Relationship to resolved schedules (BroadcastScheduleDay)
+
+**Critical Distinction:** Templates define *what types of content* should appear, not *what specific content* appears. Actual content selections are made in SchedulePlans, which operators create to fill templates.
 
 Templates are channel-agnostic by design. Channel-specific programming is achieved by:
 
-- Assigning templates to channels via BroadcastScheduleDay
-- Using rule_json in ScheduleTemplateBlock to filter content appropriate for the channel
+- Creating plans that fill templates with content appropriate for the channel
+- Using rule_json in ScheduleTemplateBlock to filter content types (guardrails)
 - Relying on Channel configuration (grid_block_minutes, programming_day_start) for timing context
 
 ## Execution model
 
-ScheduleService consumes ScheduleTemplate records through BroadcastScheduleDay assignments to determine which template to use for a given channel and date. When generating schedules, ScheduleService:
+ScheduleService consumes ScheduleTemplate records through SchedulePlan and BroadcastScheduleDay to determine which template structure to use. When generating schedules, ScheduleService:
 
-1. Identifies the active template for a channel and date via BroadcastScheduleDay
-2. Retrieves all ScheduleTemplateBlock records for that template
-3. Determines which blocks apply to specific time periods based on start_time and end_time
-4. Applies each block's rule_json to select appropriate content from Asset
-5. Generates BroadcastPlaylogEvent entries for the selected content
+1. Identifies the active plan for a channel and date (which references a template)
+2. Retrieves all ScheduleTemplateBlock records for that template (these define constraints)
+3. Retrieves SchedulePlanBlockAssignment records for the plan (these define actual content selections)
+4. Validates that assignments respect template block rules (rule_json)
+5. Resolves the plan into a BroadcastScheduleDay for the specific channel and date
+6. Generates BroadcastPlaylogEvent entries for the scheduled content
 
-Templates provide the "what programming pattern to use" logic, while template blocks provide the "how to select content" logic that drives automated scheduling decisions.
+Templates provide the "what programming pattern to use" structure (constraints/guardrails), while plans provide the "what specific content to use" selections. Template blocks define constraints; plan assignments define content.
 
 ## Failure / fallback behavior
 
@@ -74,10 +80,12 @@ If templates are missing or invalid:
 
 ## Scheduling model
 
-- Templates are reusable across multiple channels via BroadcastScheduleDay assignments
-- Exactly one template can be assigned to a channel for a specific broadcast date (enforced by unique constraint on BroadcastScheduleDay)
-- Template blocks define time periods and content selection rules within each template
-- Content selection rules (rule_json) in template blocks query Asset records where `state='ready'` and `approved_for_broadcast=true`
+- Templates are reusable, channel-agnostic shells that define content type constraints
+- Templates define structure; plans fill that structure with actual content
+- Multiple plans can reference the same template (e.g., "WeekdayPlan" and "WeekendPlan" both use "GeneralTemplate")
+- Template blocks define time periods and content type constraints (guardrails) within each template
+- Content type constraints (rule_json) in template blocks define what *types* of content are allowed (e.g., "cartoons only")
+- Actual content selections are made in SchedulePlans via SchedulePlanBlockAssignment
 - Templates can be activated/deactivated via `is_active` flag without deletion
 
 ## Lifecycle and referential integrity
@@ -88,17 +96,17 @@ If templates are missing or invalid:
 
 ## Operator workflows
 
-**Create Template**: Define a new reusable programming template with a descriptive name and optional description.
+**Create Template**: Define a new reusable programming template (shell/blueprint) with a descriptive name and optional description. This defines the *structure* and *constraints*, not specific content.
 
-**Manage Template Blocks**: Add, modify, or remove ScheduleTemplateBlock records to define time periods and content selection rules within the template.
+**Manage Template Block Instances**: Add, modify, or remove ScheduleTemplateBlockInstance records to link standalone blocks to the template with template-specific timing. Blocks define what *types* of content are allowed, not what specific content appears. The same block can be used in multiple templates with different timing.
 
-**Assign Template to Channel**: Use BroadcastScheduleDay to link a template to a channel for specific broadcast dates.
+**Create Plans**: Operators create SchedulePlans that fill templates with actual content selections. Plans reference templates and provide specific content choices.
 
-**Activate/Deactivate Template**: Toggle `is_active` to enable or disable template availability for new schedule assignments.
+**Activate/Deactivate Template**: Toggle `is_active` to enable or disable template availability for new plan creation.
 
-**Template Reuse**: Apply the same template to multiple channels or dates to ensure consistent programming patterns.
+**Template Reuse**: Apply the same template to multiple plans (e.g., "WeekdayPlan" and "WeekendPlan" can both use "GeneralTemplate") to ensure consistent programming structure.
 
-**Template Maintenance**: Update description, modify blocks, or archive templates as programming needs evolve.
+**Template Maintenance**: Update description, modify blocks, or archive templates as programming needs evolve. Note that template changes affect all plans that reference the template.
 
 ### CLI command examples
 
@@ -106,27 +114,48 @@ If templates are missing or invalid:
 
 ```bash
 retrovue schedule-template add --name "All Sitcoms 24x7" \
-  --description "24-hour sitcom programming block"
+  --description "24-hour sitcom programming template (defines structure/constraints)"
 ```
 
 **List Templates**: Use `retrovue schedule-template list` to see all templates in table format, or `retrovue schedule-template list --json` for machine-readable output.
 
-**Show Template**: Use `retrovue schedule-template show --id <uuid>` or `retrovue schedule-template show --name <name>` to see detailed template information including associated blocks.
+**Show Template**: Use `retrovue schedule-template show --template <name-or-uuid>` to see detailed template information including associated blocks and plans that reference it. The `--template` parameter accepts either a template name or UUID.
 
-**Activate/Deactivate**: Use `retrovue schedule-template update --id <uuid> --active` or `--inactive` to toggle is_active status.
+**Add Block to Template**: After creating standalone blocks, link them to templates with timing:
 
-**Update Template**: Use `retrovue schedule-template update --id <uuid>` with any combination of fields to modify template properties.
+```bash
+retrovue schedule-template block add --template <name-or-uuid> --block <block-name-or-uuid> --start-time 06:00 --end-time 09:00
+```
 
-**Delete Template**: Use `retrovue schedule-template delete --id <uuid>` to permanently remove a template (only if no dependencies exist).
+Both `--template` and `--block` parameters accept either a name or UUID, making commands easier to use.
 
-All operations use UUID identifiers for template identification. The CLI provides both human-readable and JSON output formats.
+**Broadcast Day Time Format**: Times support `HH:MM` or `HH:MM+1` format where `+1` indicates the next calendar day. Broadcast days run from 06:00 to 06:00+1 (next day), so blocks can span midnight:
+- Valid: `22:00` to `04:00` (spans midnight, same broadcast day)
+- Invalid: `22:00` to `08:00` (crosses broadcast day boundary at 06:00)
+- Valid: `06:00` to `06:00+1` (full broadcast day)
+- Valid: `22:00` to `02:00+1` (spans midnight, ends before 06:00 next day)
+
+**Create Plan**: After creating a template with blocks, create a plan that fills it with content:
+
+```bash
+retrovue schedule-plan add --name "WeekdayPlan" --template <name-or-uuid> --cron "0 6 * * MON-FRI"
+```
+
+**Activate/Deactivate**: Use `retrovue schedule-template update --template <name-or-uuid> --active` or `--inactive` to toggle is_active status.
+
+**Update Template**: Use `retrovue schedule-template update --template <name-or-uuid>` with any combination of fields to modify template properties.
+
+**Delete Template**: Use `retrovue schedule-template delete --template <name-or-uuid>` to permanently remove a template (only if no dependencies exist, including plans).
+
+All operations accept either name or UUID for template identification (name lookups are case-insensitive). The CLI provides both human-readable and JSON output formats.
 
 ## Validation & invariants
 
 - **Name uniqueness**: `name` must be unique across all templates (enforced at database level)
-- **Active status**: Only templates where `is_active=true` are eligible for assignment via BroadcastScheduleDay
-- **Block coverage**: Templates should have ScheduleTemplateBlock records that cover the full 24-hour programming day (00:00 to 24:00), though this is not enforced at the template level
-- **Referential integrity**: Templates cannot be deleted if they have dependent ScheduleTemplateBlock or BroadcastScheduleDay records
+- **Active status**: Only templates where `is_active=true` are eligible for use in new SchedulePlans
+- **Block coverage**: Templates should have ScheduleTemplateBlockInstance records that cover the full 24-hour programming day (00:00 to 24:00), though this is not enforced at the template level
+- **Block instance non-overlap**: Block instances within a template must not overlap (enforced by validation or database constraints)
+- **Referential integrity**: Templates cannot be deleted if they have dependent ScheduleTemplateBlockInstance, SchedulePlan, or BroadcastScheduleDay records
 
 ## Out of scope (v0.1)
 
@@ -140,8 +169,9 @@ All operations use UUID identifiers for template identification. The CLI provide
 ## See also
 
 - [Scheduling](Scheduling.md) - High-level scheduling system
-- [ScheduleDay](ScheduleDay.md) - Template assignments to channels for specific dates
-- [ScheduleTemplateBlock](ScheduleTemplateBlock.md) - Time blocks within templates with content selection rules
+- [SchedulePlan](SchedulePlan.md) - Operator-created plans that fill templates with actual content
+- [ScheduleDay](ScheduleDay.md) - Resolved schedules for specific channel and date
+- [ScheduleTemplateBlock](ScheduleTemplateBlock.md) - Standalone, reusable blocks with content type constraints
 - [Channel](Channel.md) - Channel configuration and timing policy
 - [Asset](Asset.md) - Approved content available for scheduling
 - [PlaylogEvent](PlaylogEvent.md) - Generated playout events

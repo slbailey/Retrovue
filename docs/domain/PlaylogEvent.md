@@ -40,10 +40,13 @@ ScheduleService generates BroadcastPlaylogEvent records as the output of the sch
 
 Playlog events are created by:
 
-1. ScheduleService reading template assignments and blocks
-2. Applying content selection rules to choose appropriate assets (must be in `ready` state)
-3. Generating playout events with precise timing and sequencing
-4. Creating BroadcastPlaylogEvent records for each scheduled content item
+1. ScheduleService resolving active SchedulePlans for channels and dates
+2. Retrieving resolved BroadcastScheduleDay records (generated from plans)
+3. Extracting content selections from resolved schedule days
+4. Generating playout events with precise timing and sequencing
+5. Creating BroadcastPlaylogEvent records for each scheduled content item
+
+**Generation Flow:** Plan → ScheduleDay → PlaylogEvent. Playlog events are the execution layer derived from resolved schedule days.
 
 ## Failure / fallback behavior
 
@@ -70,8 +73,10 @@ Playlog events are generated scheduling output, not runtime components. They def
 ## See also
 
 - [Scheduling](Scheduling.md) - High-level scheduling system
-- [Schedule day](ScheduleDay.md) - Template assignments
+- [SchedulePlan](SchedulePlan.md) - Operator-created plans that fill templates with actual content
+- [ScheduleDay](ScheduleDay.md) - Resolved schedules for specific channel and date
+- [ScheduleTemplate](ScheduleTemplate.md) - Reusable programming templates (structure)
 - [Asset](Asset.md) - Approved content
-- [Playout pipeline](PlayoutPipeline.md) - Live stream generation
+- [PlayoutPipeline](PlayoutPipeline.md) - Live stream generation
 - [Channel manager](../runtime/ChannelManager.md) - Stream execution
 - [Operator CLI](../operator/CLI.md) - Operational procedures
