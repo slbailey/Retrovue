@@ -2,7 +2,6 @@
 Source CLI commands for source and collection management.
 
 Surfaces source and collection management capabilities including listing, configuration, and path mapping.
-Calls SourceService under the hood for all source operations.
 """
 
 from __future__ import annotations
@@ -11,6 +10,7 @@ import json
 import uuid
 
 import typer
+from sqlalchemy.orm import Session
 
 from ...adapters.registry import (
     SOURCES,
@@ -21,7 +21,6 @@ from ...adapters.registry import (
 )
 from ...domain.entities import Collection, Source
 from ...infra.uow import session
-from sqlalchemy.orm import Session
 
 # Thin, contract-aligned functions instead of fat SourceService
 # Each function maps 1:1 to a contract + test
@@ -89,20 +88,36 @@ def source_get_by_id(source_id: str) -> Source | None:
     Used by other source functions.
     """
     with session() as db:
-        # Try by UUID first
-        try:
-            uuid.UUID(source_id)
-            return db.query(Source).filter(Source.id == source_id).first()
-        except ValueError:
-            pass
-        
-        # Try by external_id
-        source = db.query(Source).filter(Source.external_id == source_id).first()
+        return _resolve_source_by_id(db, source_id)
+
+
+def _resolve_source_by_id(db: Session, source_id: str) -> Source | None:
+    """
+    Resolve a source by ID, external ID, or name using an existing session.
+    
+    Args:
+        db: Database session
+        source_id: Source identifier (UUID, external_id, or name)
+    
+    Returns:
+        Source object or None if not found
+    """
+    # Try by UUID first
+    try:
+        uuid.UUID(source_id)
+        source = db.query(Source).filter(Source.id == source_id).first()
         if source:
             return source
-        
-        # Try by name
-        return db.query(Source).filter(Source.name == source_id).first()
+    except ValueError:
+        pass
+    
+    # Try by external_id
+    source = db.query(Source).filter(Source.external_id == source_id).first()
+    if source:
+        return source
+    
+    # Try by name
+    return db.query(Source).filter(Source.name == source_id).first()
 
 def source_add(
     source_type: str,
@@ -347,7 +362,7 @@ def _redact_sensitive_config(config: dict) -> dict:
     
     return redacted
 
-app = typer.Typer(name="source", help="Source and collection management operations using SourceService")
+app = typer.Typer(name="source", help="Source and collection management operations")
 
 
 @app.command("list")
@@ -443,10 +458,8 @@ def list_asset_groups(
     """
     try:
         with session() as db:
-            source_service = SourceService(db)
-            
             # Get the source
-            source = source_service.get_source_by_id(source_id)
+            source = _resolve_source_by_id(db, source_id)
             if not source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
@@ -455,7 +468,7 @@ def list_asset_groups(
             from ...adapters.registry import get_importer
             
             # Filter out enrichers from config as importers don't need them
-            importer_config = {k: v for k, v in source.config.items() if k != 'enrichers'}
+            importer_config = {k: v for k, v in (source.config or {}).items() if k != 'enrichers'}
             importer = get_importer(source.type, **importer_config)
             
             # Get asset groups from the importer
@@ -924,10 +937,8 @@ def show_source(
         retrovue source show 4b2b05e7-d7d2-414a-a587-3f5df9b53f44 --json
     """
     with session() as db:
-        source_service = SourceService(db)
-        
         try:
-            source = source_service.get_source_by_id(source_id)
+            source = _resolve_source_by_id(db, source_id)
             if not source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
@@ -1278,9 +1289,6 @@ def discover_collections(
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
             
-            # Get the importer for this source type
-            from ...adapters.importers.plex_importer import PlexImporter
-            
             # Create importer with source config
             if source.kind == "plex":
                 # Extract Plex configuration
@@ -1298,8 +1306,6 @@ def discover_collections(
                 if not base_url or not token:
                     typer.echo(f"Error: Plex source '{source.name}' missing base_url or token", err=True)
                     raise typer.Exit(1)
-                
-                importer = PlexImporter(base_url=base_url, token=token)
                 
                 # Use thin function for collection discovery
                 collections = source_discover_collections(source_id, test_db, db)
@@ -1462,11 +1468,9 @@ def source_attach_enricher(
         retrovue source "My Plex Server" attach-enricher enricher-llm-1 --priority 3
     """
     with session() as db:
-        source_service = SourceService(db)
-        
         try:
             # Get the source first to validate it exists
-            source = source_service.get_source_by_id(source_id)
+            source = _resolve_source_by_id(db, source_id)
             if not source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
@@ -1542,11 +1546,9 @@ def source_detach_enricher(
         retrovue source "My Plex Server" detach-enricher enricher-llm-1
     """
     with session() as db:
-        source_service = SourceService(db)
-        
         try:
             # Get the source first to validate it exists
-            source = source_service.get_source_by_id(source_id)
+            source = _resolve_source_by_id(db, source_id)
             if not source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
@@ -1614,10 +1616,8 @@ def enable_asset_group(
     """
     try:
         with session() as db:
-            source_service = SourceService(db)
-            
             # Get the source
-            source = source_service.get_source_by_id(source_id)
+            source = _resolve_source_by_id(db, source_id)
             if not source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
@@ -1626,7 +1626,7 @@ def enable_asset_group(
             from ...adapters.registry import get_importer
             
             # Filter out enrichers from config as importers don't need them
-            importer_config = {k: v for k, v in source.config.items() if k != 'enrichers'}
+            importer_config = {k: v for k, v in (source.config or {}).items() if k != 'enrichers'}
             importer = get_importer(source.type, **importer_config)
             
             # Enable the asset group
@@ -1657,10 +1657,8 @@ def disable_asset_group(
     """
     try:
         with session() as db:
-            source_service = SourceService(db)
-            
             # Get the source
-            source = source_service.get_source_by_id(source_id)
+            source = _resolve_source_by_id(db, source_id)
             if not source:
                 typer.echo(f"Error: Source '{source_id}' not found", err=True)
                 raise typer.Exit(1)
@@ -1669,7 +1667,7 @@ def disable_asset_group(
             from ...adapters.registry import get_importer
             
             # Filter out enrichers from config as importers don't need them
-            importer_config = {k: v for k, v in source.config.items() if k != 'enrichers'}
+            importer_config = {k: v for k, v in (source.config or {}).items() if k != 'enrichers'}
             importer = get_importer(source.type, **importer_config)
             
             # Disable the asset group
@@ -1701,9 +1699,13 @@ def update_enrichers(
         retrovue source enrichers plex-5063d926 "ffprobe"
     """
     with session() as db:
-        source_service = SourceService(db)
-        
         try:
+            # Get the source
+            source = _resolve_source_by_id(db, source_id)
+            if not source:
+                typer.echo(f"Error: Source '{source_id}' not found", err=True)
+                raise typer.Exit(1)
+            
             # Parse enrichers
             enricher_list = [e.strip() for e in enrichers.split(",") if e.strip()]
             
@@ -1719,23 +1721,22 @@ def update_enrichers(
                     typer.echo(f"Error: Unknown enricher '{enricher}'. Available: {', '.join(available_enrichers)}", err=True)
                 raise typer.Exit(1)
             
-            # Update enrichers
-            success = source_service.update_source_enrichers(source_id, enricher_list)
+            # Update enrichers in source config
+            if source.config is None:
+                source.config = {}
+            source.config["enrichers"] = enricher_list
+            db.commit()
             
-            if success:
-                if json_output:
-                    import json
-                    result = {
-                        "source_id": source_id,
-                        "enrichers": enricher_list
-                    }
-                    typer.echo(json.dumps(result, indent=2))
-                else:
-                    typer.echo(f"Successfully updated enrichers for source: {source_id}")
-                    typer.echo(f"  Enrichers: {', '.join(enricher_list)}")
+            if json_output:
+                import json
+                result = {
+                    "source_id": source_id,
+                    "enrichers": enricher_list
+                }
+                typer.echo(json.dumps(result, indent=2))
             else:
-                typer.echo("Error updating enrichers", err=True)
-                raise typer.Exit(1)
+                typer.echo(f"Successfully updated enrichers for source: {source_id}")
+                typer.echo(f"  Enrichers: {', '.join(enricher_list)}")
                 
         except Exception as e:
             typer.echo(f"Error updating enrichers: {e}", err=True)
