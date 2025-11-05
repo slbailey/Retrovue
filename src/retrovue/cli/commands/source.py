@@ -21,6 +21,7 @@ from ...adapters.registry import (
 )
 from ...domain.entities import Collection, Source
 from ...infra.uow import session
+from ...usecases.source_add import add_source as usecase_add_source
 
 # Thin, contract-aligned functions instead of fat SourceService
 # Each function maps 1:1 to a contract + test
@@ -168,7 +169,7 @@ def source_add(
             "id": str(source.id),
             "external_id": source.external_id,
             "name": source.name,
-            "type": source.kind,
+            "type": source.type,
             "config": source.config,
             "enrichers": enrichers or [],
             "collections_discovered": collections_discovered
@@ -688,44 +689,27 @@ def add_source(
         
         # Now actually create and save the source in the database
         with session() as db:
-            # Use thin, contract-aligned function
-            result = source_add(
+            # Use usecase function (contract-aligned)
+            result = usecase_add_source(
+                db,
                 source_type=type,
                 name=name,
                 config=config,
-                enrichers=enricher_list,
-                discover=discover,
-                test_db=test_db,
-                db_session=db
+                enrichers=enricher_list if enricher_list else None
             )
             
-            # For Plex sources, discover collections if --discover flag is provided
-            collections_discovered = result.get("collections_discovered", 0)
-            if type == "plex" and discover:
-                typer.echo("Discovering collections from Plex server...")
-                collections = source_discover_collections(result["external_id"], test_db, db)
-                if collections:
-                    success = source_persist_collections(result["external_id"], collections, test_db, db)
-                    if success:
-                        collections_discovered = len(collections)
-                        typer.echo(f"  Discovered and persisted {collections_discovered} collections (all disabled by default)")
-                    else:
-                        typer.echo("  Warning: Failed to persist collections", err=True)
-                else:
-                    typer.echo("  No collections found on Plex server")
-            elif type == "filesystem" and discover:
-                typer.echo("  Warning: Collection discovery not supported for filesystem sources", err=True)
+            # Add collections_discovered field for backward compatibility
+            result["collections_discovered"] = 0
+            
+            # Note: --discover flag is ignored in add command per contract
+            # Discovery is handled by separate source discover command
             
             if json_output:
                 import json
                 # Add importer name to result
                 result["importer_name"] = importer.name
-                
-                # Add collection discovery information if --discover was used
-                if discover and collections_discovered > 0:
-                    result["collections_discovered"] = collections_discovered
-                    # TODO: Add actual collection details when available
-                    result["collections"] = []
+                # Add status field for contract compliance
+                result["status"] = "success"
                 
                 typer.echo(json.dumps(result, indent=2))
             else:

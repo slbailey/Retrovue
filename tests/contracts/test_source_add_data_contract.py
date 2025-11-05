@@ -38,7 +38,16 @@ class TestSourceAddDataContract:
             mock_session.return_value.__enter__.return_value = mock_db
             
             # Patch usecase add_source
-            with patch("retrovue.usecases.source_add.add_source") as mock_uc_add:
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_uc_add:
+                mock_uc_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test-plex",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": []
+                }
+                
                 result = self.runner.invoke(app, [
                     "source", "add", 
                     "--type", "plex", 
@@ -48,11 +57,11 @@ class TestSourceAddDataContract:
                 ])
                 
                 assert result.exit_code == 0
-                # Verify transaction methods were called
-                mock_db.add.assert_called_once()
-                mock_db.commit.assert_called_once()
-                mock_db.refresh.assert_called_once()
+                # Verify usecase was called (which handles transaction internally)
                 mock_uc_add.assert_called_once()
+                # Verify usecase was called with the db session
+                call_args = mock_uc_add.call_args
+                assert call_args[0][0] == mock_db  # First arg is db session
 
     def test_source_add_external_id_uniqueness(self):
         """
@@ -78,7 +87,16 @@ class TestSourceAddDataContract:
             mock_session.return_value.__enter__.return_value = mock_db
             
             # Patch usecase add_source
-            with patch("retrovue.usecases.source_add.add_source") as mock_uc_add:
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_uc_add:
+                mock_uc_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test-plex",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": []
+                }
+                
                 result = self.runner.invoke(app, [
                     "source", "add", 
                     "--type", "plex", 
@@ -97,11 +115,27 @@ class TestSourceAddDataContract:
         Discovery must NOT occur during add; separate command handles it.
         """
         with (
-            patch("retrovue.usecases.source_add.add_source") as mock_add,
+            patch("retrovue.cli.commands.source.list_importers") as mock_list_importers,
+            patch("retrovue.cli.commands.source.usecase_add_source") as mock_add,
             patch("retrovue.usecases.source_discover.discover_collections") as mock_discover,
+            patch("retrovue.cli.commands.source.get_importer") as mock_get_importer,
         ):
+            mock_list_importers.return_value = ["plex"]
+            mock_importer = MagicMock()
+            mock_importer.name = "PlexImporter"
+            mock_get_importer.return_value = mock_importer
+            mock_add.return_value = {
+                "id": "test-id",
+                "external_id": "plex-my-plex",
+                "name": "My Plex",
+                "type": "plex",
+                "config": {},
+                "enrichers": []
+            }
+            
             result = self.runner.invoke(app, [
-                "source", "add", "--type", "plex", "--name", "My Plex"
+                "source", "add", "--type", "plex", "--name", "My Plex",
+                "--base-url", "http://test", "--token", "test-token"
             ])
 
         assert result.exit_code == 0
@@ -171,18 +205,33 @@ class TestSourceAddDataContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            result = self.runner.invoke(app, [
-                "source", "add", 
-                "--type", "plex", 
-                "--name", "Test Plex", 
-                "--base-url", "http://test", 
-                "--token", "test-token",
-                "--enrichers", "ffprobe"
-            ])
-            
-            assert result.exit_code == 0
-            # Verify enricher validation occurred
-            mock_enrichers.assert_called_once()
+            # Mock usecase
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_uc_add:
+                mock_uc_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test-plex",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": ["ffprobe"]
+                }
+                
+                result = self.runner.invoke(app, [
+                    "source", "add", 
+                    "--type", "plex", 
+                    "--name", "Test Plex", 
+                    "--base-url", "http://test", 
+                    "--token", "test-token",
+                    "--enrichers", "ffprobe"
+                ])
+                
+                assert result.exit_code == 0
+                # Verify enricher validation occurred
+                mock_enrichers.assert_called_once()
+                # Verify usecase was called with enrichers
+                mock_uc_add.assert_called_once()
+                call_args = mock_uc_add.call_args
+                assert call_args[1]["enrichers"] == ["ffprobe"]
 
     
 
@@ -222,9 +271,17 @@ class TestSourceAddDataContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            # Mock source service
-            mock_source_service = MagicMock()
-            with patch("retrovue.cli.commands.source.SourceService", return_value=mock_source_service):
+            # Mock usecase
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_uc_add:
+                mock_uc_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test-plex",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": []
+                }
+                
                 result = self.runner.invoke(app, [
                     "source", "add", 
                     "--type", "plex", 
@@ -258,18 +315,27 @@ class TestSourceAddDataContract:
             mock_db = MagicMock()
             mock_session.return_value.__enter__.return_value = mock_db
             
-            result = self.runner.invoke(app, [
-                "source", "add", 
-                "--type", "plex", 
-                "--name", "Test Plex", 
-                "--base-url", "http://test", 
-                "--token", "test-token"
-            ])
-            
-            assert result.exit_code == 0
-            # Verify database operations were called in correct order
-            mock_db.add.assert_called_once()
-            mock_db.commit.assert_called_once()
-            mock_db.refresh.assert_called_once()
+            # Mock usecase
+            with patch("retrovue.cli.commands.source.usecase_add_source") as mock_uc_add:
+                mock_uc_add.return_value = {
+                    "id": "test-id-123",
+                    "external_id": "plex-test-plex",
+                    "name": "Test Plex",
+                    "type": "plex",
+                    "config": {"servers": [{"base_url": "http://test", "token": "test-token"}]},
+                    "enrichers": []
+                }
+                
+                result = self.runner.invoke(app, [
+                    "source", "add", 
+                    "--type", "plex", 
+                    "--name", "Test Plex", 
+                    "--base-url", "http://test", 
+                    "--token", "test-token"
+                ])
+                
+                assert result.exit_code == 0
+                # Verify usecase was called (which handles database operations internally)
+                mock_uc_add.assert_called_once()
 
     
