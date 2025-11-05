@@ -15,7 +15,7 @@ The Broadcast Scheduling Domain defines the core data models that enable RetroVu
 The Broadcast Scheduling Domain consists of six primary models that work together to define the complete scheduling infrastructure:
 
 - **Channel** - Channel configuration and timing policy
-- **BroadcastTemplate** - Reusable daypart programming templates
+- **ScheduleTemplate** - Reusable daypart programming templates
 - **ScheduleTemplateBlock** - Time blocks within templates with content selection rules
 - **BroadcastScheduleDay** - Template assignments to channels for specific dates
 - **Asset** - Broadcast-approved content (airable content)
@@ -28,7 +28,7 @@ These entities work together in a specific flow:
 **Channel → Template → ScheduleDay → PlaylogEvent**
 
 1. **Channel** defines the channel identity and timing configuration
-2. **BroadcastTemplate** and **ScheduleTemplateBlock** define programming structure and content selection rules
+2. **ScheduleTemplate** and **ScheduleTemplateBlock** define programming structure and content selection rules
 3. **BroadcastScheduleDay** binds templates to channels for specific broadcast dates
 4. **Asset** provides the approved content available for scheduling (must be in `ready` state)
 5. **BroadcastPlaylogEvent** represents the generated playout schedule that ChannelManager executes

@@ -8,7 +8,7 @@ This roadmap breaks down the implementation of the scheduling system architectur
 
 ## Current state
 
-The scheduling system architecture is documented, but implementation is in early stages. The domain models exist (Channel, BroadcastTemplate, ScheduleTemplateBlock, BroadcastScheduleDay, BroadcastPlaylogEvent), but the runtime services that orchestrate these layers are not yet fully implemented.
+The scheduling system architecture is documented, but implementation is in early stages. The domain models exist (Channel, ScheduleTemplate, ScheduleTemplateBlock, BroadcastScheduleDay, BroadcastPlaylogEvent), but the runtime services that orchestrate these layers are not yet fully implemented.
 
 ## Implementation phases
 

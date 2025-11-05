@@ -20,13 +20,13 @@ ScheduleTemplateBlock enables:
 ScheduleTemplateBlock is managed by SQLAlchemy with the following fields:
 
 - **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
-- **template_id** (Integer, required, foreign key): Reference to parent BroadcastTemplate
+- **template_id** (Integer, required, foreign key): Reference to parent ScheduleTemplate
 - **start_time** (Text, required): Block start time in "HH:MM" format (local wallclock time)
 - **end_time** (Text, required): Block end time in "HH:MM" format (local wallclock time)
 - **rule_json** (Text, required): JSON configuration defining content selection rules
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 
-ScheduleTemplateBlock has a many-to-one relationship with BroadcastTemplate. Multiple blocks can exist within a single template to define complex programming patterns.
+ScheduleTemplateBlock has a many-to-one relationship with ScheduleTemplate. Multiple blocks can exist within a single template to define complex programming patterns.
 
 ## Execution model
 
