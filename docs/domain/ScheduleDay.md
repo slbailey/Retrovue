@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md) • [Channel](Channel.md) • [ScheduleTemplate](ScheduleTemplate.md)_
 
 # Domain — Schedule day
 
@@ -6,26 +6,39 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 BroadcastScheduleDay represents the assignment of a ScheduleTemplate to a Channel for a specific broadcast date. This is planning-time logic that creates the link between programming structure (templates) and actual scheduling execution.
 
-## Core model / scope
-
-BroadcastScheduleDay enables:
-
-- Template-to-channel assignments for specific dates
-- Flexible programming that can vary by date
-- Multi-channel programming with different templates per channel
-- Date-specific programming overrides
-
-## Contract / interface
+## Persistence model
 
 BroadcastScheduleDay is managed by SQLAlchemy with the following fields:
 
-- **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
-- **channel_id** (Integer, required, foreign key): Reference to Channel
-- **template_id** (Integer, required, foreign key): Reference to ScheduleTemplate
+- **id** (UUID, primary key): Unique identifier for relational joins and foreign key references
+- **channel_id** (UUID, required, foreign key): Reference to Channel
+- **template_id** (UUID, required, foreign key): Reference to ScheduleTemplate
 - **schedule_date** (Text, required): Broadcast date in "YYYY-MM-DD" format
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
+- **updated_at** (DateTime(timezone=True), required): Record last modification timestamp
 
 BroadcastScheduleDay has a unique constraint on (channel_id, schedule_date) ensuring only one template per channel per date.
+
+### Table name
+
+The table is named `broadcast_schedule_days` (plural). Schema migration is handled through Alembic. Postgres is the authoritative backing store.
+
+### Constraints
+
+- `schedule_date` must be in "YYYY-MM-DD" format
+- Unique constraint on (channel_id, schedule_date) ensures only one template per channel per broadcast day
+- Foreign key constraints ensure channel_id and template_id reference valid entities
+
+## Contract / interface
+
+BroadcastScheduleDay provides the assignment mechanism that links templates to channels for specific dates. It defines:
+
+- Channel assignment (channel_id)
+- Template assignment (template_id)
+- Date assignment (schedule_date)
+- Unique constraint ensuring one template per channel per date
+
+Schedule assignments are the bridge between programming structure (templates) and execution (playout events).
 
 ## Execution model
 
@@ -35,8 +48,6 @@ ScheduleService consumes BroadcastScheduleDay records to determine which templat
 2. Retrieving template blocks for content selection
 3. Applying template rules to generate playout schedules
 4. Creating BroadcastPlaylogEvent entries for scheduled content
-
-Schedule assignments are the bridge between programming structure (templates) and execution (playout events).
 
 ## Failure / fallback behavior
 
@@ -64,6 +75,7 @@ Schedule assignments are programming decisions, not runtime components. They def
 
 - [Scheduling](Scheduling.md) - High-level scheduling system
 - [Schedule template](ScheduleTemplate.md) - Reusable programming templates
+- [Channel](Channel.md) - Channel configuration and timing policy
 - [Playlog event](PlaylogEvent.md) - Generated playout events
 - [Channel manager](../runtime/ChannelManager.md) - Stream execution
 - [Operator CLI](../operator/CLI.md) - Operational procedures
