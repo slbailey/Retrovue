@@ -1,11 +1,11 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Contracts](../contracts/README.md) • [ScheduleTemplate](ScheduleTemplate.md) • [Operator CLI](../operator/CLI.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Contracts](../contracts/README.md) • [Operator CLI](../operator/CLI.md)_
 
 # Domain — Channel
 
 ## Purpose
 
 Define the canonical, persisted Channel entity. Channel is the time root for interpreting
-schedule templates and building programming horizons in local time (inputs/outputs in
+schedule plans and building programming horizons in local time (inputs/outputs in
 local time; timestamps stored in UTC). Channel defines a persistent broadcast entity with channel identity, configuration, and operational parameters for channels such as "RetroToons" or "MidnightMovies".
 
 ## Persistence model
@@ -43,13 +43,13 @@ Naming rules:
 - Horizon builders and EPG generation consult only Channels where `is_active=true`.
 - CLI/Usecases expose CRUD-like operations; deletions require no dependent references.
 - A system-level `validateChannel(channelId)` use case recomputes and reports all invariant
-  violations across dependent `ScheduleTemplate` and `ScheduleDay` assignments.
+  violations across dependent `SchedulePlan` and `ScheduleDay` assignments.
 - ScheduleService consumes Channel records to determine current programming. It generates schedule data using the channel's grid configuration for accurate block-based scheduling.
 - Channel provides the identity and context for scheduling operations. ScheduleService is authoritative for what to play.
 
 ## Scheduling model
 
-- All dayparts and templates are channel-scoped and interpreted in local time, anchored to
+- All dayparts and plans are channel-scoped and interpreted in local time, anchored to
   `programming_day_start`.
 - Block starts must align to the channel's allowed offsets; durations are expressed in grid
   blocks (not minutes).
@@ -72,7 +72,7 @@ Naming rules:
 
 ChannelManager uses Channel to know how to interpret 'now' and how to cut the day (rollover). A Channel continues to exist even when nobody is watching and ffmpeg is torn down.
 
-Channel has relationships with schedule data through BroadcastScheduleDay, which links channels to templates for specific broadcast dates.
+Channel has relationships with schedule data through BroadcastScheduleDay, which links channels to plans for specific broadcast dates.
 
 ## Failure / fallback behavior
 
@@ -115,10 +115,10 @@ All operations use UUID identifiers for channel identification. The CLI provides
 - `is_active=false` archives the channel for prospective operations: horizon builders and EPG
   generation exclude the channel going forward. Already-materialized horizons/EPG rows are not
   retroactively deleted; operators may trigger rebuilds if policy requires.
-- Hard delete is only permitted when no dependent rows exist (e.g., `ScheduleTemplate`,
+- Hard delete is only permitted when no dependent rows exist (e.g., `SchedulePlan`,
   `ScheduleDay`, EPG rows, playout configurations). When dependencies exist, prefer archival
   (`is_active=false`). The delete path MUST verify the absence of these references.
-  The dependency preflight MUST cover: `ScheduleTemplate`, `ScheduleDay`, EPG rows, playout
+  The dependency preflight MUST cover: `SchedulePlan`, `ScheduleDay`, EPG rows, playout
   pipelines/configs, broadcast bindings, and ad/avail policies (when present).
 
 ## Validation & invariants
@@ -140,9 +140,9 @@ Offset set shape:
 
 Validation guidelines:
 
-- Reject templates or blocks that violate offset/grid rules for the channel.
+- Reject plans or assignments that violate offset/grid rules for the channel.
 - Changing `grid_block_minutes` or `block_start_offsets_minutes` requires revalidation of
-  existing `ScheduleTemplate` and `ScheduleDay` assignments; consider a temporary
+  existing `SchedulePlan` and `ScheduleDay` assignments; consider a temporary
   "pending-change" state with migration aids (diffs and fix-up suggestions).
 
 ### Input validation surface
@@ -162,12 +162,12 @@ Branding, overlays, content ratings, ad/avail policy, guide playout specifics.
 
 - Durations are specified in grid blocks. When mapping content to blocks:
   - If content runtime is shorter than allocated blocks, any underfill is handled per
-    template rules (e.g., `allow_underfill`) and finalized during playlog building.
-  - Overflow beyond allocated block count is not permitted; adjust the template or block
+    plan rules and finalized during playlog building.
+  - Overflow beyond allocated block count is not permitted; adjust the plan or block
     allocation.
 - Horizon window: default look-ahead and look-behind windows are implementation-defined (e.g.,
   14 days ahead, 1 day behind). Rebuild triggers include channel field changes (grid, offsets,
-  `programming_day_start`), template edits, and content substitutions.
+  `programming_day_start`), plan edits, and content substitutions.
 
 ## Concurrency & operations
 
@@ -186,7 +186,7 @@ Version semantics:
 ## Validator entrypoint
 
 - `validateChannel(channelId)` recomputes invariants and cross-validates dependent
-  `ScheduleTemplate`/`ScheduleDay` for block alignment policies. If
+  `SchedulePlan`/`ScheduleDay` for block alignment policies. If
   `grid_block_minutes`/offsets change, mark all dependents as `needs-review`.
   When validation flags `needs-review` or violations, emit a typed observability event such as
   `channel.validation.failed` for job runners/ops workflows.
@@ -202,7 +202,7 @@ Version semantics:
 
 ## See also
 
-- [ScheduleTemplate](ScheduleTemplate.md) — Reusable programming templates per channel
-- [ScheduleDay](ScheduleDay.md) — Template assignments for specific dates
+- [SchedulePlan](SchedulePlan.md) — Top-level operator-created plans that define channel programming
+- [ScheduleDay](ScheduleDay.md) — Resolved schedules for specific channel and date
 - [Scheduling](Scheduling.md) — Planning-time logic for future air
 - [EPGGeneration](EPGGeneration.md) — Electronic Program Guide generation

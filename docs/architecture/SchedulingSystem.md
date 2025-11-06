@@ -4,68 +4,73 @@ _Related: [Architecture overview](ArchitectureOverview.md) • [Domain: Scheduli
 
 ## Purpose
 
-The scheduling system defines what content airs on each Channel and when. It operates across multiple layers from high-level templates to granular playout execution. The system maintains a rolling horizon of scheduled content that advances with the master clock, ensuring all viewers see synchronized playback regardless of join time.
+The scheduling system defines what content airs on each Channel and when. It operates across multiple layers from high-level plans to granular playout execution. The system maintains a rolling horizon of scheduled content that advances with the master clock, ensuring all viewers see synchronized playback regardless of join time.
 
 ## Five-layer architecture
 
 The scheduling system follows a strict separation of concerns across five layers:
 
-**Template → Schedule → EPG → Playlog → As-Run Log**
+**SchedulePlan → ScheduleDay → EPG → Playlog → As-Run Log**
 
 Each layer has distinct responsibilities:
 
 | Layer          | Responsibility                                                                  | Ownership                | When Generated                    |
 | -------------- | ------------------------------------------------------------------------------- | ------------------------ | --------------------------------- |
-| **Template**   | Reusable programming structure with dayparts and content selection rules        | Operators create via CLI | Once, reused across days          |
-| **Schedule**   | Template instantiation for a specific broadcast day with resolved content types | ScheduleService          | Daily, ahead of broadcast         |
+| **SchedulePlan** | Top-level operator-created plans defining 24-hour timeline with block assignments | Operators create via CLI | Once, reused across days          |
+| **ScheduleDay** | Resolved, immutable daily schedule for specific channel and date                 | ScheduleService (daemon)  | 3–4 days in advance               |
 | **EPG**        | Coarse viewer-facing program guide (program-level information)                  | EPG generator            | Days ahead, updated periodically  |
 | **Playlog**    | Fine-grained playout plan with specific assets, ads, and timestamps             | ScheduleService          | Rolling horizon (3-4 hours ahead) |
 | **As-Run Log** | Factual record of what actually aired                                           | AsRunLogger              | Real-time as playback occurs      |
 
-**Critical principle**: Each layer builds on the previous one. The Template defines structure, Schedule instantiates it, EPG presents it to viewers, Playlog executes it, and As-Run Log records it.
+**Critical principle**: Each layer builds on the previous one. SchedulePlan defines structure, ScheduleDay instantiates it, EPG presents it to viewers, Playlog executes it, and As-Run Log records it.
 
 ## Core scheduling layers
 
 The scheduling system consists of five interconnected layers:
 
-### 1. Template
+### 1. SchedulePlan
 
-A reusable structure that defines dayparts (e.g., 6–9 AM = "Morning Block") with time slots but no specific content assignments. Templates define the programming structure and content selection rules without binding to actual episodes or assets.
+Top-level operator-created plans that define channel programming. Each SchedulePlan represents a complete 24-hour timeline (00:00 to 24:00 relative to the channel's `programming_day_start` / `broadcast_day_start` anchor) with sequential block assignments.
 
-- Templates are channel-specific and can be applied to multiple days
-- Each template contains daypart definitions and block slots
-- Templates include content selection rules (e.g., "cartoons", "series episodes", "movies")
-- Metadata like `commType` or `introBumper` can be attached to blocks for downstream logic
-- Templates support hierarchical override patterns to minimize duplication (see Template hierarchy below)
+- Plans are channel-specific and can be applied to multiple days via cron expressions or date ranges
+- Each plan contains [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) entries that directly define what content runs when using `start_time` (schedule-time offset from 00:00) and `duration` (minutes)
+- Plans can reference assets, series, rules, or [VirtualAssets](VirtualAsset.md) (reusable containers that encapsulate structured content sequences)
+- Plans can optionally use [SchedulePlanLabel](SchedulePlanLabel.md) for visual organization (labels do not affect scheduling logic)
+- Plans support layering with priority resolution (higher priority plans override lower priority plans)
+- [ContentPolicyRule](ContentPolicyRule.md) can be used to validate assignment compatibility (future feature)
 
-### 2. Schedule
+### 2. ScheduleDay
 
-Instantiated from a template. Assigns specific programs, content types, or series to each slot for a particular broadcast day. The schedule binds templates to specific dates and resolves content selection rules into actual programming decisions.
+Resolved, immutable daily schedule derived from SchedulePlans. A background daemon (ScheduleService) uses the channel's programming day anchor to generate ScheduleDay rows 3–4 days in advance.
 
-- Created from a template applied to a specific broadcast date
-- Contains the resolved content assignments for each time slot
-- May reference series, movies, or generic content categories
-- Maintains the relationship between template structure and actual content
+- Generated from active, layered SchedulePlans for a specific channel and date
+- Contains resolved asset selections with real-world wall-clock times
+- Times are calculated by anchoring schedule-time offsets to the channel's `programming_day_start`
+- Immutable once generated (frozen) unless force-regenerated or manually overridden
+- VirtualAssets expand to concrete Asset UUIDs during ScheduleDay generation
+- Maintains the relationship between plan assignments and resolved content
 
 ### 3. EPG (Electronic Program Guide)
 
-Derived from the schedule. Public-facing grid that shows what's scheduled to air. The EPG provides a coarse view of programming for viewers and operators.
+Derived from ScheduleDay. Public-facing grid that shows what's scheduled to air. The EPG provides a coarse view of programming for viewers and operators.
 
-- Generated from schedule state and playlog events
+- Generated from ScheduleDay state and playlog events
 - Shows program-level information (e.g., "Cheers 9:00 PM - 9:30 PM")
 - Can extend 2–3 days ahead for viewer reference
 - Does not reflect last-minute playlog changes until they occur
-- Safe to generate ahead of time since templates are relatively static
+- Safe to generate ahead of time since ScheduleDays are frozen 3–4 days in advance
 
 ### 4. Playlog
 
-Built from the schedule. Contains real video assets, commercials, and bumpers in exact playout order with precise timestamps. The playlog is the fine-grained execution plan that ChannelManager uses for actual playout.
+Built from ScheduleDay. Contains the resolved list of media segments to be played, with real video assets, commercials, and bumpers in exact playout order with precise timestamps. The playlog is the fine-grained execution plan that ChannelManager uses for actual playout.
 
 - Contains specific asset references with exact file paths
+- Each entry maps to a ScheduleDay and points to a resolved asset or asset segment (for VirtualAssets)
 - Includes ad breaks, bumpers, and interstitials in correct sequence
 - Uses precise timestamps aligned to the master clock
 - Generated using a rolling horizon (see Playlog mechanics below)
-- Asset-level and file-specific, unlike the schedule which is content-agnostic
+- Supports fallback mechanisms and last-minute overrides
+- Asset-level and file-specific, unlike ScheduleDay which contains resolved asset selections
 
 ### 5. As-Run Log
 
@@ -77,99 +82,75 @@ Tracks what actually aired by recording each segment as it starts playback. This
 - Used for historical accuracy, audits, and reporting
 - Independent of the playlog (which is the plan, not the execution)
 
-## Template hierarchy and overrides
+## SchedulePlan layering and priority
 
-The scheduling system supports hierarchical template overrides to minimize template duplication. Instead of creating separate templates for every day, operators can create base templates that cover most of the year, with override templates for seasons, holidays, or special events.
+The scheduling system supports plan layering (Photoshop-style priority resolution) to minimize plan duplication. Instead of creating separate plans for every day, operators can create base plans that cover most of the year, with higher-priority plans for seasons, holidays, or special events.
 
-### Override precedence
+### Plan priority resolution
 
-When resolving which template applies to a specific date, the system uses the following precedence (most specific wins):
+When multiple SchedulePlans match for a channel and date, the system uses priority resolution (highest priority wins):
 
-1. **Explicit schedule day assignment** (highest priority)
+1. **Plan matching**: ScheduleService identifies all active SchedulePlans that match the channel and date based on:
+   - `cron_expression` (e.g., "0 6 * * MON-FRI" for weekdays)
+   - `start_date` / `end_date` date ranges
+   - `is_active=true` status
 
-   - A BroadcastScheduleDay record that explicitly assigns a template to a specific date
-   - Example: `schedule_date = "2025-12-25"` with `template_id = christmas_day_template`
+2. **Priority resolution**: Among matching plans, the plan with the highest `priority` value is selected
+   - Higher priority plans override lower priority plans
+   - More specific plans (e.g., holidays) should have higher priority than general plans (e.g., weekdays)
 
-2. **Date range templates with day-of-week filters**
+3. **Assignment layering**: Block assignments from the selected plan are used to generate the ScheduleDay
+   - If multiple plans match but have different priorities, only the highest priority plan's assignments are used
+   - Lower priority plans are completely superseded, not merged
 
-   - Templates with `starts_on`/`ends_on` date ranges and optional day-of-week filters
-   - Example: Monday–Friday from June–September, Monday–Friday from September–June
+### Plan attributes for layering
 
-3. **Date range templates**
+SchedulePlans support the following attributes for matching and layering:
 
-   - Templates with `starts_on`/`ends_on` date ranges (no day-of-week filter)
-   - Example: Christmas season (December 1–25)
+- **`cron_expression`** (text): Cron-style expression defining when the plan is active (e.g., "0 6 * * MON-FRI")
+- **`start_date` / `end_date`** (date): Date range when the plan is valid (can be year-agnostic)
+- **`priority`** (integer): Priority level for layering (higher = more specific, overrides lower priority)
+- **`is_active`** (boolean): Whether the plan is active and eligible for use
 
-4. **Base template** (lowest priority)
-   - Template with no date restrictions, or the widest date range
-   - Falls back to default if no other template matches
+### Example layering
 
-### Template attributes for hierarchy
+Here's a practical example of how plan layering works:
 
-Templates support the following attributes for hierarchical matching:
+**Base Plan: "WeekdayPlan"**
 
-- **`starts_on` / `ends_on`** (date): Date range when template is active
-- **`day_of_week_filter`** (array of integers): Optional filter for specific days of week (0=Monday, 6=Sunday)
-- **`override_priority`** (integer): Explicit priority level (higher = more specific, overrides lower priority)
-- **`is_base_template`** (boolean): Marks template as base fallback when no other matches
-
-### Example hierarchy
-
-Here's a practical example of how template hierarchy works:
-
-**Base Template: "Weekday Standard"**
-
-- `starts_on`: null (always active as fallback)
-- `ends_on`: null
-- `day_of_week_filter`: [0, 1, 2, 3, 4] (Monday–Friday)
+- `cron_expression`: "0 6 * * MON-FRI" (weekdays 6am)
+- `priority`: 10
+- `start_date`: null, `end_date`: null
 - Covers: Monday–Friday year-round
 
-**Seasonal Template: "Summer Weekdays"**
+**Seasonal Plan: "SummerWeekdayPlan"**
 
-- `starts_on`: "2025-06-01"
-- `ends_on`: "2025-09-30"
-- `day_of_week_filter`: [0, 1, 2, 3, 4] (Monday–Friday)
-- Covers: Monday–Friday from June–September (overrides base for this period)
+- `cron_expression`: "0 6 * * MON-FRI" (weekdays 6am)
+- `priority`: 20
+- `start_date`: "2025-06-01", `end_date`: "2025-09-30"
+- Covers: Monday–Friday from June–September (overrides WeekdayPlan for this period)
 
-**Holiday Template: "Christmas Season"**
+**Holiday Plan: "ChristmasPlan"**
 
-- `starts_on`: "2025-12-01"
-- `ends_on`: "2025-12-25"
-- `day_of_week_filter`: null (all days)
-- Covers: All days from December 1–25 (overrides both base and seasonal)
+- `cron_expression`: null
+- `priority`: 30
+- `start_date`: "2025-12-25", `end_date`: "2025-12-25"
+- Covers: December 25 only (overrides both WeekdayPlan and SummerWeekdayPlan)
 
-**Special Day Template: "Christmas Day"**
+### Plan resolution algorithm
 
-- Explicit BroadcastScheduleDay assignment: `schedule_date = "2025-12-25"`
-- Covers: Only December 25 (highest priority, overrides all others)
+When ScheduleService needs to determine which plan applies to a date:
 
-### Template resolution algorithm
+1. **Identify matching plans**: Query active SchedulePlans for the channel that match the date based on cron_expression and date ranges
+2. **Apply priority resolution**: Select the plan with the highest `priority` value among matching plans
+3. **Generate ScheduleDay**: Use the selected plan's block assignments to generate the ScheduleDay
 
-When ScheduleService needs to determine which template applies to a date:
+### Benefits of plan layering
 
-1. **Check explicit assignments**: Query BroadcastScheduleDay for `(channel_id, schedule_date)` match
-2. **If no explicit match**: Query templates matching date range and day-of-week
-3. **Sort by specificity**:
-   - Explicit assignment > Date range with day filter > Date range only > Base template
-   - Within same type, higher `override_priority` wins
-4. **Apply fallback**: If no match found, use base template or raise error
-
-### Benefits of hierarchical templates
-
-- **Reduced duplication**: One base template covers most of the year
-- **Easy overrides**: Special schedules for holidays or seasons without recreating entire templates
-- **Flexible patterns**: Date ranges with day-of-week filters handle complex recurring patterns
-- **Maintainability**: Changes to base template automatically apply except where overridden
-
-### Template composition
-
-Templates can reference other templates for composition:
-
-- **Parent template**: Base template that defines common structure
-- **Override template**: Child template that modifies specific dayparts or blocks
-- **Inheritance**: Override templates can inherit blocks from parent and only modify what's different
-
-This allows operators to create "Christmas Base" that inherits from "Weekday Standard" but changes prime time programming.
+- **Reduced duplication**: One base plan covers most of the year
+- **Easy overrides**: Special schedules for holidays or seasons without recreating entire plans
+- **Flexible patterns**: Cron expressions and date ranges handle complex recurring patterns
+- **Maintainability**: Changes to base plans automatically apply except where overridden by higher priority plans
 
 ## Grid blocks and dayparts
 
@@ -182,14 +163,14 @@ The smallest schedulable unit. Typically 30-minute time slots, though the durati
 - Duration must align with channel's grid block configuration
 - Metadata like `commType` (e.g., "cartoon") or `introBumper` can be attached
 
-### Daypart
+### Daypart (Visual Organization)
 
-A named block of time made up of one or more grid blocks. Used in templates to define programming patterns.
+A named block of time used for visual organization. [SchedulePlanLabel](SchedulePlanLabel.md) can be used to group block assignments into dayparts (e.g., "Morning Block", "Prime Time") for operator convenience.
 
 - Examples: "Morning Block" (6–9 AM), "Prime Time" (7–11 PM)
-- Dayparts group related grid blocks with similar content characteristics
-- Enable reusable template patterns across different times of day
-- Content selection rules are often associated with dayparts
+- Dayparts are purely visual/organizational via SchedulePlanLabel
+- Labels do not affect scheduling logic — they are optional and used for visual organization only
+- Content selection is defined directly in SchedulePlanBlockAssignment entries, not through daypart rules
 
 ## Playlog mechanics
 
@@ -366,23 +347,25 @@ Every time an asset begins playback, it's recorded in the as-run log. This log r
 
 ## Design principles
 
-### Template minimalism
+### Plan minimalism
 
-- Keep templates minimal but reusable
-- Apply them to multiple days or duplicate if needed
-- Templates define structure, not specific content
+- Keep plans minimal but reusable
+- Apply them to multiple days via cron expressions or date ranges
+- Plans define structure and content placement directly via block assignments
 
 ### Layer separation
 
-- **Schedule and EPG**: High-level representations, not tied to files
-- **Playlog**: Asset-level and file-specific, includes ads, bumpers, episode files
+- **SchedulePlan and ScheduleDay**: High-level representations defining what content should air when
+- **EPG**: Coarse viewer-facing representation derived from ScheduleDay
+- **Playlog**: Asset-level and file-specific, includes ads, bumpers, episode files (resolved list of media segments)
 - **As-run log**: Factual record of what really aired and when
 
 ### Content selection timing
 
-- Content selection, rules, and avails logic are applied during playlog generation
-- Templates contain rules, not resolved content
-- The playlog builder resolves rules into actual asset references
+- Content selection is defined in SchedulePlanBlockAssignment entries (assets, series, rules, or VirtualAssets)
+- ScheduleDays are generated 3–4 days in advance with resolved asset selections
+- VirtualAssets expand to concrete Asset UUIDs during ScheduleDay generation
+- PlaylogEvents are generated from ScheduleDays with already-resolved asset references
 
 ### Rolling generation
 
@@ -466,7 +449,7 @@ After failures:
 
 Early-stage testing can use simplified configurations:
 
-- Single template repeated daily
+- Single plan applied to multiple days via cron expression or date range
 - Populate each daypart with fixed content (e.g., "Cheers" or "Big Bang Theory")
 - Validate the system end-to-end with minimal complexity
 - Gaps (like unused avails) can be left empty or filled with placeholders
@@ -503,18 +486,25 @@ Sync checkpoints can allow newly joined viewers to align to the current master c
 
 ### Schedule service
 
-ScheduleService is the primary orchestrator for scheduling:
+ScheduleService is a background daemon that orchestrates scheduling:
 
-1. **Template resolution**: Determines which template applies to a date using hierarchical override rules:
-   - Checks explicit BroadcastScheduleDay assignments first
-   - Falls back to date range templates with day-of-week filters
-   - Falls back to date range templates
-   - Falls back to base template
-2. Reads template blocks and content selection rules
-3. Queries assets for eligible content (`state='ready'` and `approved_for_broadcast=true`)
-4. Generates playlog events with precise timing
-5. Extends the playlog horizon as needed
-6. Uses master clock for all timing decisions
+1. **Plan resolution**: Determines which SchedulePlan applies to a channel and date:
+   - Identifies active SchedulePlans matching the channel and date (based on cron_expression, date ranges)
+   - Applies priority resolution (highest priority plan wins)
+   - Uses the channel's programming day anchor (`programming_day_start` / `broadcast_day_start`) for time anchoring
+2. **ScheduleDay generation**: Generates ScheduleDay rows 3–4 days in advance:
+   - Retrieves block assignments from the selected plan
+   - Resolves VirtualAssets to concrete Asset UUIDs
+   - Resolves content references (assets, series, rules) to specific assets
+   - Anchors schedule-time offsets to programming day start to produce wall-clock times
+   - Creates frozen, immutable ScheduleDay records
+3. **PlaylogEvent generation**: Generates PlaylogEvents from ScheduleDays:
+   - Each PlaylogEvent maps to a ScheduleDay and points to a resolved asset or asset segment
+   - Creates precise timestamps for playout execution
+   - Supports fallback mechanisms and last-minute overrides
+4. **Content eligibility**: Queries assets for eligible content (`state='ready'` and `approved_for_broadcast=true`)
+5. **Horizon management**: Extends the playlog horizon as needed (rolling 3–4 hours ahead)
+6. **Timing**: Uses master clock for all timing decisions
 
 ### Program director
 
@@ -536,18 +526,18 @@ ChannelManager executes playout but does not modify scheduling domain models:
 
 ## Naming rules
 
-- **Template**: Reusable programming structure with dayparts
-- **Schedule**: Template instantiation for a specific broadcast day
+- **SchedulePlan**: Top-level operator-created plan defining 24-hour timeline with block assignments
+- **ScheduleDay**: Resolved, immutable daily schedule for specific channel and date (generated 3–4 days in advance)
 - **EPG**: Electronic Program Guide (coarse viewer-facing schedule)
-- **Playlog**: Fine-grained playout plan with specific assets
+- **Playlog**: Resolved list of media segments to be played (fine-grained playout plan)
 - **As-run log**: Record of what actually aired
-- **Grid block**: Smallest schedulable time unit
-- **Daypart**: Named block of time in a template
+- **Grid block**: Smallest schedulable time unit (aligned with channel grid)
+- **Daypart**: Named block of time for visual organization (via SchedulePlanLabel, optional and visual only)
 
 ## See also
 
 - [Domain: Scheduling](../domain/Scheduling.md) - Core scheduling domain models
-- [Domain: ScheduleTemplate](../domain/ScheduleTemplate.md) - Template structure
+- [Domain: SchedulePlan](../domain/SchedulePlan.md) - Plan structure and scheduling logic
 - [Domain: PlaylogEvent](../domain/PlaylogEvent.md) - Playlog event records
 - [Domain: EPGGeneration](../domain/EPGGeneration.md) - EPG generation logic
 - [Domain: MasterClock](../domain/MasterClock.md) - Time authority

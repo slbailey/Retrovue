@@ -96,7 +96,7 @@ Channel updated:
 - **B-6:** `--json` returns valid JSON with updated record.
 - **B-7:** Output MUST be deterministic.
 - **B-8:** If `--version` is provided and does not match current, update MUST fail with a conflict message.
-- **B-9:** When `--effective-date` is provided with `--broadcast-day-start`, the JSON response MUST include `impacted_entities` with counts and IDs for affected `ScheduleTemplate`/`ScheduleDay`.
+- **B-9:** When `--effective-date` is provided with `--broadcast-day-start`, the JSON response MUST include `impacted_entities` with counts and IDs for affected `SchedulePlan`/`ScheduleDay`.
 
 ---
 

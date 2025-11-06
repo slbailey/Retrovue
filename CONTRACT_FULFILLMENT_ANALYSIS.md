@@ -103,11 +103,11 @@ RetroVue has **15 major contracts** defined across CLI, Domain, Testing, and Run
 
 #### Schedule Domain Contracts
 
-- **Files:** `docs/domain/ScheduleTemplate.md`, `docs/domain/ScheduleDay.md`, `docs/domain/ScheduleTemplateBlock.md`
+- **Files:** `docs/domain/SchedulePlan.md`, `docs/domain/ScheduleDay.md`, `docs/domain/SchedulePlanBlockAssignment.md`
 - **Missing Features:**
-  - ❌ Schedule template validation
+  - ❌ Schedule plan validation
   - ❌ Schedule day validation
-  - ❌ Schedule block validation
+  - ❌ Schedule block assignment validation
 
 #### PlayoutPipeline Domain Contract
 

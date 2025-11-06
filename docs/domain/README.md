@@ -18,8 +18,7 @@ This is **not** implementation documentation (that lives in `src/`), but rather 
 RetroVue follows Domain-Driven Design (DDD) principles, where the domain model reflects the real-world concepts of broadcast television operations:
 
 - **Sources** → **Collections** → **Assets** (content hierarchy)
-- **Assets** → **PlaylogEvents** → **Streams** (broadcast pipeline)
-- **Channels** → **Schedules** → **Playout** (operational flow)
+- **Channels** → **SchedulePlans** → **ScheduleDays** → **PlaylogEvents** → **Streams** (scheduling and broadcast pipeline)
 
 ## Core Domain Entities
 
@@ -36,7 +35,6 @@ RetroVue follows Domain-Driven Design (DDD) principles, where the domain model r
 
 - **[Channel](Channel.md)** - Channel identity and configuration
 - **[Scheduling](Scheduling.md)** - Planning-time logic for future air
-- **[PlaylogEvent](PlaylogEvent.md)** - Scheduled, timestamped playout units
 - **[PlayoutPipeline](PlayoutPipeline.md)** - How scheduled content becomes streams
 
 ### Enhancement Domain
@@ -45,10 +43,12 @@ RetroVue follows Domain-Driven Design (DDD) principles, where the domain model r
 
 ### Scheduling Infrastructure Domain
 
-- **[ScheduleTemplate](ScheduleTemplate.md)** - Reusable, channel-agnostic shells that define what *types* of content should appear
-- **[ScheduleTemplateBlock](ScheduleTemplateBlock.md)** - Time blocks within templates with content type constraints (guardrails)
-- **[SchedulePlan](SchedulePlan.md)** - Operator-created plans that fill templates with actual content selections
+- **[SchedulePlan](SchedulePlan.md)** - Top-level operator-created plans that define channel programming (structure and content selections)
+- **[SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md)** - Scheduled pieces of content in plans (source of truth for what should air when)
+- **[SchedulePlanLabel](SchedulePlanLabel.md)** - Optional UI-only labels for visual organization of block assignments
 - **[ScheduleDay](ScheduleDay.md)** - Resolved schedules for specific channel and date (generated from plans)
+- **[PlaylogEvent](PlaylogEvent.md)** - Scheduled, timestamped playout units (generated from schedule days)
+- **[VirtualAsset](VirtualAsset.md)** - ⚠️ FUTURE: Container for multiple assets (fixed sequences or rule-based definitions)
 - **[EPGGeneration](EPGGeneration.md)** - Electronic Program Guide generation
 
 ## Key Architectural Principles
@@ -80,20 +80,22 @@ The system enforces clear boundaries based on asset state:
 
 1. **Start with [Asset](Asset.md)** - This is the central entity
 2. **Understand the hierarchy** - Source → Collection → Asset
-3. **Follow the flow** - Asset → PlaylogEvent → Playout
+3. **Follow the scheduling flow** - Channel → SchedulePlan → ScheduleDay → Playlog → Stream
 4. **Read related domains** - Each document links to related concepts
 
 ### For Operators
 
-1. **Focus on operational domains** - Channel, Scheduling, PlayoutPipeline
+1. **Focus on operational domains** - Channel, SchedulePlan, ScheduleDay, PlaylogEvent
 2. **Understand state transitions** - How assets become ready for broadcast
 3. **Learn the constraints** - What can and cannot be scheduled
+4. **Follow the planning flow** - Create plans, assign content, generate schedule days
 
 ### For System Architects
 
 1. **Study the relationships** - How domains interact
 2. **Understand the boundaries** - Clear separation of concerns
 3. **Follow the invariants** - Critical rules that must be maintained
+4. **Trace the flow** - Channel → SchedulePlan → ScheduleDay → Playlog → Stream
 
 ## Document Structure
 

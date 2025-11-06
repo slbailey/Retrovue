@@ -1,6 +1,6 @@
 # Schedule Day Contract
 
-_Related: [Domain: ScheduleDay](../../domain/ScheduleDay.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: ScheduleTemplate](../../domain/ScheduleTemplate.md) • [Domain: PlaylogEvent](../../domain/PlaylogEvent.md) • [SchedulePlanInvariantsContract](SchedulePlanInvariantsContract.md)_
+_Related: [Domain: ScheduleDay](../../domain/ScheduleDay.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: PlaylogEvent](../../domain/PlaylogEvent.md) • [SchedulePlanInvariantsContract](SchedulePlanInvariantsContract.md)_
 
 ## Purpose
 
@@ -126,7 +126,7 @@ retrovue schedule-day validate \
 
 ## Safety Expectations
 
-- **Generate**: Creates a new BroadcastScheduleDay record by resolving the active SchedulePlan for the channel and date. Validates plan is active and template is valid.
+- **Generate**: Creates a new BroadcastScheduleDay record by resolving the active SchedulePlan for the channel and date. Validates plan is active.
 - **Override**: Explicitly replaces an existing schedule day with a new one. Requires confirmation unless `--yes` provided. Sets `is_manual_override=true`.
 - **Regenerate**: Recreates schedule day from its plan. Useful after plan updates. Requires `--force` if schedule day already exists.
 - **No side effects**: Operations affect only the specified schedule day and downstream PlaylogEvent generation.
@@ -144,7 +144,6 @@ Schedule day generated:
   Channel: RetroVue-1
   Date: 2025-01-15
   Plan: WeekdayPlan
-  Template: GeneralTemplate
   Manual Override: false
   Gaps: 0
   Warnings: 0
@@ -163,8 +162,6 @@ Schedule day generated:
     "channel_name": "RetroVue-1",
     "plan_id": "789e0123-e45b-67c8-d901-234567890abc",
     "plan_name": "WeekdayPlan",
-    "template_id": "456e7890-e12b-34c5-d678-901234567def",
-    "template_name": "GeneralTemplate",
     "schedule_date": "2025-01-15",
     "is_manual_override": false,
     "gaps_count": 0,
@@ -184,7 +181,6 @@ Schedule Day:
   Channel: RetroVue-1
   Date: 2025-01-15
   Plan: WeekdayPlan
-  Template: GeneralTemplate
   Manual Override: false
   Gaps: 2
     - 02:00-02:30 (no content assigned)
@@ -221,9 +217,6 @@ Schedule Day:
 - **D-8:** Plan resolution MUST identify the active plan for the channel and date based on cron_expression, date ranges, and priority
 - **D-9:** If no active plan matches for the channel and date, generation MUST exit 1 with error: "Error: No active plan found for channel and date."
 - **D-10:** Plan MUST have `is_active=true` to be eligible for schedule generation
-- **D-11:** Plan's template MUST have `is_active=true` to be eligible for schedule generation
-- **D-12:** If plan's template is inactive, generation MUST exit 1 with error: "Error: Plan's template is not active."
-- **D-13:** Plan MUST have at least one ScheduleTemplateBlock in its template (enforced by template contract)
 - **D-14:** Plan MUST have at least one SchedulePlanBlockAssignment (enforced by plan validation)
 
 ### Gap Detection and Warnings
@@ -232,7 +225,7 @@ Schedule Day:
 - **D-16:** Gaps are defined as time periods within the broadcast day (00:00-24:00) with no content assigned
 - **D-17:** Gaps SHOULD be flagged as warnings, not errors (gaps are allowed but should be noted)
 - **D-18:** Gap warnings MUST identify the time period and reason (e.g., "no content assigned", "block assignment missing")
-- **D-19:** Gap detection MUST check all time periods within template blocks
+- **D-19:** Gap detection MUST check all time periods within the broadcast day
 - **D-20:** Schedule day output SHOULD include gap count and gap details when gaps exist
 - **D-21:** Validate command MUST report all gaps and warnings
 - **D-22:** Gaps MUST NOT prevent schedule day generation (warnings only, not errors)
@@ -264,7 +257,7 @@ Schedule Day:
 - **D-39:** Each content assignment in the schedule day MUST result in at least one PlaylogEvent entry
 - **D-40:** PlaylogEvent entries MUST reference the schedule day's channel_id and schedule_date
 - **D-41:** PlaylogEvent generation MUST use the resolved content from SchedulePlanBlockAssignment records
-- **D-42:** PlaylogEvent generation MUST respect template block constraints and validate content eligibility
+- **D-42:** PlaylogEvent generation MUST validate content eligibility
 - **D-43:** If PlaylogEvent generation fails, schedule day creation MUST fail (rollback transaction)
 - **D-44:** Schedule day output SHOULD include count of generated PlaylogEvent entries
 
@@ -281,21 +274,19 @@ Schedule Day:
 - **D-50:** Creating schedule day with non-existent channel MUST exit 1 with error: "Error: Channel not found."
 - **D-51:** `plan_id` MUST reference an existing SchedulePlan (if provided)
 - **D-52:** Override with non-existent plan MUST exit 1 with error: "Error: Plan not found."
-- **D-53:** `template_id` MUST reference an existing ScheduleTemplate
-- **D-54:** Template reference MUST be valid (resolved from plan or explicitly provided)
 
 ### Dry Run Support
 
 - **D-55:** `--dry-run` flag MUST preview schedule generation without persisting
-- **D-56:** Dry run MUST show what schedule day would be created (plan, template, gaps, warnings)
+- **D-56:** Dry run MUST show what schedule day would be created (plan, gaps, warnings)
 - **D-57:** Dry run MUST NOT create any database records
-- **D-58:** Dry run MUST validate all constraints (plan existence, template validity, etc.)
+- **D-58:** Dry run MUST validate all constraints (plan existence, etc.)
 - **D-59:** Dry run output SHOULD match generate output format (without database IDs)
 
 ### Output Format
 
 - **D-60:** `--json` flag MUST return valid JSON with the operation result
-- **D-61:** Human-readable output MUST include all schedule day fields (id, channel, date, plan, template, gaps, warnings, playlog count)
+- **D-61:** Human-readable output MUST include all schedule day fields (id, channel, date, plan, gaps, warnings, playlog count)
 - **D-62:** Show command MUST display schedule day details including gaps and warnings
 - **D-63:** List command MUST show all schedule days matching filters
 
@@ -314,7 +305,6 @@ Schedule Day:
 - **D-2:** Timestamps MUST be stored in UTC with timezone information
 - **D-3:** `channel_id` MUST be stored as UUID foreign key reference
 - **D-4:** `plan_id` MUST be stored as UUID foreign key reference (nullable)
-- **D-5:** `template_id` MUST be stored as UUID foreign key reference
 - **D-6:** `schedule_date` MUST be stored as TEXT in "YYYY-MM-DD" format
 - **D-7:** `is_manual_override` MUST be stored as BOOLEAN (NOT NULL, default false)
 - **D-8:** Database constraint MUST enforce unique (channel_id, schedule_date) tuple
@@ -323,7 +313,6 @@ Schedule Day:
 
 - **D-9:** Foreign key constraints MUST ensure channel_id references valid Channel
 - **D-10:** Foreign key constraints MUST ensure plan_id references valid SchedulePlan (if not null)
-- **D-11:** Foreign key constraints MUST ensure template_id references valid ScheduleTemplate
 - **D-12:** Deleting a channel SHOULD handle dependent schedule days (CASCADE or RESTRICT based on schema)
 - **D-13:** Deleting a plan SHOULD preserve schedule days (set plan_id to null or prevent deletion if schedule days exist)
 
@@ -350,7 +339,6 @@ Planned tests:
 - `tests/contracts/test_schedule_day_generate_contract.py::test_schedule_day_generate__duplicate_without_force_fails`
 - `tests/contracts/test_schedule_day_generate_contract.py::test_schedule_day_generate__no_active_plan_fails`
 - `tests/contracts/test_schedule_day_generate_contract.py::test_schedule_day_generate__inactive_plan_fails`
-- `tests/contracts/test_schedule_day_generate_contract.py::test_schedule_day_generate__inactive_template_fails`
 - `tests/contracts/test_schedule_day_generate_contract.py::test_schedule_day_generate__with_gaps_warns`
 - `tests/contracts/test_schedule_day_generate_contract.py::test_schedule_day_generate__generates_playlog_events`
 - `tests/contracts/test_schedule_day_generate_contract.py::test_schedule_day_generate__dry_run`
@@ -371,7 +359,6 @@ Planned tests:
 - Duplicate without force: exit 1, "Error: Schedule day already exists for channel and date. Use --force to overwrite."
 - No active plan: exit 1, "Error: No active plan found for channel and date."
 - Inactive plan: exit 1, "Error: Plan is not active."
-- Inactive template: exit 1, "Error: Plan's template is not active."
 - Channel not found: exit 1, "Error: Channel not found."
 - Plan not found: exit 1, "Error: Plan not found."
 - Invalid date format: exit 1, "Error: Invalid date format. Expected YYYY-MM-DD."
@@ -419,8 +406,6 @@ Schedule Day:
 
 - [Domain: ScheduleDay](../../domain/ScheduleDay.md) - Complete domain documentation
 - [Domain: SchedulePlan](../../domain/SchedulePlan.md) - Plan entity that generates schedule days
-- [Domain: ScheduleTemplate](../../domain/ScheduleTemplate.md) - Template structure
-- [Domain: ScheduleTemplateBlock](../../domain/ScheduleTemplateBlock.md) - Time blocks with content type constraints
 - [Domain: PlaylogEvent](../../domain/PlaylogEvent.md) - Generated playout events
 - [SchedulePlanInvariantsContract](SchedulePlanInvariantsContract.md) - Cross-entity invariants
 - [CLI Data Guarantees](cross-domain/CLI_Data_Guarantees.md) - General CLI guarantees

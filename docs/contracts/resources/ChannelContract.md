@@ -85,7 +85,7 @@ Each Channel operation follows the standard contract pattern:
 
 - Validate on `add`, `update`, and via explicit `retrovue channel validate`.
 - Always validate the Channel row.
-- Cross-validate `ScheduleTemplate`/`ScheduleDay` alignment:
+- Cross-validate `SchedulePlan`/`ScheduleDay` alignment:
   - On demand via `validate` command, and
   - On `update` when `--effective-date` is provided for changes that impact alignment.
 - On such updates, return `impacted_entities` (IDs and counts). Do not auto-rebuild; report only.
@@ -113,8 +113,8 @@ Each Channel operation follows the standard contract pattern:
 - Offsets: integers 0–59, sorted, unique; every `offset % grid == 0`; 1–6 entries; same set repeats each hour
 - Programming day start: minute aligns to grid and is in offsets; seconds `== 00`
 - Active/archive: `is_active=false` excludes prospectively; historical rows retained
-- Revalidation: grid/offset changes require revalidation; mark `ScheduleTemplate`/`ScheduleDay` as needs-review
-- Delete gate: no dependents (templates, days, EPG rows, playout configs, broadcast bindings, ad/avail policies)
+- Revalidation: grid/offset changes require revalidation; mark `SchedulePlan`/`ScheduleDay` as needs-review
+- Delete gate: no dependents (plans, days, EPG rows, playout configs, broadcast bindings, ad/avail policies)
 - Backfill: when activating, backfill horizons/EPG for the standard window
 - Lints (non-fatal): warn if grid=60 with non-zero offsets; warn on sparse/nonstandard offset sets
 

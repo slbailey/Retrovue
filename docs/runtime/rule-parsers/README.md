@@ -1,10 +1,12 @@
 # Runtime — Rule Parsers
 
-_Related: [Channel Manager](../ChannelManager.md) • [Schedule Template](../../domain/ScheduleTemplate.md) • [Schedule Day](../../domain/ScheduleDay.md)_
+_Related: [Channel Manager](../ChannelManager.md) • [Schedule Plan](../../domain/SchedulePlan.md) • [Schedule Day](../../domain/ScheduleDay.md)_
 
 ## Purpose
 
-This directory contains **rule parsers** used by the runtime to interpret and apply domain logic at execution time. Rule parsers operate on persisted domain models (such as `ScheduleTemplateBlock`) but are _not_ themselves part of the canonical domain model. Instead, they provide the logic needed to convert static programming rules and templates into actionable scheduling or playout instructions.
+This directory contains **rule parsers** used by the runtime to interpret and apply domain logic at execution time. Rule parsers operate on persisted domain models (such as `SchedulePlanBlockAssignment`) but are _not_ themselves part of the canonical domain model. Instead, they provide the logic needed to convert static programming rules and plans into actionable scheduling or playout instructions.
+
+**Note:** ScheduleTemplateBlock has been deprecated. Rule parsers now operate on SchedulePlanBlockAssignment records that directly define what content runs when using `start_time` and `duration`.
 
 ## What is a Rule Parser?
 
@@ -16,7 +18,7 @@ Rule parsers are responsible for turning configuration or templates into runtime
 
 ## Example Uses
 
-- **Filling a ScheduleTemplateBlock:** For a template block like "Afternoon Sitcoms," a rule parser determines which sitcoms from an eligible pool should be scheduled into that block.
+- **Filling a SchedulePlanBlockAssignment:** For a plan assignment that defines a time slot (e.g., "Afternoon Sitcoms" from 14:00-16:00), a rule parser determines which sitcoms from an eligible pool should be scheduled into that assignment.
 - **Selecting Interstitials for Ad Blocks:** When the schedule engine encounters an ad or interstitial block, a rule parser can select the most appropriate promo/bumper from a pool according to configured rules (e.g., "rotate evenly", "avoid repeats", "must match channel branding").
 
 ## Relationship to Domain and Runtime
@@ -32,8 +34,10 @@ Unlike entities defined in `src/retrovue/domain/entities.py` (see [ScheduleDay](
 ## See Also
 
 - [ChannelManager](../ChannelManager.md): How schedules and rules are applied during streaming.
-- [ScheduleTemplate](../../domain/ScheduleTemplate.md): Persistent templates defining programming blocks.
+- [SchedulePlan](../../domain/SchedulePlan.md): Top-level plans defining channel programming.
 - [Operator CLI](../../operator/CLI.md): Assigning and managing programming rules.
+
+**Note:** ScheduleTemplate and ScheduleTemplateBlock have been deprecated. SchedulePlan is now the top-level structure that directly defines channel programming. SchedulePlanBlockAssignment directly defines what content runs when using `start_time` and `duration`.
 
 ---
 

@@ -22,9 +22,7 @@ from .commands import (
     enricher,
     producer,
     runtime,
-    schedule_template,
     source,
-    template_block,
 )
 from .router import get_router
 
@@ -83,19 +81,6 @@ router.register(
     doc_path="runtime.md",
 )
 
-router.register(
-    "schedule-template",
-    schedule_template.app,
-    help_text="Schedule template management operations",
-    doc_path="schedule-template.md",
-)
-
-router.register(
-    "template-block",
-    template_block.app,
-    help_text="Standalone template block management operations",
-    doc_path="template-block.md",
-)
 
 
 @app.callback()
