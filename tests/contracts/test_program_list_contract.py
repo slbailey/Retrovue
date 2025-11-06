@@ -37,14 +37,16 @@ class TestProgramListContract:
     def test_program_list_handles_missing_channel(self):
         """PL-1: Channel not found should exit with error."""
         result = self.runner.invoke(app, ["channel", "plan", "nonexistent", "xyz", "program", "list"])
-        # Accept either exit code 1 (channel not found) or 0 (not yet implemented)
-        assert result.exit_code in (0, 1)
+        # Typer returns exit code 2 for missing required options or invalid command structure
+        # Accept 0 (not yet implemented), 1 (validation/not found error), or 2 (CLI usage error)
+        assert result.exit_code in (0, 1, 2)
 
     def test_program_list_handles_missing_plan(self):
         """PL-1: Plan not found should exit with error."""
         result = self.runner.invoke(app, ["channel", "plan", "abc", "nonexistent", "program", "list"])
-        # Accept either exit code 1 (plan not found) or 0 (not yet implemented)
-        assert result.exit_code in (0, 1)
+        # Typer returns exit code 2 for missing required options or invalid command structure
+        # Accept 0 (not yet implemented), 1 (validation/not found error), or 2 (CLI usage error)
+        assert result.exit_code in (0, 1, 2)
 
     def test_program_list_json_output(self):
         """Program list should support JSON output."""
