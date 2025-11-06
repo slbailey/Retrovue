@@ -229,6 +229,8 @@ build_schedule_plan(channel_id=1, date=date(2025, 11, 7))
 
 The CLI entrypoint provides a user-friendly interface to the underlying scheduling functions, which handle plan resolution, Zone/Pattern expansion, and ScheduleDay generation.
 
+**Note:** The CLI "plan-building mode" is a front-end to the same schedule engine the UI uses; both call the same SchedulePlanService methods.
+
 ## Next Steps
 
 Implementation checklist for the scheduling system:

@@ -4,7 +4,7 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [ScheduleP
 
 ## Purpose
 
-Program is a **catalog entity** that describes how to resolve content, not a per-day time-slot assignment. Programs are referenced by Patterns within SchedulePlans and define content selection rules, rotation policies, and resolution behavior.
+Program is a **catalog entity** that describes how to resolve content, not a per-day time-block assignment. Programs are referenced by Patterns within SchedulePlans and define content selection rules, rotation policies, and resolution behavior.
 
 **What a Program is:**
 
@@ -17,10 +17,10 @@ Program is a **catalog entity** that describes how to resolve content, not a per
 **What a Program is not:**
 
 - A row with `start_time`/`duration` inside the plan (that's now Zone+Pattern)
-- A per-day time-slot assignment
+- A per-day time-block assignment
 - A time-specific placement
 
-Programs are catalog entries referenced by Patterns. The Zone defines when the Pattern applies, and the Pattern defines the sequence of Programs. The plan engine repeats Patterns over Zones until Zones are full, snapping to the Channel's Grid boundaries. At ScheduleDay time, each Program slot resolves to specific assets/episodes.
+Programs are catalog entries referenced by Patterns. The Zone defines when the Pattern applies, and the Pattern defines the sequence of Programs. The plan engine repeats Patterns over Zones until Zones are full, snapping to the Channel's Grid boundaries. At ScheduleDay time, each Program entry resolves to specific assets/episodes.
 
 ## Core Model / Scope
 
@@ -34,10 +34,10 @@ Program enables:
 
 **Key Points:**
 
-- Program is a **catalog entity**, not a per-day time-slot
+- Program is a **catalog entity**, not a per-day time-block
 - Programs define **how to resolve content** (rotation, commType, slot_units), not when it airs
 - Programs are **referenced by Patterns** — the Zone defines when, the Pattern defines sequence
-- **Resolution at ScheduleDay time**: Each Program slot resolves to specific assets/episodes when ScheduleDay is generated
+- **Resolution at ScheduleDay time**: Each Program entry resolves to specific assets/episodes when ScheduleDay is generated
 - **No time placement**: Programs do not have `start_time`/`duration` — that's Zone+Pattern
 - **Longform support**: `slot_units` override allows longform content to consume multiple grid blocks
 - **VirtualAsset expansion**: VirtualAssets expand at ScheduleDay time, not at plan definition time
@@ -220,7 +220,7 @@ Programs flow into [ScheduleDay](ScheduleDay.md) via Zones+Patterns during sched
 
 1. **Zone and Pattern Resolution**: Zones and Patterns from an active SchedulePlan are retrieved
 2. **Pattern Repeating**: The plan engine repeats each Pattern over its Zone until the Zone is full, snapping to the Channel's Grid boundaries
-3. **Program Resolution**: At ScheduleDay time, each Program slot resolves to specific assets/episodes:
+3. **Program Resolution**: At ScheduleDay time, each Program entry resolves to specific assets/episodes:
    - **Series Programs**: Resolve to specific episodes based on rotation policy (sequential, random, LRU, seasonal)
    - **Asset Programs**: Resolve to the referenced asset
    - **VirtualAsset Programs**: Expand to multiple assets (e.g., "intro + episode + outro" becomes three assets)
@@ -301,7 +301,7 @@ This Program defines how to resolve Cheers episodes: select seasonally-appropria
 
 - Zone: 19:00–22:00 (Prime Time)
 - Pattern: `["Cheers", "Frasier", "Seinfeld"]`
-- The Pattern repeats over the Zone, and each Cheers slot resolves to a specific episode at ScheduleDay time
+- The Pattern repeats over the Zone, and each Cheers entry resolves to a specific episode at ScheduleDay time
 
 ### Example 2: Movie Block with slot_units Override
 
@@ -362,7 +362,7 @@ This Program references a VirtualAsset that expands to three assets at ScheduleD
 If programs are missing or invalid:
 
 - **Missing programs**: Result in gaps in the schedule (allowed but should generate warnings). Under-filled blocks generate avails.
-- **Invalid content references**: System falls back to default content or skips the program slot
+- **Invalid content references**: System falls back to default content or skips the program entry
 - **Unresolvable content**: If content cannot be resolved (e.g., series has no episodes, rule matches no assets), system falls back to alternative content or leaves gap (generates avail)
 - **Invalid rotation policies**: System falls back to default rotation (e.g., sequential) if specified policy is invalid
 - **VirtualAsset expansion failures**: If VirtualAsset cannot expand, system falls back to alternative content or leaves gap
@@ -391,4 +391,4 @@ Programs are often referred to as "block assignments" or simply "programs" in op
 - [Asset](Asset.md) - Approved content available for scheduling
 - [Operator CLI](../operator/CLI.md) - Operational procedures
 
-Program is a **catalog entity** (series/movie/block/composite) that describes how to resolve content, not a per-day time-slot. Programs define resolution rules such as rotation policy (random/sequential/LRU), commType, and slot_units override for longform content. Programs are referenced by Patterns within SchedulePlans — the Zone defines when the Pattern applies, and the Pattern defines the sequence of Program references. Programs do not have `start_time`/`duration` (that's Zone+Pattern). At ScheduleDay time, each Program slot resolves to specific assets/episodes; under-filled blocks generate avails, and longform content with `slot_units` override consumes multiple grid blocks. Programs can reference VirtualAssets for packaging (e.g., "intro + episode + outro"), which expand at ScheduleDay time. Programs flow into ScheduleDay via Zones+Patterns, resolved 3-4 days in advance for EPG and playout purposes.
+Program is a **catalog entity** (series/movie/block/composite) that describes how to resolve content, not a per-day time-block. Programs define resolution rules such as rotation policy (random/sequential/LRU), commType, and slot_units override for longform content. Programs are referenced by Patterns within SchedulePlans — the Zone defines when the Pattern applies, and the Pattern defines the sequence of Program references. Programs do not have `start_time`/`duration` (that's Zone+Pattern). At ScheduleDay time, each Program entry resolves to specific assets/episodes; under-filled blocks generate avails, and longform content with `slot_units` override consumes multiple grid blocks. Programs can reference VirtualAssets for packaging (e.g., "intro + episode + outro"), which expand at ScheduleDay time. Programs flow into ScheduleDay via Zones+Patterns, resolved 3-4 days in advance for EPG and playout purposes.

@@ -92,7 +92,7 @@ This document describes the **default scheduling policies** used by SchedulingSe
 
 **User-Facing Outcomes:**
 - **Content Integrity:** Viewers see complete content without abrupt cuts
-- **EPG Truth:** EPG reflects actual content duration, even if it extends beyond the planned slot
+- **EPG Truth:** EPG reflects actual content duration, even if it extends beyond the planned block
 - **Predictable Behavior:** Operators know that longform content will always play to completion
 
 **Example:**
@@ -124,6 +124,8 @@ This document describes the **default scheduling policies** used by SchedulingSe
 - Day 1: Movie playing from 04:00, expected to end at 06:45
 - Day 2: "Morning Zone" starts at 06:00 with Pattern ["Cartoons"]
 - Result: Movie continues until 06:45, then "Cartoons" start at 07:00 (next grid boundary after carry-in)
+
+The same carry-in rule applies across broadcast day boundaries (e.g., a film beginning before 6 AM continues uninterrupted).
 
 **See Also:** [Channel.md](Channel.md) - Grid & Boundaries section, [ScheduleDay.md](ScheduleDay.md) - Soft-Start and Carry-In section
 

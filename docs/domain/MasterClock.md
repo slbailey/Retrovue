@@ -161,7 +161,7 @@ The MasterClock implementation is validated through comprehensive testing that e
 - Time monotonicity (never goes backward)
 - Timezone safety (DST transitions handled correctly)
 - Consistency (all components see the same "now")
-- Boundary conditions (schedule slot boundaries work correctly)
+- Boundary conditions (schedule block boundaries work correctly)
 - Performance (high-frequency operations remain stable)
 - Serialization (timestamps serialize to ISO 8601 correctly)
 

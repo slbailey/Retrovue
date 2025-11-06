@@ -102,7 +102,7 @@ ScheduleDay generation resolves Zones and Patterns into concrete asset selection
 
 **For each Zone, expand its Pattern across the Zone's window, snapping to the Channel grid:**
 
-1. **Zone identification**: Identify all active Zones from the layered SchedulePlans for the channel and date
+1. **Zone identification**: Identify all active Zones from SchedulePlans for the channel and date. If multiple plans are active, priority resolves overlapping Zones.
 2. **Pattern retrieval**: For each Zone, retrieve its associated Pattern (ordered list of Program references)
 3. **Pattern repeating**: Repeat the Pattern across the Zone's active window, snapping to the Channel's Grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`)
 4. **Grid alignment**: All content placement snaps to valid grid boundaries; no fractional-minute scheduling
