@@ -105,7 +105,7 @@ def validate_schedule_plan(plan: Any) -> None:
     # Get plan attributes (handle both SQLAlchemy models and dict-like objects)
     plan_id = getattr(plan, "id", None)
     plan_name = getattr(plan, "name", "Unknown")
-    channel_id = getattr(plan, "channel_id", None)
+    # channel_id = getattr(plan, "channel_id", None)  # Not currently used
 
     # Get programs
     programs = getattr(plan, "programs", getattr(plan, "block_assignments", []))
@@ -316,9 +316,6 @@ def validate_block_assignment(assignment: Any, plan: Any | None = None, channel:
                     # Default to [0] if not specified
                     allowed_offsets = [0]
 
-                # Calculate the offset within the hour for the start time
-                offset_within_hour = start_minutes % 60
-
                 # Check if the start time aligns with any allowed offset
                 # For a grid of size N, valid start times are: offset + k*N for any k
                 # where offset is in allowed_offsets
@@ -335,7 +332,7 @@ def validate_block_assignment(assignment: Any, plan: Any | None = None, channel:
                         f"start_time ({start_time}) does not align with channel grid boundaries. "
                         f"Grid size: {grid_block_minutes} minutes, allowed offsets: {offsets_str}"
                     )
-        except (ValueError, AttributeError) as e:
+        except (ValueError, AttributeError):
             # If we can't parse or access channel properties, skip grid validation
             # but log that we couldn't validate
             pass

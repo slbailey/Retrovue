@@ -531,8 +531,8 @@ def list_plans(
     test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
 ):
     """List all plans for a channel."""
-    channel_selector = ctx.obj.get("channel_selector")
     # TODO: Implement plan listing
+    # channel_selector = ctx.obj.get("channel_selector")  # Will be used when implemented
     typer.echo("Plan listing not yet implemented", err=True)
     raise typer.Exit(1)
 

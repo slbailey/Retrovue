@@ -5,8 +5,6 @@ This module defines custom exceptions for scheduling validation errors.
 These exceptions are raised when validation contracts detect violations.
 """
 
-from typing import Any
-
 
 class ScheduleValidationError(Exception):
     """Base exception for all scheduling validation errors."""
