@@ -7,7 +7,7 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 ## Purpose
 
-BroadcastScheduleDay is a **resolved, immutable daily schedule** for a specific channel and calendar date. **It is derived from [SchedulePlan](SchedulePlan.md)** and materialized 3–4 days in advance. Once generated, the schedule day is **frozen** (locked and immutable) unless force-regenerated or manually overridden by an operator.
+BroadcastScheduleDay is a **resolved, immutable daily schedule** for a specific channel and calendar date. **It is derived from [SchedulePlan](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones.** ScheduleDay is materialized 3–4 days in advance. Once generated, the schedule day is **frozen** (locked and immutable) unless force-regenerated or manually overridden by an operator.
 
 **Primary Expansion Point:** ScheduleDay is the **primary expansion point** for:
 - **Programs → concrete episodes**: Programs (catalog entries) in Patterns are expanded to specific episodes based on rotation policy
@@ -47,7 +47,7 @@ The table is named `broadcast_schedule_days` (plural). Schema migration is handl
 
 ## Contract / interface
 
-BroadcastScheduleDay is a resolved, immutable daily schedule **derived from [SchedulePlan](SchedulePlan.md)** and **materialized 3–4 days in advance**. It provides the concrete schedule for a specific channel and calendar date. Once generated, the schedule day is **frozen** (locked and immutable) unless force-regenerated or manually overridden. It contains resolved asset selections with real-world wall-clock times and playback instructions. It defines:
+BroadcastScheduleDay is a resolved, immutable daily schedule **derived from [SchedulePlan](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones.** ScheduleDay is **materialized 3–4 days in advance**. It provides the concrete schedule for a specific channel and calendar date. Once generated, the schedule day is **frozen** (locked and immutable) unless force-regenerated or manually overridden. It contains resolved asset selections with real-world wall-clock times and playback instructions. It defines:
 
 - Channel assignment (channel_id) - the channel this schedule applies to
 - Plan reference (plan_id) - the [SchedulePlan](SchedulePlan.md) that generated this schedule (may reference the highest-priority plan when multiple plans are layered)
@@ -59,11 +59,11 @@ BroadcastScheduleDay is a resolved, immutable daily schedule **derived from [Sch
 - Manual override flag (is_manual_override) - indicates if this was manually overridden
 - Unique constraint ensuring one schedule per channel per date
 
-Schedule days are the resolved output of the planning process. They are **derived from [SchedulePlan](SchedulePlan.md)** and **materialized 3–4 days in advance**, then **frozen** after generation. They represent "what will actually air" after resolving active layered plans for a given channel and date into concrete schedules with specific `asset_uuid` selections (possibly derived from [VirtualAssets](VirtualAsset.md)), wall-clock times anchored to the channel's Grid boundaries, and playback instructions derived from Programs. **ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.** Manual overrides are permitted post-generation even after the schedule day has been frozen.
+Schedule days are the resolved output of the planning process. They are **derived from [SchedulePlan](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones.** ScheduleDays are **materialized 3–4 days in advance**, then **frozen** after generation. They represent "what will actually air" after resolving active plans for a given channel and date into concrete schedules with specific `asset_uuid` selections (possibly derived from [VirtualAssets](VirtualAsset.md)), wall-clock times anchored to the channel's Grid boundaries, and playback instructions derived from Programs. **ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.** Manual overrides are permitted post-generation even after the schedule day has been frozen.
 
 ## Execution model
 
-ScheduleService generates BroadcastScheduleDay records **derived from active layered [SchedulePlans](SchedulePlan.md) for a given channel and date**. Schedule days are **materialized 3–4 days in advance** to provide stable schedules for EPG and playout systems. The process:
+ScheduleService generates BroadcastScheduleDay records **derived from active [SchedulePlans](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists) for a given channel and date. If multiple plans are active, priority resolves overlapping Zones.** Schedule days are **materialized 3–4 days in advance** to provide stable schedules for EPG and playout systems. The process:
 
 1. **Plan resolution**: For a given channel and date, identify all applicable active [SchedulePlans](SchedulePlan.md) (based on cron_expression, date ranges, priority). Apply priority-based layering where more specific plans override generic ones. Zones from higher-priority plans override overlapping Zones from lower-priority plans.
 2. **Zone and Pattern resolution**: Retrieve Zones (time windows) and Patterns (ordered lists of Programs) from the matching plan(s)
@@ -220,7 +220,7 @@ Schedule days are resolved from plans. They define "what will air when" for a sp
 
 ## Operator workflows
 
-**Generate Schedule Days**: ScheduleService automatically generates BroadcastScheduleDay records derived from active layered SchedulePlans for a given channel and date. Schedule days are materialized 3–4 days in advance and frozen after generation. Operators don't manually create schedule days in normal operation.
+**Generate Schedule Days**: ScheduleService automatically generates BroadcastScheduleDay records derived from active SchedulePlans using Zones (time windows) and Patterns (ordered Program lists) for a given channel and date. If multiple plans are active, priority resolves overlapping Zones. Schedule days are materialized 3–4 days in advance and frozen after generation. Operators don't manually create schedule days in normal operation.
 
 **Preview Schedule**: Use preview/dry-run features to see how a plan will resolve into a BroadcastScheduleDay before it's generated.
 

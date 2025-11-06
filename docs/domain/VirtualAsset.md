@@ -23,7 +23,7 @@ VirtualAssets provide a way to:
 - **Package asset sequences**: Create reusable bundles of assets (e.g., intro → clip → clip)
 - **Define rule-based collections**: Specify dynamic asset selections (e.g., "intro + 2 random SpongeBob shorts")
 - **Enable modular programming**: Reference complex asset combinations as a single unit in schedule plans
-- **Support content reuse**: Define once, use many times across different plans and time slots
+- **Support content reuse**: Define once, use many times across different plans and ScheduleDay entries
 - **Support playout hints**: Include playout directives like shuffle, sequential, and conditional inserts (e.g., rating slates)
 
 ## Core Model / Scope
@@ -160,7 +160,7 @@ VirtualAssets are referenced in [Program](Program.md) entries using `content_typ
 - Programs contain the VirtualAsset reference, not the expanded assets
 - The VirtualAsset is a reusable container that will be expanded later during ScheduleDay resolution
 - Programs define what content should play, but not when (that's determined by Zones and Patterns)
-- **Cross-plan reuse**: The same VirtualAsset can be referenced in multiple schedule plans, allowing operators to define once and use many times across different plans and time slots
+- **Cross-plan reuse**: The same VirtualAsset can be referenced in multiple schedule plans, allowing operators to define once and use many times across different plans and ScheduleDay entries
 
 ## Relationship to ScheduleDay
 
@@ -381,7 +381,7 @@ The VirtualAsset expands to a fixed structure with some dynamic components:
 
 VirtualAssets provide several benefits:
 
-1. **Reusability**: Define once, use many times across multiple schedule plans and time slots
+1. **Reusability**: Define once, use many times across multiple schedule plans and ScheduleDay entries
 2. **Modularity**: Package related assets into reusable bundles of asset references and logic
 3. **Consistency**: Ensure consistent branding and packaging across programming
 4. **Flexibility**: Support both fixed sequences and dynamic rule-based selections

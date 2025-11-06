@@ -75,7 +75,7 @@ The Channel's Grid configuration defines the temporal structure for all scheduli
 
 The Grid system provides predictable, consistent scheduling behavior across the entire broadcast system. It enables:
 
-- **Predictable EPG**: Electronic Program Guides can display consistent time slots that align with viewer expectations, with programs starting at predictable intervals (e.g., every 30 minutes on the half-hour).
+- **Predictable EPG**: Electronic Program Guides can display consistent grid blocks that align with viewer expectations, with programs starting at predictable intervals (e.g., every 30 minutes on the half-hour).
 
 - **Ad math**: Advertising placement and revenue calculations become straightforward when content aligns to standard grid boundaries, making it easy to calculate ad pod positions and fill rates.
 
@@ -190,8 +190,7 @@ Branding, overlays, content ratings, ad/avail policy, guide playout specifics.
 - Durations are specified in grid blocks. When mapping content to blocks:
   - If content runtime is shorter than allocated blocks, any underfill is handled per
     plan rules and finalized during playlog building.
-  - Overflow beyond allocated block count is not permitted; adjust the plan or block
-    allocation.
+  - Longform MAY consume multiple grid blocks per Program `slot_units` or plan policy. The scheduler never cuts longform mid-program; handoffs snap to the next grid boundary.
 - Horizon window: default look-ahead and look-behind windows are implementation-defined (e.g.,
   14 days ahead, 1 day behind). Rebuild triggers include channel field changes (grid, offsets,
   `programming_day_start`), plan edits, and content substitutions.

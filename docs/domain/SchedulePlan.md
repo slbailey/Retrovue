@@ -13,7 +13,7 @@ SchedulePlan is the **top-level unit of channel programming**. It is the **singl
 - **Zone**: Declares when it applies (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and references a Pattern. Zones do not hold episodes or assets.
 - **Pattern**: An ordered list of [Program](Program.md) entries (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern. The plan engine repeats the pattern over the Zone until the Zone is full.
 
-SchedulePlans are layered (Photoshop-style) and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones. Plans are channel-bound and span repeating or one-time timeframes. Superseded plans are archived rather than deleted. Plan-based scheduling flows into [ScheduleDay](ScheduleDay.md), which is resolved 3-4 days in advance for EPG and playout purposes.
+SchedulePlans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones. Plans are channel-bound and span repeating or one-time timeframes. Superseded plans are archived rather than deleted. Plan-based scheduling flows into [ScheduleDay](ScheduleDay.md), which is resolved 3-4 days in advance for EPG and playout purposes.
 
 **Key Points:**
 - SchedulePlan is the **top-level unit of channel programming** — the authoritative source for all scheduling decisions
@@ -38,7 +38,7 @@ SchedulePlan is the **top-level unit of channel programming** and the **single s
 - **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy
 - **Zone-based time windows**: Zones declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) but do not hold episodes or assets
 - **Is channel-bound**: Plans are bound to specific channels and span repeating or one-time timeframes
-- **Supports layering and overrides**: Plans are layered (Photoshop-style) and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones
+- **Supports layering and overrides**: Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones
 - **Is timeless but date-bound**: Plans are timeless (reusable patterns) but bound by effective date ranges (start_date, end_date). Superseded plans are archived (`is_active=false`) rather than deleted
 - **Flows into ScheduleDay**: Plan-based scheduling flows into [ScheduleDay](ScheduleDay.md), which is resolved 3-4 days in advance for EPG and playout purposes
 
@@ -78,7 +78,7 @@ The table is named `schedule_plans` (plural). Schema migration is handled throug
 
 ### Layering and Priority Rules
 
-SchedulePlans use a Photoshop-style layering model where plans are matched by effective dates, with more specific layers overriding more generic ones. Plans can be layered and overridden (e.g., weekday vs. holiday):
+SchedulePlans use priority-based layering where plans are matched by effective dates, with more specific layers overriding more generic ones. Plans can be layered and overridden (e.g., weekday vs. holiday):
 
 - Plans with higher `priority` values override plans with lower `priority` values when both are active and match the same date
 - When multiple plans match (via cron_expression or date range), the highest priority plan is used
@@ -94,7 +94,7 @@ SchedulePlan is the **single source of scheduling logic** for channel programmin
 - Plan identity and metadata (name, description)
 - Channel binding - plans are channel-bound and span repeating or one-time timeframes
 - Temporal validity (cron_expression, start_date, end_date) - plans are timeless but bound by effective date ranges
-- Priority for layering (priority) - enables Photoshop-style layering where more specific plans (e.g., holidays) override generic ones (e.g., weekdays)
+- Priority for layering (priority) - enables plan layering by priority where more specific plans (e.g., holidays) override generic ones (e.g., weekdays)
 - Operational status (is_active) - superseded plans are archived rather than deleted
 - **Zones** - named time windows within the programming day (e.g., base 00:00–24:00, or After Dark 22:00–05:00)
 - **Patterns** - ordered lists of [Program](Program.md) entries for each Zone. Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
@@ -113,7 +113,7 @@ Content selection can include regular assets or VirtualAssets. Plan-based schedu
 SchedulePlan is the **single source of scheduling logic** for channel programming. ScheduleService and schedule generation logic consume SchedulePlan records to determine actual content selections. Plan-based scheduling flows into ScheduleDay, which is resolved 3-4 days in advance:
 
 1. **Identify active plans**: For a given channel and date, determine which plans are active based on cron_expression, effective date ranges (start_date, end_date), and is_active status. Plans are channel-bound and span repeating or one-time timeframes
-2. **Resolve layering and overrides**: Apply Photoshop-style layering - if multiple plans match, select the plan with the highest priority. More specific plans (e.g., holidays) override generic ones (e.g., weekdays)
+2. **Resolve layering and overrides**: Apply plan layering by priority - if multiple plans match, select the plan with the highest priority. More specific plans (e.g., holidays) override generic ones (e.g., weekdays)
 3. **Resolve Zones and Patterns**: For each active plan, identify its Zones (time windows with optional day filters) and their associated Patterns (ordered lists of Program references). Zones + Patterns repeat to fill each Zone's active window, snapping to the Channel's Grid boundaries. Apply conflict resolution (soft-start-after-current) when Zones open while content is playing
 4. **Generate BroadcastScheduleDay**: Resolve the plan into a concrete [BroadcastScheduleDay](ScheduleDay.md) for the specific channel and date (resolved 3-4 days in advance for EPG and playout purposes). This is the primary expansion point where Programs → concrete episodes and VirtualAssets → real assets
 5. **Generate PlaylogEvents**: From the resolved ScheduleDay, generate [BroadcastPlaylogEvent](PlaylogEvent.md) records for actual playout execution
@@ -226,7 +226,7 @@ If plans are missing or invalid:
 - **Programs are catalog entries**: Programs in Patterns are schedulable entities (series, movies, blocks, composites) without durations
 - **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy
 - **Channel-bound**: Plans are channel-bound and span repeating or one-time timeframes
-- **Layering and overrides**: Plans are layered (Photoshop-style) and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones
+- **Layering and overrides**: Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones
 - **Content selection**: Content selection can include regular assets or VirtualAssets
 - **Timeless but date-bound**: Plans are timeless (reusable patterns) but bound by effective date ranges
 - **Archival**: Superseded plans are archived (`is_active=false`) rather than deleted
@@ -251,7 +251,7 @@ If plans are missing or invalid:
 
 **Manage Program References in Patterns**: Add, modify, or remove Program references (catalog entries) within Patterns. Programs are schedulable entities such as series, movies, blocks, or composites.
 
-**Layer Plans**: Create multiple plans with different priorities and effective date ranges to handle recurring patterns (weekdays, weekends, holidays, seasons) or one-time timeframes. Use Photoshop-style layering where more specific plans override generic ones. Plans can be layered and overridden (e.g., weekday vs. holiday).
+**Layer Plans**: Create multiple plans with different priorities and effective date ranges to handle recurring patterns (weekdays, weekends, holidays, seasons) or one-time timeframes. Use plan layering by priority where more specific plans override generic ones. Plans can be layered and overridden (e.g., weekday vs. holiday).
 
 **Preview Schedule**: Use dry-run or preview features to visualize how a plan's Zones and Patterns will resolve into a BroadcastScheduleDay.
 
@@ -422,6 +422,7 @@ The UI will provide the same functionality through a visual interface, calling t
 - **Pattern validity**: Patterns must contain valid Programs (catalog entries)
 - **Grid alignment**: Zones must align with the Channel's Grid boundaries
 - **Referential integrity**: Plans cannot be deleted if they have dependent Zones, Patterns, or BroadcastScheduleDay records
+- **Zones and Patterns define scheduling**: Zones define *when* by window; Patterns define *what order* (Programs). Patterns have **no durations** and repeat to fill the Zone, snapping to the Channel Grid.
 
 ## Out of Scope (v0.1)
 
@@ -442,5 +443,5 @@ The UI will provide the same functionality through a visual interface, calling t
 - [Channel manager](../runtime/ChannelManager.md) - Stream execution
 - [Operator CLI](../operator/CLI.md) - Operational procedures
 
-SchedulePlan is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows with optional day filters) and a **Pattern** for each Zone. **Zones** declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and reference a Pattern. **Patterns** are ordered lists of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern — Zones + Patterns repeat to fill the Zone's active window, snapping to the Channel's Grid boundaries. **Programs** are catalog entities (series/movie/block) referenced by patterns; episodes are resolved at ScheduleDay time based on rotation policy. Plans are reusable and timeless — they define Zones and Patterns that are applied per day to generate ScheduleDay records. Plans are channel-bound and span repeating or one-time timeframes. Plans are layered (Photoshop-style) and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones. Templates have been removed; all scheduling logic is defined directly in SchedulePlan. Content selection can include regular assets or VirtualAssets. Plans are timeless but bound by effective date ranges, and superseded plans are archived. Plan-based scheduling flows into ScheduleDay, which is resolved 3-4 days in advance for EPG and playout purposes. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.
+SchedulePlan is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows with optional day filters) and a **Pattern** for each Zone. **Zones** declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and reference a Pattern. **Patterns** are ordered lists of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern — Zones + Patterns repeat to fill the Zone's active window, snapping to the Channel's Grid boundaries. **Programs** are catalog entities (series/movie/block) referenced by patterns; episodes are resolved at ScheduleDay time based on rotation policy. Plans are reusable and timeless — they define Zones and Patterns that are applied per day to generate ScheduleDay records. Plans are channel-bound and span repeating or one-time timeframes. Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones. Templates have been removed; all scheduling logic is defined directly in SchedulePlan. Content selection can include regular assets or VirtualAssets. Plans are timeless but bound by effective date ranges, and superseded plans are archived. Plan-based scheduling flows into ScheduleDay, which is resolved 3-4 days in advance for EPG and playout purposes. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.
 
