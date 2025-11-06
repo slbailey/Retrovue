@@ -112,3 +112,6 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-q --tb=short"
 xfail_strict = false
+markers = [
+    "contract: marks tests as contract tests (deselect with '-m \"not contract\"')",
+]

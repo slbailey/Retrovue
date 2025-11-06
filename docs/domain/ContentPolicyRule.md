@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Asset](Asset.md) • [SchedulePlan](SchedulePlan.md) • [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) • [VirtualAsset](VirtualAsset.md) • [Scheduling](Scheduling.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Asset](Asset.md) • [SchedulePlan](SchedulePlan.md) • [Program](Program.md) • [VirtualAsset](VirtualAsset.md) • [Scheduling](Scheduling.md)_
 
 # Domain — ContentPolicyRule
 
@@ -10,7 +10,7 @@ This document describes a planned feature that is not part of the initial MVP re
 
 ContentPolicyRule is a placeholder for future infrastructure around **content filtering, eligibility rules, and smart selection**. It will enable operators to define reusable rules that specify content selection criteria, allowing the system to intelligently select assets based on metadata, ratings, duration, genre, and other attributes.
 
-**Example:** A ContentPolicyRule might define "pick a G-rated 90s cartoon with runtime < 30m" — a reusable rule that can be applied to automatically select eligible content from the catalog.
+**Example:** A ContentPolicyRule might define "pick a G-rated 90s cartoon with runtime < 30m" — a reusable rule that can be applied to Programs inside Patterns. Pattern picks Program whose rule is "G-rated 90s cartoons < 30m".
 
 **Critical Note:** ContentPolicyRule is **not yet implemented** but is aligned with the long-term roadmap for RetroVue's content selection and scheduling capabilities.
 
@@ -19,7 +19,7 @@ ContentPolicyRule is a placeholder for future infrastructure around **content fi
 ContentPolicyRule will enable:
 
 - **Content filtering**: Define criteria to filter assets from the catalog (e.g., rating, genre, decade, duration)
-- **Eligibility rules**: Specify what content is eligible for specific time slots, channels, or programming contexts
+- **Eligibility rules**: Specify what content is eligible for specific grid blocks, channels, or programming contexts
 - **Smart selection**: Automatically select assets that match specified criteria (e.g., "pick a G-rated 90s cartoon with runtime < 30m")
 - **Reusable rules**: Define once, use many times across different schedule plans and assignments
 - **Complex criteria**: Combine multiple filters and constraints (rating + genre + duration + freshness, etc.)
@@ -30,7 +30,7 @@ ContentPolicyRule will enable:
 - Will enable reusable rules for content eligibility and selection
 - Supports complex criteria combining multiple attributes (rating, genre, duration, decade, etc.)
 - Not yet implemented but aligned with long-term roadmap
-- Will integrate with [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) and [VirtualAsset](VirtualAsset.md) for content selection
+- Will integrate with [Program](Program.md) entries inside Patterns and [VirtualAsset](VirtualAsset.md) for content selection
 
 ## Contract / Interface
 
@@ -70,33 +70,35 @@ ContentPolicyRule will define:
 ContentPolicyRule will be used during content selection:
 
 1. **Rule Definition**: Operators create ContentPolicyRule records that define filtering and selection criteria
-2. **Rule Reference**: Rules are referenced in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) entries or [VirtualAsset](VirtualAsset.md) definitions
-3. **Rule Evaluation**: During schedule resolution, rules are evaluated against the asset catalog to find matching assets
+2. **Rule Reference**: Rules are referenced in [Program](Program.md) entries inside Patterns or [VirtualAsset](VirtualAsset.md) definitions
+3. **Rule Evaluation**: During ScheduleDay resolution, rules are evaluated against the asset catalog to find matching assets
 4. **Asset Selection**: The system selects assets from the matching set based on the rule's selection logic
 5. **Schedule Integration**: Selected assets are included in [ScheduleDay](ScheduleDay.md) and [PlaylogEvent](PlaylogEvent.md) records
 
 **Integration Points:**
-- **SchedulePlanBlockAssignment**: Rules can be referenced in assignments to automatically select content
+- **Programs in Patterns**: Rules can be referenced in Programs inside Patterns to automatically select content (e.g., Pattern picks Program whose rule is "G-rated 90s cartoons < 30m")
 - **VirtualAsset**: Rules can be used within VirtualAsset definitions for dynamic content selection
 - **Asset Catalog**: Rules evaluate against asset metadata to find eligible content
 
-## Relationship to SchedulePlanBlockAssignment
+## Relationship to Programs in Patterns
 
-ContentPolicyRule will integrate with [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) to enable smart content selection:
+ContentPolicyRule will integrate with [Program](Program.md) entries inside Patterns to enable smart content selection:
 
-- Assignments can reference ContentPolicyRule instead of specific assets or series
+- Programs can reference ContentPolicyRule instead of specific assets or series
+- Pattern picks Program whose rule is "G-rated 90s cartoons < 30m"
 - Rules are evaluated during ScheduleDay generation to select eligible assets
 - Selected assets are resolved to concrete Asset UUIDs in the ScheduleDay
 
 **Example Usage:**
+A Program inside a Pattern references a ContentPolicyRule:
 ```json
 {
   "content_type": "rule",
-  "content_reference": "g-rated-90s-cartoons-under-30m",
-  "start_time": "06:00",
-  "duration": 30
+  "content_ref": "g-rated-90s-cartoons-under-30m"
 }
 ```
+
+Note: Programs do not have `start_time`/`duration` — that's determined by Zones and Patterns.
 
 ## Relationship to VirtualAsset
 
@@ -120,18 +122,17 @@ ContentPolicyRule will integrate with [VirtualAsset](VirtualAsset.md) to enable 
   - Avoid content aired in last 7 days
 - Selection logic: Random from matching set
 
-**Usage in SchedulePlanBlockAssignment:**
+**Usage in Program inside Pattern:**
+Pattern picks Program whose rule is "G-rated 90s cartoons < 30m":
 ```json
 {
   "content_type": "rule",
-  "content_reference": "g-rated-90s-cartoons-under-30m",
-  "start_time": "06:00",
-  "duration": 30
+  "content_ref": "g-rated-90s-cartoons-under-30m"
 }
 ```
 
 **Evaluation Result:**
-- System evaluates rule against asset catalog
+- During ScheduleDay generation, system evaluates rule against asset catalog
 - Finds matching assets (e.g., SpongeBob S01E05, Rugrats S02E12, etc.)
 - Randomly selects one asset that matches all criteria
 - Resolves to concrete Asset UUID in ScheduleDay
@@ -157,7 +158,7 @@ A VirtualAsset might use this rule to select the movie component:
 ContentPolicyRule will provide several benefits:
 
 1. **Smart Selection**: Automatically select content based on complex criteria without manual asset selection
-2. **Reusability**: Define once, use many times across different plans and time slots
+2. **Reusability**: Define once, use many times across different plans and grid blocks
 3. **Consistency**: Ensure consistent content selection patterns across programming
 4. **Flexibility**: Support complex filtering and selection logic
 5. **Maintainability**: Update rule definitions to affect all references
@@ -171,7 +172,7 @@ ContentPolicyRule will provide several benefits:
 - Rule evaluation engine will need access to asset catalog and metadata
 - Rule language/format must support complex criteria combinations
 - Performance considerations for rule evaluation against large asset catalogs
-- Integration with SchedulePlanBlockAssignment and VirtualAsset systems
+- Integration with Programs in Patterns and VirtualAsset systems
 - Validation to ensure rules can be evaluated and produce valid results
 
 ## Out of Scope (MVP)
@@ -181,7 +182,7 @@ ContentPolicyRule is not part of the initial MVP release. The following are defe
 - ContentPolicyRule persistence and management
 - Rule definition language and format
 - Rule evaluation engine
-- Integration with SchedulePlanBlockAssignment
+- Integration with Programs in Patterns
 - Integration with VirtualAsset
 - ContentPolicyRule CLI commands and operator workflows
 - Rule validation and testing tools
@@ -190,7 +191,7 @@ ContentPolicyRule is not part of the initial MVP release. The following are defe
 
 - [Asset](Asset.md) - Atomic unit of broadcastable content (what rules select from)
 - [SchedulePlan](SchedulePlan.md) - Top-level operator-created plans that define channel programming
-- [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) - Scheduled pieces of content in plans (can reference rules)
+- [Program](Program.md) - Catalog entities in Patterns (can reference rules)
 - [VirtualAsset](VirtualAsset.md) - Container for multiple assets (can use rules for selection)
 - [ScheduleDay](ScheduleDay.md) - Resolved schedules (rules evaluated here)
 - [Scheduling](Scheduling.md) - High-level scheduling system

@@ -8,6 +8,8 @@ Define the canonical, persisted Channel entity. Channel is the time root for int
 schedule plans and building programming horizons in local time (inputs/outputs in
 local time; timestamps stored in UTC). Channel defines a persistent broadcast entity with channel identity, configuration, and operational parameters for channels such as "RetroToons" or "MidnightMovies".
 
+**Channel Grid:** Channel owns the **Grid** configuration that defines the temporal structure for all scheduling. The Grid consists of `grid_block_minutes`, `block_start_offsets_minutes`, and `programming_day_start`. All scheduling snaps to these boundaries — no content can be scheduled outside the grid constraints. The Grid is the foundation for all time-based scheduling operations.
+
 ## Persistence model
 
 Scheduling-centric fields persisted on Channel:
@@ -15,14 +17,17 @@ Scheduling-centric fields persisted on Channel:
 - **id (UUID)** — primary key
 - **slug (str, unique)** — lowercase kebab-case machine id; immutable post-create
 - **title (str)** — operator-facing label
-- **grid_block_minutes (int)** — base grid size; allowed: 15, 30, or 60
+- **Grid configuration** (Channel owns the Grid):
+  - **grid_block_minutes (int)** — base grid size; allowed: 15, 30, or 60
+  - **block_start_offsets_minutes (json array[int])** — allowed minute offsets within the hour
+    (e.g., `[0,30]`, `[5,35]`)
+  - **programming_day_start (time)** — e.g., `06:00:00`; daypart anchor
 - **kind (str)** — lightweight label; `network` | `premium` | `specialty` (non-functional in v0.1)
-- **programming_day_start (time)** — e.g., `06:00:00`; daypart anchor
-- **block_start_offsets_minutes (json array[int])** — allowed minute offsets within the hour
-  (e.g., `[0,30]`, `[5,35]`)
 - **is_active (bool)** — included in horizon builders when true
 - **created_at / updated_at (timestamps)** — audit fields (UTC)
 - **version (int)** — optional optimistic-locking counter for concurrent updates
+
+**Grid Ownership:** Channel owns the Grid configuration (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`). All scheduling operations snap to these grid boundaries. The Grid defines when content can start and how time is structured for the channel.
 
 The table is named `channels` (plural). Schema migration is handled through Alembic. Postgres is the authoritative backing store.
 
@@ -36,6 +41,7 @@ Naming rules:
 
 ## Contract / interface
 
+- **Channel owns the Grid**: Channel provides the Grid configuration (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`) that defines temporal boundaries for all scheduling. All scheduling snaps to these grid boundaries.
 - Channel provides the temporal context for:
   - validating block alignment against `block_start_offsets_minutes`,
   - grid math using `grid_block_minutes`,
@@ -49,10 +55,31 @@ Naming rules:
 
 ## Scheduling model
 
+- **Grid boundaries**: All scheduling snaps to the Channel's Grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`). No content can be scheduled outside these constraints.
 - All dayparts and plans are channel-scoped and interpreted in local time, anchored to
   `programming_day_start`.
 - Block starts must align to the channel's allowed offsets; durations are expressed in grid
   blocks (not minutes).
+
+## Grid & Boundaries
+
+The Channel's Grid configuration defines the temporal structure for all scheduling operations. The Grid consists of three key components:
+
+- **`grid_block_minutes`** defines the canonical grid; all placements snap to it. This is the base unit of time alignment (15, 30, or 60 minutes) that determines when content can start and how durations are measured.
+
+- **`block_start_offsets_minutes`** constrain valid starts within each hour. This array specifies the minute offsets (e.g., `[0,30]` or `[5,35]`) where content blocks can begin, ensuring alignment with the grid while allowing flexibility within hourly boundaries.
+
+- **`programming_day_start`** anchors the broadcast day, including DST; ScheduleDay is cut by this boundary. This time (e.g., `06:00:00`) defines when the programming day begins in local time, and all schedule days are cut at this boundary regardless of wall-clock midnight or DST transitions.
+
+### Why grid?
+
+The Grid system provides predictable, consistent scheduling behavior across the entire broadcast system. It enables:
+
+- **Predictable EPG**: Electronic Program Guides can display consistent time slots that align with viewer expectations, with programs starting at predictable intervals (e.g., every 30 minutes on the half-hour).
+
+- **Ad math**: Advertising placement and revenue calculations become straightforward when content aligns to standard grid boundaries, making it easy to calculate ad pod positions and fill rates.
+
+- **Snap-at-boundary behavior**: All content placement automatically aligns to grid boundaries, eliminating fractional-minute scheduling and ensuring clean transitions between programs. This simplifies both operator workflows and system logic.
 
 ### Time and calendar semantics
 

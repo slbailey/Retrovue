@@ -12,29 +12,29 @@ The scheduling system architecture is documented, but implementation is in early
 
 ## Implementation phases
 
-### Phase 1: Template and schedule foundation
+### Phase 1: SchedulePlan and schedule foundation
 
-**Goal**: Establish the basic template-to-schedule flow.
+**Goal**: Establish the basic plan-to-schedule flow.
 
 **Components**:
 
-- Template creation and management
-- Daypart definition within templates
+- SchedulePlan creation and management
+- Zone and Pattern definition within plans
 - Grid block configuration
-- Schedule day instantiation from templates
+- ScheduleDay generation from plans
 - Basic content selection rules (placeholder or fixed content)
 
 **Deliverables**:
 
-- CLI commands for template CRUD operations
+- CLI commands for SchedulePlan CRUD operations
 - CLI commands for schedule day creation
-- Contract tests for template and schedule operations
-- Database schema validation for template/schedule relationships
+- Contract tests for plan and schedule operations
+- Database schema validation for plan/schedule relationships
 
 **Success criteria**:
 
-- Operators can create a template with dayparts
-- Operators can instantiate a schedule from a template for a specific date
+- Operators can create a SchedulePlan with Zones and Patterns
+- Operators can generate a ScheduleDay from a plan for a specific date
 - Schedule data is persisted correctly in the database
 
 **Estimated effort**: 2-3 days
@@ -49,7 +49,7 @@ The scheduling system architecture is documented, but implementation is in early
 
 - EPG generation service that reads schedule and playlog events
 - EPG view generation (coarse program-level information)
-- EPG horizon extension (2-3 days ahead)
+- Plan horizon extension (2-3 days ahead)
 - EPG export format (XMLTV or similar)
 
 **Deliverables**:
@@ -240,15 +240,15 @@ Before implementing all phases, validate the system with a minimal proof of conc
 
 ### POC setup
 
-1. **Single template**: Create one template with basic dayparts
-2. **Fixed content**: Populate dayparts with fixed series (e.g., "Cheers", "Big Bang Theory")
-3. **Daily schedule**: Apply template to multiple days
-4. **Basic playlog**: Generate playlog for fixed content
+1. **Single SchedulePlan**: Create one plan with basic Zones and Patterns
+2. **Fixed content**: Populate Patterns with fixed series (e.g., "Cheers", "Big Bang Theory")
+3. **Daily schedule**: Generate ScheduleDays from plan for multiple days
+4. **Basic playlog**: Build runtime playlog for fixed content
 5. **Simple EPG**: Generate EPG from schedule
 
 ### POC validation
 
-- Templates create schedules correctly
+- SchedulePlans generate ScheduleDays correctly
 - Playlog generates with correct timing
 - EPG shows program information
 - Viewer joins work with synchronization
@@ -256,7 +256,7 @@ Before implementing all phases, validate the system with a minimal proof of conc
 
 ### POC success criteria
 
-- End-to-end flow works: Template → Schedule → EPG → Playlog → Playout
+- End-to-end flow works: SchedulePlan → ScheduleDay → EPG → Playlog → Playout
 - Master clock synchronization works
 - Viewer join behavior is correct
 - System is ready for content selection rules
@@ -347,7 +347,7 @@ Before implementing all phases, validate the system with a minimal proof of conc
 
 ### Recommended sequence
 
-1. Phase 1 (Template/Schedule foundation)
+1. Phase 1 (SchedulePlan/Schedule foundation)
 2. POC validation (end-to-end with fixed content)
 3. Phase 3 (Playlog generation) - depends on MasterClock
 4. Phase 2 (EPG generation) - can run in parallel with Phase 3

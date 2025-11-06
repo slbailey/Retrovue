@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Asset](Asset.md) • [SchedulePlan](SchedulePlan.md) • [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) • [ScheduleDay](ScheduleDay.md) • [PlaylogEvent](PlaylogEvent.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Asset](Asset.md) • [SchedulePlan](SchedulePlan.md) • [Program](Program.md) • [ScheduleDay](ScheduleDay.md) • [PlaylogEvent](PlaylogEvent.md)_
 
 # Domain — VirtualAsset
 
@@ -8,7 +8,7 @@ This document describes a planned feature that is not part of the initial MVP re
 
 ## Purpose
 
-VirtualAsset is a **reusable container of asset references and logic**. It enables packaging and re-use of modular asset bundles that can be referenced in scheduling and plan assignments. VirtualAssets are used during scheduling or in plan assignments, but **expand to actual assets at ScheduleDay or Playlog time**.
+VirtualAsset is a **reusable container of asset references and logic**. It enables packaging and re-use of modular asset bundles that can be referenced in scheduling and plan assignments. VirtualAssets may be referenced by Programs that appear inside Patterns; expansion still occurs during ScheduleDay generation. VirtualAssets are used during scheduling or in plan assignments, but **expand to actual assets at ScheduleDay (primary) or Playlog time (fallback)**.
 
 **Example:** A VirtualAsset might define "intro + 2 random SpongeBob shorts" — a reusable container that combines a fixed intro asset with logic to select 2 random SpongeBob segments.
 
@@ -33,7 +33,7 @@ VirtualAsset enables:
 - **Fixed sequences**: Predefined ordered lists of assets (e.g., branded intro → episode clip → outro bumper)
 - **Rule-based definitions**: Dynamic asset selections based on rules (e.g., "3 random SpongeBob 11-min segments + branded intro")
 - **Modular packaging**: Group related assets into reusable bundles
-- **Scheduling abstraction**: Reference complex asset combinations as a single unit in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) entries
+- **Scheduling abstraction**: Reference complex asset combinations as a single unit in [Program](Program.md) entries that appear inside Patterns
 - **Runtime expansion**: Expand to actual Asset references at [ScheduleDay](ScheduleDay.md) or [PlaylogEvent](PlaylogEvent.md) resolution time
 
 **Key Points:**
@@ -103,7 +103,7 @@ VirtualAsset defines:
 - **Expansion behavior**: How the virtual asset expands to concrete assets during resolution
 - **Reusability**: Can be referenced across multiple schedule plans
 
-VirtualAssets are referenced in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) entries using `content_type: "virtual_package"` and `content_reference` pointing to the VirtualAsset identifier. The same VirtualAsset can be referenced in multiple plans, enabling cross-plan reuse.
+VirtualAssets are referenced in [Program](Program.md) entries using `content_type: "virtual_package"` and `content_ref` pointing to the VirtualAsset UUID. Programs appear inside Patterns within SchedulePlans. The same VirtualAsset can be referenced in multiple plans, enabling cross-plan reuse.
 
 ## Execution Model
 
@@ -111,9 +111,10 @@ VirtualAssets are used during scheduling but **expand to actual assets during re
 
 ### Expansion Flow
 
-1. **Plan Assignment**: [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) references a VirtualAsset using `content_type: "virtual_package"` and `content_reference: <virtual_asset_id>`
-   - The assignment contains the VirtualAsset reference, not the expanded assets
-   - See [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) for details on how VirtualAssets are referenced in assignments
+1. **Program Reference**: [Program](Program.md) entries inside Patterns reference a VirtualAsset using `content_type: "virtual_package"` and `content_ref: <virtual_asset_uuid>`
+   - The Program contains the VirtualAsset reference, not the expanded assets
+   - Programs appear inside Patterns within SchedulePlans
+   - See [Program](Program.md) for details on how VirtualAssets are referenced in Programs
 
 2. **Schedule Day Resolution** (Primary Expansion Point): When [ScheduleDay](ScheduleDay.md) is generated from the plan:
    - **VirtualAsset expansion occurs here** — VirtualAssets are resolved to concrete Asset references
@@ -131,9 +132,10 @@ VirtualAssets are used during scheduling but **expand to actual assets during re
 
 ### Expansion Timing
 
-**Primary Expansion: ScheduleDay Time (3-5 days in advance)**
+**Primary Expansion: ScheduleDay Time (3-4 days in advance)**
 - VirtualAssets **preferentially expand** when [ScheduleDay](ScheduleDay.md) records are resolved from plans
-- This happens 3-5 days before broadcast, providing advance resolution for EPG and planning
+- This happens 3-4 days before broadcast, providing advance resolution for EPG and planning
+- VirtualAssets may be referenced by Programs that appear inside Patterns; expansion still occurs during ScheduleDay generation
 - Fixed sequences expand deterministically to their predefined asset lists
 - Rule-based VirtualAssets evaluate rules against the catalog state at ScheduleDay generation time
 - The expanded Asset references are stored in the ScheduleDay, making it immutable and stable
@@ -150,14 +152,14 @@ VirtualAssets are used during scheduling but **expand to actual assets during re
 - Enables better planning and conflict detection
 - Supports audit trails and compliance requirements
 
-## Relationship to SchedulePlanBlockAssignment
+## Relationship to Programs in Patterns
 
-VirtualAssets are referenced in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) entries using `content_type: "virtual_package"` and `content_reference` pointing to the VirtualAsset UUID. See [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) for details on how VirtualAssets are used in plan assignments.
+VirtualAssets are referenced in [Program](Program.md) entries using `content_type: "virtual_package"` and `content_ref` pointing to the VirtualAsset UUID. Programs appear inside Patterns within SchedulePlans. VirtualAssets may be referenced by Programs that appear inside Patterns; expansion still occurs during ScheduleDay generation.
 
 **Key Points:**
-- Assignments contain the VirtualAsset reference, not the expanded assets
+- Programs contain the VirtualAsset reference, not the expanded assets
 - The VirtualAsset is a reusable container that will be expanded later during ScheduleDay resolution
-- Assignments define when and how long the VirtualAsset should play, but not what specific assets it contains
+- Programs define what content should play, but not when (that's determined by Zones and Patterns)
 - **Cross-plan reuse**: The same VirtualAsset can be referenced in multiple schedule plans, allowing operators to define once and use many times across different plans and time slots
 
 ## Relationship to ScheduleDay
@@ -202,15 +204,15 @@ See [PlaylogEvent](PlaylogEvent.md) for details on how playlog events are genera
   2. Episode (selected from series based on episode policy) — may vary per expansion
   3. Station bumper (`station-bumper.mp4`) — fixed Asset UUID
 
-**Usage in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md):**
+**Usage in [Program](Program.md) inside Pattern:**
 ```json
 {
   "content_type": "virtual_package",
-  "content_reference": "550e8400-e29b-41d4-a716-446655440000",
-  "start_time": "19:00",
-  "duration": 30
+  "content_ref": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+Note: Programs do not have `start_time`/`duration` — that's determined by Zones and Patterns.
 
 **Expansion at ScheduleDay Time:**
 When the [ScheduleDay](ScheduleDay.md) is generated 3-5 days in advance, the VirtualAsset expands:
@@ -238,7 +240,7 @@ The expanded assets are stored in the ScheduleDay. When [PlaylogEvent](PlaylogEv
 - **Playout hints**: `shuffle` (randomize SpongeBob segment order)
 - **Reusability**: Can be reused across multiple schedule plans (e.g., weekday morning plan, weekend morning plan)
 
-**Usage in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md):**
+**Usage in [Program](Program.md) inside Pattern:**
 ```json
 {
   "content_type": "virtual_package",
@@ -278,7 +280,7 @@ When the [ScheduleDay](ScheduleDay.md) is generated for Tuesday, the VirtualAsse
   4. Commercial slot 3 (selected from ad library based on rotation policy)
   5. Return bumper (`return-bumper.mp4`) — fixed Asset UUID
 
-**Usage in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md):**
+**Usage in [Program](Program.md) inside Pattern:**
 ```json
 {
   "content_type": "virtual_package",
@@ -312,7 +314,7 @@ The VirtualAsset expands to a fixed structure with some dynamic components:
   - Avoid movies that aired in the last 30 days
   - Prefer movies with "classic" genre tag
 
-**Usage in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md):**
+**Usage in [Program](Program.md) inside Pattern:**
 ```json
 {
   "content_type": "virtual_package",
@@ -352,7 +354,7 @@ The VirtualAsset expands to a fixed structure with some dynamic components:
     - Rating slate asset: `r-rating-slate.mp4` (inserted if rating is R)
 - **Reusability**: Can be reused across multiple schedule plans (e.g., weekday prime-time plan, weekend prime-time plan)
 
-**Usage in [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md):**
+**Usage in [Program](Program.md) inside Pattern:**
 ```json
 {
   "content_type": "virtual_package",
@@ -414,7 +416,7 @@ VirtualAssets are not part of the initial MVP release. The following are deferre
 
 - [Asset](Asset.md) - Atomic unit of broadcastable content (what VirtualAssets contain)
 - [SchedulePlan](SchedulePlan.md) - Top-level operator-created plans that define channel programming
-- [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) - Scheduled pieces of content in plans (can reference VirtualAssets)
+- [Program](Program.md) - Catalog entities in Patterns (can reference VirtualAssets)
 - [ScheduleDay](ScheduleDay.md) - Resolved schedules for specific channel and date (VirtualAssets expand here)
 - [PlaylogEvent](PlaylogEvent.md) - Generated playout events (uses resolved assets from VirtualAssets)
 - [Scheduling](Scheduling.md) - High-level scheduling system

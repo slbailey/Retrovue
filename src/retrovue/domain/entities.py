@@ -8,7 +8,7 @@ These entities are independent of any external concerns and contain pure busines
 from __future__ import annotations
 
 import uuid as uuid_module
-from datetime import datetime
+from datetime import date, datetime
 from datetime import time as dt_time
 from typing import Any
 
@@ -17,6 +17,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -603,3 +604,142 @@ class Enricher(Base):
     def __repr__(self) -> str:
         return f"<Enricher(id={self.id}, enricher_id={self.enricher_id}, type={self.type}, scope={self.scope}, name={self.name}, protected={self.protected_from_removal})>"
 
+
+class Program(Base):
+    """
+    Represents a scheduled program in a SchedulePlan.
+
+    Programs define what content runs when within a schedule plan, using
+    schedule-time (00:00 to 24:00 relative to programming day) and duration.
+    """
+
+    __tablename__ = "programs"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
+    )
+    channel_id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("channels.id", ondelete="CASCADE"), nullable=False
+    )
+    plan_id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("schedule_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    start_time: Mapped[str] = mapped_column(
+        String(5), nullable=False, comment="Start time in 'HH:MM' format (schedule-time)"
+    )
+    duration: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Duration in minutes"
+    )
+    content_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="Type of content: 'series', 'asset', 'rule', 'random', 'virtual_package'",
+    )
+    content_ref: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="Content reference (UUID or JSON depending on content_type)"
+    )
+    label_id: Mapped[uuid_module.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("schedule_plan_labels.id", ondelete="SET NULL"), nullable=True
+    )
+    episode_policy: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="Episode selection policy (e.g., 'sequential', 'seasonal')"
+    )
+    playback_rules: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Additional playback rules and directives"
+    )
+    operator_intent: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Operator-defined metadata describing programming intent"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Relationships
+    channel: Mapped[Channel | None] = relationship("Channel", passive_deletes=True)
+    # plan relationship would be defined in SchedulePlan model
+    # label relationship would be defined in SchedulePlanLabel model
+
+    __table_args__ = (
+        Index("ix_programs_channel_id", "channel_id"),
+        Index("ix_programs_plan_id", "plan_id"),
+        Index("ix_programs_start_time", "plan_id", "start_time"),
+        Index("ix_programs_label_id", "label_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Program(id={self.id}, plan_id={self.plan_id}, start_time={self.start_time}, duration={self.duration}, content_type={self.content_type})>"
+
+
+class SchedulePlan(Base):
+    """
+    Represents a schedule plan for a channel.
+
+    Schedule plans define programming patterns for specific date ranges on a channel.
+    Lower priority numbers indicate higher priority when multiple plans overlap.
+    """
+
+    __tablename__ = "schedule_plans"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
+    )
+    channel_id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("channels.id", ondelete="CASCADE"), nullable=False
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    priority: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="Lower number = higher priority"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Relationships
+    channel: Mapped[Channel | None] = relationship("Channel", passive_deletes=True)
+
+    __table_args__ = (
+        UniqueConstraint("channel_id", "start_date", "end_date", name="uq_schedule_plans_channel_dates"),
+        Index("ix_schedule_plans_channel_id", "channel_id"),
+        Index("ix_schedule_plans_dates", "start_date", "end_date"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SchedulePlan(id={self.id}, channel_id={self.channel_id}, start_date={self.start_date}, end_date={self.end_date}, priority={self.priority})>"
+
+
+class SchedulePlanLabel(Base):
+    """
+    Represents a label for organizing programs within schedule plans.
+
+    Labels are purely visual/organizational and do not affect scheduling logic.
+    """
+
+    __tablename__ = "schedule_plan_labels"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_schedule_plan_labels_name", "name"),
+        Index("ix_schedule_plan_labels_category", "category"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SchedulePlanLabel(id={self.id}, name='{self.name}', category={self.category})>"

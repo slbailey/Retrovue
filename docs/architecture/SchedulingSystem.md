@@ -2,9 +2,12 @@ _Related: [Architecture overview](ArchitectureOverview.md) • [Domain: Scheduli
 
 # Scheduling system architecture
 
+> **Note:** This document reflects the modern scheduling architecture.  
+> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+
 ## Purpose
 
-The scheduling system defines what content airs on each Channel and when. It operates across multiple layers from high-level plans to granular playout execution. The system maintains a rolling horizon of scheduled content that advances with the master clock, ensuring all viewers see synchronized playback regardless of join time.
+The scheduling system defines what content airs on each Channel and when. It operates across multiple layers from high-level plans to granular playout execution. The system extends the plan horizon ahead of time, ensuring all viewers see synchronized playback regardless of join time.
 
 ## Five-layer architecture
 
@@ -35,13 +38,12 @@ Top-level operator-created plans that define channel programming. Each ScheduleP
 - Plans are channel-specific and can be applied to multiple days via cron expressions or date ranges
 - Each plan contains [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) entries that directly define what content runs when using `start_time` (schedule-time offset from 00:00) and `duration` (minutes)
 - Plans can reference assets, series, rules, or [VirtualAssets](VirtualAsset.md) (reusable containers that encapsulate structured content sequences)
-- Plans can optionally use [SchedulePlanLabel](SchedulePlanLabel.md) for visual organization (labels do not affect scheduling logic)
 - Plans support layering with priority resolution (higher priority plans override lower priority plans)
 - [ContentPolicyRule](ContentPolicyRule.md) can be used to validate assignment compatibility (future feature)
 
 ### 2. ScheduleDay
 
-Resolved, immutable daily schedule derived from SchedulePlans. A background daemon (ScheduleService) uses the channel's programming day anchor to generate ScheduleDay rows 3–4 days in advance.
+Resolved, immutable daily schedule derived from SchedulePlans. SchedulingService uses the channel's programming day anchor to generate ScheduleDay rows 3–4 days in advance.
 
 - Generated from active, layered SchedulePlans for a specific channel and date
 - Contains resolved asset selections with real-world wall-clock times
@@ -156,7 +158,7 @@ When ScheduleService needs to determine which plan applies to a date:
 
 ### Grid block
 
-The smallest schedulable unit. Typically 30-minute time slots, though the duration is configurable per channel via `grid_block_minutes`.
+The smallest schedulable unit. Typically 30-minute grid blocks, though the duration is configurable per channel via `grid_block_minutes`.
 
 - Grid blocks are atomic scheduling units
 - Can contain series episodes, movies, or generic content types
@@ -165,12 +167,11 @@ The smallest schedulable unit. Typically 30-minute time slots, though the durati
 
 ### Daypart (Visual Organization)
 
-A named block of time used for visual organization. [SchedulePlanLabel](SchedulePlanLabel.md) can be used to group block assignments into dayparts (e.g., "Morning Block", "Prime Time") for operator convenience.
+A named block of time used for visual organization. Dayparts can be represented as Zones within SchedulePlans for operator convenience.
 
 - Examples: "Morning Block" (6–9 AM), "Prime Time" (7–11 PM)
-- Dayparts are purely visual/organizational via SchedulePlanLabel
-- Labels do not affect scheduling logic — they are optional and used for visual organization only
-- Content selection is defined directly in SchedulePlanBlockAssignment entries, not through daypart rules
+- Dayparts are represented as Zones within SchedulePlans
+- Content selection is defined directly in Patterns within Zones, not through separate daypart rules
 
 ## Playlog mechanics
 
@@ -180,7 +181,7 @@ The full day's playlog is not generated at midnight. Instead, the system uses a 
 
 - Only 3–4 hours of playlog are created at a time
 - The playlog horizon continuously extends ahead of the current time
-- This avoids long gaps and unnecessary prep for time slots no one is watching
+- This avoids long gaps and unnecessary prep for grid blocks no one is watching
 - Reduces computational overhead while maintaining sufficient lookahead
 
 ### Content composition
@@ -199,7 +200,7 @@ The playlog builder only considers assets where `state == 'ready'` and `approved
 
 ### Skippability and underfills
 
-When no eligible asset is found for a time slot:
+When no eligible asset is found for a grid block:
 
 - **Skippable segments**: If a segment cannot be filled and skipping is allowed, the playlog builder creates a gap event or moves to the next segment
 - **Underfill handling**: If a grid block is partially filled (e.g., 20 minutes of content in a 30-minute slot), the system may:
@@ -492,18 +493,18 @@ ScheduleService is a background daemon that orchestrates scheduling:
    - Identifies active SchedulePlans matching the channel and date (based on cron_expression, date ranges)
    - Applies priority resolution (highest priority plan wins)
    - Uses the channel's programming day anchor (`programming_day_start` / `broadcast_day_start`) for time anchoring
-2. **ScheduleDay generation**: Generates ScheduleDay rows 3–4 days in advance:
+2. **ScheduleDay generation**: Extends the plan horizon by generating ScheduleDay rows 3–4 days in advance:
    - Retrieves block assignments from the selected plan
    - Resolves VirtualAssets to concrete Asset UUIDs
    - Resolves content references (assets, series, rules) to specific assets
    - Anchors schedule-time offsets to programming day start to produce wall-clock times
    - Creates frozen, immutable ScheduleDay records
-3. **PlaylogEvent generation**: Generates PlaylogEvents from ScheduleDays:
+3. **PlaylogEvent generation**: Builds runtime playlog by generating PlaylogEvents from ScheduleDays:
    - Each PlaylogEvent maps to a ScheduleDay and points to a resolved asset or asset segment
    - Creates precise timestamps for playout execution
    - Supports fallback mechanisms and last-minute overrides
 4. **Content eligibility**: Queries assets for eligible content (`state='ready'` and `approved_for_broadcast=true`)
-5. **Horizon management**: Extends the playlog horizon as needed (rolling 3–4 hours ahead)
+5. **Horizon management**: Extends the plan horizon and builds the runtime playlog as needed (rolling 3–4 hours ahead)
 6. **Timing**: Uses master clock for all timing decisions
 
 ### Program director
@@ -517,7 +518,7 @@ ProgramDirector coordinates multiple channels and may:
 
 ### Channel manager
 
-ChannelManager executes playout but does not modify scheduling domain models:
+ChannelManager executes playout but does not modify scheduling domain models. It:
 
 - Reads playlog events for playout instructions
 - References channel configuration
@@ -532,7 +533,7 @@ ChannelManager executes playout but does not modify scheduling domain models:
 - **Playlog**: Resolved list of media segments to be played (fine-grained playout plan)
 - **As-run log**: Record of what actually aired
 - **Grid block**: Smallest schedulable time unit (aligned with channel grid)
-- **Daypart**: Named block of time for visual organization (via SchedulePlanLabel, optional and visual only)
+- **Daypart**: Named block of time represented as a Zone within a SchedulePlan
 
 ## See also
 

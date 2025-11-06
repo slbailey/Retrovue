@@ -4,24 +4,23 @@ _Related: [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Sche
 
 ## Purpose
 
-**Note:** ScheduleTemplate and ScheduleTemplateBlock have been deprecated. SchedulePlan is now the top-level structure that directly defines channel programming. SchedulePlanBlockAssignment directly defines what content runs when using `start_time` and `duration`. This contract defines the critical invariants and constraints that must be enforced for the plan-based scheduling model. These invariants ensure system correctness, prevent scheduling conflicts, and maintain data integrity across SchedulePlan, SchedulePlanBlockAssignment, and BroadcastScheduleDay.
+**Note:** ScheduleTemplate and ScheduleTemplateBlock have been deprecated. SchedulePlan is now the top-level structure that directly defines channel programming. Program directly defines what content runs when using `start_time` and `duration`. This contract defines the critical invariants and constraints that must be enforced for the plan-based scheduling model. These invariants ensure system correctness, prevent scheduling conflicts, and maintain data integrity across SchedulePlan, Program, and BroadcastScheduleDay.
 
 ## Scope
 
 This contract applies to:
 
 - **SchedulePlan** - Top-level operator-created plans that define channel programming. SchedulePlans define a 24-hour timeline relative to the channel's broadcast day start.
-- **SchedulePlanBlockAssignment** - Time slices within plans that directly define what content runs when using `start_time` and `duration`
+- **Program** - Time slices within plans that directly define what content runs when using `start_time` and `duration`
 - **BroadcastScheduleDay** - Resolved schedules for specific channel and date
 - **VirtualAsset** - Reusable containers that encapsulate structured content sequences
 - **ContentPolicyRule** - Rules used to validate assignment compatibility (future feature)
-- **SchedulePlanLabel** - Optional labels used for visual organization only (does not affect scheduling logic)
 
 ## Critical Invariants
 
 ### I-1: Plan Assignment Non-Overlap
 
-**Rule:** SchedulePlanBlockAssignment entries within the same plan MUST NOT overlap.
+**Rule:** Program entries within the same plan MUST NOT overlap.
 
 **Rationale:** Each time slice within a plan must have exactly one content assignment. Overlapping assignments would create ambiguity about what content should play.
 
@@ -39,7 +38,7 @@ This contract applies to:
 
 ### I-2: Plan Assignment Constraint Compliance (Future)
 
-**Rule:** SchedulePlanBlockAssignment entries SHOULD respect constraints defined by ContentPolicyRule when referenced (future feature).
+**Rule:** Program entries SHOULD respect constraints defined by ContentPolicyRule when referenced (future feature).
 
 **Rationale:** ContentPolicyRules provide validation for assignment compatibility (e.g., rating, genre, duration constraints). When a rule is referenced, assignments should comply with its constraints.
 
@@ -162,5 +161,7 @@ Each invariant (I-1 through I-5) MUST have corresponding test coverage that:
 ## See Also
 
 - [Domain: SchedulePlan](../../domain/SchedulePlan.md) - Complete domain documentation
+- [Domain: Program](../../domain/Program.md) - Program domain documentation
+- [ProgramContract](ProgramContract.md) - Program-specific contract rules
 - [Domain: ScheduleDay](../../domain/ScheduleDay.md) - Resolved schedules
 

@@ -2,23 +2,26 @@
 
 _Related: [Runtime: Channel manager](ChannelManager.md) • [Domain: MasterClock](../domain/MasterClock.md) • [Runtime: Program director](program_director.md)_
 
+> **Note:** This document reflects the modern scheduling architecture.  
+> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+
 > Station's programming authority for "what should air, and when."
 
 **Note:** This document consolidates content from multiple earlier sources (docs/components/_ and docs/runtime/_) as part of documentation unification (2025-10-24).
 
 ## Purpose
 
-ScheduleService is the station's programming authority for "what should air, and when."
+SchedulingService is the station's programming authority for "what should air, and when."
 
 All other runtime components (ChannelManager, ProgramDirector, AsRunLogger, the future guide, etc.) rely on it for schedule interpretation.
 
-ScheduleService owns broadcast day logic and channel timing policy. No other component may redefine or guess these rules.
+SchedulingService owns broadcast day logic and channel timing policy. No other component may redefine or guess these rules.
 
 ## Content Authority Constraint
 
-**ScheduleService may only schedule Asset entries that are marked as approved for broadcast.**
+**SchedulingService may only schedule Asset entries that are marked as approved for broadcast.**
 
-ScheduleService is forbidden from:
+SchedulingService is forbidden from:
 
 - Fetching raw content directly from Plex, filesystem, or unreviewed sources
 - Scheduling unapproved or non-canonical content
@@ -44,7 +47,7 @@ At 6:15am local, you're in the new broadcast day.
 
 **It is NOT a hard playout cut point.**
 
-### ScheduleService Methods
+### SchedulingService Methods
 
 #### `broadcast_day_for(channel_id, when_utc) -> date`
 
@@ -124,7 +127,7 @@ Each channel carries its own timing policy configuration:
   - Default: 06:00.
   - Examples: 06:05, 05:00, etc.
 
-ScheduleService is responsible for honoring these policies when generating future schedule blocks and playout segments.
+SchedulingService is responsible for honoring these policies when extending the plan horizon and building the runtime playlog.
 
 No other component should assume "programs always start on :00/:30" or "broadcast day always rolls at 6:00am."
 
@@ -148,7 +151,7 @@ A background loop (scheduler_daemon / horizon builder) keeps these horizons gene
 ### Loop Contract
 
 1. Ask MasterClock.now_utc() for the current authoritative time.
-2. For each Channel, ask ScheduleService:
+2. For each Channel, ask SchedulingService:
    - "Based on this channel's timing policy and broadcast day rollover rules, what's supposed to air next?"
    - "Do we already have scheduled segments covering from now out to the target horizon window?"
    - "If not, generate more future segments."
@@ -156,11 +159,11 @@ A background loop (scheduler_daemon / horizon builder) keeps these horizons gene
 
 **MasterClock remains passive. It does not fire callbacks or timers. The scheduler_daemon polls MasterClock for time instead of registering 'wake me at 06:00' listeners.**
 
-**ScheduleService never calls datetime.now() directly. It always works from explicit timestamps provided by the daemon, which come from MasterClock.**
+**SchedulingService never calls datetime.now() directly. It always works from explicit timestamps provided by the daemon, which come from MasterClock.**
 
 ## ScheduledSegment Model
 
-ScheduledSegment represents what ScheduleService emits for downstream consumers:
+ScheduledSegment represents what SchedulingService emits for downstream consumers:
 
 ```python
 ScheduledSegment:
@@ -193,18 +196,18 @@ ScheduledSegment:
 
 | Component            | Responsibilities                                                                                                                                                                                                                             |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ScheduleService**  | • Owns broadcast day math<br>• Owns per-channel timing policy<br>• Owns horizon layout and knows where the "next schedulable slot" begins after rollover<br>• Provides ScheduledSegments for downstream consumers                            |
-| **scheduler_daemon** | • Polls MasterClock for "now"<br>• Asks ScheduleService to extend horizons<br>• Never invents timing rules on its own                                                                                                                        |
+| **SchedulingService**  | • Owns broadcast day math<br>• Owns per-channel timing policy<br>• Extends the plan horizon and knows where the "next schedulable slot" begins after rollover<br>• Provides ScheduledSegments for downstream consumers                            |
+| **scheduler_daemon** | • Polls MasterClock for "now"<br>• Asks SchedulingService to extend the plan horizon<br>• Never invents timing rules on its own                                                                                                                        |
 | **ChannelManager**   | • Plays what ScheduleService/horizon gave it<br>• Never snaps content at broadcast day rollover<br>• Never tries to reschedule mid-flight                                                                                                    |
 | **ProgramDirector**  | • Coordinates channels and emergency overrides<br>• May ask "what's airing now?" and "which broadcast day are we in?" but cannot reschedule or cut at rollover                                                                               |
-| **AsRunLogger**      | • Uses ScheduledSegments and ScheduleService.broadcast_day_for() to log what aired<br>• Is allowed to break a single continuous airing into multiple reporting rows when it crosses broadcast day<br>• This split is intentional and correct |
+| **AsRunLogger**      | • Uses ScheduledSegments and SchedulingService.broadcast_day_for() to log what aired<br>• Is allowed to break a single continuous airing into multiple reporting rows when it crosses broadcast day<br>• This split is intentional and correct |
 | **MasterClock**      | • Provides UTC and channel-local "now"<br>• Does not know what a broadcast day is<br>• Does not accept timers, listeners, alarms, or scheduling callbacks<br>• Is the only valid source of current time for the system                       |
 
 ## Testing
 
 Use the `retrovue test broadcast-day-alignment` command to validate broadcast day logic and rollover handling. This test validates the HBO-style 05:00–07:00 scenario and ensures proper broadcast day classification.
 
-ScheduleService operates on Channel entities using UUID identifiers for external operations and logs.
+SchedulingService operates on Channel entities using UUID identifiers for external operations and logs.
 
 ## Cross-References
 
@@ -213,6 +216,6 @@ ScheduleService operates on Channel entities using UUID identifiers for external
 | **[MasterClock](../domain/MasterClock.md)**          | Provides authoritative station time for all scheduling operations |
 | **[ChannelManager](ChannelManager.md)**    | Consumes ScheduledSegments for playout execution                  |
 | **[AsRunLogger](AsRunLogging.md)**         | Uses broadcast_day_for() for compliance reporting                 |
-| **[ProgramDirector](program_director.md)** | Queries ScheduleService for current airing status                 |
+| **[ProgramDirector](program_director.md)** | Queries SchedulingService for current airing status                 |
 
 _Document version: v0.1 · Last updated: 2025-10-24_
