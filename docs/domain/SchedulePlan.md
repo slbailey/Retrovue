@@ -1,9 +1,8 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md) • [Contracts](../contracts/README.md) • [ScheduleDay](ScheduleDay.md) • [Program](Program.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md) • [Contracts](../contracts/README.md) • [ScheduleDay](ScheduleDay.md) • [Zone](Zone.md) • [Pattern](Pattern.md) • [Program](Program.md)_
 
 # Domain — SchedulePlan
 
-> **Note:** This document reflects the modern scheduling architecture.  
-> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+> **Note:** This document reflects the modern scheduling architecture. Active chain: **SchedulePlan (Zones + Patterns) → ScheduleDay (resolved) → PlaylogEvent (runtime) → AsRunLog.**
 
 ## Purpose
 
@@ -123,69 +122,17 @@ SchedulePlan is the **single source of scheduling logic** for channel programmin
 
 Zones and Patterns are the core contents of a SchedulePlan. A plan defines one or more Zones, and each Zone references a Pattern that repeats to fill the Zone's time window.
 
-### Zone
+For detailed documentation on Zones and Patterns, see:
+- **[Zone](Zone.md)** - Named time windows within the programming day that declare when content should play
+- **[Pattern](Pattern.md)** - Ordered lists of Program references that define content sequences
 
-A Zone defines a named time window within the programming day with the following components:
+**Summary:**
 
-- **Name**: A human-readable identifier (e.g., "Base", "After Dark", "Prime Time", "Weekend Morning")
-- **Active window**: The time range when the Zone applies (e.g., `00:00–24:00`, `22:00–05:00`, `19:00–22:00`)
-- **Optional day filters**: Day-of-week constraints (e.g., Mon–Fri, Sat–Sun) that restrict when the Zone is active
-- **Pattern reference**: A pointer to a Pattern that defines the content sequence for this Zone
+**Zone:** A named time window within the programming day that declares when content should play. Zones reference Patterns to define the content sequence. Zones use broadcast day time (00:00–24:00 relative to `programming_day_start`), not calendar day time. Zones can span midnight (e.g., `22:00–05:00`) within the same broadcast day and support optional day-of-week filters for recurring patterns.
 
-Zones do not hold episodes or assets directly. They declare when content should play and which Pattern to use. The plan engine applies the Pattern repeatedly across the Zone's active window until the Zone is full, snapping to the Channel's Grid boundaries.
+**Pattern:** An ordered list of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). Patterns have no durations — the plan engine repeats the Pattern across the Zone until the Zone is full, snapping to the Channel's Grid boundaries.
 
-**Examples:**
-- Base zone: `00:00–24:00` (full programming day) with no day filters
-- After Dark zone: `22:00–05:00` (spans midnight) with no day filters
-- Prime Time zone: `19:00–22:00` with no day filters
-- Weekend Morning zone: `06:00–12:00` with day filter `Sat–Sun`
-
-**Zone Alignment Note:**
-
-Zones align to **broadcast days**, not calendar days. The broadcast day is defined by the Channel's `programming_day_start` (e.g., 06:00). A Zone like `22:00–05:00` spans from 22:00 on one calendar day to 05:00 the next calendar day, but both times are within the same broadcast day (e.g., 06:00 to 06:00 next day).
-
-**Key Points:**
-- Zones use broadcast day time (00:00–24:00 relative to `programming_day_start`)
-- Long content can bridge the broadcast day boundary without truncation
-- For example, a movie starting at 23:00 can continue past midnight (00:00) and into the next calendar day's early hours (e.g., until 01:30) without being cut
-- The carry-in policy ensures content that crosses the programming-day seam continues into the next broadcast day until completion
-
-### Pattern
-
-A Pattern is an ordered list of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). Patterns have no durations — the plan engine repeats the Pattern across the Zone until the Zone is full.
-
-**Pattern Repeating:** The plan engine:
-1. Takes the ordered list of Program references from the Pattern
-2. Repeats the Pattern across the Zone's active window
-3. Snaps to the Channel's Grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`)
-4. Continues until the Zone is full
-
-**Examples:**
-
-**Base zone with pattern:**
-- Zone: `00:00–24:00` (Base)
-- Pattern: `["Cheers", "The Big Bang Theory"]`
-- Result: The pattern repeats across the full 24-hour day, with each Program (series) expanding to episodes at ScheduleDay time
-
-**Weekend zone overriding base:**
-- Zone: `00:00–24:00` (Weekend) with day filter `Sat–Sun`
-- Pattern: `["Movie Block"]`
-- Result: On weekends, this Zone overrides the base Zone, replacing the series pattern with a movie block pattern
-
-**Pattern repeating behavior (crystal clear example):**
-- Zone: `19:00–22:00` (Prime Time, 3 hours)
-- Pattern:
-  - Cheers
-  - The Big Bang Theory
-  repeat: true
-- Result: The pattern auto-repeats until the zone duration is filled, regardless of episode length:
-  - Cheers (episode 1) starts at 19:00, ends at 19:30
-  - The Big Bang Theory (episode 1) starts at 19:30, ends at 20:00
-  - Cheers (episode 2) starts at 20:00, ends at 20:30
-  - The Big Bang Theory (episode 2) starts at 20:30, ends at 21:00
-  - Cheers (episode 3) starts at 21:00, ends at 21:30
-  - The Big Bang Theory (episode 3) starts at 21:30, ends at 22:00 (zone end)
-- **Key Point:** The pattern repeats cyclically until the Zone's declared end time (22:00) is reached. Each Program reference expands to a specific episode at ScheduleDay time, and the pattern continues repeating regardless of individual episode lengths (they snap to grid boundaries).
+**Relationship:** Each Zone references a Pattern that defines its content sequence. The plan engine applies the Pattern repeatedly across the Zone's active window until the Zone is full, snapping to Grid boundaries. Programs in Patterns are resolved to concrete episodes at ScheduleDay time.
 
 **Conflict Resolution:**
 
@@ -399,9 +346,9 @@ Within the Planning Mode REPL, the following commands are available:
   - Grid alignment, soft-start-after-current, fixed zone end, no mid-longform cuts, and carry-in policies are all applied
   - The preview is not persisted but shows exactly how the plan will resolve
 
-**Parity for UI:**
+### Function-call Parity
 
-The Planning Mode REPL commands have equivalent function calls that the UI will use:
+The UI uses the same engine:
 
 - **`PlanAPI.addZone(channelId, planId, zoneName, fromTime, toTime, dayFilters?)`** - Equivalent to `zone add`
 - **`PlanAPI.setPattern(channelId, planId, zoneName, programNames[])`** - Equivalent to `pattern set`
@@ -412,7 +359,56 @@ The Planning Mode REPL commands have equivalent function calls that the UI will 
 - **`PlanAPI.save(channelId, planId)`** - Equivalent to `save`
 - **`PlanAPI.discard(channelId, planId)`** - Equivalent to `discard`
 
-The UI will provide the same functionality through a visual interface, calling these underlying API functions. The Planning Mode REPL and UI share the same validation, preview, and resolution logic.
+### Planning Session Implementation
+
+The Planning Mode REPL is implemented by `SchedulePlanningSession`, which provides the underlying session management, validation, and persistence logic. This section defines the implementation requirements for the Planning Session.
+
+**Validation Delegation:**
+
+All commands (`create_zone`, `update_zone`, `create_pattern`, `update_pattern`, `assign_pattern_to_zone`) delegate validation to the domain layer. Failures propagate as `ValidationError{code, message, details}` without translation.
+
+- Planning Session commands must call the same domain validators used by CLI operations
+- Validation errors must propagate unchanged from the domain layer
+- Error structure: `ValidationError` with `code` (matching contract IDs like `Z-VAL-01`), `message`, and `details`
+- No error message translation or reformatting in the Planning Session layer
+- Same validation rules apply whether called via CLI or Planning Session
+
+**Atomicity:**
+
+Each command runs in a transaction; on error, the session rolls back the entire operation.
+
+- Each Planning Session command (`create_zone`, `update_zone`, `create_pattern`, etc.) runs in a single transaction
+- If validation fails or an error occurs, the entire transaction rolls back
+- No partial updates persist on validation failure
+- Database state before and after a failed operation must be identical
+- `save` command commits all changes made during the session; `discard` rolls back all changes
+
+**Injected Context:**
+
+Session is constructed with `channel_ctx` and `clock`; both are passed to domain validators.
+
+- Planning Session is constructed with Channel context (`channel_ctx`) containing Channel grid configuration
+- Planning Session is constructed with a clock provider (e.g., `MasterClock` interface)
+- Both `channel_ctx` and `clock` are passed through to all domain validator calls
+- Channel context provides: `grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`
+- Clock provider enables deterministic testing and time-based validation (e.g., DST transitions)
+- Domain validators receive explicit context; no hidden defaults or global state
+
+**Idempotent Reads:**
+
+Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
+
+- After creating or updating Zones/Patterns, subsequent reads return normalized domain objects
+- Time values are normalized: 24:00:00 is stored as 23:59:59.999999 but returned as 24:00:00
+- Domain layer handles normalization transparently; Planning Session consumers see normalized values
+- Round-trip persistence preserves conceptual values (24:00:00 → storage → read → 24:00:00)
+- All domain objects returned by Planning Session are in normalized form
+
+**Related Contracts:**
+
+- [ZoneContract.md](../contracts/resources/ZoneContract.md) - Z-INT-01: Shared Validator, Z-INT-02: Transactional Semantics, Z-INT-03: Clock Injection, Z-INT-04: Channel Context Required
+- [Zone.md](Zone.md) - Runtime & Validation Notes
+- [Pattern.md](Pattern.md) - Runtime & Validation Notes
 
 ## Validation & Invariants
 
@@ -422,7 +418,7 @@ The UI will provide the same functionality through a visual interface, calling t
 - **Pattern validity**: Patterns must contain valid Programs (catalog entries)
 - **Grid alignment**: Zones must align with the Channel's Grid boundaries
 - **Referential integrity**: Plans cannot be deleted if they have dependent Zones, Patterns, or BroadcastScheduleDay records
-- **Zones and Patterns define scheduling**: Zones define *when* by window; Patterns define *what order* (Programs). Patterns have **no durations** and repeat to fill the Zone, snapping to the Channel Grid.
+- **Time structure**: Zones define *when* (window); Patterns define *order* (Programs). Patterns have **no durations** and repeat to fill the Zone, snapping to the Channel Grid.
 
 ## Out of Scope (v0.1)
 
