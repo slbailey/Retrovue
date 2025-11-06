@@ -372,3 +372,4 @@ Tests MUST verify:
 - [Domain: Zone](../../domain/Zone.md) - Complete Zone domain documentation
 - [Domain: SchedulePlan](../../domain/SchedulePlan.md) - SchedulePlan domain documentation
 - [Domain: Pattern](../../domain/Pattern.md) - Pattern domain documentation
+

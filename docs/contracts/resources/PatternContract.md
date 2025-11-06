@@ -344,3 +344,4 @@ Each contract (P-VAL-01 through P-BEH-02) MUST have corresponding test coverage 
 
 **Note:** These contracts ensure that Pattern entities are correctly validated, managed, and expanded during schedule generation. All contracts prioritize early validation (domain-level), clear error messages, and deterministic behavior.
 
+

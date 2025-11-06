@@ -194,3 +194,4 @@ Tests MUST verify:
 - [Domain: Pattern](../../domain/Pattern.md) - Complete Pattern domain documentation
 - [Domain: Zone](../../domain/Zone.md) - Zone domain documentation (references Patterns)
 
+

@@ -18,7 +18,7 @@ This is **not** implementation documentation (that lives in `src/`), but rather 
 RetroVue follows Domain-Driven Design (DDD) principles, where the domain model reflects the real-world concepts of broadcast television operations:
 
 - **Sources** → **Collections** → **Assets** (content hierarchy)
-- **Channels (Grid)** → **SchedulePlans (Zones)** → **ScheduleDays (resolved)** → **PlaylogEvents (runtime)** → **Streams** (scheduling and broadcast pipeline)
+- **Channel (Grid)** → **SchedulePlan (Zones)** → **ScheduleDay (resolved)** → **PlaylogEvent (runtime)** → **Stream** (scheduling and broadcast pipeline)
 
 ## Core Domain Entities
 
@@ -43,7 +43,9 @@ RetroVue follows Domain-Driven Design (DDD) principles, where the domain model r
 
 ### Scheduling Infrastructure Domain
 
-- **[SchedulePlan](SchedulePlan.md)** - Zones + Patterns (defines time windows and repeating program sequences)
+- **[SchedulePlan](SchedulePlan.md)** - Top-level operator-created plans that define channel programming using Zones and Patterns
+- **[Zone](Zone.md)** - Named time windows within the programming day that declare when content should play
+- **[Pattern](Pattern.md)** - Ordered lists of Program references that define content sequences
 - **[Program](Program.md)** - Catalog entity (series/movie/block/composite) referenced by patterns; episodes resolved at ScheduleDay
 - **[ScheduleDay](ScheduleDay.md)** - Resolved schedules for specific channel and date (generated from plans)
 - **[PlaylogEvent](PlaylogEvent.md)** - Scheduled, timestamped playout units (generated from schedule days)
@@ -79,7 +81,7 @@ The system enforces clear boundaries based on asset state:
 
 1. **Start with [Asset](Asset.md)** - This is the central entity
 2. **Understand the hierarchy** - Source → Collection → Asset
-3. **Follow the scheduling flow** - Channel (Grid) → SchedulePlan (Zones) → ScheduleDay (resolved) → PlaylogEvent (runtime)
+3. **Follow the scheduling flow** - Channel (Grid) → SchedulePlan (Zones) → ScheduleDay (resolved) → PlaylogEvent (runtime) → Stream
 4. **Read related domains** - Each document links to related concepts
 
 ### For Operators
@@ -87,14 +89,14 @@ The system enforces clear boundaries based on asset state:
 1. **Focus on operational domains** - Channel, SchedulePlan, ScheduleDay, PlaylogEvent
 2. **Understand state transitions** - How assets become ready for broadcast
 3. **Learn the constraints** - What can and cannot be scheduled
-4. **Follow the planning flow** - Channel (Grid) → SchedulePlan (Zones) → ScheduleDay (resolved) → PlaylogEvent (runtime)
+4. **Follow the planning flow** - Channel (Grid) → SchedulePlan (Zones) → ScheduleDay (resolved) → PlaylogEvent (runtime) → Stream
 
 ### For System Architects
 
 1. **Study the relationships** - How domains interact
 2. **Understand the boundaries** - Clear separation of concerns
 3. **Follow the invariants** - Critical rules that must be maintained
-4. **Trace the flow** - Channel (Grid) → SchedulePlan (Zones) → ScheduleDay (resolved) → PlaylogEvent (runtime)
+4. **Trace the flow** - Channel (Grid) → SchedulePlan (Zones) → ScheduleDay (resolved) → PlaylogEvent (runtime) → Stream
 
 ## Document Structure
 

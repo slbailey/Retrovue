@@ -2,8 +2,7 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 # Domain — Playlog event
 
-> **Note:** This document reflects the modern scheduling architecture.  
-> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+> **Note:** This document reflects the modern scheduling architecture. Active chain: **SchedulePlan (Zones + Patterns) → ScheduleDay (resolved) → PlaylogEvent (runtime) → AsRunLog.**
 
 ## Purpose
 
@@ -11,7 +10,7 @@ BroadcastPlaylogEvent is the **resolved list of media segments to be played**. E
 
 **Critical Rule:** PlaylogEvent is a finalized instruction representing "this asset airs at this absolute time on this channel" - it contains resolved `start_utc`, `end_utc`, and `asset_uuid` values. Each entry maps to a ScheduleDay and points to a resolved concrete asset. PlaylogEvents reflect the **exact wall-clock timestamps derived from ScheduleDay**. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets, not VirtualAsset containers. The referenced asset must be in `ready` state with `approved_for_broadcast=true`.
 
-**Generation Lineage:** The scheduling flow follows a clear lineage: **Plan → Day → Playlog**
+**Generation Lineage:** SchedulePlan (Zones + Patterns) → ScheduleDay (immutable; primary expansion point) → PlaylogEvent (exact wall-clock instructions for runtime)
 
 1. **[SchedulePlan](SchedulePlan.md)** - Top-level operator-created plans defining Zones (time windows) and Patterns (ordered lists of Program references). Multiple plans are layered using priority resolution. Zones + Patterns resolve to assets.
 2. **[BroadcastScheduleDay](ScheduleDay.md)** - Resolved, immutable daily schedules built from SchedulePlans using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones. ScheduleDay is the primary expansion point where Zones + Patterns resolve to concrete assets: Programs → episodes and VirtualAssets → real assets. Contains resolved asset selections and exact wall-clock times.

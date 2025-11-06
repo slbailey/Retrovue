@@ -2,8 +2,7 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 # Domain — Schedule day
 
-> **Note:** This document reflects the modern scheduling architecture.  
-> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+> **Note:** This document reflects the modern scheduling architecture. Active chain: **SchedulePlan (Zones + Patterns) → ScheduleDay (resolved) → PlaylogEvent (runtime) → AsRunLog.**
 
 ## Purpose
 
@@ -233,6 +232,21 @@ Schedule days are resolved from plans. They define "what will air when" for a sp
 **Multi-Channel Programming**: Different channels can have different plans, resulting in different schedule days for the same date.
 
 **Schedule Inspection**: View resolved schedule days to see "what will air" for a specific channel and date.
+
+## Invocation
+
+**CLI:**
+
+```bash
+retrovue schedule plan preview --channel <id> --date YYYY-MM-DD
+retrovue schedule day build --channel <id> --date YYYY-MM-DD
+```
+
+**Programmatic:**
+
+```python
+from retrovue.scheduling import preview_schedule, build_schedule_day
+```
 
 ## See also
 

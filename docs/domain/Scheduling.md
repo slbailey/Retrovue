@@ -2,8 +2,9 @@ _Related: [Scheduling system architecture](../architecture/SchedulingSystem.md) 
 
 # Domain — Scheduling
 
-> **Note:** This document reflects the modern scheduling architecture.  
-> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+> **Note:** This document reflects the modern scheduling architecture. Active chain: **SchedulePlan (Zones + Patterns) → ScheduleDay (resolved) → PlaylogEvent (runtime) → AsRunLog.**
+
+> **Chain:** Channel (Grid) → SchedulePlan (Zones + Patterns) → ScheduleDay (resolved) → PlaylogEvent (runtime) → AsRunLog.
 
 ## Purpose
 
@@ -71,7 +72,7 @@ The scheduling system follows a simplified architecture based on Zones + Pattern
 
 4. **Programs are catalog entities** - Programs in Patterns are schedulable entities such as series, movies, blocks, or composites (can reference [VirtualAssets](VirtualAsset.md)). Episodes are resolved automatically at ScheduleDay time based on rotation policy.
 
-5. **Layering allows combining multiple plans** - Plans can be layered using priority resolution. For example, a base weekday plan can be overlaid with a holiday-specific plan. Higher priority plans override lower priority plans when both are active for the same date. Zones from higher-priority plans override overlapping Zones from lower-priority plans.
+5. **Layering allows combining multiple plans** - Plans may layer by priority; more specific plans override generic ones within overlapping windows. Higher priority plans override lower priority plans when both are active for the same date. Zones from higher-priority plans override overlapping Zones from lower-priority plans.
 
 6. **VirtualAssets enable modular packaging** - [VirtualAssets](VirtualAsset.md) are containers for multiple assets that can be referenced in Programs. They expand to actual assets during ScheduleDay resolution (primary expansion point), enabling reusable modular programming blocks (e.g., branded intro → episode → outro).
 
@@ -117,7 +118,7 @@ The scheduling system follows this end-to-end flow:
 - **SchedulePlan is the top-level construct** - All scheduling logic flows from plans defining Zones and Patterns
 - **Zones + Patterns model** - Plans define Zones (time windows) and Patterns (ordered lists of Programs). Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full.
 - **Programs are catalog entries** - Programs in Patterns are schedulable entities (series, movies, blocks, composites) without durations. Episodes are resolved at ScheduleDay time.
-- **Layering enables plan composition** - Multiple plans can be combined using priority resolution (base + overlays). Zones from higher-priority plans override overlapping Zones from lower-priority plans.
+- **Layering enables plan composition** - Plans may layer by priority; more specific plans override generic ones within overlapping windows. Zones from higher-priority plans override overlapping Zones from lower-priority plans.
 - **VirtualAssets enable modularity** - Reusable asset containers for complex programming blocks (expanded at ScheduleDay time)
 - **ScheduleDay is resolved and immutable** - Once generated, days are locked unless manually overridden. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.
 - **PlaylogEvent is runtime** - Generated from ScheduleDay for actual playout execution
