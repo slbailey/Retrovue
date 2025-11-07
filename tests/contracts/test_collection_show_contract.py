@@ -13,11 +13,13 @@ class TestCollectionShowContract:
         self.runner = CliRunner()
 
     def test_show_collection_json_includes_enrichers_and_config(self):
-        with patch("retrovue.infra.uow.session") as session_ctx, patch(
+        with patch("retrovue.cli.commands.collection._get_db_context") as get_ctx, patch(
             "retrovue.cli.commands.collection.resolve_collection_selector"
         ) as resolve:
+            fake_cm = MagicMock()
             fake_db = MagicMock()
-            session_ctx.return_value.__enter__.return_value = fake_db
+            fake_cm.__enter__.return_value = fake_db
+            get_ctx.return_value = fake_cm
 
             # Fake collection with config including enrichers
             collection = MagicMock()
@@ -84,11 +86,13 @@ class TestCollectionShowContract:
         assert "enricher-ffprobe-1" in ids and "enricher-qc-2" in ids
 
     def test_show_collection_human_mentions_enricher(self):
-        with patch("retrovue.infra.uow.session") as session_ctx, patch(
+        with patch("retrovue.cli.commands.collection._get_db_context") as get_ctx, patch(
             "retrovue.cli.commands.collection.resolve_collection_selector"
         ) as resolve:
+            fake_cm = MagicMock()
             fake_db = MagicMock()
-            session_ctx.return_value.__enter__.return_value = fake_db
+            fake_cm.__enter__.return_value = fake_db
+            get_ctx.return_value = fake_cm
 
             collection = MagicMock()
             collection.uuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
