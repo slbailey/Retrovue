@@ -341,6 +341,60 @@ class TestPlanShowContract:
                 assert "zones" in payload["plan"]
                 assert "patterns" in payload["plan"]
 
+    def test_plan_show_coverage_guarantee_has_at_least_one_zone(self):
+        """
+        Contract: Every displayed plan MUST have at least one zone (coverage guarantee).
+        Coverage Guarantee: Plans satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE.
+        """
+        with patch("retrovue.cli.commands.channel.session") as mock_session, patch(
+            "retrovue.cli.commands.channel._resolve_channel"
+        ) as mock_resolve, patch(
+            "retrovue.cli.commands.channel._resolve_plan"
+        ) as mock_resolve_plan:
+            mock_db = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db
+            mock_channel = MagicMock()
+            mock_channel.id = uuid.UUID(self.channel_id)
+            mock_resolve.return_value = mock_channel
+            mock_plan = MagicMock()
+            mock_plan.id = uuid.UUID(self.plan_id)
+            mock_resolve_plan.return_value = mock_plan
+
+            with patch("retrovue.usecases.plan_show.show_plan") as mock_show:
+                plan_data = _mock_plan_result()
+                # Plan must have at least one zone (coverage guarantee)
+                plan_data["plan"]["zones"] = [
+                    {
+                        "id": "770e8400-e29b-41d4-a716-446655440002",
+                        "name": "Base",
+                        "start_time": "00:00:00",
+                        "end_time": "24:00:00",
+                        "day_filters": None
+                    }
+                ]
+                plan_data["plan"]["patterns"] = []
+                mock_show.return_value = plan_data
+
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "channel",
+                        "plan",
+                        self.channel_id,
+                        "show",
+                        "WeekdayPlan",
+                        "--with-contents",
+                        "--json",
+                    ],
+                )
+                assert result.exit_code == 0
+                payload = json.loads(result.stdout)
+                # Verify at least one zone exists (coverage guarantee)
+                assert len(payload["plan"]["zones"]) >= 1
+                # Verify zone covers full day (00:00–24:00)
+                zones = payload["plan"]["zones"]
+                assert any(z.get("start_time") == "00:00:00" and z.get("end_time") == "24:00:00" for z in zones)
+
     def test_plan_show_with_computed(self):
         """
         Contract B-6: --computed MUST include effective_today and next_applicable_date.

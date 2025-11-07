@@ -6,6 +6,8 @@ _Related: [SchedulePlanContract](SchedulePlanContract.md) • [Domain: ScheduleP
 
 This contract defines the behavior of the `retrovue channel plan <channel> list` command, which lists all SchedulePlan records for a given channel.
 
+**Coverage Guarantee:** Plans returned by list APIs are guaranteed valid (coverage invariant enforced). All plans satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14), ensuring full 24-hour coverage (00:00–24:00) with no gaps.
+
 ## Command Syntax
 
 ```bash

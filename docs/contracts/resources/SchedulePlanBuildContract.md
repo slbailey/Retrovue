@@ -4,7 +4,9 @@ _Related: [SchedulePlanContract](SchedulePlanContract.md) • [SchedulePlan Add]
 
 ## Purpose
 
-This contract defines the behavior of the `retrovue channel plan <channel> build` command, which creates a new SchedulePlan and enters an interactive REPL (Read-Eval-Print Loop) for building and editing the plan. This command is intended for interactive CLI use, while `plan add` provides the non-interactive API surface for web UI integration.
+This contract defines the behavior of the `retrovue channel plan <channel> build` command, which creates a new SchedulePlan and enters an interactive REPL (Read-Eval-Print Loop) for building and editing the plan. This command is intended for interactive CLI use, while `plan add` provides the non-interactive API surface for web UI integration. The web UI will call the same underlying Plan Add function used by the CLI; the interactive plan build command exists only for developer and QA workflows, not production usage.
+
+**Coverage Guarantee:** Plans created by this command are automatically initialized with a default "test pattern" zone (00:00–24:00) to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14). This ensures the plan immediately has full 24-hour coverage and can be used for schedule generation. The default zone can be replaced or modified during the REPL session.
 
 ## Command Syntax
 
@@ -50,6 +52,7 @@ retrovue channel plan <channel> build \
 
 - Plan is created with all provided parameters
 - Same validation rules apply as `plan add` (channel resolution, name uniqueness, date validation, cron validation, priority validation)
+- **Default test pattern zone initialization**: When no zones are supplied, the system automatically initializes the plan with a default "test pattern" zone covering 00:00–24:00 to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14). This ensures the plan immediately has full 24-hour coverage and can be used for schedule generation. The default zone can be replaced or modified during the REPL session.
 - If plan creation fails, command exits with error (does not enter REPL)
 - Plan is created in a transaction that is NOT committed until `save` is called in REPL
 

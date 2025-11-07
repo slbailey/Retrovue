@@ -8,6 +8,8 @@ This contract defines the behavior of the `retrovue channel plan <channel> <plan
 
 **Context:** This command is part of the Plan Mode workflow, allowing operators to inspect SchedulePlan details before entering plan mode for interactive editing.
 
+**Coverage Guarantee:** Every displayed plan is guaranteed to have a coverage baseline satisfying INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14). When no scheduled content exists, the "test pattern" filler zone appears in the zones list (00:00–24:00).
+
 ## Command Syntax
 
 ```bash
@@ -99,6 +101,9 @@ retrovue channel plan <channel> <plan> show \
   - **Patterns (count: M)** with rows: `Zone | Programs (ordered, truncated)`
 - Zone rows show: name, time window (HH:MM–HH:MM), day filters (or "All days")
 - Pattern rows show: associated zone name, ordered program list (truncated if long)
+- Every plan is guaranteed to have at least one zone covering 00:00–24:00 (see INV_PLAN_MUST_HAVE_FULL_COVERAGE)
+- If no explicit zones exist, the default "test pattern" zone (00:00–24:00) will appear in the zones list
+- **UI Note:** UI renderers can safely assume at least one zone exists for empty coverage fallback visualization
 
 **Behavior (JSON):**
 

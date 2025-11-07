@@ -8,6 +8,8 @@ This contract defines the behavior of the `retrovue channel plan <channel> <plan
 
 **Context:** This command is part of the Plan Mode workflow, allowing operators to remove obsolete or test SchedulePlans from a channel once all dependent components (Zones, Patterns, ScheduleDays) are cleared.
 
+**Coverage Implications:** Deletion of the last valid plan (or all plans) for a channel may leave the schedule without coverage, violating INV_PLAN_MUST_HAVE_FULL_COVERAGE for that channel. Operators should ensure at least one active plan with full 24-hour coverage remains after deletion. Deleting all plans for a channel triggers a scheduler warning about uncovered channels.
+
 ## Command Syntax
 
 ```bash

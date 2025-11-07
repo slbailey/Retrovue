@@ -90,6 +90,121 @@ SchedulePlans use priority-based layering where plans are matched by effective d
 - Plans are timeless but bound by effective date ranges (`start_date`, `end_date`)
 - Superseded plans are archived (`is_active=false`) rather than deleted, preserving history
 
+## Creation Model
+
+SchedulePlan creation enforces **INV_PLAN_MUST_HAVE_FULL_COVERAGE** (S-INV-14) by automatically initializing plans with a default test pattern zone when no zones are provided.
+
+**Pseudocode:**
+
+```python
+def create_schedule_plan(
+    channel_id: UUID,
+    name: str,
+    description: str | None = None,
+    cron_expression: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    priority: int = 0,
+    is_active: bool = True,
+    zones: list[Zone] | None = None,
+    empty: bool = False  # Developer override flag
+) -> SchedulePlan:
+    """
+    Create a new SchedulePlan with automatic zone initialization.
+
+    Enforces INV_PLAN_MUST_HAVE_FULL_COVERAGE by auto-seeding a default
+    test pattern zone (00:00–24:00) if zones is empty or None.
+    """
+    # Validate channel exists
+    channel = get_channel(channel_id)
+    if not channel:
+        raise ValueError(f"Channel {channel_id} not found")
+
+    # Validate name uniqueness within channel
+    if plan_name_exists(channel_id, name):
+        raise ValueError(f"Plan name '{name}' already exists in channel")
+
+    # Initialize zones list
+    if zones is None:
+        zones = []
+
+    # Enforce INV_PLAN_MUST_HAVE_FULL_COVERAGE: auto-seed default zone if empty
+    if not empty and len(zones) == 0:
+        # Auto-seed default test pattern zone covering full 24-hour period
+        default_zone = Zone(
+            name="Base",
+            start_time="00:00:00",
+            end_time="24:00:00",
+            plan_id=None,  # Will be set after plan creation
+            filler="test_pattern"  # Indicates this is the auto-seeded filler zone
+        )
+        zones = [default_zone]
+
+    # Create plan record
+    plan = SchedulePlan(
+        id=generate_uuid(),
+        channel_id=channel_id,
+        name=name,
+        description=description,
+        cron_expression=cron_expression,
+        start_date=start_date,
+        end_date=end_date,
+        priority=priority,
+        is_active=is_active,
+        created_at=now(),
+        updated_at=now()
+    )
+
+    # Persist plan
+    session.add(plan)
+    session.flush()  # Get plan.id
+
+    # Associate zones with plan
+    for zone in zones:
+        zone.plan_id = plan.id
+        session.add(zone)
+
+    # Validate coverage invariant (unless empty flag is set)
+    if not empty:
+        validate_full_coverage(plan.id)
+
+    return plan
+
+
+def validate_full_coverage(plan_id: UUID) -> None:
+    """
+    Validate that plan satisfies INV_PLAN_MUST_HAVE_FULL_COVERAGE.
+
+    Raises ValidationError if plan does not have full 24-hour coverage (00:00–24:00)
+    with no gaps.
+    """
+    zones = get_zones_for_plan(plan_id)
+
+    if len(zones) == 0:
+        raise ValidationError(
+            code="INV_PLAN_MUST_HAVE_FULL_COVERAGE",
+            message="Plan must have full 24-hour coverage (00:00–24:00) with no gaps. "
+                    "See INV_PLAN_MUST_HAVE_FULL_COVERAGE."
+        )
+
+    # Check coverage spans 00:00–24:00 with no gaps
+    coverage = compute_coverage(zones)
+    if not coverage.is_complete():
+        raise ValidationError(
+            code="INV_PLAN_MUST_HAVE_FULL_COVERAGE",
+            message=f"Plan has coverage gaps: {coverage.gaps}. "
+                    "Plan must have full 24-hour coverage (00:00–24:00) with no gaps. "
+                    "See INV_PLAN_MUST_HAVE_FULL_COVERAGE."
+        )
+```
+
+**Key Points:**
+
+- **Automatic initialization**: If `zones` is empty or `None` and `empty=False`, the system automatically creates a default `Zone` with `start="00:00"`, `end="24:00"`, and `filler="test_pattern"`.
+- **Developer override**: The `empty` flag allows developers to bypass auto-seeding for testing/debugging scenarios, but the plan will not satisfy the coverage invariant.
+- **Validation**: After creation, `validate_full_coverage()` ensures the plan satisfies INV_PLAN_MUST_HAVE_FULL_COVERAGE unless `empty=True`.
+- **Default zone properties**: The auto-seeded zone has `name="Base"` and `filler="test_pattern"` to indicate it's a placeholder that can be replaced or modified.
+
 ## Contract / Interface
 
 SchedulePlan is the **single source of scheduling logic** for channel programming. It defines one or more **Zones** (named time windows within the programming day) and a **Pattern** for each Zone. It defines:
@@ -191,6 +306,21 @@ If plans are missing or invalid:
 - **Validation**: Dry run and validation features should be supported to visualize gaps or rule violations
 
 ## Lifecycle and Referential Integrity
+
+**Plan Lifecycle Flow with Validation Points:**
+
+```
+Add  →  Build  →  Update  →  Activate  →  Archive  →  Delete
+            ↖────── Validation (INV_PLAN_MUST_HAVE_FULL_COVERAGE)
+```
+
+**Enforcement Points:**
+
+- **Add**: Automatic test pattern zone seeding ensures full coverage on creation
+- **Build**: REPL session validates coverage before save
+- **Update**: Coverage invariant validated on zone modifications
+- **Activate**: Plan must satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE to be eligible for schedule generation
+- **Archive/Delete**: No validation required (plan is inactive or being removed)
 
 - `is_active=false` archives the plan: ScheduleService excludes the plan from schedule generation. Existing Zones and Patterns remain but are ignored.
 - Hard delete is only permitted when no dependent rows exist (e.g., Zone, Pattern, ScheduleDay). When dependencies exist, prefer archival (`is_active=false`).
@@ -432,7 +562,7 @@ Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
 
 - **Name uniqueness**: `name` must be unique within each channel (enforced via unique constraint on `channel_id` + `name`)
 - **Active status**: Only plans where `is_active=true` are eligible for schedule generation
-- **Zone coverage**: Plans should have Zones covering the programming day, though gaps are allowed (with warnings)
+- **Full coverage invariant (INV_PLAN_MUST_HAVE_FULL_COVERAGE)**: Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps. When a plan is created without explicit zones, the system automatically initializes it with a default "test pattern" zone covering the full 24-hour period (00:00–24:00). This ensures every plan provides complete daily coverage, preventing runtime gaps where no content is scheduled. See [Scheduling Invariants](../contracts/resources/SchedulingInvariants.md) S-INV-14 for details.
 - **Zone overlap validation**: No overlapping active windows per Zone set after grid normalization. Zones within the same plan must not have overlapping time windows when both are active (considering day filters and effective dates)
 - **Pattern validity**: Patterns must contain valid Programs (catalog entries)
 - **Grid alignment**: Zones must align with the Channel's Grid boundaries

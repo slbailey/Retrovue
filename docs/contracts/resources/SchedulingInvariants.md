@@ -61,6 +61,60 @@ _Status: Enforced_
 
 - All plan/zone/pattern mutations use shared domain validators and run in a single transaction (rollback on failure).
 
+**S-INV-14: Plan Must Have Full Coverage (INV_PLAN_MUST_HAVE_FULL_COVERAGE)**
+
+- A SchedulePlan must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps.
+- When a plan is created without explicit zones, the system automatically initializes it with a default "test pattern" zone covering the full 24-hour period (00:00–24:00).
+- This invariant ensures that every plan provides complete daily coverage, preventing runtime gaps where no content is scheduled.
+- Validation occurs on plan creation and on any update that modifies zones (save/update operations enforce this invariant unless in developer debug mode).
+
+## Rationale: Why Blank Plans Are Disallowed
+
+Blank plans (plans without zones or with coverage gaps) are disallowed for runtime because the scheduling engine requires continuous coverage to generate valid ScheduleDays. Without full 24-hour coverage, the engine cannot determine what content to play during uncovered time periods, leading to runtime errors or undefined behavior. The default "test pattern" zone ensures new plans are immediately usable while allowing operators to replace it with actual programming zones.
+
+## Validation Examples
+
+The following examples demonstrate valid and invalid plans according to INV_PLAN_MUST_HAVE_FULL_COVERAGE (S-INV-14):
+
+### Example 1: Valid Plan with Single Full-Day Test Pattern Zone
+
+**Plan:** `WeekdayPlan`
+
+**Zones:**
+- `Base` (00:00–24:00) — Default test pattern zone
+
+**Validation Result:** ✅ **Valid** — Single zone provides complete 24-hour coverage with no gaps.
+
+**Note:** This is the default state when a plan is created without explicit zones. The system automatically initializes the plan with this test pattern zone.
+
+### Example 2: Valid Plan with Multiple Sequential Zones
+
+**Plan:** `PrimeTimePlan`
+
+**Zones:**
+- `Morning` (00:00–12:00) — Morning programming
+- `Afternoon` (12:00–19:00) — Afternoon programming
+- `Prime Time` (19:00–22:00) — Prime time programming
+- `Late Night` (22:00–24:00) — Late night programming
+
+**Validation Result:** ✅ **Valid** — Multiple zones provide complete 24-hour coverage with no gaps. Zone boundaries touch (e.g., Morning ends at 12:00, Afternoon starts at 12:00), which is allowed.
+
+### Example 3: Invalid Plan with Coverage Gap
+
+**Plan:** `IncompletePlan`
+
+**Zones:**
+- `Morning` (00:00–12:00) — Morning programming
+- `Afternoon` (12:00–19:00) — Afternoon programming
+- `Prime Time` (19:00–22:00) — Prime time programming
+- **Missing:** No zone covering 22:00–24:00
+
+**Validation Result:** ❌ **Invalid** — Plan has a coverage gap from 22:00–24:00. The scheduling engine cannot determine what content to play during this period, violating INV_PLAN_MUST_HAVE_FULL_COVERAGE.
+
+**Error Message:** `Error Code E-INV-14: Coverage Invariant Violation — Plan no longer covers 00:00–24:00. Suggested Fix: Add a zone covering the missing range or enable default test pattern seeding.`
+
+**Resolution:** Add a zone covering 22:00–24:00, or extend an existing zone to cover the gap.
+
 ## Outdated/Removed Concepts
 
 - ❌ Program-level `start_time`/`duration` inside plans  
@@ -78,6 +132,7 @@ _Status: Enforced_
 - ScheduleDay immutability & override behavior
 - Eligibility filter excludes non-ready/non-approved assets
 - EPG/Playlog horizon behavior
+- Plan full coverage validation (00:00–24:00 with no gaps)
 
 ## See Also
 
@@ -91,4 +146,11 @@ _Status: Enforced_
 - [SchedulePlan Show Contract](SchedulePlanShowContract.md)
 - [SchedulePlan Update Contract](SchedulePlanUpdateContract.md)
 - [SchedulePlan Delete Contract](SchedulePlanDeleteContract.md)
+
+## Referenced By
+
+- [SchedulePlanAddContract.md](SchedulePlanAddContract.md)
+- [SchedulePlanUpdateContract.md](SchedulePlanUpdateContract.md)
+- [SchedulePlanShowContract.md](SchedulePlanShowContract.md)
+- [SchedulePlanListContract.md](SchedulePlanListContract.md)
 

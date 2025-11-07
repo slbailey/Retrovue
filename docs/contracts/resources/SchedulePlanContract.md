@@ -100,6 +100,7 @@ All date and cron evaluation use the system clock via MasterClock. There is no p
 
 - Validate on `add`, `update`, and via explicit validation commands
 - Always validate the SchedulePlan row
+- **Coverage Invariant (INV_PLAN_MUST_HAVE_FULL_COVERAGE)**: All plans must satisfy full 24-hour coverage (00:00–24:00) with no gaps. Plans are automatically initialized with a default "test pattern" zone (00:00–24:00) when created without explicit zones. See [Scheduling Invariants](SchedulingInvariants.md) S-INV-14 for details.
 - Cross-validate Zone/Pattern alignment with Channel Grid boundaries
 - Validate cron expression syntax (if provided)
 - Validate date ranges (start_date <= end_date)
@@ -134,6 +135,7 @@ Each SchedulePlan contract should have exactly two test files:
 ## See Also
 
 - [Scheduling Invariants](SchedulingInvariants.md) - Cross-cutting scheduling invariants
+- [Scheduling Invariants → S-INV-14 Coverage Invariant](SchedulingInvariants.md#s-inv-14-plan-must-have-full-coverage-inv_plan_must_have_full_coverage) - Plan full coverage requirement (00:00–24:00)
 - [SchedulePlan Domain Documentation](../../domain/SchedulePlan.md) - Core domain model and rules
 - [Zone Contract](ZoneContract.md) - Zone operations within plans
 - [Pattern Contract](PatternContract.md) - Pattern operations within plans

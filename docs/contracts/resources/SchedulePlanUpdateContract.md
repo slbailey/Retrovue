@@ -156,6 +156,19 @@ retrovue channel plan <channel> <plan> update \
 - Cron hour/minute fields are parsed but ignored (only date/day-of-week fields are used)
 - Tests must inject fixed MasterClock for deterministic behavior
 
+### B-12: Coverage Invariant Validation (INV_PLAN_MUST_HAVE_FULL_COVERAGE)
+
+**Rule:** On save/update, the plan MUST satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14).
+
+**Behavior:**
+
+- Validation checks that the plan's zones provide full 24-hour coverage (00:00–24:00) with no gaps
+- If validation fails → exit 1, error message: "Error: Plan must have full 24-hour coverage (00:00–24:00) with no gaps. See INV_PLAN_MUST_HAVE_FULL_COVERAGE."
+- **Example error output:** `Error Code E-INV-14: Coverage Invariant Violation — Plan no longer covers 00:00–24:00. Suggested Fix: Add a zone covering the missing range or enable default test pattern seeding.`
+- Removal of all zones or breaking coverage is prohibited unless in developer debug mode
+- In developer debug mode, the invariant check may be bypassed (implementation-specific)
+- This validation ensures plans remain usable for runtime schedule generation
+
 ## Data Contract Rules (D-#)
 
 ### D-1: Partial Field Updates
