@@ -10,14 +10,14 @@ This document tracks the migration from legacy tests to contract-based testing a
 
 | Status        | Count | Notes                                                                                            |
 | ------------- | ----- | ------------------------------------------------------------------------------------------------ |
-| ENFORCED      | 10    | All Enricher commands + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete |
+| ENFORCED      | 20    | All Enricher commands + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete + CollectionList + CollectionShow + CollectionUpdate + CollectionWipe + CollectionIngest + AssetAttention + AssetResolve + AssetConfidence |
 | TESTS CREATED | 0     | All tests moved to ENFORCED                                                                      |
-| PLANNED       | 9     | Source, Collection, Assets, Channel, System                                                      |
+| PLANNED       | 4     | SourceIngest, AssetsSelect, AssetsDelete, Channel operations                                      |
 | CROSS-DOMAIN  | 4     | Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests)    |
 
-**10 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete  
+**20 Contracts ENFORCED:** All Enricher operations (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete + CollectionList + CollectionShow + CollectionUpdate + CollectionWipe + CollectionIngest + AssetAttention + AssetResolve + AssetConfidence  
 **0 Contracts with Tests:** All tests moved to ENFORCED  
-**9 Contracts Planned:** Source, Collection, Assets, Channel, and System operations  
+**4 Contracts Planned:** SourceIngest, AssetsSelect, AssetsDelete, Channel operations  
 **4 Cross-Domain Guarantees:** Source-Enricher (tests), Source-Importer (tests), Source-Collection (tests), CLI-Data (tests)
 
 ## Migration Status Legend
@@ -142,6 +142,98 @@ This document tracks the migration from legacy tests to contract-based testing a
   **CI:** YES  
   **Notes:** All 27 contract tests passing (13 behavioral + 14 data contract tests). Complete implementation with wildcard support, production safety checks, confirmation prompts, cascade deletion, and transactional guarantees. Includes compliance with DestructiveOperationConfirmation (C-1 through C-14) and ProductionSafety (PS-1 through PS-4) contracts.
 
+### CollectionList
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/CollectionListContract.md  
+**Tests:**
+
+- tests/contracts/test_collection_list_contract.py
+- tests/contracts/test_collection_list_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 23 contract tests passing (14 behavioral + 9 data contract tests). Complete implementation with source filtering, JSON output, and read-only snapshot guarantees.
+
+### CollectionShow
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/CollectionShowContract.md  
+**Tests:**
+
+- tests/contracts/test_collection_show_contract.py  
+  **CI:** YES  
+  **Notes:** All 3 contract tests passing. Complete implementation with detailed collection information display.
+
+### CollectionUpdate
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/CollectionUpdateContract.md  
+**Tests:**
+
+- tests/contracts/test_collection_update_contract.py  
+  **CI:** YES  
+  **Notes:** All contract tests passing. Complete implementation with path mapping updates, sync state management, and ingestible revalidation.
+
+### CollectionWipe
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/CollectionWipeContract.md  
+**Tests:**
+
+- tests/contracts/test_collection_wipe_contract.py  
+  **CI:** YES  
+  **Notes:** All 2 contract tests passing. Complete implementation with confirmation prompts and data removal.
+
+### CollectionIngest
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/CollectionIngestContract.md  
+**Tests:**
+
+- tests/contracts/test_collection_ingest_contract.py
+- tests/contracts/test_collection_ingest_data_contract.py
+- tests/contracts/test_collection_ingest_confidence_contract.py
+- tests/contracts/test_collection_ingest_metadata_persistence_data_contract.py
+- tests/contracts/test_collection_ingest_payload_contract.py
+- tests/contracts/test_collection_ingest_progress_contract.py
+- tests/contracts/test_collection_ingest_safety_contract.py
+- tests/contracts/test_collection_ingest_verbose_assets_contract.py
+- tests/contracts/test_collection_ingest_with_real_importer_contract.py  
+  **CI:** YES  
+  **Notes:** All 55+ contract tests passing. Complete implementation with asset processing, metadata handling, confidence scoring, and comprehensive safety checks.
+
+### AssetAttention
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/AssetAttentionContract.md  
+**Tests:**
+
+- tests/contracts/test_asset_attention_contract.py
+- tests/contracts/test_asset_attention_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 6 contract tests passing (5 behavioral + 1 data contract test). Complete implementation for listing assets needing operator attention.
+
+### AssetResolve
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/AssetResolveContract.md  
+**Tests:**
+
+- tests/contracts/test_asset_resolve_contract.py
+- tests/contracts/test_asset_resolve_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 8 contract tests passing (7 behavioral + 1 data contract test). Complete implementation for resolving assets by approving and/or marking ready.
+
+### AssetConfidence
+
+**Status:** ENFORCED  
+**Contracts:** docs/contracts/resources/AssetConfidenceContract.md  
+**Tests:**
+
+- tests/contracts/test_asset_confidence_contract.py
+- tests/contracts/test_asset_confidence_data_contract.py  
+  **CI:** YES  
+  **Notes:** All 2 contract tests passing. Complete implementation for confidence scoring during ingest.
+
 ---
 
 ## Cross-Domain Guarantees
@@ -190,12 +282,9 @@ _None - all tests moved to ENFORCED_
 ### Planned Contracts
 
 - ⏳ SourceIngest
-- ⏳ CollectionIngest
-- ⏳ CollectionWipe
 - ⏳ AssetsSelect
 - ⏳ AssetsDelete
-- ⏳ Channel
-- ⏳ Collection
+- ⏳ Channel operations (Add, Update, Delete, List, Show, Validate)
 - ⏳ SyncIdempotency
 - ⏳ UnitOfWork
 
@@ -209,7 +298,7 @@ All previous test implementations have been moved to `tests/_legacy/` for refere
 
 **Enforced Contracts:** CI runs contract tests for all ENFORCED contracts plus minimal unit tests that don't contradict contracts.
 
-**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete
+**Current Enforced Contracts:** All Enricher contracts (Add, ListTypes, List, Update, Remove) + SourceListTypes + SourceAdd + SourceList + SourceDiscover + SourceDelete + CollectionList + CollectionShow + CollectionUpdate + CollectionWipe + CollectionIngest + AssetAttention + AssetResolve + AssetConfidence
 
 **Command:** `pytest tests/contracts --maxfail=1 --disable-warnings -q`
 
