@@ -236,19 +236,21 @@ AsRun Log (Observed ground truth)
 
 ### Contract Files (Legacy References)
 
-The following contract files in `docs/contracts/` still reference the old Pattern model and may need separate attention:
+**Enforced Legacy Contracts Removed:**
+- ✅ `docs/contracts/resources/SchedulingInvariants.md` - REMOVED (was enforced legacy contract)
+- ✅ `docs/contracts/resources/SchedulePlanContract.md` - REMOVED (was enforced legacy contract)
 
-- `docs/contracts/resources/PatternContract.md` (if exists)
-- `docs/contracts/resources/SchedulingInvariants.md` (references Pattern)
-- `docs/contracts/resources/ZoneContract.md` (references Pattern extensively)
-- `docs/contracts/resources/ZoneAddContract.md` (references Pattern)
-- `docs/contracts/resources/ZoneUpdateContract.md` (references Pattern)
-- `docs/contracts/resources/ZoneShowContract.md` (references Pattern)
-- `docs/contracts/resources/ZoneListContract.md` (references Pattern)
-- `docs/contracts/resources/ZoneDeleteContract.md` (references Pattern)
-- `docs/contracts/resources/SchedulePlanContract.md` (references Pattern)
+**Legacy Contracts with Deprecation Notices:**
+The following contract files in `docs/contracts/` still reference the old Pattern model but are marked with deprecation notices:
 
-**Note**: These contract files may be intentionally preserved for backward compatibility or may need updating in a separate effort. They should be reviewed separately from the domain documentation.
+- `docs/contracts/resources/ZoneContract.md` (references Pattern extensively, has deprecation notice)
+- `docs/contracts/resources/ZoneAddContract.md` (references Pattern, has deprecation notice)
+- `docs/contracts/resources/ZoneUpdateContract.md` (references Pattern, has deprecation notice)
+- `docs/contracts/resources/ZoneShowContract.md` (references Pattern, has deprecation notice)
+- `docs/contracts/resources/ZoneListContract.md` (references Pattern, has deprecation notice)
+- `docs/contracts/resources/ZoneDeleteContract.md` (references Pattern, has deprecation notice)
+
+**Note**: These contract files are intentionally preserved with deprecation notices for backward compatibility reference. They are not marked as "Enforced" and serve as historical documentation.
 
 ### Legitimate "Pattern" References
 

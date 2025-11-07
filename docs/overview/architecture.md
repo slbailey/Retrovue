@@ -415,15 +415,15 @@ Planning happens in two scopes:
 
 **Architecture Refactoring (November 2025):** RetroVue's scheduling architecture was unified around the `SchedulableAsset` concept. The following legacy concepts were replaced:
 
-| Legacy Concept | New Concept | Notes |
-|---------------|-------------|-------|
-| **Pattern** | **Program** | Programs are now linked lists of SchedulableAssets with `play_mode` (random, sequential, manual). Programs define ordering and sequencing, not duration. |
-| **PatternZone** | **Zone** | Zones now hold SchedulableAssets directly (Programs, Assets, VirtualAssets, SyntheticAssets). Duration is zone-controlled. |
-| **VirtualProducer** | **Producer** (runtime component) | VirtualProducers don't exist. VirtualAssets expand to physical Assets which then feed standard Producers (runtime components). |
-| **Duration in Program** | **Duration in Zone** | Duration is now zone-controlled, not program-controlled. Programs define ordering and sequencing only. |
-| **Intro/outro fields in Program** | **Linked list nodes in `asset_chain`** | Intro/outro bumpers are now nodes in the Program's `asset_chain` linked list, not separate fields. |
-| **Pattern expansion at ScheduleDay** | **Program expansion at Playlist generation** | Programs expand their asset chains at playlist generation, not at ScheduleDay resolution. |
-| **ScheduleDay → PlaylogEvent** | **ScheduleDay → Playlist → PlaylogEvent** | New Playlist layer between ScheduleDay and PlaylogEvent for asset expansion. |
+| Legacy Concept                            | New Concept                                                           | Notes                                                                                                                                            |
+| ----------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pattern**                               | **Program**                                                           | Programs are now linked lists of SchedulableAssets with `play_mode` (random, sequential, manual). Programs define ordering and sequencing, not duration. |
+| **PatternZone**                           | **Zone**                                                              | Zones now hold SchedulableAssets directly (Programs, Assets, VirtualAssets, SyntheticAssets). Duration is zone-controlled. |
+| **VirtualProducer**                       | **Producer** (runtime component)                                      | VirtualProducers don't exist. VirtualAssets expand to physical Assets which then feed standard Producers (runtime components). |
+| **Duration in Program**                   | **Duration in Zone**                                                  | Duration is now zone-controlled, not program-controlled. Programs define ordering and sequencing only. |
+| **Intro/outro fields in Program**         | **Linked list nodes in `asset_chain`**                                | Intro/outro bumpers are now nodes in the Program's `asset_chain` linked list, not separate fields. |
+| **Pattern expansion at ScheduleDay**      | **Program expansion at Playlist generation**                          | Programs expand their asset chains at playlist generation, not at ScheduleDay resolution. |
+| **ScheduleDay → PlaylogEvent**            | **ScheduleDay → Playlist → PlaylogEvent**                             | New Playlist layer between ScheduleDay and PlaylogEvent for asset expansion. |
 
 **Key Architectural Shifts:**
 1. **Elimination of Pattern Layer**: Patterns are eliminated — Programs now serve this role with linked list structure

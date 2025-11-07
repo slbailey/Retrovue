@@ -22,7 +22,7 @@ The scheduling system assigns assets (or rules to select them) into grid blocks 
 
 **Relationship Diagram:**
 
-```
+```text
 SchedulePlan ─┬─> ScheduleDay ─┬─> PlaylogEvent
                │                 └─> AsRunLog
                │
