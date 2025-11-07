@@ -3,29 +3,29 @@ _Related: [Architecture overview](ArchitectureOverview.md) • [Domain: Scheduli
 # Scheduling system architecture
 
 > **Note:** This document reflects the modern scheduling architecture.  
-> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+> The active scheduling pipeline is: **SchedulableAsset → ScheduleDay → Playlist → Producer(ffmpeg) → AsRun.**
 
 ## Purpose
 
 The scheduling system defines what content airs on each Channel and when. It operates across multiple layers from high-level plans to granular playout execution. The system extends the plan horizon ahead of time, ensuring all viewers see synchronized playback regardless of join time.
 
-## Five-layer architecture
+## Pipeline Architecture
 
-The scheduling system follows a strict separation of concerns across five layers:
+The scheduling system follows a strict separation of concerns across the pipeline:
 
-**SchedulePlan → ScheduleDay → EPG → Playlog → As-Run Log**
+**SchedulableAsset → ScheduleDay → Playlist → Producer(ffmpeg) → AsRun**
 
-Each layer has distinct responsibilities:
+Each stage has distinct responsibilities:
 
-| Layer          | Responsibility                                                                  | Ownership                | When Generated                    |
+| Stage          | Responsibility                                                                  | Ownership                | When Generated                    |
 | -------------- | ------------------------------------------------------------------------------- | ------------------------ | --------------------------------- |
-| **SchedulePlan** | Top-level operator-created plans defining 24-hour timeline with block assignments | Operators create via CLI | Once, reused across days          |
-| **ScheduleDay** | Resolved, immutable daily schedule for specific channel and date                 | ScheduleService (daemon)  | 3–4 days in advance               |
-| **EPG**        | Coarse viewer-facing program guide (program-level information)                  | EPG generator            | Days ahead, updated periodically  |
-| **Playlog**    | Fine-grained playout plan with specific assets, ads, and timestamps             | ScheduleService          | Rolling horizon (3-4 hours ahead) |
-| **As-Run Log** | Factual record of what actually aired                                           | AsRunLogger              | Real-time as playback occurs      |
+| **SchedulePlan** | Top-level operator-created plans with Zones holding SchedulableAssets | Operators create via CLI | Once, reused across days          |
+| **ScheduleDay** | Planned daypart lineup for EPG. Holds SchedulableAssets (not files) in Zones | ScheduleService (daemon)  | 3–4 days in advance (EPG horizon) |
+| **Playlist**   | Resolved pre–AsRun list of physical assets with absolute timecodes             | ScheduleService          | Rolling horizon (few hours ahead) |
+| **Playlog**    | Runtime execution plan aligned to MasterClock                                   | ScheduleService          | Rolling horizon (few hours ahead) |
+| **AsRun**      | Observed ground truth — what actually aired                                     | AsRunLogger              | Real-time as playback occurs      |
 
-**Critical principle**: Each layer builds on the previous one. SchedulePlan defines structure, ScheduleDay instantiates it, EPG presents it to viewers, Playlog executes it, and As-Run Log records it.
+**Critical principle**: The pipeline flows from planning (SchedulableAssets in ScheduleDay) to resolution (Playlist with physical assets) to execution (Playlog aligned to MasterClock) to observation (AsRun). EPG horizon (days) vs playlog/playlist horizon (rolling few hours). MasterClock alignment and broadcast-day offset in rendering.
 
 ## Core scheduling layers
 
@@ -33,24 +33,26 @@ The scheduling system consists of five interconnected layers:
 
 ### 1. SchedulePlan
 
-Top-level operator-created plans that define channel programming. Each SchedulePlan represents a complete 24-hour timeline (00:00 to 24:00 relative to the channel's `programming_day_start` / `broadcast_day_start` anchor) with sequential block assignments.
+Top-level operator-created plans that define channel programming. Each SchedulePlan contains Zones (time windows) that hold SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets).
 
 - Plans are channel-specific and can be applied to multiple days via cron expressions or date ranges
-- Each plan contains [SchedulePlanBlockAssignment](SchedulePlanBlockAssignment.md) entries that directly define what content runs when using `start_time` (schedule-time offset from 00:00) and `duration` (minutes)
-- Plans can reference assets, series, rules, or [VirtualAssets](VirtualAsset.md) (reusable containers that encapsulate structured content sequences)
+- Each plan contains Zones (time windows) that hold SchedulableAssets directly
+- Zones declare when they apply (e.g., 00:00–24:00, 19:00–22:00) and hold SchedulableAssets
+- SchedulableAssets include Programs (with asset_chain and play_mode), Assets, VirtualAssets, and SyntheticAssets
 - Plans support layering with priority resolution (higher priority plans override lower priority plans)
-- [ContentPolicyRule](ContentPolicyRule.md) can be used to validate assignment compatibility (future feature)
+- Default/empty plan auto-creates a single 24:00 Zone labeled "Test Pattern" (SyntheticAsset)
 
 ### 2. ScheduleDay
 
-Resolved, immutable daily schedule derived from SchedulePlans. SchedulingService uses the channel's programming day anchor to generate ScheduleDay rows 3–4 days in advance.
+Planned daypart lineup for EPG. Holds SchedulableAssets (not files) placed in Zones. ScheduleService generates ScheduleDay rows 3–4 days in advance (EPG horizon).
 
 - Generated from active, layered SchedulePlans for a specific channel and date
-- Contains resolved asset selections with real-world wall-clock times
-- Times are calculated by anchoring schedule-time offsets to the channel's `programming_day_start`
+- Contains SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets) placed in Zones
+- Times are calculated by anchoring Zone time windows to the channel's `programming_day_start` / `broadcast_day_start`
 - Immutable once generated (frozen) unless force-regenerated or manually overridden
-- VirtualAssets expand to concrete Asset UUIDs during ScheduleDay generation
-- Maintains the relationship between plan assignments and resolved content
+- SchedulableAssets remain intact in ScheduleDay — expansion to physical assets occurs at playlist generation
+- Human-readable times reflect broadcast-day start (e.g., 06:00 → 05:59 next day)
+- JSON outputs include canonical times plus `broadcast_day_start` for UI offset calculation
 
 ### 3. EPG (Electronic Program Guide)
 
@@ -62,27 +64,39 @@ Derived from ScheduleDay. Public-facing grid that shows what's scheduled to air.
 - Does not reflect last-minute playlog changes until they occur
 - Safe to generate ahead of time since ScheduleDays are frozen 3–4 days in advance
 
+### 3. Playlist
+
+Resolved pre–AsRun list of physical assets with absolute timecodes. Generated from ScheduleDay by expanding SchedulableAssets to physical Assets.
+
+- Generated from ScheduleDay by expanding SchedulableAssets to physical Assets
+- VirtualAssets expand into one or more physical Assets at playlist generation
+- Programs expand their asset chains based on play_mode (random, sequential, manual)
+- Contains concrete file entries with absolute start/end times and ffmpeg input specifications
+- Each entry references source ScheduleDay slot for traceability
+- Generated using a rolling horizon (few hours ahead)
+
 ### 4. Playlog
 
-Built from ScheduleDay. Contains the resolved list of media segments to be played, with real video assets, commercials, and bumpers in exact playout order with precise timestamps. The playlog is the fine-grained execution plan that ChannelManager uses for actual playout.
+Runtime execution plan aligned to the MasterClock. Derived from Playlist, represents what should play.
 
+- Derived from Playlist and aligned to MasterClock for synchronized playout
 - Contains specific asset references with exact file paths
-- Each entry maps to a ScheduleDay and points to a resolved asset or asset segment (for VirtualAssets)
-- Includes ad breaks, bumpers, and interstitials in correct sequence
-- Uses precise timestamps aligned to the master clock
-- Generated using a rolling horizon (see Playlog mechanics below)
+- Each entry maps to a ScheduleDay slot and points to a resolved physical asset from Playlist
+- Uses precise timestamps aligned to the MasterClock
+- Generated using a rolling horizon (few hours ahead)
 - Supports fallback mechanisms and last-minute overrides
-- Asset-level and file-specific, unlike ScheduleDay which contains resolved asset selections
+- Asset-level and file-specific, ready for Producer execution
 
-### 5. As-Run Log
+### 5. AsRun
 
-Tracks what actually aired by recording each segment as it starts playback. This is the factual record of broadcast execution.
+Observed ground truth — what actually aired. Records what was observed during playout execution.
 
 - Records every asset as it begins playback
-- Includes actual start times from the master clock
+- Includes actual start times from the MasterClock
 - Captures what was attempted vs. what actually aired
 - Used for historical accuracy, audits, and reporting
-- Independent of the playlog (which is the plan, not the execution)
+- Independent of Playlog (which is the plan, not the execution)
+- Can be compared to Playlog to identify discrepancies
 
 ## SchedulePlan layering and priority
 
@@ -171,44 +185,54 @@ A named block of time used for visual organization. Dayparts can be represented 
 
 - Examples: "Morning Block" (6–9 AM), "Prime Time" (7–11 PM)
 - Dayparts are represented as Zones within SchedulePlans
-- Content selection is defined directly in Patterns within Zones, not through separate daypart rules
+- Content selection is defined directly by SchedulableAssets placed in Zones, not through separate daypart rules
 
-## Playlog mechanics
+## Playlist and Playlog mechanics
 
 ### Rolling horizon
 
-The full day's playlog is not generated at midnight. Instead, the system uses a rolling horizon approach:
+The full day's playlist/playlog is not generated at midnight. Instead, the system uses a rolling horizon approach:
 
-- Only 3–4 hours of playlog are created at a time
-- The playlog horizon continuously extends ahead of the current time
+- Only a few hours of playlist/playlog are created at a time
+- The horizon continuously extends ahead of the current time
 - This avoids long gaps and unnecessary prep for grid blocks no one is watching
 - Reduces computational overhead while maintaining sufficient lookahead
 
+**EPG Horizon:** ScheduleDays are resolved 3–4 days in advance (EPG horizon).  
+**Playlist/Playlog Horizon:** Playlists and Playlogs are generated with a rolling horizon (few hours ahead).
+
 ### Content composition
+
+During playlist generation:
+
+- SchedulableAssets are resolved to physical Assets
+- VirtualAssets expand into one or more physical Assets
+- Programs expand their asset chains based on play_mode
+- Content is stitched together in exact order with absolute timecodes
+- All timing aligns with the channel's Grid boundaries
 
 During playlog generation:
 
-- Content is stitched together in exact order
-- Ad breaks are inserted at designated avails
-- Bumpers and interstitials are placed between segments
+- Playlist entries are aligned to MasterClock for synchronized playout
+- Ad breaks, bumpers, and interstitials are placed in correct sequence
 - Transitions between content items are specified
-- All timing aligns with the master clock
+- All timing aligns with the MasterClock
 
 ### Asset eligibility
 
-The playlog builder only considers assets where `state == 'ready'` and `approved_for_broadcast == true`. Assets in `new`, `enriching`, or `retired` states are never included in playlog generation.
+The playlist builder only considers assets where `state == 'ready'` and `approved_for_broadcast == true`. Assets in `new`, `enriching`, or `retired` states are never included in playlist generation. SchedulableAssets that cannot resolve to eligible assets are skipped or fall back to default content.
 
 ### Skippability and underfills
 
 When no eligible asset is found for a grid block:
 
-- **Skippable segments**: If a segment cannot be filled and skipping is allowed, the playlog builder creates a gap event or moves to the next segment
+- **Skippable segments**: If a segment cannot be filled and skipping is allowed, the playlist builder creates a gap entry or moves to the next segment
 - **Underfill handling**: If a grid block is partially filled (e.g., 20 minutes of content in a 30-minute slot), the system may:
-  - Insert a fallback playlog event (e.g., holding pattern, bumper, or error screen)
+  - Insert a fallback playlist entry (e.g., holding pattern, bumper, or error screen)
   - Extend adjacent content if rules permit
   - Leave the gap and notify operators
 - **Operator notification**: All skips, gaps, and underfills are logged and surfaced to operators for review
-- **Fallback events**: The playlog includes explicit fallback events with type indicators (e.g., `event_type: "gap"` or `event_type: "fallback"`) so ChannelManager knows how to handle them
+- **Fallback entries**: The playlist includes explicit fallback entries so Producers know how to handle them
 
 ## Viewer join behavior
 
@@ -223,19 +247,20 @@ When a viewer joins a stream:
 
 Here's a concrete example of how the system handles a viewer join:
 
-**8:55 PM** - System extends playlog horizon:
+**8:55 PM** - System extends playlist/playlog horizon:
 
-- ScheduleService checks master clock: `now_utc = 2025-11-04T20:55:00Z`
-- Current playlog horizon ends at 11:00 PM
-- Extends playlog to cover 9:00 PM - 12:00 AM
-- Generates BroadcastPlaylogEvent for "Cheers S2E5" starting at 9:00 PM
+- ScheduleService checks MasterClock: `now_utc = 2025-11-04T20:55:00Z`
+- Current playlist/playlog horizon ends at 11:00 PM
+- Extends playlist/playlog to cover 9:00 PM - 12:00 AM
+- Generates Playlist entry for "Cheers S2E5" starting at 9:00 PM
+- Generates PlaylogEvent aligned to MasterClock
 
 **9:00 PM** - Program starts:
 
 - ChannelManager reads playlog event for 9:00 PM
 - Locates asset: `asset_uuid = "cheers_s2e5_uuid"`
 - Verifies asset state: `state='ready'`, `approved_for_broadcast=true`
-- Starts playback at file offset `00:00:00`
+- Producer (AssetProducer) starts playback at file offset `00:00:00`
 - AsRunLogger records: `{timestamp: "2025-11-04T21:00:00Z", asset: "cheers_s2e5", event_type: "program"}`
 
 **9:03 PM** - Viewer joins:
@@ -244,7 +269,7 @@ Here's a concrete example of how the system handles a viewer join:
 - ChannelManager identifies current grid block (9:00 PM - 9:30 PM)
 - Finds playlog event: "Cheers S2E5" starting at 9:00 PM
 - Calculates offset: `master_clock.now_utc() - playlog_event.start_utc = 180 seconds`
-- Starts viewer playback at file offset `00:03:00` in `cheers_s2e5.mp4`
+- Producer starts viewer playback at file offset `00:03:00` in `cheers_s2e5.mp4`
 - Viewer sees synchronized content with all other viewers
 
 **9:30 PM** - Program ends:
@@ -255,9 +280,9 @@ Here's a concrete example of how the system handles a viewer join:
 
 This ensures perfect synchronization regardless of join time.
 
-## Master clock synchronization
+## MasterClock synchronization and broadcast-day alignment
 
-The master clock dictates when each asset should start. Every segment in the playlog aligns with the clock to prevent drift.
+The MasterClock dictates when each asset should start. Every segment in the playlog aligns with the clock to prevent drift. Human-readable times in plan show and ScheduleDay views reflect channel broadcast-day start (e.g., 06:00 → 05:59 next day).
 
 ### Component responsibilities
 
@@ -266,32 +291,47 @@ Synchronization logic is distributed across components with clear ownership:
 | Component           | Responsibility                              | Sync Role                                                         |
 | ------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
 | **MasterClock**     | Provides current time + timestamp authority | Single source of truth for "now"                                  |
-| **ScheduleService** | Extends playlog horizon aligned to clock    | Generates playlog events with `start_utc` from master clock       |
-| **ChannelManager**  | Executes playback, syncs viewer joins       | Calculates playback offset using master clock, aligns all viewers |
-| **AsRunLogger**     | Logs playback events with clock time        | Records actual start times from master clock                      |
+| **ScheduleService** | Extends playlist/playlog horizon aligned to clock | Generates playlist/playlog entries with absolute times from MasterClock |
+| **ChannelManager**  | Executes playback, syncs viewer joins       | Calculates playback offset using MasterClock, aligns all viewers |
+| **AsRunLogger**     | Logs playback events with clock time        | Records actual start times from MasterClock                      |
 
 **Critical rule**: All timing decisions must use MasterClock. Direct calls to `datetime.now()` or `datetime.utcnow()` are not allowed in runtime code.
 
+**Broadcast-day display**: Human-readable times in plan show and ScheduleDay views must reflect channel broadcast-day start. JSON outputs can keep canonical times, but include `broadcast_day_start` so UIs can offset.
+
 ### Clock alignment
 
-- Every playlog event has a precise `start_utc` timestamp from the master clock
+- Every playlog event has a precise `start_utc` timestamp from the MasterClock
 - When generating playout for a viewer, ChannelManager:
-  1. Queries master clock for current time
-  2. Locates the current grid block using master clock time
+  1. Queries MasterClock for current time
+  2. Locates the current grid block using MasterClock time
   3. Finds the correct time offset within the segment: `offset = master_clock.now_utc() - playlog_event.start_utc`
-  4. Starts playback exactly from that point in the asset file
+  4. Producer starts playback exactly from that point in the asset file
 - Prevents "drifting ahead" due to faster encoding or random delays
 - Ensures all viewers see the same content at the same absolute time
+- Broadcast-day offset is applied in human-readable views (e.g., 06:00 → 05:59 next day)
 
 ### Sync checkpoints
 
 The system may use sync checkpoints to allow newly joined viewers to align to the current master clock offset quickly. These checkpoints help minimize join latency while maintaining perfect synchronization.
 
-## BroadcastPlaylogEvent structure
+## Playlist and Playlog structure
 
-The playlog is composed of BroadcastPlaylogEvent records. Each event represents a single playout segment with precise timing and asset references.
+The playlist is composed of PlaylistEntry records. Each entry represents a resolved physical asset with absolute timecodes. The playlog is composed of PlaylogEvent records aligned to MasterClock.
 
-### Event structure
+### Playlist entry structure
+
+```json
+{
+  "start_time": "2025-11-04T21:00:00Z",
+  "end_time": "2025-11-04T21:23:00Z",
+  "asset_id": "cheers_s2e5_uuid",
+  "source_slot_id": "schedule-day-slot-uuid",
+  "ffmpeg_input": "/mnt/media/cheers/season2/cheers_s2e5.mp4"
+}
+```
+
+### Playlog event structure
 
 ```json
 {
@@ -302,40 +342,30 @@ The playlog is composed of BroadcastPlaylogEvent records. Each event represents 
   "start_utc": "2025-11-04T21:00:00Z",
   "end_utc": "2025-11-04T21:23:00Z",
   "broadcast_day": "2025-11-04",
-  "event_type": "program",
-  "duration_seconds": 1380,
-  "playout_path": "/mnt/media/cheers/season2/cheers_s2e5.mp4",
+  "schedule_day_id": "schedule-day-uuid",
   "created_at": "2025-11-04T20:55:00Z"
 }
 ```
 
-### Event types
-
-- **`program`**: Regular content (episodes, movies)
-- **`commercial`**: Ad break segment
-- **`bumper`**: Transition bumper or station ID
-- **`interstitial`**: Short filler content
-- **`gap`**: Skipped or unfilled slot (fallback)
-- **`fallback`**: Error screen or holding pattern
-
 ### Event lifecycle
 
-1. **Generation**: ScheduleService creates BroadcastPlaylogEvent during horizon extension
-2. **Storage**: Events persisted in database with indexes on `channel_id`, `start_utc`, `broadcast_day`
-3. **Retrieval**: ChannelManager queries events by channel and time range
-4. **Execution**: ChannelManager uses events to build playout plans
-5. **Recording**: AsRunLogger records when events actually start playback
+1. **Playlist Generation**: ScheduleService creates PlaylistEntry records from ScheduleDay (SchedulableAssets expand to physical assets)
+2. **Playlog Generation**: ScheduleService creates PlaylogEvent records from Playlist (aligned to MasterClock)
+3. **Storage**: Events persisted in database with indexes on `channel_id`, `start_utc`, `broadcast_day`
+4. **Retrieval**: ChannelManager queries playlog events by channel and time range
+5. **Execution**: Producer uses playlog events to build playout plans
+6. **Recording**: AsRunLogger records when events actually start playback
 
-## As-run log
+## AsRun
 
-Every time an asset begins playback, it's recorded in the as-run log. This log reflects actual playout execution, not the plan.
+Every time an asset begins playback, it's recorded in the AsRun log. This log reflects actual playout execution, not the plan.
 
 ### What gets logged
 
-- Time the segment started (from master clock)
+- Time the segment started (from MasterClock)
 - What asset actually aired
 - Channel identifier
-- Reference to the originating BroadcastPlaylogEvent
+- Reference to the originating PlaylogEvent
 - Any fallback conditions (e.g., emergency slate instead of intended content)
 - Any enrichers applied during playout
 
@@ -363,16 +393,19 @@ Every time an asset begins playback, it's recorded in the as-run log. This log r
 
 ### Content selection timing
 
-- Content selection is defined in SchedulePlanBlockAssignment entries (assets, series, rules, or VirtualAssets)
-- ScheduleDays are generated 3–4 days in advance with resolved asset selections
-- VirtualAssets expand to concrete Asset UUIDs during ScheduleDay generation
-- PlaylogEvents are generated from ScheduleDays with already-resolved asset references
+- Content selection is defined in SchedulePlan Zones holding SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets)
+- ScheduleDays are generated 3–4 days in advance with SchedulableAssets placed in Zones
+- VirtualAssets expand to physical Assets during playlist generation (not at ScheduleDay time)
+- Playlists are generated from ScheduleDays by expanding SchedulableAssets to physical Assets
+- PlaylogEvents are generated from Playlists, aligned to MasterClock
 
 ### Rolling generation
 
-- EPG can be generated days ahead (coarse view)
-- Playlog is generated hours ahead (fine-grained view)
-- As-run log is generated in real time (actual execution)
+- EPG can be generated days ahead (coarse view, derived from ScheduleDay)
+- ScheduleDay is generated 3–4 days in advance (EPG horizon)
+- Playlist is generated hours ahead (resolved physical assets)
+- Playlog is generated hours ahead (runtime execution plan aligned to MasterClock)
+- AsRun is generated in real time (observed ground truth)
 
 ## Failure / fallback behavior
 
@@ -402,48 +435,47 @@ The system handles failures at each layer with specific fallback strategies:
 
 ### Scheduling failures
 
-- If playlog generation fails, the system falls back to the most recent successful schedule
-- Missing playlog events trigger default programming or error handling
+- If playlist/playlog generation fails, the system falls back to the most recent successful schedule
+- Missing playlist/playlog entries trigger default programming or error handling
 - Operators are notified of scheduling failures via alerts
 
-### Playlog gaps
+### Playlist/Playlog gaps
 
-When the playlog horizon is not ready when needed:
+When the playlist/playlog horizon is not ready when needed:
 
 1. **Detection**: ChannelManager detects missing playlog events for current time
-2. **On-demand generation**: Attempts to generate playlog on-demand (with potential latency)
-3. **Fallback events**: If generation fails, inserts fallback playlog event:
-   - Event type: `fallback`
+2. **On-demand generation**: Attempts to generate playlist/playlog on-demand (with potential latency)
+3. **Fallback entries**: If generation fails, inserts fallback playlist/playlog entry:
    - Content: Error screen or holding pattern
-   - Duration: Until next available playlog event
+   - Duration: Until next available entry
 4. **Operator notification**: All gaps and fallbacks are logged and surfaced to operators
 
 ### Asset availability failures
 
 When no eligible asset is found:
 
-1. **Skip logic**: If segment is skippable, creates gap event and moves to next segment
-2. **Underfill handling**: If partial fill, creates fallback event for remaining time
+1. **Skip logic**: If segment is skippable, creates gap entry and moves to next segment
+2. **Underfill handling**: If partial fill, creates fallback entry for remaining time
 3. **Fallback content**: Uses configured fallback content (e.g., station ID, holding pattern)
 4. **Operator alert**: Notifies operators of missing content for review
 
-### Master clock issues
+### MasterClock issues
 
-- If master clock is unavailable, downstream services cannot safely determine "what is on right now"
+- If MasterClock is unavailable, downstream services cannot safely determine "what is on right now"
 - This condition is considered critical and triggers:
   - All playout stops
   - Critical alert to operators
   - System enters degraded mode
-- All scheduling decisions depend on authoritative time from the master clock
-- No graceful degradation is possible without master clock
+- All scheduling decisions depend on authoritative time from the MasterClock
+- No graceful degradation is possible without MasterClock
 
 ### Recovery procedures
 
 After failures:
 
-1. **Scheduling recovery**: ScheduleService retries playlog generation
+1. **Scheduling recovery**: ScheduleService retries playlist/playlog generation
 2. **Gap recovery**: ChannelManager periodically checks for newly available playlog events
-3. **Clock recovery**: System waits for master clock restoration before resuming playout
+3. **Clock recovery**: System waits for MasterClock restoration before resuming playout
 4. **Operator intervention**: Manual override commands available for critical situations
 
 ## Proof of concept strategy
@@ -493,19 +525,24 @@ ScheduleService is a background daemon that orchestrates scheduling:
    - Identifies active SchedulePlans matching the channel and date (based on cron_expression, date ranges)
    - Applies priority resolution (highest priority plan wins)
    - Uses the channel's programming day anchor (`programming_day_start` / `broadcast_day_start`) for time anchoring
-2. **ScheduleDay generation**: Extends the plan horizon by generating ScheduleDay rows 3–4 days in advance:
-   - Retrieves block assignments from the selected plan
-   - Resolves VirtualAssets to concrete Asset UUIDs
-   - Resolves content references (assets, series, rules) to specific assets
-   - Anchors schedule-time offsets to programming day start to produce wall-clock times
+2. **ScheduleDay generation**: Extends the plan horizon by generating ScheduleDay rows 3–4 days in advance (EPG horizon):
+   - Retrieves Zones and their SchedulableAssets from the selected plan
+   - Places SchedulableAssets in Zones with wall-clock times
+   - Anchors Zone time windows to programming day start to produce wall-clock times
    - Creates frozen, immutable ScheduleDay records
-3. **PlaylogEvent generation**: Builds runtime playlog by generating PlaylogEvents from ScheduleDays:
-   - Each PlaylogEvent maps to a ScheduleDay and points to a resolved asset or asset segment
+3. **Playlist generation**: Builds resolved playlist by generating PlaylistEntry records from ScheduleDays:
+   - SchedulableAssets expand to physical Assets (VirtualAssets expand here)
+   - Programs expand their asset chains based on play_mode
+   - Creates absolute timecodes for each physical asset
+   - Supports fallback mechanisms
+4. **PlaylogEvent generation**: Builds runtime playlog by generating PlaylogEvents from Playlists:
+   - Each PlaylogEvent maps to a ScheduleDay slot and points to a resolved physical asset from Playlist
+   - Aligns entries to MasterClock for synchronized playout
    - Creates precise timestamps for playout execution
    - Supports fallback mechanisms and last-minute overrides
-4. **Content eligibility**: Queries assets for eligible content (`state='ready'` and `approved_for_broadcast=true`)
-5. **Horizon management**: Extends the plan horizon and builds the runtime playlog as needed (rolling 3–4 hours ahead)
-6. **Timing**: Uses master clock for all timing decisions
+5. **Content eligibility**: Queries assets for eligible content (`state='ready'` and `approved_for_broadcast=true`)
+6. **Horizon management**: Extends the plan horizon (ScheduleDay 3–4 days ahead) and builds the runtime playlist/playlog as needed (rolling few hours ahead)
+7. **Timing**: Uses MasterClock for all timing decisions
 
 ### Program director
 
@@ -527,19 +564,25 @@ ChannelManager executes playout but does not modify scheduling domain models. It
 
 ## Naming rules
 
-- **SchedulePlan**: Top-level operator-created plan defining 24-hour timeline with block assignments
-- **ScheduleDay**: Resolved, immutable daily schedule for specific channel and date (generated 3–4 days in advance)
-- **EPG**: Electronic Program Guide (coarse viewer-facing schedule)
-- **Playlog**: Resolved list of media segments to be played (fine-grained playout plan)
-- **As-run log**: Record of what actually aired
+- **SchedulePlan**: Top-level operator-created plan with Zones holding SchedulableAssets
+- **SchedulableAsset**: Abstract base for all schedule entries (Program, Asset, VirtualAsset, SyntheticAsset)
+- **ScheduleDay**: Planned daypart lineup for EPG. Holds SchedulableAssets (not files) in Zones (generated 3–4 days in advance)
+- **Playlist**: Resolved pre–AsRun list of physical assets with absolute timecodes
+- **Playlog**: Runtime execution plan aligned to MasterClock
+- **AsRun**: Observed ground truth — what actually aired
+- **EPG**: Electronic Program Guide (coarse viewer-facing schedule, derived from ScheduleDay)
 - **Grid block**: Smallest schedulable time unit (aligned with channel grid)
-- **Daypart**: Named block of time represented as a Zone within a SchedulePlan
+- **Zone**: Named time window within the programming day that holds SchedulableAssets
+- **Producer**: Output-oriented runtime component (AssetProducer, SyntheticProducer, future LiveProducer). ffmpeg is the playout engine that Producers feed.
 
 ## See also
 
 - [Domain: Scheduling](../domain/Scheduling.md) - Core scheduling domain models
-- [Domain: SchedulePlan](../domain/SchedulePlan.md) - Plan structure and scheduling logic
-- [Domain: PlaylogEvent](../domain/PlaylogEvent.md) - Playlog event records
+- [Domain: SchedulePlan](../domain/SchedulePlan.md) - Plan structure with Zones holding SchedulableAssets
+- [Domain: Program](../domain/Program.md) - SchedulableAsset type with asset_chain and play_mode
+- [Domain: VirtualAsset](../domain/VirtualAsset.md) - SchedulableAsset type that expands at playlist generation
+- [Domain: PlaylogEvent](../domain/PlaylogEvent.md) - Playlist, Playlog, and AsRun pipeline
+- [Architecture: Playlist](Playlist.md) - Resolved pre–AsRun list of physical assets
 - [Domain: EPGGeneration](../domain/EPGGeneration.md) - EPG generation logic
 - [Domain: MasterClock](../domain/MasterClock.md) - Time authority
 - [Runtime: ChannelManager](../runtime/ChannelManager.md) - Playout execution

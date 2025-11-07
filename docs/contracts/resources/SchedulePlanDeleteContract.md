@@ -1,6 +1,6 @@
 # SchedulePlan Delete Contract
 
-_Related: [SchedulePlanContract](SchedulePlanContract.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
+_Related: [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
 
 ## Purpose
 
@@ -219,8 +219,6 @@ Planned tests:
 
 ## See Also
 
-- [Scheduling Invariants](SchedulingInvariants.md) - Cross-cutting scheduling invariants
-- [SchedulePlan Domain Documentation](../../domain/SchedulePlan.md)
-- [SchedulePlan Contract](SchedulePlanContract.md)
+- [Domain: SchedulePlan](../../domain/SchedulePlan.md) - SchedulePlan domain documentation
 - [SchedulePlan Update](SchedulePlanUpdateContract.md)
 - [\_ops/DestructiveOperationConfirmation.md](../_ops/DestructiveOperationConfirmation.md)

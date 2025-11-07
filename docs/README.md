@@ -20,7 +20,13 @@ Core concepts RetroVue is built on. These define what the system is, not how it 
 - [Enricher](domain/Enricher.md)
 - [Playout pipeline](domain/PlayoutPipeline.md)
 - [Channel](domain/Channel.md)
-- (Scheduling / EPG / Playlog docs also belong here)
+- [Scheduling](domain/Scheduling.md) - Scheduling system architecture
+- [SchedulePlan](domain/SchedulePlan.md) - Schedule plan domain model
+- [Program](domain/Program.md) - Program domain model (linked list of SchedulableAssets)
+- [Zone](domain/Zone.md) - Zone domain model (time windows)
+- [ScheduleDay](domain/ScheduleDay.md) - Resolved daily schedules
+- [Playlist](architecture/Playlist.md) - Resolved pre-AsRun list of physical assets
+- [PlaylogEvent](domain/PlaylogEvent.md) - Runtime execution plan
 
 ## Runtime
 

@@ -1,6 +1,8 @@
 # Zone Domain Contracts
 
-_Related: [Zone Add](ZoneAddContract.md) • [Zone Update](ZoneUpdateContract.md) • [Zone List](ZoneListContract.md) • [Zone Show](ZoneShowContract.md) • [Zone Delete](ZoneDeleteContract.md) • [Domain: Zone](../../domain/Zone.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Pattern](../../domain/Pattern.md) • [Domain: Channel](../../domain/Channel.md) • [Zones + Patterns Contracts](../ZonesPatterns.md)_
+> ⚠️ **Legacy Contract:** This document describes legacy structures (Pattern references) retained for backward compatibility only. See `docs/domain/Zone.md` and `docs/domain/Program.md` for the current unified SchedulableAsset architecture. Zones now hold SchedulableAssets directly, not Patterns.
+
+_Related: [Zone Add](ZoneAddContract.md) • [Zone Update](ZoneUpdateContract.md) • [Zone List](ZoneListContract.md) • [Zone Show](ZoneShowContract.md) • [Zone Delete](ZoneDeleteContract.md) • [Domain: Zone](../../domain/Zone.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Program](../../domain/Program.md) • [Domain: Channel](../../domain/Channel.md) • [Zones + SchedulableAssets Contracts](../ZonesPatterns.md)_
 
 ## Purpose
 
@@ -749,7 +751,7 @@ Each contract (Z-VAL-01 through Z-STOR-01) MUST have corresponding test coverage
 
 - [ZonesPatterns.md](../ZonesPatterns.md) - High-level Zones + Patterns behavioral contracts
 - [SchedulePlanInvariantsContract.md](SchedulePlanInvariantsContract.md) - Cross-entity invariants for SchedulePlan
-- [PatternContract.md](PatternContract.md) - Pattern-specific contract rules (future)
+- [Domain: Program](../../domain/Program.md) - Program domain documentation (replaced Patterns)
 - [ScheduleDayContract.md](ScheduleDayContract.md) - ScheduleDay generation and validation contracts
 
 ## See Also

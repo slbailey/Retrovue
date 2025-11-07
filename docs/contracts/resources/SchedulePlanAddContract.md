@@ -1,10 +1,10 @@
 # SchedulePlan Add Contract
 
-_Related: [SchedulePlanContract](SchedulePlanContract.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Channel](../../domain/Channel.md)_
+_Related: [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Channel](../../domain/Channel.md)_
 
 ## Purpose
 
-This contract defines the behavior of the `retrovue channel plan <channel> add` command, which creates a new SchedulePlan for a channel. SchedulePlans are the top-level unit of channel programming, defining Zones (time windows) and Patterns (content sequences). The web UI will call the same underlying Plan Add function used by the CLI; the interactive plan build command exists only for developer and QA workflows, not production usage.
+This contract defines the behavior of the `retrovue channel plan <channel> add` command, which creates a new SchedulePlan for a channel. SchedulePlans are the top-level unit of channel programming, defining Zones (time windows) that hold SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets). On creation, a newly created plan auto-creates a single 24:00 test filler zone (SyntheticAsset) to ensure the plan is valid. The web UI will call the same underlying Plan Add function used by the CLI; the interactive plan build command exists only for developer and QA workflows, not production usage.
 
 ## Command Syntax
 
@@ -36,8 +36,8 @@ retrovue channel plan <channel> add \
 - `--end-date <YYYY-MM-DD>` - End date for plan validity (inclusive, can be year-agnostic)
 - `--priority <integer>` - Priority for layering (default: 0). Higher numbers = higher priority.
 - `--active` / `--inactive` - Plan operational status (default: `--active`)
-- `--empty` - Create plan without default test pattern zone (developer override; plan will not satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE)
-- `--allow-empty` - Create an invalid plan (no zones) for debugging or schema testing only. This flag disables automatic test-pattern seeding and should only be available in dev mode.
+- `--empty` - Create plan without default test filler zone (developer override; plan will not satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE)
+- `--allow-empty` - Create an invalid plan (no zones) for debugging or schema testing only. This flag disables automatic test filler zone seeding and should only be available in dev mode.
 - `--json` - Output in JSON format
 - `--test-db` - Use test database context
 
@@ -123,18 +123,18 @@ retrovue channel plan <channel> add \
 - Cron hour/minute fields are parsed but ignored (only date/day-of-week fields are used)
 - Tests must inject fixed MasterClock for deterministic behavior
 
-### B-9: Initialization Rules (Default Test Pattern Zone)
+### B-9: Initialization Rules (Default Test Filler Zone)
 
-**Rule:** When no zones are supplied, the system MUST auto-seed a full 24-hour test pattern zone (00:00–24:00) to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE.
+**Rule:** When no zones are supplied, the system MUST auto-seed a full 24-hour test filler zone (00:00–24:00) to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE.
 
 **Behavior:**
 
-- By default, a new plan is created with a default "test pattern" zone covering 00:00–24:00
-- This ensures the plan immediately satisfies the full coverage invariant (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14)
+- By default, a new plan is created with a default test filler zone covering 00:00–24:00
+- This ensures the plan immediately satisfies the full coverage invariant (plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps)
 - The default zone can be replaced or modified after plan creation
 - With `--empty` flag: Skip auto-seeding (plan will not satisfy coverage invariant; developer override only)
 - The `--empty` flag is intended for development/testing scenarios where incomplete plans are temporarily needed
-- With `--allow-empty` flag: Disables automatic test-pattern seeding and creates an invalid plan with no zones. This flag should only be available in dev mode and is intended for debugging or schema testing only. The resulting plan will violate INV_PLAN_MUST_HAVE_FULL_COVERAGE.
+- With `--allow-empty` flag: Disables automatic test filler zone seeding and creates an invalid plan with no zones. This flag should only be available in dev mode and is intended for debugging or schema testing only. The resulting plan will violate INV_PLAN_MUST_HAVE_FULL_COVERAGE.
 
 ### B-10: JSON Error Shape
 
@@ -322,7 +322,5 @@ Planned tests:
 
 ## See Also
 
-- [Scheduling Invariants](SchedulingInvariants.md) - Cross-cutting scheduling invariants
-- [SchedulePlan Domain Documentation](../../domain/SchedulePlan.md)
-- [SchedulePlan Contract](SchedulePlanContract.md)
+- [Domain: SchedulePlan](../../domain/SchedulePlan.md) - SchedulePlan domain documentation
 - [Channel Contract](ChannelContract.md)

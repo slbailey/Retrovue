@@ -1,6 +1,8 @@
 # Zone Show Contract
 
-_Related: [ZoneContract](ZoneContract.md) • [ZoneAddContract](ZoneAddContract.md) • [Domain: Zone](../../domain/Zone.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
+> ⚠️ **Legacy Contract:** This document describes legacy structures (Pattern references) retained for backward compatibility only. See `docs/domain/Zone.md` and `docs/domain/Program.md` for the current unified SchedulableAsset architecture. Zones now hold SchedulableAssets directly, not Patterns.
+
+_Related: [ZoneContract](ZoneContract.md) • [ZoneAddContract](ZoneAddContract.md) • [Domain: Zone](../../domain/Zone.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Program](../../domain/Program.md)_
 
 ## Purpose
 

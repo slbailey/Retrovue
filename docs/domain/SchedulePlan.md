@@ -1,17 +1,17 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md) • [Contracts](../contracts/README.md) • [ScheduleDay](ScheduleDay.md) • [Zone](Zone.md) • [Pattern](Pattern.md) • [Program](Program.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md) • [Contracts](../contracts/README.md) • [ScheduleDay](ScheduleDay.md) • [Zone](Zone.md) • [Program](Program.md) • [VirtualAsset](VirtualAsset.md)_
 
 # Domain — SchedulePlan
 
-> **Note:** This document reflects the modern scheduling architecture. Active chain: **SchedulePlan (Zones + Patterns) → ScheduleDay (resolved) → PlaylogEvent (runtime) → AsRunLog.**
+> **Note:** This document reflects the modern scheduling architecture. Active pipeline: **SchedulableAsset → ScheduleDay → Playlist → Producer(ffmpeg) → AsRun.**
 
 ## Purpose
 
-SchedulePlan is the **top-level unit of channel programming**. It is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows within the programming day) and a **Pattern** for each Zone.
+SchedulePlan is the **top-level unit of channel programming**. It is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows within the programming day) that hold **SchedulableAssets** (Programs, Assets, VirtualAssets, SyntheticAssets) directly.
 
-**Zones + Patterns Model:**
+**Zones + SchedulableAssets Model:**
 
-- **Zone**: Declares when it applies (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and references a Pattern. Zones do not hold episodes or assets.
-- **Pattern**: An ordered list of [Program](Program.md) entries (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern. The plan engine repeats the pattern over the Zone until the Zone is full.
+- **Zone**: Declares when it applies (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and holds SchedulableAssets directly. Zones do not reference Patterns.
+- **SchedulableAssets**: Programs (with asset_chain and play_mode), Assets, VirtualAssets, and SyntheticAssets placed directly in Zones.
 
 SchedulePlans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones. Plans are channel-bound and span repeating or one-time timeframes. Superseded plans are archived rather than deleted. Plan-based scheduling flows into [ScheduleDay](ScheduleDay.md), which is resolved 3-4 days in advance for EPG and playout purposes.
 
@@ -19,10 +19,9 @@ SchedulePlans are layered by priority and can be overridden (e.g., weekday vs. h
 
 - SchedulePlan is the **top-level unit of channel programming** — the authoritative source for all scheduling decisions
 - Each plan defines one or more **Zones** (named time windows within the programming day)
-- Each Zone references a **Pattern** (ordered list of Programs)
-- **Programs** are catalog entries (series, movie, block, composite) that can reference [VirtualAssets](VirtualAsset.md)
-- Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
-- Episodes are resolved automatically at ScheduleDay time based on rotation policy
+- Each Zone holds **SchedulableAssets** directly (Programs, Assets, VirtualAssets, SyntheticAssets)
+- **Programs** are SchedulableAssets with asset_chain (linked list of SchedulableAssets) and play_mode (random, sequential, manual)
+- Programs resolve at playlist generation to concrete files via linked chain expansion and pool selection
 - Plans are channel-bound and span repeating or one-time timeframes
 - Plans are layered with more specific plans (e.g., holidays) overriding generic ones (e.g., weekdays)
 - All scheduling logic is defined directly in SchedulePlan
@@ -30,14 +29,14 @@ SchedulePlans are layered by priority and can be overridden (e.g., weekday vs. h
 
 ## Core Model / Scope
 
-SchedulePlan is the **top-level unit of channel programming** and the **single source of scheduling logic** for channel programming. It defines one or more **Zones** (named time windows within the programming day) and a **Pattern** for each Zone. It is a reusable planning construct that:
+SchedulePlan is the **top-level unit of channel programming** and the **single source of scheduling logic** for channel programming. It defines one or more **Zones** (named time windows within the programming day) that hold **SchedulableAssets** (Programs, Assets, VirtualAssets, SyntheticAssets) directly. It is a reusable planning construct that:
 
 - **Top-level unit of channel programming**: SchedulePlan is the authoritative source for all scheduling decisions
 - **Defines Zones**: Each plan defines one or more Zones (named time windows within the programming day, e.g., base 00:00–24:00, or After Dark 22:00–05:00)
-- **Defines Patterns per Zone**: Each Zone references a Pattern (ordered list of [Program](Program.md) entries). Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
-- **Programs are catalog entries**: [Program](Program.md) entries in Patterns are schedulable entities such as series, movies, blocks, or composites (can reference [VirtualAssets](VirtualAsset.md))
-- **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy (`sequential`, `random`, or `lru`)
-- **Zone-based time windows**: Zones declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) but do not hold episodes or assets
+- **Zones hold SchedulableAssets**: Each Zone holds SchedulableAssets directly (Programs, Assets, VirtualAssets, SyntheticAssets)
+- **Programs are SchedulableAssets**: Programs are SchedulableAssets with asset_chain (linked list of SchedulableAssets) and play_mode (random, sequential, manual)
+- **Playlist resolution**: Programs resolve at playlist generation to concrete files via linked chain expansion and pool selection
+- **Zone-based time windows**: Zones declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and hold SchedulableAssets directly
 - **Is channel-bound**: Plans are bound to specific channels and span repeating or one-time timeframes
 - **Supports layering and overrides**: Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones
 - **Is timeless but date-bound**: Plans are timeless (reusable patterns) but bound by effective date ranges (start_date, end_date). Superseded plans are archived (`is_active=false`) rather than deleted
@@ -61,8 +60,7 @@ SchedulePlan is managed by SQLAlchemy with the following fields:
 
 SchedulePlan has one-to-many relationships with:
 
-- **Zone**: Multiple Zones can exist within a single plan, each defining a time window and Pattern reference
-- **Pattern**: Multiple Patterns can exist within a single plan, each defining an ordered list of Program references
+- **Zone**: Multiple Zones can exist within a single plan, each defining a time window and holding SchedulableAssets directly
 - **ScheduleDay**: Plans are used to generate resolved schedule days
 
 ### Table Name
@@ -92,7 +90,7 @@ SchedulePlans use priority-based layering where plans are matched by effective d
 
 ## Creation Model
 
-SchedulePlan creation enforces **INV_PLAN_MUST_HAVE_FULL_COVERAGE** (S-INV-14) by automatically initializing plans with a default test pattern zone when no zones are provided.
+SchedulePlan creation enforces **INV_PLAN_MUST_HAVE_FULL_COVERAGE** (S-INV-14) by automatically initializing plans with a default test filler zone when no zones are provided.
 
 **Pseudocode:**
 
@@ -113,7 +111,7 @@ def create_schedule_plan(
     Create a new SchedulePlan with automatic zone initialization.
 
     Enforces INV_PLAN_MUST_HAVE_FULL_COVERAGE by auto-seeding a default
-    test pattern zone (00:00–24:00) if zones is empty or None.
+    test filler zone (00:00–24:00) if zones is empty or None.
     """
     # Validate channel exists
     channel = get_channel(channel_id)
@@ -130,13 +128,13 @@ def create_schedule_plan(
 
     # Enforce INV_PLAN_MUST_HAVE_FULL_COVERAGE: auto-seed default zone if empty
     if not empty and len(zones) == 0:
-        # Auto-seed default test pattern zone covering full 24-hour period
+        # Auto-seed default test filler zone covering full 24-hour period
         default_zone = Zone(
             name="Base",
             start_time="00:00:00",
             end_time="24:00:00",
             plan_id=None,  # Will be set after plan creation
-            filler="test_pattern"  # Indicates this is the auto-seeded filler zone
+            filler="test_filler"  # Indicates this is the auto-seeded filler zone
         )
         zones = [default_zone]
 
@@ -200,32 +198,31 @@ def validate_full_coverage(plan_id: UUID) -> None:
 
 **Key Points:**
 
-- **Automatic initialization**: If `zones` is empty or `None` and `empty=False`, the system automatically creates a default `Zone` with `start="00:00"`, `end="24:00"`, and `filler="test_pattern"`.
+- **Automatic initialization**: If `zones` is empty or `None` and `empty=False`, the system automatically creates a default `Zone` with `start="00:00"`, `end="24:00"`, and `filler="test_filler"`.
 - **Developer override**: The `empty` flag allows developers to bypass auto-seeding for testing/debugging scenarios, but the plan will not satisfy the coverage invariant.
 - **Validation**: After creation, `validate_full_coverage()` ensures the plan satisfies INV_PLAN_MUST_HAVE_FULL_COVERAGE unless `empty=True`.
-- **Default zone properties**: The auto-seeded zone has `name="Base"` and `filler="test_pattern"` to indicate it's a placeholder that can be replaced or modified.
+- **Default zone properties**: The auto-seeded zone has `name="Base"` and `filler="test_filler"` to indicate it's a placeholder that can be replaced or modified.
 
 ## Contract / Interface
 
-SchedulePlan is the **single source of scheduling logic** for channel programming. It defines one or more **Zones** (named time windows within the programming day) and a **Pattern** for each Zone. It defines:
+SchedulePlan is the **single source of scheduling logic** for channel programming. It defines one or more **Zones** (named time windows within the programming day) that hold **SchedulableAssets** (Programs, Assets, VirtualAssets, SyntheticAssets) directly. It defines:
 
 - Plan identity and metadata (name, description)
 - Channel binding - plans are channel-bound and span repeating or one-time timeframes
 - Temporal validity (cron_expression, start_date, end_date) - plans are timeless but bound by effective date ranges
 - Priority for layering (priority) - enables plan layering by priority where more specific plans (e.g., holidays) override generic ones (e.g., weekdays)
 - Operational status (is_active) - superseded plans are archived rather than deleted
-- **Zones** - named time windows within the programming day (e.g., base 00:00–24:00, or After Dark 22:00–05:00)
-- **Patterns** - ordered lists of [Program](Program.md) entries for each Zone. Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
+- **Zones** - named time windows within the programming day (e.g., base 00:00–24:00, or After Dark 22:00–05:00) that hold SchedulableAssets directly
 
-**Zones + Patterns Model:**
+**Zones + SchedulableAssets Model:**
 
-- **Zone**: Declares when it applies (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and references a Pattern. Zones do not hold episodes or assets.
-- **Pattern**: An ordered list of [Program](Program.md) entries (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern. The plan engine repeats the pattern over the Zone until the Zone is full.
-- **Program (catalog)**: A schedulable entity such as a series, movie, block, or composite (can reference a [VirtualAsset](VirtualAsset.md)). Episodes are resolved automatically at ScheduleDay time based on rotation policy.
+- **Zone**: Declares when it applies (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and holds SchedulableAssets directly. Zones do not reference Patterns.
+- **SchedulableAssets**: Programs (with asset_chain and play_mode), Assets, VirtualAssets, and SyntheticAssets placed directly in Zones.
+- **Program**: SchedulableAsset type with asset_chain (linked list of SchedulableAssets) and play_mode (random, sequential, manual). Programs resolve at playlist generation to concrete files via linked chain expansion and pool selection.
 
-Plans are timeless and reusable by design. They define Zones and Patterns for recurring patterns (e.g., weekdays, holidays, seasons) or one-time events. All scheduling logic is defined directly in SchedulePlan.
+Plans are timeless and reusable by design. They define Zones with SchedulableAssets for recurring patterns (e.g., weekdays, holidays, seasons) or one-time events. All scheduling logic is defined directly in SchedulePlan.
 
-Content selection can include regular assets or VirtualAssets. Plan-based scheduling flows into [ScheduleDay](ScheduleDay.md), which is resolved 3-4 days in advance for EPG and playout purposes. ScheduleDays are then used to generate [PlaylogEvent](PlaylogEvent.md) records for actual playout execution.
+Content selection can include Programs, Assets, VirtualAssets, or SyntheticAssets. Plan-based scheduling flows into [ScheduleDay](ScheduleDay.md), which is resolved 3-4 days in advance for EPG and playout purposes. ScheduleDays are then used to generate [Playlist](../architecture/Playlist.md) records, which feed [PlaylogEvent](PlaylogEvent.md) records for actual playout execution.
 
 ## Execution Model
 
@@ -233,45 +230,43 @@ SchedulePlan is the **single source of scheduling logic** for channel programmin
 
 1. **Identify active plans**: For a given channel and date, determine which plans are active based on cron_expression, effective date ranges (start_date, end_date), and is_active status. Plans are channel-bound and span repeating or one-time timeframes
 2. **Resolve layering and overrides**: Apply plan layering by priority - if multiple plans match, select the plan with the highest priority. More specific plans (e.g., holidays) override generic ones (e.g., weekdays)
-3. **Resolve Zones and Patterns**: For each active plan, identify its Zones (time windows with optional day filters) and their associated Patterns (ordered lists of Program references). Zones + Patterns repeat to fill each Zone's active window, snapping to the Channel's Grid boundaries. Apply conflict resolution (soft-start-after-current) when Zones open while content is playing
-4. **Generate ScheduleDay**: Resolve the plan into a concrete [ScheduleDay](ScheduleDay.md) for the specific channel and date. **EPG horizon:** ScheduleDays are resolved 2-3 days in advance for EPG purposes. **Playlog horizon:** PlaylogEvents are continuously extended ~3-4 hours ahead of real time. This is the primary expansion point where Programs → concrete episodes and VirtualAssets → real assets
-5. **Generate PlaylogEvents**: From the resolved ScheduleDay, generate [PlaylogEvent](PlaylogEvent.md) records for actual playout execution
-6. **Validate Zones, Patterns, and Programs**: Ensure all Zones, Patterns, and Programs are valid and consistent
+3. **Resolve Zones and SchedulableAssets**: For each active plan, identify its Zones (time windows with optional day filters) and their SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets). Zones hold SchedulableAssets directly, snapping to the Channel's Grid boundaries. Apply conflict resolution (soft-start-after-current) when Zones open while content is playing
+4. **Generate ScheduleDay**: Resolve the plan into a concrete [ScheduleDay](ScheduleDay.md) for the specific channel and date. **EPG horizon:** ScheduleDays are resolved 3-4 days in advance for EPG purposes. ScheduleDay contains SchedulableAssets placed in Zones with wall-clock times
+5. **Generate Playlist**: From ScheduleDay, generate [Playlist](../architecture/Playlist.md) records by expanding SchedulableAssets to physical Assets. **Playlist horizon:** Playlists are continuously extended ~few hours ahead of real time. This is where Programs expand their asset chains and VirtualAssets expand to physical Assets
+6. **Generate PlaylogEvents**: From the Playlist, generate [PlaylogEvent](PlaylogEvent.md) records aligned to MasterClock for actual playout execution
+7. **Validate Zones and SchedulableAssets**: Ensure all Zones and SchedulableAssets are valid and consistent
 
 **Viewer Join Behavior:** When a viewer joins a channel, playout starts from the beginning of the current grid block. This ensures consistent viewing experiences regardless of join time. See [ChannelManager](../runtime/ChannelManager.md) for runtime behavior details.
 
-## Zones and Patterns
+## Zones and SchedulableAssets
 
-Zones and Patterns are the core contents of a SchedulePlan. A plan defines one or more Zones, and each Zone references a Pattern that repeats to fill the Zone's time window.
+Zones and SchedulableAssets are the core contents of a SchedulePlan. A plan defines one or more Zones, and each Zone holds SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets) directly.
 
-For detailed documentation on Zones and Patterns, see:
+For detailed documentation on Zones, see:
 
-- **[Zone](Zone.md)** - Named time windows within the programming day that declare when content should play
-- **[Pattern](Pattern.md)** - Ordered lists of Program references that define content sequences
+- **[Zone](Zone.md)** - Named time windows within the programming day that hold SchedulableAssets directly
 
 **Summary:**
 
-**Zone:** A named time window within the programming day that declares when content should play. Zones reference Patterns to define the content sequence. Zones use broadcast day time (00:00–24:00 relative to `programming_day_start`), not calendar day time. Zones can span midnight (e.g., `22:00–05:00`) within the same broadcast day and support optional day-of-week filters for recurring patterns.
+**Zone:** A named time window within the programming day that declares when content should play. Zones hold SchedulableAssets directly (Programs, Assets, VirtualAssets, SyntheticAssets). Zones use broadcast day time (00:00–24:00 relative to `programming_day_start`), not calendar day time. Zones can span midnight (e.g., `22:00–05:00`) within the same broadcast day and support optional day-of-week filters for recurring patterns.
 
-**Pattern:** An ordered list of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). Patterns have no durations — the plan engine repeats the Pattern across the Zone until the Zone is full, snapping to the Channel's Grid boundaries.
-
-**Relationship:** Each Zone references a Pattern that defines its content sequence. The plan engine applies the Pattern repeatedly across the Zone's active window until the Zone is full, snapping to Grid boundaries. Programs in Patterns are resolved to concrete episodes at ScheduleDay time based on rotation policy: `sequential` (next episode in order), `random` (random selection), or `lru` (least-recently-used).
+**SchedulableAssets:** Programs (with asset_chain and play_mode), Assets, VirtualAssets, and SyntheticAssets placed directly in Zones. Programs resolve at playlist generation to concrete files via linked chain expansion and pool selection based on play_mode (random, sequential, manual).
 
 **Conflict Resolution:**
 
-When a Zone opens while content is already playing (e.g., a Zone starts at 19:00 but a program from a previous Zone is still running), the system applies the **soft-start-after-current** policy:
+When a Zone opens while content is already playing (e.g., a Zone starts at 19:00 but content from a previous Zone is still running), the system applies the **soft-start-after-current** policy:
 
-- The current program continues to completion
-- The new Zone's Pattern starts at the next valid Grid boundary after the current program ends
+- The current content continues to completion
+- The new Zone's SchedulableAssets start at the next valid Grid boundary after the current content ends
 - This ensures clean transitions and prevents mid-program interruptions
 
 This policy is applied automatically during ScheduleDay generation to handle Zone transitions gracefully.
 
 ### Temporality
 
-Plans are **reusable and timeless** — they define Zones and Patterns that can be applied to any day. Plans are not tied to specific dates in their structure; instead:
+Plans are **reusable and timeless** — they define Zones with SchedulableAssets that can be applied to any day. Plans are not tied to specific dates in their structure; instead:
 
-- Plans define the **pattern** of programming (Zones + Patterns)
+- Plans define the **pattern** of programming (Zones + SchedulableAssets)
 - Plans are **applied per day** to generate [ScheduleDay](ScheduleDay.md) records
 - The same plan can generate different ScheduleDays for different dates (e.g., different episodes selected based on rotation policy)
 - Plans remain unchanged as they are applied across multiple days
@@ -290,19 +285,18 @@ If plans are missing or invalid:
 ## Scheduling Model
 
 - **Single source of scheduling logic**: SchedulePlan is the single source of scheduling logic for channel programming
-- **Zones + Patterns model**: Each plan defines one or more Zones (time windows) and Patterns (ordered lists of Programs) for each Zone
+- **Zones + SchedulableAssets model**: Each plan defines one or more Zones (time windows) that hold SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets) directly
 - **Grid alignment**: All scheduling snaps to the Channel's Grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`)
-- **Pattern repeating**: Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
-- **Programs are catalog entries**: Programs in Patterns are schedulable entities (series, movies, blocks, composites) without durations
-- **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy (`sequential`, `random`, or `lru`)
+- **Programs are SchedulableAssets**: Programs are SchedulableAssets with asset_chain (linked list of SchedulableAssets) and play_mode (random, sequential, manual)
+- **Playlist resolution**: Programs resolve at playlist generation to concrete files via linked chain expansion and pool selection
 - **Channel-bound**: Plans are channel-bound and span repeating or one-time timeframes
 - **Layering and overrides**: Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones
-- **Content selection**: Content selection can include regular assets or VirtualAssets
+- **Content selection**: Content selection can include Programs, Assets, VirtualAssets, or SyntheticAssets
 - **Timeless but date-bound**: Plans are timeless (reusable patterns) but bound by effective date ranges
 - **Archival**: Superseded plans are archived (`is_active=false`) rather than deleted
-- **Flows to ScheduleDay**: Plan-based scheduling flows into ScheduleDay. **EPG horizon:** ScheduleDays are resolved 2-3 days in advance for EPG purposes. **Playlog horizon:** PlaylogEvents are continuously extended ~3-4 hours ahead of real time. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets
+- **Flows to ScheduleDay**: Plan-based scheduling flows into ScheduleDay. **EPG horizon:** ScheduleDays are resolved 3-4 days in advance for EPG purposes. **Playlist horizon:** Playlists are continuously extended ~few hours ahead of real time. Playlist generation is where Programs expand their asset chains and VirtualAssets expand to physical Assets
 - **Self-contained**: Plans are self-contained and directly define channel programming
-- **Operator control**: Operators choose what to place in Zones and Patterns, but may request system suggestions
+- **Operator control**: Operators choose what SchedulableAssets to place in Zones, but may request system suggestions
 - **Validation**: Dry run and validation features should be supported to visualize gaps or rule violations
 
 ## Lifecycle and Referential Integrity
@@ -316,31 +310,31 @@ Add  →  Build  →  Update  →  Activate  →  Archive  →  Delete
 
 **Enforcement Points:**
 
-- **Add**: Automatic test pattern zone seeding ensures full coverage on creation
+- **Add**: Automatic test filler zone seeding ensures full coverage on creation
 - **Build**: REPL session validates coverage before save
 - **Update**: Coverage invariant validated on zone modifications
 - **Activate**: Plan must satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE to be eligible for schedule generation
 - **Archive/Delete**: No validation required (plan is inactive or being removed)
 
-- `is_active=false` archives the plan: ScheduleService excludes the plan from schedule generation. Existing Zones and Patterns remain but are ignored.
-- Hard delete is only permitted when no dependent rows exist (e.g., Zone, Pattern, ScheduleDay). When dependencies exist, prefer archival (`is_active=false`).
-- The dependency preflight MUST cover: Zone, Pattern, ScheduleDay, and any EPG/playlog references that depend on the plan.
+- `is_active=false` archives the plan: ScheduleService excludes the plan from schedule generation. Existing Zones and SchedulableAssets remain but are ignored.
+- Hard delete is only permitted when no dependent rows exist (e.g., Zone, ScheduleDay). When dependencies exist, prefer archival (`is_active=false`).
+- The dependency preflight MUST cover: Zone, ScheduleDay, and any EPG/playlog references that depend on the plan.
 
 ## Operator Workflows
 
-**Create Plan**: Define a new plan that defines channel programming using Zones and Patterns. Specify name, temporal validity (cron/date range), and priority. Plans are the top-level object and are self-contained.
+**Create Plan**: Define a new plan that defines channel programming using Zones and SchedulableAssets. Specify name, temporal validity (cron/date range), and priority. Plans are the top-level object and are self-contained.
 
-**Define Zones**: Create Zones (time windows within the programming day) for the plan. Specify name, active window (e.g., `00:00–24:00`, `22:00–05:00`), optional day filters (e.g., Mon–Fri), and a Pattern reference. Examples: base 00:00–24:00, After Dark 22:00–05:00, Prime Time 19:00–22:00, Weekend Morning 06:00–12:00 (Sat–Sun).
+**Define Zones**: Create Zones (time windows within the programming day) for the plan. Specify name, active window (e.g., `00:00–24:00`, `22:00–05:00`), optional day filters (e.g., Mon–Fri). Examples: base 00:00–24:00, After Dark 22:00–05:00, Prime Time 19:00–22:00, Weekend Morning 06:00–12:00 (Sat–Sun).
 
-**Define Patterns**: Create Patterns (ordered lists of Program references) for each Zone. Patterns have no durations — Zones + Patterns repeat to fill the Zone's active window.
+**Place SchedulableAssets in Zones**: Add SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets) directly to Zones. Programs are SchedulableAssets with asset_chain and play_mode.
 
-**Manage Program References in Patterns**: Add, modify, or remove Program references (catalog entries) within Patterns. Programs are schedulable entities such as series, movies, blocks, or composites.
+**Manage Programs**: Create and manage Programs with asset_chain (linked list of SchedulableAssets) and play_mode (random, sequential, manual). Programs can reference other Programs, Assets, VirtualAssets, and SyntheticAssets in their asset chains.
 
 **Layer Plans**: Create multiple plans with different priorities and effective date ranges to handle recurring patterns (weekdays, weekends, holidays, seasons) or one-time timeframes. Use plan layering by priority where more specific plans override generic ones. Plans can be layered and overridden (e.g., weekday vs. holiday).
 
-**Preview Schedule**: Use dry-run or preview features to visualize how a plan's Zones and Patterns will resolve into a ScheduleDay.
+**Preview Schedule**: Use dry-run or preview features to visualize how a plan's Zones and SchedulableAssets will resolve into a ScheduleDay.
 
-**Validate Plan**: Check for gaps, rule violations, or conflicts before activating the plan. Ensure Zones align with Grid boundaries and Patterns are valid.
+**Validate Plan**: Check for gaps, rule violations, or conflicts before activating the plan. Ensure Zones align with Grid boundaries and SchedulableAssets are valid.
 
 **Override Plans**: Use higher-priority plans to override general plans for specific dates or patterns. For example, a "HolidayPlan" can override a "WeekdayPlan" on holidays, or a "ChristmasPlan" can override a "WeekdayPlan" on December 25.
 
@@ -378,15 +372,14 @@ retrovue schedule-plan add --name "WeekdayPlan" \
 
 **Show Plan**: Use `retrovue schedule-plan show --id <uuid>` or `retrovue schedule-plan show --name <name>` to see detailed plan information including associated programs.
 
-**Add Program Reference to Pattern**: Use `retrovue channel plan <channel> <plan> pattern <pattern> program add` to add a Program reference (catalog entry) to a Pattern:
+**Add SchedulableAsset to Zone**: Use `retrovue channel plan <channel> <plan> zone <zone> asset add` to add a SchedulableAsset to a Zone:
 
 ```bash
-retrovue channel plan <channel> <plan> pattern <pattern> program add \
-  --series "Tom & Jerry" \
-  --episode-policy sequential
+retrovue channel plan <channel> <plan> zone <zone> asset add \
+  --schedulable-asset-id <program-uuid>
 ```
 
-**Preview Schedule**: Use `retrovue schedule-plan preview --plan-id <uuid> --date 2025-12-25` to see how a plan resolves for a specific date.
+**Preview Schedule**: Use `retrovue schedule-plan preview --plan-id <uuid> --date 2025-12-25` to see how a plan resolves for a specific date. Preview shows how Zones and their SchedulableAssets resolve into ScheduleDay.
 
 **Validate Plan**: Use `retrovue schedule-plan validate --plan-id <uuid>` to check for gaps, rule violations, or conflicts.
 
@@ -405,7 +398,7 @@ retro schedule plan build <channel>
 retro schedule plan preview <channel> --date 2025-11-06
 ```
 
-**Note:** These commands share the same backend functions as the UI scheduler, so both interfaces produce identical results. This ensures consistency between CLI and UI operations and helps future developers understand that CLI and UI are two faces of the same logic layer.
+**Note:** These commands share the same backend functions as the UI scheduler, so both interfaces produce identical results. This ensures consistency between CLI and UI operations and helps future developers understand that CLI and UI are two faces of the same logic layer. Commands reflect adding assets (Programs/Assets/VirtualAssets) to Zones and adjusting windows.
 
 ### Operator CLI → Planning Mode
 
@@ -435,24 +428,22 @@ Within the Planning Mode REPL, the following commands are available:
   - Optional `--days` parameter restricts the Zone to specific days of the week (e.g., `MON..FRI`, `SAT..SUN`)
   - All times snap to the Channel's grid boundaries
 
-- **`pattern set <zone> "<ProgramA>,<ProgramB>,..."`**
+- **`zone asset add <zone> <schedulable-asset-id>`**
 
-  - Sets the Pattern for the specified Zone
-  - Takes a comma-separated list of Program names
-  - The Pattern repeats to fill the Zone's time window
+  - Adds a SchedulableAsset (Program, Asset, VirtualAsset, SyntheticAsset) to a Zone
+  - Takes a SchedulableAsset ID (UUID)
+  - Multiple SchedulableAssets can be added to the same Zone
 
-- **`pattern weight <zone> "<A>,<A>,<B>..."`**
+- **`zone asset remove <zone> <schedulable-asset-id>`**
 
-  - Sets a weighted Pattern for the specified Zone
-  - Allows repeating Program references to control frequency (e.g., Program A appears twice for every one instance of Program B)
-  - The weighted Pattern repeats to fill the Zone's time window
+  - Removes a SchedulableAsset from a Zone
+  - Takes a SchedulableAsset ID (UUID)
 
-- **`program create <name> --type series|movie|block [--rotation random|sequential|lru] [--slot-units N]`**
+- **`program create <name> --play-mode random|sequential|manual [--asset-chain <id1>,<id2>,...]`**
 
-  - Creates a new Program catalog entry
-  - `--type` specifies the Program type (series, movie, or block)
-  - `--rotation` specifies episode selection policy for series (random, sequential, or least-recently-used)
-  - `--slot-units` overrides the default block count for longform content (e.g., a 2-hour movie on a 30-minute grid would use `--slot-units 4`)
+  - Creates a new Program SchedulableAsset
+  - `--play-mode` specifies playback policy (random, sequential, or manual)
+  - `--asset-chain` specifies linked list of SchedulableAsset IDs (Programs, Assets, VirtualAssets, SyntheticAssets)
 
 - **`validate`**
 
@@ -465,12 +456,12 @@ Within the Planning Mode REPL, the following commands are available:
   - Generates a preview of how the current plan resolves for the specified date
   - Shows the first 12 hours rolled from the current Plan
   - Compiles to a ScheduleDay draft (not persisted) using the same resolution rules used in production
-  - Demonstrates how Zones, Patterns, and Programs expand into concrete schedule entries
+  - Demonstrates how Zones and SchedulableAssets expand into concrete schedule entries
 
 - **`save`**
 
   - Saves the current plan and exits Planning Mode
-  - Persists all Zones, Patterns, and Programs to the database
+  - Persists all Zones and SchedulableAssets to the database
   - Returns to the normal shell prompt
 
 - **`discard`**
@@ -487,10 +478,10 @@ Within the Planning Mode REPL, the following commands are available:
 **Behavior:**
 
 - **Grid Alignment**: All entries snap to the Channel grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`)
-- **Pattern Repeating**: Patterns repeat to fill Zone windows, with each Program reference expanding at ScheduleDay time
+- **SchedulableAsset Placement**: SchedulableAssets are placed directly in Zones
 - **Preview Compilation**: The `preview day` command compiles to a ScheduleDay draft using the same resolution rules as production:
-  - Zones expand their Patterns across the Zone's window
-  - Programs resolve to concrete episodes/assets based on rotation policy
+  - Zones and their SchedulableAssets are placed in ScheduleDay
+  - Programs expand their asset chains at playlist generation based on play_mode
   - Grid alignment, soft-start-after-current, fixed zone end, no mid-longform cuts, and carry-in policies are all applied
   - The preview is not persisted but shows exactly how the plan will resolve
 
@@ -499,9 +490,9 @@ Within the Planning Mode REPL, the following commands are available:
 The UI uses the same engine:
 
 - **`PlanAPI.addZone(channelId, planId, zoneName, fromTime, toTime, dayFilters?)`** - Equivalent to `zone add`
-- **`PlanAPI.setPattern(channelId, planId, zoneName, programNames[])`** - Equivalent to `pattern set`
-- **`PlanAPI.setWeightedPattern(channelId, planId, zoneName, weightedPrograms[])`** - Equivalent to `pattern weight`
-- **`ProgramAPI.create(name, type, rotation?, slotUnits?)`** - Equivalent to `program create`
+- **`PlanAPI.addAssetToZone(channelId, planId, zoneName, schedulableAssetId)`** - Equivalent to `zone asset add`
+- **`PlanAPI.removeAssetFromZone(channelId, planId, zoneName, schedulableAssetId)`** - Equivalent to `zone asset remove`
+- **`ProgramAPI.create(name, playMode, assetChain)`** - Equivalent to `program create`
 - **`PlanAPI.validate(channelId, planId)`** - Equivalent to `validate`
 - **`PlanAPI.previewDay(channelId, planId, date)`** - Equivalent to `preview day`
 - **`PlanAPI.save(channelId, planId)`** - Equivalent to `save`
@@ -513,7 +504,7 @@ The Planning Mode REPL is implemented by `SchedulePlanningSession`, which provid
 
 **Validation Delegation:**
 
-All commands (`create_zone`, `update_zone`, `create_pattern`, `update_pattern`, `assign_pattern_to_zone`) delegate validation to the domain layer. Failures propagate as `ValidationError{code, message, details}` without translation.
+All commands (`create_zone`, `update_zone`, etc.) delegate validation to the domain layer. Failures propagate as `ValidationError{code, message, details}` without translation.
 
 - Planning Session commands must call the same domain validators used by CLI operations
 - Validation errors must propagate unchanged from the domain layer
@@ -525,7 +516,7 @@ All commands (`create_zone`, `update_zone`, `create_pattern`, `update_pattern`, 
 
 Each command runs in a transaction; on error, the session rolls back the entire operation.
 
-- Each Planning Session command (`create_zone`, `update_zone`, `create_pattern`, etc.) runs in a single transaction
+- Each Planning Session command (`create_zone`, `update_zone`, etc.) runs in a single transaction
 - If validation fails or an error occurs, the entire transaction rolls back
 - No partial updates persist on validation failure
 - Database state before and after a failed operation must be identical
@@ -546,7 +537,7 @@ Session is constructed with `channel_ctx` and `clock`; both are passed to domain
 
 Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
 
-- After creating or updating Zones/Patterns, subsequent reads return normalized domain objects
+- After creating or updating Zones, subsequent reads return normalized domain objects
 - Time values are normalized: 24:00:00 is stored as 23:59:59.999999 but returned as 24:00:00
 - Domain layer handles normalization transparently; Planning Session consumers see normalized values
 - Round-trip persistence preserves conceptual values (24:00:00 → storage → read → 24:00:00)
@@ -556,19 +547,18 @@ Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
 
 - [ZoneContract.md](../contracts/resources/ZoneContract.md) - Z-INT-01: Shared Validator, Z-INT-02: Transactional Semantics, Z-INT-03: Clock Injection, Z-INT-04: Channel Context Required
 - [Zone.md](Zone.md) - Runtime & Validation Notes
-- [Pattern.md](Pattern.md) - Runtime & Validation Notes
 
 ## Validation & Invariants
 
 - **Name uniqueness**: `name` must be unique within each channel (enforced via unique constraint on `channel_id` + `name`)
 - **Active status**: Only plans where `is_active=true` are eligible for schedule generation
-- **Full coverage invariant (INV_PLAN_MUST_HAVE_FULL_COVERAGE)**: Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps. When a plan is created without explicit zones, the system automatically initializes it with a default "test pattern" zone covering the full 24-hour period (00:00–24:00). This ensures every plan provides complete daily coverage, preventing runtime gaps where no content is scheduled. See [Scheduling Invariants](../contracts/resources/SchedulingInvariants.md) S-INV-14 for details.
+- **Full coverage invariant (INV_PLAN_MUST_HAVE_FULL_COVERAGE)**: Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps. When a plan is created without explicit zones, the system automatically initializes it with a default test filler zone (SyntheticAsset, 00:00–24:00). This ensures every plan provides complete daily coverage, preventing runtime gaps where no content is scheduled.
 - **Zone overlap validation**: No overlapping active windows per Zone set after grid normalization. Zones within the same plan must not have overlapping time windows when both are active (considering day filters and effective dates)
-- **Pattern validity**: Patterns must contain valid Programs (catalog entries)
+- **SchedulableAsset validity**: Zones must contain valid SchedulableAssets (Programs, Assets, VirtualAssets, SyntheticAssets)
 - **Grid alignment**: Zones must align with the Channel's Grid boundaries
-- **Program resolution policy**: Programs resolve to episodes using rotation policy: `sequential` (next episode in order), `random` (random selection), or `lru` (least-recently-used)
-- **Referential integrity**: Plans cannot be deleted if they have dependent Zones, Patterns, or ScheduleDay records
-- **Time structure**: Zones define _when_ (window); Patterns define _order_ (Programs). Patterns have **no durations** and repeat to fill the Zone, snapping to the Channel Grid.
+- **Program resolution policy**: Programs resolve at playlist generation via linked chain expansion and pool selection based on play_mode (random, sequential, manual)
+- **Referential integrity**: Plans cannot be deleted if they have dependent Zones or ScheduleDay records
+- **Time structure**: Zones define _when_ (window) and hold SchedulableAssets directly. SchedulableAssets expand to physical assets at playlist generation.
 
 ## Out of Scope (v0.1)
 
@@ -580,14 +570,14 @@ Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
 
 ## See Also
 
-- [Scheduling Invariants](../contracts/resources/SchedulingInvariants.md) - Cross-cutting scheduling invariants
+- [Scheduling Policies](SchedulingPolicies.md) - Scheduling policy behaviors
 - [Scheduling](Scheduling.md) - High-level scheduling system
 - [ScheduleDay](ScheduleDay.md) - Resolved schedules for specific channel and date
-- [Program](Program.md) - Catalog entities (series/movie/block) referenced by patterns; episodes resolved at ScheduleDay
+- [Program](Program.md) - SchedulableAsset type that is a linked list of SchedulableAssets with play_mode; Programs expand their asset chains at playlist generation
 - [Channel](Channel.md) - Channel configuration and timing policy
 - [Asset](Asset.md) - Approved content available for scheduling
 - [PlaylogEvent](PlaylogEvent.md) - Generated playout events
 - [Channel manager](../runtime/ChannelManager.md) - Stream execution
 - [Operator CLI](../operator/CLI.md) - Operational procedures
 
-SchedulePlan is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows with optional day filters) and a **Pattern** for each Zone. **Zones** declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and reference a Pattern. **Patterns** are ordered lists of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern — Zones + Patterns repeat to fill the Zone's active window, snapping to the Channel's Grid boundaries. **Programs** are catalog entities (series/movie/block) referenced by patterns; episodes are resolved at ScheduleDay time based on rotation policy (`sequential`, `random`, or `lru`). Plans are reusable and timeless — they define Zones and Patterns that are applied per day to generate ScheduleDay records. Plans are channel-bound and span repeating or one-time timeframes. Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones. Templates have been removed; all scheduling logic is defined directly in SchedulePlan. Content selection can include regular assets or VirtualAssets. Plans are timeless but bound by effective date ranges, and superseded plans are archived. **EPG horizon:** ScheduleDays are resolved 2-3 days in advance for EPG purposes. **Playlog horizon:** PlaylogEvents are continuously extended ~3-4 hours ahead of real time. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.
+SchedulePlan is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows with optional day filters) that hold **SchedulableAssets** (Programs, Assets, VirtualAssets, SyntheticAssets) directly. **Zones** declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and hold SchedulableAssets directly. **Programs** are SchedulableAssets with asset_chain (linked list of SchedulableAssets) and play_mode (random, sequential, manual). Programs resolve at playlist generation to concrete files via linked chain expansion and pool selection. Plans are reusable and timeless — they define Zones with SchedulableAssets that are applied per day to generate ScheduleDay records. Plans are channel-bound and span repeating or one-time timeframes. Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones. All scheduling logic is defined directly in SchedulePlan. Content selection can include Programs, Assets, VirtualAssets, or SyntheticAssets. Plans are timeless but bound by effective date ranges, and superseded plans are archived. **EPG horizon:** ScheduleDays are resolved 3-4 days in advance for EPG purposes. **Playlist horizon:** Playlists are continuously extended ~few hours ahead of real time. Playlist generation is where Programs expand their asset chains and VirtualAssets expand to physical Assets.

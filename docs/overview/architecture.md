@@ -85,38 +85,29 @@ The leaf unit RetroVue can eventually broadcast. Each asset belongs to exactly o
 
 ### Broadcast Domain (Scheduling Layer)
 
-Builds and maintains **two rolling planning horizons** for every channel:
+Builds and maintains the scheduling pipeline: **SchedulableAsset → ScheduleDay → Playlist → Producer(ffmpeg) → AsRun**.
 
-#### EPG Horizon
+#### Pipeline Stages
 
-| Property      | Value                                                        |
-| ------------- | ------------------------------------------------------------ |
-| **Purpose**   | Coarse, human-facing grid (e.g. "9:00 PM – Classic Sitcoms") |
-| **Structure** | 30-minute blocks snapped to a fixed grid                     |
-| **Range**     | 2–3 days into the future                                     |
-| **Use**       | Feeds guides, "now/next" banners, and listings channels      |
-| **Update**    | Extended or rolled forward daily                             |
-
-#### Playlog Horizon
-
-| Property      | Value                                                        |
-| ------------- | ------------------------------------------------------------ |
-| **Purpose**   | Fine, machine-facing playout plan                            |
-| **Structure** | Fully resolved content — episodes, ad pods, bumpers, padding |
-| **Range**     | 2–3 hours into the future                                    |
-| **Use**       | Drives actual playout and as-run logs                        |
-| **Update**    | Continuously rolled forward                                  |
+| Stage          | Purpose                                                      | Horizon                      |
+| -------------- | ------------------------------------------------------------ | ---------------------------- |
+| **ScheduleDay** | Planned daypart lineup for EPG. Holds SchedulableAssets (not files) in Zones | 3–4 days ahead (EPG horizon) |
+| **Playlist**   | Resolved pre–AsRun list of physical assets with absolute timecodes | Rolling few hours ahead      |
+| **Playlog**    | Runtime execution plan aligned to MasterClock                | Rolling few hours ahead      |
+| **AsRun**      | Observed ground truth — what actually aired                  | Real-time                    |
 
 #### Timing Model
 
 Every scheduled item has an `absolute_start` and `absolute_end` timestamp in wall-clock time. That's how we can determine, at 09:05, that a sitcom which began at 09:00 should start 5 minutes in. Because every Playlog Event carries `absolute_start` and `absolute_end`, ChannelManager can start playback mid-show at the correct offset instead of always starting from the top of the file.
 
+**Broadcast-Day Display:** Human-readable times in plan show and ScheduleDay views reflect channel broadcast-day start (e.g., 06:00 → 05:59 next day). JSON outputs include canonical times plus `broadcast_day_start` for UI offset calculation.
+
 #### Block Alignment Rule
 
 - **EPG blocks** always align to 30-minute boundaries, even if episode runtimes don't
-- **Playlog** fills the leftover time with ad pods, bumpers, and promos to end exactly on the boundary
+- **Playlist/Playlog** fills the leftover time with ad pods, bumpers, and promos to end exactly on the boundary
 
-> **Key Insight:** This dual-horizon model lets RetroVue act like a real network without needing to prebuild byte-accurate schedules for days in advance.
+> **Key Insight:** This pipeline model lets RetroVue act like a real network without needing to prebuild byte-accurate schedules for days in advance.
 
 > **See docs/components/schedule-manager.md for horizon generation + timing.**
 
@@ -138,7 +129,7 @@ Every scheduled item has an `absolute_start` and `absolute_end` timestamp in wal
 
 ```mermaid
 graph TD
-    A[Viewer tunes in] --> B[ChannelManager asks ScheduleManager<br/>"what should be airing right now + offset?"]
+    A[Viewer tunes in] --> B[ChannelManager asks ScheduleService<br/>"what should be airing right now + offset?"]
     B --> C[ChannelManager builds playout plan<br/>starting at correct position within current show]
     C --> D[ChannelManager spins up Producer<br/>to emit the stream]
     D --> E[Subsequent viewers attach<br/>to that same Producer]
@@ -159,18 +150,20 @@ graph TD
 
 ### Playout / Producer Layer
 
-A **Producer** emits the audiovisual stream for a channel.
+**Producers** are output-oriented runtime components that drive playout. Examples: AssetProducer, SyntheticProducer, future LiveProducer.
 
 #### Types of Producers
 
 | Type                     | Purpose                                          |
 | ------------------------ | ------------------------------------------------ |
-| **Programming Producer** | Standard episodes, ads, bumpers                  |
-| **Emergency Producer**   | Full-screen alert or crawl takeover              |
-| **Guide Producer**       | TV Guide-style output listing what's on now/next |
+| **AssetProducer**        | Standard episodes, ads, bumpers (physical assets) |
+| **SyntheticProducer**    | Generated content (test patterns, countdown clocks) |
+| **LiveProducer**         | Live feeds (future)                              |
 
 #### Key Principles
 
+- **Producers are output-oriented** — they drive playout execution
+- **ffmpeg is not a Producer** — it's the playout/encoding engine that Producers feed
 - **Producers are modular** — ChannelManager decides which Producer to use and what plan to give it
 - **Producers don't pick content** — they render the playout plan they're given
 
@@ -180,6 +173,7 @@ A **Producer** emits the audiovisual stream for a channel.
 - ✅ **Must follow the Playlog plan exactly** — order, duration, transitions
 - ✅ **Must be composable** with overlays
 - ✅ **Must terminate cleanly** when instructed
+- ✅ **Must feed ffmpeg** with appropriate inputs for playout/encoding
 
 ### System Time / MasterClock
 
@@ -220,18 +214,19 @@ Scheduling depends on accurate runtime and ad break data to create believable co
 
 #### **WHAT**
 
-Maintains EPG and Playlog horizons for each channel.
+Maintains the scheduling pipeline: ScheduleDay (EPG horizon), Playlist, and Playlog for each channel.
 
 #### **WHY**
 
-Viewers need a guide; the playout engine needs exact timing. Splitting them lets us plan days in broad strokes without resolving every frame ahead of time.
+Viewers need a guide; the playout engine needs exact timing. The pipeline lets us plan days in broad strokes (ScheduleDay with SchedulableAssets) without resolving every frame ahead of time, then expand to physical assets (Playlist) and align to MasterClock (Playlog) for execution.
 
 #### **HOW**
 
-- **Applies block rules and templates** (e.g. "Weeknights 8–10 PM = classic sitcoms, PG-13 max")
-- **Selects episodes**, inserts bumpers and promos, and pads blocks to end on time
-- **Persists both horizons** with `absolute_start` / `absolute_end` timestamps
-- **Rolls EPG daily** (~2–3 days out) and **Playlog continuously** (~2–3 hours ahead)
+- **Generates ScheduleDays** from SchedulePlans (Zones holding SchedulableAssets directly) — 3–4 days ahead (EPG horizon)
+- **Generates Playlists** by expanding SchedulableAssets to physical Assets — rolling few hours ahead
+- **Generates Playlogs** by aligning Playlist entries to MasterClock — rolling few hours ahead
+- **Persists pipeline stages** with `absolute_start` / `absolute_end` timestamps
+- **Rolls EPG daily** (~3–4 days out) and **Playlist/Playlog continuously** (~few hours ahead)
 
 #### Invariants
 
@@ -286,20 +281,21 @@ We only spin up resources when needed. It's also how viewers "drop in" mid-show 
 
 #### **WHAT**
 
-Encodes and streams content for a channel according to a playout plan.
+Output-oriented runtime component that drives playout for a channel. Examples: AssetProducer, SyntheticProducer, future LiveProducer.
 
 #### **WHY**
 
-Separates "what to play" (scheduling) from "how to render/encode."
+Separates "what to play" (scheduling) from "how to render/encode." Producers are output drivers; ffmpeg is the playout/encoding engine that Producers feed.
 
 #### **HOW**
 
-- **Reads plan:** program content, ad pods, bumpers, padding
-- **Runs FFmpeg** or equivalent to produce continuous MPEG-TS output
+- **Reads playlog:** resolved physical assets with absolute timecodes
+- **Feeds ffmpeg** with appropriate inputs to produce continuous MPEG-TS output
 - **Supports mid-program start**, overlays, and clean stop
 - **Other viewers attach** to this output stream (fanout model)
 
-> **Only one Producer per channel.** Others may view its stream, but not spawn new ones.
+> **Only one Producer per channel.** Others may view its stream, but not spawn new ones.  
+> **ffmpeg is not a Producer** — it's the playout/encoding engine that Producers feed.
 
 > **See docs/components/program-manager.md for runtime coordination and playout.**
 
@@ -393,19 +389,50 @@ Planning happens in two scopes:
 | Term                   | Definition                                                                                                                      |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | **Channel**            | A virtual broadcast stream with its own schedule and identity                                                                   |
-| **Block / Block Rule** | Time period (e.g., "Weeknights 8–10PM = Classic Sitcoms"). Defines allowed content and tone                                     |
-| **EPG Horizon**        | Coarse, grid-aligned programming schedule, 2–3 days ahead. Rolled forward daily                                                 |
-| **Playlog Horizon**    | Fine-grained, fully resolved playout plan, 2–3 hours ahead. Continuously extended                                               |
-| **Playlog Event**      | One scheduled content item with `absolute_start` / `absolute_end` timestamps (e.g., "Commercial Pod #2 from 09:14:30–09:15:00") |
+| **SchedulableAsset**   | Abstract base for all schedule entries. Concrete types: Program, Asset, VirtualAsset, SyntheticAsset                            |
+| **Program**            | SchedulableAsset type with asset_chain (linked list of SchedulableAssets) and play_mode (random, sequential, manual)           |
+| **VirtualAsset**       | SchedulableAsset type that represents input-driven composite. Expands to physical Assets at playlist generation                |
+| **Zone**               | Named time window within the programming day that holds SchedulableAssets                                                       |
+| **ScheduleDay**        | Planned daypart lineup for EPG. Holds SchedulableAssets (not files) in Zones. Generated 3–4 days ahead (EPG horizon)          |
+| **Playlist**           | Resolved pre–AsRun list of physical assets with absolute timecodes. Generated from ScheduleDay                                 |
+| **Playlog**            | Runtime execution plan aligned to MasterClock. Derived from Playlist                                                             |
+| **AsRun**              | Observed ground truth — what actually aired. Records what was observed during playout execution                                 |
+| **EPG Horizon**        | Coarse, grid-aligned programming schedule, 3–4 days ahead. Rolled forward daily (ScheduleDay)                                  |
+| **Playlist/Playlog Horizon** | Fine-grained, fully resolved playout plan, few hours ahead. Continuously extended                                               |
 | **Viewer Fanout**      | Model where the first viewer triggers Producer startup, additional viewers share the same output, and last viewer shutdowns it  |
 | **ProgramManager**     | Oversees all channels; handles global policies and emergencies                                                                  |
 | **ChannelManager**     | Controls runtime state of one channel; handles viewer count and Producer lifecycle                                              |
-| **Producer**           | Generates the audiovisual output for a channel. Different types handle normal, guide, or emergency modes                        |
+| **Producer**           | Output-oriented runtime component (AssetProducer, SyntheticProducer, future LiveProducer). ffmpeg is the playout engine that Producers feed. |
 | **Overlay**            | Visual branding or crawl applied over the video feed                                                                            |
 | **MasterClock**        | Single authoritative notion of "now." All timing derives from it; direct system time calls are prohibited                       |
+| **Broadcast Day**      | 24-hour period starting at channel's broadcast_day_start (e.g., 06:00). Human-readable times reflect broadcast-day offset       |
 | **Ad Pod**             | Cluster of commercials played together during a break                                                                           |
 | **Bumper**             | Short station ID or transition clip between programs                                                                            |
-| **As-Run Log**         | A record of what actually aired versus what was scheduled, using MasterClock timestamps. Planned feature                        |
+
+---
+
+## Legacy Transition Notes
+
+**Architecture Refactoring (November 2025):** RetroVue's scheduling architecture was unified around the `SchedulableAsset` concept. The following legacy concepts were replaced:
+
+| Legacy Concept | New Concept | Notes |
+|---------------|-------------|-------|
+| **Pattern** | **Program** | Programs are now linked lists of SchedulableAssets with `play_mode` (random, sequential, manual). Programs define ordering and sequencing, not duration. |
+| **PatternZone** | **Zone** | Zones now hold SchedulableAssets directly (Programs, Assets, VirtualAssets, SyntheticAssets). Duration is zone-controlled. |
+| **VirtualProducer** | **Producer** (runtime component) | VirtualProducers don't exist. VirtualAssets expand to physical Assets which then feed standard Producers (runtime components). |
+| **Duration in Program** | **Duration in Zone** | Duration is now zone-controlled, not program-controlled. Programs define ordering and sequencing only. |
+| **Intro/outro fields in Program** | **Linked list nodes in `asset_chain`** | Intro/outro bumpers are now nodes in the Program's `asset_chain` linked list, not separate fields. |
+| **Pattern expansion at ScheduleDay** | **Program expansion at Playlist generation** | Programs expand their asset chains at playlist generation, not at ScheduleDay resolution. |
+| **ScheduleDay → PlaylogEvent** | **ScheduleDay → Playlist → PlaylogEvent** | New Playlist layer between ScheduleDay and PlaylogEvent for asset expansion. |
+
+**Key Architectural Shifts:**
+1. **Elimination of Pattern Layer**: Patterns are eliminated — Programs now serve this role with linked list structure
+2. **Direct SchedulableAsset Placement**: Zones directly contain SchedulableAssets, not Patterns
+3. **Duration Ownership**: Duration is explicitly zone-controlled, not asset-controlled
+4. **Playlist Layer**: New intermediate layer for asset expansion between ScheduleDay and PlaylogEvent
+5. **Expansion Timing**: Programs and VirtualAssets expand at playlist generation, not ScheduleDay resolution
+
+For detailed migration information, see `docs/appendix/LegacyMapping.md`.
 
 ---
 

@@ -1,10 +1,12 @@
 # Zone Add Contract
 
-_Related: [ZoneContract](ZoneContract.md) • [Domain: Zone](../../domain/Zone.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Pattern](../../domain/Pattern.md) • [Domain: Channel](../../domain/Channel.md)_
+> ⚠️ **Legacy Contract:** This document describes legacy structures (Pattern references) retained for backward compatibility only. See `docs/domain/Zone.md` and `docs/domain/Program.md` for the current unified SchedulableAsset architecture. Zones now hold SchedulableAssets directly, not Patterns.
+
+_Related: [ZoneContract](ZoneContract.md) • [Domain: Zone](../../domain/Zone.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Program](../../domain/Program.md) • [Domain: Channel](../../domain/Channel.md)_
 
 ## Purpose
 
-This contract defines the behavior of the `retrovue channel plan <channel> <plan> zone add` command, which creates a new Zone within a SchedulePlan. Zones are named time windows that declare when content should play and reference Patterns to define content sequences.
+This contract defines the behavior of the `retrovue channel plan <channel> <plan> zone add` command, which creates a new Zone within a SchedulePlan. Zones are named time windows that declare when content should play and hold SchedulableAssets directly.
 
 ## Command Syntax
 

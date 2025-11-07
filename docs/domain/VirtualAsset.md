@@ -8,42 +8,63 @@ This document describes a planned feature that is not part of the initial MVP re
 
 ## Purpose
 
-VirtualAsset is a **reusable container of asset references and logic**. It enables packaging and re-use of modular asset bundles that can be referenced in scheduling and plan assignments. VirtualAssets may be referenced by Programs that appear inside Patterns; expansion still occurs during ScheduleDay generation. VirtualAssets are used during scheduling or in plan assignments, but **expand to actual assets at ScheduleDay (primary) or Playlog time (fallback)**.
+VirtualAsset is a **SchedulableAsset** subclass that acts as a template or composite wrapper referencing other assets. Unlike physical Assets (which are files), VirtualAssets are design-time constructs that dynamically resolve to real assets when instantiated in a Playlist.
 
-**Example:** A VirtualAsset might define "intro + 2 random SpongeBob shorts" — a reusable container that combines a fixed intro asset with logic to select 2 random SpongeBob segments.
+**What a VirtualAsset is:**
 
-**Critical Rule:** VirtualAssets are **containers only — not assets themselves**. They are not broadcastable content. They are metadata structures that expand to concrete Asset references when resolved during schedule generation. VirtualAssets never appear in playout; only the expanded Asset references do.
+- A **SchedulableAsset** subclass (concrete implementation of the abstract base)
+- A **template or composite wrapper** that references other assets, not a file itself
+- A **design/planning-time entity** that exists only during schedule planning, not in the runtime layer
+- A **dynamic selector** that resolves to concrete Assets when a Playlist is generated from a ScheduleDay
+
+**What a VirtualAsset is not:**
+
+- A physical file or media asset (VirtualAssets have no `canonical_uri`, `source_uri`, or file size)
+- A runtime entity (VirtualAssets do not exist in PlaylogEvent or the playout stream)
+- A Producer (VirtualAssets expand to physical Assets which then feed standard Producers)
+
+**Examples:**
+
+- **"Movie of the Day"** — A VirtualAsset that selects one movie from a pool of eligible films each day, dynamically resolving to a specific movie asset when the Playlist is generated
+- **"Cartoon Marathon"** — A VirtualAsset that selects multiple cartoon episodes from a collection, creating a themed block that varies each time it's scheduled
+
+**Critical Rule:** VirtualAssets exist only at **design/planning time**. They are SchedulableAssets that can be placed in Zones or referenced in Program asset chains during schedule planning. When a Playlist is generated from a ScheduleDay, VirtualAssets expand into one or more physical Assets (files) which then feed the appropriate Producer (usually AssetProducer). There is no "VirtualProducer" — Producers are output-oriented runtime components that operate on physical Assets.
 
 **Key Characteristics:**
-- **Reusable container**: A VirtualAsset is a reusable container of asset references and logic that can be used across multiple schedule plans
-- **Asset references and logic**: Contains both direct asset references and logic for dynamic selection (e.g., rules, filters, selection criteria)
-- **Cross-plan reuse**: Can be reused across multiple schedule plans, allowing operators to define once and use many times
+
+- **SchedulableAsset subclass**: VirtualAsset is a concrete SchedulableAsset implementation
+- **Template/composite wrapper**: VirtualAsset references other assets but is not itself a file
+- **Design/planning-time only**: VirtualAssets exist only during schedule planning, not in runtime
+- **Dynamic resolution**: VirtualAssets resolve to concrete Assets when Playlists are generated
+- **Scheduling-time equivalence**: At scheduling time, VirtualAssets are treated identically to regular Assets
 
 VirtualAssets provide a way to:
+
 - **Package asset sequences**: Create reusable bundles of assets (e.g., intro → clip → clip)
-- **Define rule-based collections**: Specify dynamic asset selections (e.g., "intro + 2 random SpongeBob shorts")
-- **Enable modular programming**: Reference complex asset combinations as a single unit in schedule plans
+- **Define rule-based collections**: Specify dynamic asset selections (e.g., "Movie of the Day" selects from a movie pool)
+- **Enable modular programming**: Reference complex asset combinations as a single unit in Zones or Program asset chains
 - **Support content reuse**: Define once, use many times across different plans and ScheduleDay entries
-- **Support playout hints**: Include playout directives like shuffle, sequential, and conditional inserts (e.g., rating slates)
 
 ## Core Model / Scope
 
-VirtualAsset enables:
+VirtualAsset is a **SchedulableAsset** subclass that enables:
 
+- **Template/composite wrappers**: Act as templates that reference other assets but are not files themselves
 - **Fixed sequences**: Predefined ordered lists of assets (e.g., branded intro → episode clip → outro bumper)
-- **Rule-based definitions**: Dynamic asset selections based on rules (e.g., "3 random SpongeBob 11-min segments + branded intro")
+- **Rule-based definitions**: Dynamic asset selections based on rules (e.g., "Movie of the Day" selects from a movie pool)
 - **Modular packaging**: Group related assets into reusable bundles
-- **Scheduling abstraction**: Reference complex asset combinations as a single unit in [Program](Program.md) entries that appear inside Patterns
-- **Runtime expansion**: Expand to actual Asset references at [ScheduleDay](ScheduleDay.md) or [PlaylogEvent](PlaylogEvent.md) resolution time
+- **Design/planning-time existence**: Exist only during schedule planning, not in the runtime layer
+- **Dynamic resolution**: Resolve to concrete Assets when Playlists are generated from ScheduleDays
 
 **Key Points:**
-- VirtualAsset is a **reusable container of asset references and logic** (e.g., intro + 2 random SpongeBob shorts)
-- Can be a fixed sequence (intro → clip → clip) or rule-based definition
-- **Can be reused across multiple schedule plans** — define once, use many times
-- Supports **playout hints** like shuffle, sequential, and conditional inserts (e.g., rating slates)
-- Used during scheduling or in plan assignments
-- Expands to actual assets at ScheduleDay or Playlog time
-- Enables packaging and re-use of modular asset bundles
+
+- VirtualAsset is a **SchedulableAsset** subclass (concrete implementation of the abstract base)
+- VirtualAsset is a **template or composite wrapper** that references other assets, not a file itself
+- VirtualAsset exists only at **design/planning time** — not in PlaylogEvent or the playout stream
+- VirtualAssets can be placed directly in Zones or referenced in Program asset chains during schedule planning
+- At **playlist generation**, VirtualAssets expand into one or more physical Assets (files)
+- Expanded physical Assets feed appropriate Producers (usually AssetProducer)
+- There is no "VirtualProducer" — Producers are output-oriented runtime components that operate on physical Assets
 
 ## Types of VirtualAssets
 
@@ -54,12 +75,14 @@ VirtualAssets come in two fundamental types, distinguished by how they expand to
 A **predefined ordered list of assets** that always plays in the same sequence. The expansion is deterministic — the same VirtualAsset always expands to the same sequence of assets in the same order.
 
 **Expansion Behavior:**
+
 - Fixed sequences expand to a predetermined list of Asset UUIDs
 - The order is always preserved: first asset in sequence → second asset → third asset, etc.
 - Each asset reference in the sequence must resolve to a valid Asset in the catalog
-- Expansion happens at ScheduleDay time (preferred) or Playlog time (fallback)
+- Expansion happens at playlist generation, not at ScheduleDay time
 
 **Example:** Branded intro → Episode clip → Outro bumper
+
 - Intro asset: `branded-intro-2024.mp4` (fixed Asset UUID)
 - Episode clip: Selected from series based on episode policy (may vary per expansion)
 - Outro bumper: `station-outro.mp4` (fixed Asset UUID)
@@ -71,6 +94,7 @@ A **predefined ordered list of assets** that always plays in the same sequence. 
 A **dynamic asset selection based on rules and constraints**. The expansion is non-deterministic — the same VirtualAsset may expand to different assets each time, based on current rules and available catalog content.
 
 **Expansion Behavior:**
+
 - Rule-based VirtualAssets evaluate their rules against the current asset catalog at expansion time
 - Rules can specify selection criteria (genre, duration, series, freshness, etc.)
 - Rules can specify ordering (random, chronological, least-recently-used, etc.)
@@ -79,6 +103,7 @@ A **dynamic asset selection based on rules and constraints**. The expansion is n
 - Each expansion may produce different asset selections based on current catalog state
 
 **Example:** "3 random SpongeBob 11-min segments + branded intro"
+
 - Rule: Select 3 random assets from SpongeBob series
 - Constraint: Each segment must be approximately 11 minutes (10-12 minute range)
 - Fixed component: Branded intro plays first (always the same Asset UUID)
@@ -103,100 +128,235 @@ VirtualAsset defines:
 - **Expansion behavior**: How the virtual asset expands to concrete assets during resolution
 - **Reusability**: Can be referenced across multiple schedule plans
 
-VirtualAssets are referenced in [Program](Program.md) entries using `content_type: "virtual_package"` and `content_ref` pointing to the VirtualAsset UUID. Programs appear inside Patterns within SchedulePlans. The same VirtualAsset can be referenced in multiple plans, enabling cross-plan reuse.
+VirtualAssets are referenced in [Program](Program.md) asset chains as nodes in the linked list. Programs are placed in Zones within SchedulePlans. The same VirtualAsset can be referenced in multiple Programs and Plans, enabling cross-plan reuse.
 
 ## Execution Model
 
-VirtualAssets are used during scheduling but **expand to actual assets during resolution**. The expansion process converts VirtualAsset containers into concrete Asset references that can be scheduled and played.
+VirtualAssets are **SchedulableAsset** subclasses that exist only at **design/planning time**. They are treated identically to regular Assets during schedule planning but **expand to physical Assets at playlist generation**. The expansion process converts VirtualAssets into concrete Asset references that can be played. VirtualAssets do not exist in the runtime layer (PlaylogEvent or playout stream).
 
-### Expansion Flow
+### Design/Planning-Time Behavior
 
-1. **Program Reference**: [Program](Program.md) entries inside Patterns reference a VirtualAsset using `content_type: "virtual_package"` and `content_ref: <virtual_asset_uuid>`
-   - The Program contains the VirtualAsset reference, not the expanded assets
-   - Programs appear inside Patterns within SchedulePlans
-   - See [Program](Program.md) for details on how VirtualAssets are referenced in Programs
+VirtualAssets exist only during schedule planning:
 
-2. **Schedule Day Resolution** (Primary Expansion Point): When [ScheduleDay](ScheduleDay.md) is generated from the plan:
-   - **VirtualAsset expansion occurs here** — VirtualAssets are resolved to concrete Asset references
+1. **Zone Placement**: VirtualAssets can be placed directly in Zones, just like regular Assets or Programs
+2. **Program Asset Chains**: VirtualAssets can be referenced in Program asset chains
+3. **Planning-Time Equivalence**: VirtualAssets are indistinguishable from regular Assets during scheduling — they are treated as single units
+4. **Template/Composite Wrapper**: VirtualAssets act as templates that reference other assets but are not files themselves
+
+### Playlist Generation (Expansion Point)
+
+When [Playlist](../architecture/Playlist.md) is generated from ScheduleDay:
+
+1. **VirtualAsset Expansion**: VirtualAssets expand into one or more physical Assets
    - **Fixed sequences**: Expand to the predetermined ordered list of Asset UUIDs
    - **Rule-based definitions**: Evaluate rules against the current asset catalog and expand to selected Asset UUIDs
-   - Resolved assets are included in the ScheduleDay with their timing and sequencing
-   - The ScheduleDay contains the actual Asset UUIDs, not the VirtualAsset reference
-   - See [ScheduleDay](ScheduleDay.md) for details on schedule day resolution
+2. **Physical Asset Resolution**: Expanded physical Assets are included in the Playlist with absolute timecodes
+3. **Producer Assignment**: Physical Assets feed appropriate Producers (usually AssetProducer)
+   - There is no "VirtualProducer" — Producers are output-oriented runtime components
+   - VirtualAssets expand to physical Assets which then render through standard Producers
 
-3. **Playlog Generation**: When [PlaylogEvent](PlaylogEvent.md) records are generated from the ScheduleDay:
-   - The resolved assets from the VirtualAsset (already expanded in ScheduleDay) are used
-   - Each asset becomes a separate PlaylogEvent or segment within a PlaylogEvent
-   - Timing and sequencing from the VirtualAsset expansion are preserved
-   - See [PlaylogEvent](PlaylogEvent.md) for details on playlog event generation
+**Critical Rule:** After expansion, VirtualAssets no longer exist. Only the concrete physical Assets remain in the Playlist and subsequent runtime layers (PlaylogEvent, playout stream).
 
 ### Expansion Timing
 
-**Primary Expansion: ScheduleDay Time (3-4 days in advance)**
-- VirtualAssets **preferentially expand** when [ScheduleDay](ScheduleDay.md) records are resolved from plans
-- This happens 3-4 days before broadcast, providing advance resolution for EPG and planning
-- VirtualAssets may be referenced by Programs that appear inside Patterns; expansion still occurs during ScheduleDay generation
+**Playlist Generation (Primary Expansion Point)**
+
+- VirtualAssets expand when [Playlist](../architecture/Playlist.md) is generated from ScheduleDay
+- This happens before playout execution, providing resolved physical assets with absolute timecodes
 - Fixed sequences expand deterministically to their predefined asset lists
-- Rule-based VirtualAssets evaluate rules against the catalog state at ScheduleDay generation time
-- The expanded Asset references are stored in the ScheduleDay, making it immutable and stable
+- Rule-based VirtualAssets evaluate rules against the catalog state at playlist generation time
+- The expanded Asset references are stored in the Playlist, ready for playout
+- **VirtualAssets do not exist in PlaylogEvent or the playout stream** — only physical Assets remain
 
-**Fallback Expansion: Playlog Time (2-3 hours ahead)**
-- If a VirtualAsset was not expanded during ScheduleDay resolution (e.g., late plan changes, manual overrides), expansion can occur during [PlaylogEvent](PlaylogEvent.md) generation
-- This happens 2-3 hours before broadcast, as a fallback mechanism
-- Rule-based VirtualAssets evaluate rules against the catalog state at Playlog generation time
-- This ensures VirtualAssets can still be resolved even if ScheduleDay expansion was skipped
+**Why Playlist Generation:**
 
-**Why ScheduleDay Time is Preferred:**
-- Provides stable, immutable schedules for EPG systems
-- Allows operators to preview and validate expanded content well in advance
-- Enables better planning and conflict detection
-- Supports audit trails and compliance requirements
+- Provides resolved physical assets with absolute timecodes for playout
+- Allows VirtualAssets to remain as SchedulableAssets in ScheduleDay (immutable planning layer)
+- Enables expansion logic to access current catalog state at playout time
+- Supports both fixed sequences and dynamic rule-based selections
+- Ensures VirtualAssets exist only at design/planning time, not in runtime
 
-## Relationship to Programs in Patterns
+## Relationship to Programs
 
-VirtualAssets are referenced in [Program](Program.md) entries using `content_type: "virtual_package"` and `content_ref` pointing to the VirtualAsset UUID. Programs appear inside Patterns within SchedulePlans. VirtualAssets may be referenced by Programs that appear inside Patterns; expansion still occurs during ScheduleDay generation.
+VirtualAssets can be referenced in Program asset chains. Programs are SchedulableAssets that contain an `asset_chain` (linked list of SchedulableAsset IDs), and VirtualAssets can be included in those chains.
 
 **Key Points:**
-- Programs contain the VirtualAsset reference, not the expanded assets
-- The VirtualAsset is a reusable container that will be expanded later during ScheduleDay resolution
-- Programs define what content should play, but not when (that's determined by Zones and Patterns)
-- **Cross-plan reuse**: The same VirtualAsset can be referenced in multiple schedule plans, allowing operators to define once and use many times across different plans and ScheduleDay entries
+
+- Programs contain VirtualAsset references in their `asset_chain`, not the expanded assets
+- The VirtualAsset is a SchedulableAsset that will be expanded later during playlist generation
+- Programs define what content should play, but not when (that's determined by Zones)
+- **Reusability**: The same VirtualAsset can be referenced in multiple Programs and Zones, allowing operators to define once and use many times
 
 ## Relationship to ScheduleDay
 
-When [ScheduleDay](ScheduleDay.md) is generated from a plan containing VirtualAsset references, **VirtualAssets expand to concrete Asset selections**. This is the primary expansion point.
+When [ScheduleDay](ScheduleDay.md) is generated from a plan containing VirtualAssets, **VirtualAssets remain as SchedulableAssets** in the ScheduleDay. They are not expanded at ScheduleDay time — expansion occurs later at playlist generation.
 
-**Expansion Process:**
-- VirtualAssets are resolved to concrete Asset UUIDs during ScheduleDay generation
-- Fixed sequences expand to their predetermined asset lists
-- Rule-based VirtualAssets evaluate rules against the current catalog and expand to selected assets
-- The resolved assets are included in the ScheduleDay with their timing and sequencing
-- **ScheduleDay contains the actual Asset UUIDs, not the VirtualAsset reference**
-- The VirtualAsset container disappears after expansion — only the expanded Asset references remain
+**ScheduleDay Process:**
 
-See [ScheduleDay](ScheduleDay.md) for details on how schedule days are generated and how VirtualAsset expansion fits into the resolution process.
+- VirtualAssets are placed in ScheduleDay as SchedulableAssets (just like regular Assets or Programs)
+- ScheduleDay contains VirtualAsset references, not expanded assets
+- VirtualAssets are treated identically to regular Assets during scheduling
+- Expansion to physical Assets occurs at playlist generation time
 
-## Relationship to PlaylogEvent
+See [ScheduleDay](ScheduleDay.md) for details on how schedule days are generated and how VirtualAssets fit into the scheduling process.
 
-When [PlaylogEvent](PlaylogEvent.md) records are generated from a ScheduleDay, **the resolved assets from VirtualAssets are used** (VirtualAssets are already expanded by this point).
+## Relationship to Playlist and PlaylogEvent
 
-**Playlog Generation:**
-- The ScheduleDay contains already-expanded Asset UUIDs (VirtualAssets were expanded during ScheduleDay generation)
-- Each expanded asset becomes a separate PlaylogEvent or segment within a PlaylogEvent
-- Timing and sequencing from the VirtualAsset expansion are preserved in the playlog events
-- **PlaylogEvents reference concrete Asset UUIDs, not VirtualAsset references**
+When [Playlist](../architecture/Playlist.md) is generated from ScheduleDay, **VirtualAssets expand to physical Assets**. The Playlist contains resolved physical assets with absolute timecodes, ready for playout. **VirtualAssets do not exist in PlaylogEvent or the playout stream** — only physical Assets remain after expansion.
 
-**Fallback Expansion:**
-- If a VirtualAsset was not expanded during ScheduleDay resolution (rare, e.g., late plan changes), expansion can occur during PlaylogEvent generation as a fallback
-- This ensures VirtualAssets can still be resolved even if ScheduleDay expansion was skipped
+**Playlist Generation:**
 
-See [PlaylogEvent](PlaylogEvent.md) for details on how playlog events are generated from schedule days.
+- VirtualAssets in ScheduleDay expand into one or more physical Assets
+- Each expanded asset becomes a separate entry in the Playlist with absolute timecodes
+- Timing and sequencing from the VirtualAsset expansion are preserved in the Playlist
+- **Playlist contains concrete Asset UUIDs, not VirtualAsset references**
+- **VirtualAssets no longer exist after expansion** — they are design/planning-time entities only
+
+**PlaylogEvent and Runtime:**
+
+- PlaylogEvents are generated from Playlists and contain only physical Asset references
+- **VirtualAssets do not exist in PlaylogEvent or the playout stream**
+- Only the concrete physical Assets that resulted from VirtualAsset expansion are present in runtime layers
+- VirtualAssets exist only at design/planning time, not in the runtime layer
+
+**Producer Assignment:**
+
+- Physical Assets from VirtualAsset expansion feed appropriate Producers (usually AssetProducer)
+- There is no "VirtualProducer" — Producers are output-oriented runtime components
+- VirtualAssets expand to physical Assets which then render through standard Producers
+
+See [Playlist](../architecture/Playlist.md) for details on how playlists are generated and how VirtualAsset expansion fits into the playout process.
 
 ## Examples
 
-### Example 1: Fixed Sequence - Branded Episode Block
+### Example 1: "Movie of the Day" - Rule-Based Selection from Pool
 
 **VirtualAsset Definition:**
+
+A VirtualAsset that acts as a template selecting one movie from a pool of eligible films each day. This demonstrates how a VirtualAsset references other assets but is not itself a file.
+
+```yaml
+name: "Movie of the Day"
+type: "rule_based"
+description: "Selects one movie from the classic movies pool each day"
+rules:
+  selection:
+    pool: "classic-movies-collection-uuid"
+    count: 1
+    method: "random"
+  constraints:
+    duration_min_ms: 5400000 # 90 minutes
+    duration_max_ms: 7200000 # 120 minutes
+    exclude_recent_days: 30 # Avoid movies aired in last 30 days
+    tags:
+      - "classic"
+      - "feature-film"
+  fixed_components:
+    - position: "before"
+      asset_uuid: "branded-intro-uuid"
+    - position: "after"
+      asset_uuid: "station-outro-uuid"
+```
+
+**JSON representation:**
+
+```json
+{
+  "id": "880e8400-e29b-41d4-a716-446655440003",
+  "name": "Movie of the Day",
+  "type": "rule_based",
+  "description": "Selects one movie from the classic movies pool each day",
+  "rules": {
+    "selection": {
+      "pool": "classic-movies-collection-uuid",
+      "count": 1,
+      "method": "random"
+    },
+    "constraints": {
+      "duration_min_ms": 5400000,
+      "duration_max_ms": 7200000,
+      "exclude_recent_days": 30,
+      "tags": ["classic", "feature-film"]
+    },
+    "fixed_components": [
+      {
+        "position": "before",
+        "asset_uuid": "branded-intro-uuid"
+      },
+      {
+        "position": "after",
+        "asset_uuid": "station-outro-uuid"
+      }
+    ]
+  }
+}
+```
+
+**Usage in SchedulePlan:**
+
+The VirtualAsset is placed in a Zone or referenced in a Program asset chain:
+
+```json
+{
+  "zone_name": "Late Night",
+  "start_time": "22:00",
+  "end_time": "24:00",
+  "schedulable_assets": ["880e8400-e29b-41d4-a716-446655440003"]
+}
+```
+
+**Expansion at Playlist Generation:**
+
+When the Playlist is generated from ScheduleDay, the VirtualAsset dynamically resolves to concrete Assets:
+
+- **Day 1**: Intro → `asset-uuid-500` (Casablanca, 102 min) → Outro
+- **Day 2**: Intro → `asset-uuid-523` (The Maltese Falcon, 100 min) → Outro
+- **Day 3**: Intro → `asset-uuid-487` (Citizen Kane, 119 min) → Outro
+
+**Key Point:** The VirtualAsset is a template that exists only at design/planning time. It references a pool of assets and rules for selection, but is not itself a file. When instantiated in a Playlist, it resolves to specific physical Assets.
+
+### Example 2: "Cartoon Marathon" - Multi-Asset Selection from Pool
+
+**VirtualAsset Definition:**
+
+A VirtualAsset that selects multiple cartoon episodes from a collection, creating a themed block that varies each time it's scheduled.
+
+```yaml
+name: "Cartoon Marathon"
+type: "rule_based"
+description: "Selects 3-4 cartoon episodes for a themed marathon block"
+rules:
+  selection:
+    pool: "cartoon-collection-uuid"
+    count: 4
+    method: "random"
+  constraints:
+    duration_min_ms: 1320000 # 22 minutes
+    duration_max_ms: 1440000 # 24 minutes
+    exclude_recent_days: 7
+    tags:
+      - "cartoon"
+      - "animated"
+  fixed_components:
+    - position: "before"
+      asset_uuid: "cartoon-intro-uuid"
+    - position: "after"
+      asset_uuid: "cartoon-outro-uuid"
+  playout_hints:
+    shuffle: true
+```
+
+**Expansion at Playlist Generation:**
+
+- **Day 1**: Intro → 4 randomly selected cartoon episodes (shuffled) → Outro
+- **Day 2**: Intro → 4 different randomly selected cartoon episodes (shuffled) → Outro
+
+**Key Point:** This VirtualAsset demonstrates how a composite wrapper can select multiple assets from a pool, apply constraints, and include fixed components (intro/outro) while varying the main content.
+
+### Example 3: Fixed Sequence - Branded Episode Block
+
+**VirtualAsset Definition:**
+
 - Name: `branded-episode-block`
 - Type: **Fixed sequence** (deterministic expansion)
 - Sequence:
@@ -204,30 +364,31 @@ See [PlaylogEvent](PlaylogEvent.md) for details on how playlog events are genera
   2. Episode (selected from series based on episode policy) — may vary per expansion
   3. Station bumper (`station-bumper.mp4`) — fixed Asset UUID
 
-**Usage in [Program](Program.md) inside Pattern:**
+**Usage in Program asset chain:**
+
 ```json
 {
-  "content_type": "virtual_package",
-  "content_ref": "550e8400-e29b-41d4-a716-446655440000"
+  "name": "Branded Episode Block",
+  "play_mode": "sequential",
+  "asset_chain": ["branded-episode-block-virtual-asset-uuid"]
 }
 ```
 
-Note: Programs do not have `start_time`/`duration` — that's determined by Zones and Patterns.
-
-**Expansion at ScheduleDay Time:**
-When the [ScheduleDay](ScheduleDay.md) is generated 3-5 days in advance, the VirtualAsset expands:
+**Expansion at Playlist Generation:**
+When the [Playlist](../architecture/Playlist.md) is generated from ScheduleDay, the VirtualAsset expands:
 
 - **Intro**: `asset-uuid-1` (branded-intro-2024.mp4) — always the same
 - **Episode**: `asset-uuid-2` (Cheers S01E05, selected based on episode policy for this date)
 - **Bumper**: `asset-uuid-3` (station-bumper.mp4) — always the same
 
-The expanded assets are stored in the ScheduleDay. When [PlaylogEvent](PlaylogEvent.md) records are generated, they reference these already-expanded Asset UUIDs.
+The expanded assets are stored in the Playlist with absolute timecodes. Physical Assets feed AssetProducer for playout.
 
-**Key Point:** The VirtualAsset container disappears after expansion. Only the concrete Asset references remain in the ScheduleDay and PlaylogEvent records.
+**Key Point:** The VirtualAsset expands to physical Assets at playlist generation. Only the concrete Asset references remain in the Playlist.
 
 ### Example 2: Rule-Based - Morning Cartoon Block (Intro + 2 Random SpongeBob Shorts)
 
 **VirtualAsset Definition:**
+
 - Name: `morning-cartoon-block`
 - Type: **Rule-based** (non-deterministic expansion)
 - Description: **Reusable container** of asset references and logic — "intro + 2 random SpongeBob shorts"
@@ -240,37 +401,31 @@ The expanded assets are stored in the ScheduleDay. When [PlaylogEvent](PlaylogEv
 - **Playout hints**: `shuffle` (randomize SpongeBob segment order)
 - **Reusability**: Can be reused across multiple schedule plans (e.g., weekday morning plan, weekend morning plan)
 
-**Usage in [Program](Program.md) inside Pattern:**
-```json
-{
-  "content_type": "virtual_package",
-  "content_reference": "660e8400-e29b-41d4-a716-446655440001",
-  "start_time": "06:00",
-  "duration": 45
-}
-```
+**Usage in Zone or Program asset chain:**
+VirtualAsset can be placed directly in a Zone or referenced in a Program asset chain.
 
-**Expansion at ScheduleDay Time (Day 1):**
-When the [ScheduleDay](ScheduleDay.md) is generated for Monday, the VirtualAsset expands:
+**Expansion at Playlist Generation (Day 1):**
+When the [Playlist](../architecture/Playlist.md) is generated for Monday, the VirtualAsset expands:
 
 - **Intro**: `asset-uuid-1` (branded-intro-2024.mp4) — always the same
 - **Segment 1**: `asset-uuid-10` (SpongeBob S03E12, randomly selected, 11 min)
 - **Segment 2**: `asset-uuid-15` (SpongeBob S02E08, randomly selected, 10 min)
 - **Segment 3**: `asset-uuid-22` (SpongeBob S04E05, randomly selected, 12 min)
 
-**Expansion at ScheduleDay Time (Day 2):**
-When the [ScheduleDay](ScheduleDay.md) is generated for Tuesday, the VirtualAsset expands differently:
+**Expansion at Playlist Generation (Day 2):**
+When the [Playlist](../architecture/Playlist.md) is generated for Tuesday, the VirtualAsset expands differently:
 
 - **Intro**: `asset-uuid-1` (branded-intro-2024.mp4) — always the same
 - **Segment 1**: `asset-uuid-18` (SpongeBob S01E15, randomly selected, 11 min) — different from Day 1
 - **Segment 2**: `asset-uuid-25` (SpongeBob S05E03, randomly selected, 10 min) — different from Day 1
 - **Segment 3**: `asset-uuid-31` (SpongeBob S02E20, randomly selected, 12 min) — different from Day 1
 
-**Key Point:** The same VirtualAsset expands to different assets each day because it's rule-based. The rules are evaluated fresh against the catalog state at ScheduleDay generation time.
+**Key Point:** The same VirtualAsset expands to different assets each day because it's rule-based. The rules are evaluated fresh against the catalog state at playlist generation time.
 
 ### Example 3: Fixed Sequence - Commercial Pod Structure
 
 **VirtualAsset Definition:**
+
 - Name: `prime-time-commercial-pod`
 - Type: **Fixed sequence** (deterministic expansion)
 - Sequence:
@@ -280,17 +435,24 @@ When the [ScheduleDay](ScheduleDay.md) is generated for Tuesday, the VirtualAsse
   4. Commercial slot 3 (selected from ad library based on rotation policy)
   5. Return bumper (`return-bumper.mp4`) — fixed Asset UUID
 
-**Usage in [Program](Program.md) inside Pattern:**
+**Usage in [Program](Program.md) placed in Zone:**
+The Program's asset_chain includes the VirtualAsset as a node:
+
 ```json
 {
-  "content_type": "virtual_package",
-  "content_reference": "770e8400-e29b-41d4-a716-446655440002",
-  "start_time": "20:15",
-  "duration": 3
+  "asset_chain": [
+    {
+      "schedulable_asset_id": "770e8400-e29b-41d4-a716-446655440002",
+      "asset_type": "virtual_asset",
+      "next_id": null
+    }
+  ]
 }
 ```
 
-**Expansion at ScheduleDay Time:**
+The Zone controls timing and duration (e.g., Zone 20:00-23:00). The VirtualAsset expands at playlist generation.
+
+**Expansion at Playlist Generation:**
 The VirtualAsset expands to a fixed structure with some dynamic components:
 
 - **Station ID**: `asset-uuid-100` (station-id-2024.mp4) — always the same
@@ -304,6 +466,7 @@ The VirtualAsset expands to a fixed structure with some dynamic components:
 ### Example 4: Rule-Based - Late Night Movie Block
 
 **VirtualAsset Definition:**
+
 - Name: `late-night-movie-block`
 - Type: **Rule-based** (non-deterministic expansion)
 - Rules:
@@ -314,22 +477,31 @@ The VirtualAsset expands to a fixed structure with some dynamic components:
   - Avoid movies that aired in the last 30 days
   - Prefer movies with "classic" genre tag
 
-**Usage in [Program](Program.md) inside Pattern:**
+**Usage in [Program](Program.md) placed in Zone:**
+The Program's asset_chain includes the VirtualAsset as a node:
+
 ```json
 {
-  "content_type": "virtual_package",
-  "content_reference": "880e8400-e29b-41d4-a716-446655440003",
-  "start_time": "22:00",
-  "duration": 120
+  "asset_chain": [
+    {
+      "schedulable_asset_id": "880e8400-e29b-41d4-a716-446655440003",
+      "asset_type": "virtual_asset",
+      "next_id": null
+    }
+  ]
 }
 ```
 
-**Expansion at ScheduleDay Time (Day 1):**
+The Zone controls timing and duration (e.g., Zone 22:00-24:00). The VirtualAsset expands at playlist generation.
+
+**Expansion at Playlist Generation (Day 1):**
+
 - **Intro**: `asset-uuid-1` (branded-intro-2024.mp4) — always the same
 - **Movie**: `asset-uuid-500` (Casablanca, 102 min, randomly selected from eligible movies)
 - **Outro**: `asset-uuid-2` (station-outro.mp4) — always the same
 
-**Expansion at ScheduleDay Time (Day 2):**
+**Expansion at Playlist Generation (Day 2):**
+
 - **Intro**: `asset-uuid-1` (branded-intro-2024.mp4) — always the same
 - **Movie**: `asset-uuid-523` (The Maltese Falcon, 100 min, randomly selected, different from Day 1)
 - **Outro**: `asset-uuid-2` (station-outro.mp4) — always the same
@@ -339,6 +511,7 @@ The VirtualAsset expands to a fixed structure with some dynamic components:
 ### Example 5: Conditional Inserts - Rating Slates
 
 **VirtualAsset Definition:**
+
 - Name: `prime-time-block-with-rating-slates`
 - Type: **Rule-based** (with conditional inserts)
 - Description: **Reusable container** of asset references and logic with conditional inserts
@@ -347,30 +520,39 @@ The VirtualAsset expands to a fixed structure with some dynamic components:
   - Duration must be 42-44 minutes
   - Add branded intro at start (fixed Asset UUID)
   - Add station outro at end (fixed Asset UUID)
-- **Playout hints**: 
+- **Playout hints**:
   - `sequential`: Play in defined order (intro → episode → outro)
   - `conditional_inserts`: Insert rating slate before episode if content rating is PG-13 or R
     - Rating slate asset: `pg13-rating-slate.mp4` (inserted if rating is PG-13)
     - Rating slate asset: `r-rating-slate.mp4` (inserted if rating is R)
 - **Reusability**: Can be reused across multiple schedule plans (e.g., weekday prime-time plan, weekend prime-time plan)
 
-**Usage in [Program](Program.md) inside Pattern:**
+**Usage in [Program](Program.md) placed in Zone:**
+The Program's asset_chain includes the VirtualAsset as a node:
+
 ```json
 {
-  "content_type": "virtual_package",
-  "content_reference": "990e8400-e29b-41d4-a716-446655440004",
-  "start_time": "20:00",
-  "duration": 45
+  "asset_chain": [
+    {
+      "schedulable_asset_id": "990e8400-e29b-41d4-a716-446655440004",
+      "asset_type": "virtual_asset",
+      "next_id": null
+    }
+  ]
 }
 ```
 
-**Expansion at ScheduleDay Time (Episode with PG-13 rating):**
+The Zone controls timing and duration (e.g., Zone 20:00-20:45). The VirtualAsset expands at playlist generation.
+
+**Expansion at Playlist Generation (Episode with PG-13 rating):**
+
 - **Intro**: `asset-uuid-1` (branded-intro-2024.mp4) — always the same
 - **Rating Slate**: `asset-uuid-300` (pg13-rating-slate.mp4) — conditionally inserted based on content rating
 - **Episode**: `asset-uuid-600` (Drama Series S02E05, PG-13 rated, 43 min)
 - **Outro**: `asset-uuid-2` (station-outro.mp4) — always the same
 
-**Expansion at ScheduleDay Time (Episode with TV-PG rating):**
+**Expansion at Playlist Generation (Episode with TV-PG rating):**
+
 - **Intro**: `asset-uuid-1` (branded-intro-2024.mp4) — always the same
 - **Episode**: `asset-uuid-605` (Comedy Series S01E12, TV-PG rated, 42 min) — no rating slate inserted
 - **Outro**: `asset-uuid-2` (station-outro.mp4) — always the same
@@ -416,10 +598,10 @@ VirtualAssets are not part of the initial MVP release. The following are deferre
 
 - [Asset](Asset.md) - Atomic unit of broadcastable content (what VirtualAssets contain)
 - [SchedulePlan](SchedulePlan.md) - Top-level operator-created plans that define channel programming
-- [Program](Program.md) - Catalog entities in Patterns (can reference VirtualAssets)
-- [ScheduleDay](ScheduleDay.md) - Resolved schedules for specific channel and date (VirtualAssets expand here)
-- [PlaylogEvent](PlaylogEvent.md) - Generated playout events (uses resolved assets from VirtualAssets)
+- [Program](Program.md) - SchedulableAsset type that is a linked list of SchedulableAssets (can reference VirtualAssets in asset chains)
+- [ScheduleDay](ScheduleDay.md) - Resolved schedules for specific channel and date (VirtualAssets remain as SchedulableAssets in ScheduleDay)
+- [Playlist](../architecture/Playlist.md) - Resolved pre–AsRun list of physical assets (VirtualAssets expand here)
+- [PlaylogEvent](PlaylogEvent.md) - Runtime execution plan aligned to MasterClock (derived from Playlist containing resolved assets from VirtualAssets)
 - [Scheduling](Scheduling.md) - High-level scheduling system
 
-**Note:** VirtualAsset is a future feature that enables packaging and re-use of modular asset bundles. A VirtualAsset is a reusable container of asset references and logic (e.g., intro + 2 random SpongeBob shorts) that can be reused across multiple schedule plans. VirtualAssets support playout hints like shuffle, sequential, and conditional inserts (e.g., rating slates). VirtualAssets are containers only — not assets themselves. They are used during scheduling or in plan assignments, but expand to actual assets at ScheduleDay time (preferred, 3-5 days in advance) or Playlog time (fallback, 2-3 hours ahead). After expansion, only the concrete Asset references remain in ScheduleDay and PlaylogEvent records.
-
+**Note:** VirtualAsset is a future feature that enables packaging and re-use of modular asset bundles. A VirtualAsset is a **SchedulableAsset** subclass that acts as a template or composite wrapper referencing other assets, but is not itself a file. VirtualAssets are reusable containers of asset references and logic (e.g., "Movie of the Day" or "Cartoon Marathon") that can be reused across multiple schedule plans. VirtualAssets support playout hints like shuffle, sequential, and conditional inserts (e.g., rating slates). **VirtualAssets exist only at design/planning time** — they are used during schedule planning and expand to actual physical Assets when Playlists are generated from ScheduleDays. After expansion, only the concrete Asset references remain in Playlists and PlaylogEvent records. VirtualAssets do not exist in the runtime layer (PlaylogEvent or playout stream).

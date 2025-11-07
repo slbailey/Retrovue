@@ -1,6 +1,6 @@
 # SchedulePlan Show Contract
 
-_Related: [SchedulePlanContract](SchedulePlanContract.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
+_Related: [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
 
 ## Purpose
 
@@ -8,7 +8,9 @@ This contract defines the behavior of the `retrovue channel plan <channel> <plan
 
 **Context:** This command is part of the Plan Mode workflow, allowing operators to inspect SchedulePlan details before entering plan mode for interactive editing.
 
-**Coverage Guarantee:** Every displayed plan is guaranteed to have a coverage baseline satisfying INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14). When no scheduled content exists, the "test pattern" filler zone appears in the zones list (00:00–24:00).
+**Coverage Guarantee:** Every displayed plan is guaranteed to have a coverage baseline satisfying INV_PLAN_MUST_HAVE_FULL_COVERAGE. Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps. When no scheduled content exists, the test filler zone (SyntheticAsset) appears in the zones list (00:00–24:00).
+
+**Broadcast-Day Display:** Human-readable times in plan show must reflect channel broadcast-day start (e.g., 06:00 → 05:59 next day). JSON outputs can keep canonical times, but include `broadcast_day_start` so UIs can offset. Human output hides implementation details (asset_type, producer_type); JSON output may include technical fields.
 
 ## Command Syntax
 
@@ -30,7 +32,7 @@ retrovue channel plan <channel> <plan> show \
 ## Optional Options
 
 - `--json` - Output in JSON format
-- `--with-contents` - Include lightweight summaries of Zones and Patterns
+- `--with-contents` - Include lightweight summaries of Zones and their SchedulableAssets
 - `--computed` - Include computed fields (effective_today, next_applicable_date)
 - `--no-color` - Disable colored output (if CLI supports it)
 - `--quiet` - Suppress extraneous output lines
@@ -92,23 +94,26 @@ retrovue channel plan <channel> <plan> show \
 
 ### B-6: Expandable Relations (Opt-In)
 
-**Rule:** Support `--with-contents` to include lightweight summaries of Zones/Patterns.
+**Rule:** Support `--with-contents` to include lightweight summaries of Zones and SchedulableAssets.
 
 **Behavior (Human-Readable):**
 
-- Append sections after main plan details:
-  - **Zones (count: N)** with rows: `Name | From–To | Days`
-  - **Patterns (count: M)** with rows: `Zone | Programs (ordered, truncated)`
-- Zone rows show: name, time window (HH:MM–HH:MM), day filters (or "All days")
-- Pattern rows show: associated zone name, ordered program list (truncated if long)
+- Display broadcast-day aligned grid/table view:
+  - **Zones (count: N)** with rows: `Ord | Start | End | Zone Name | Title`
+  - Times reflect broadcast-day start (e.g., 06:00 → 05:59 next day)
+  - Human view shows only title (e.g., "Test Filler"), not asset_type or producer_type
+- Zone rows show: order, start time (broadcast-day offset), end time (broadcast-day offset), zone name, title
 - Every plan is guaranteed to have at least one zone covering 00:00–24:00 (see INV_PLAN_MUST_HAVE_FULL_COVERAGE)
-- If no explicit zones exist, the default "test pattern" zone (00:00–24:00) will appear in the zones list
+- If no explicit zones exist, the default test filler zone (SyntheticAsset, 00:00–24:00) will appear
 - **UI Note:** UI renderers can safely assume at least one zone exists for empty coverage fallback visualization
 
 **Behavior (JSON):**
 
-- Add `"zones": [...]` array with objects containing: `id`, `name`, `start_time`, `end_time`, `day_filters`
-- Add `"patterns": [...]` array with objects containing: `id`, `name`, `zone_name`, `program_count`
+- Add `"broadcast_day_start": "HH:MM"` field for UI offset calculation
+- Add `"zones": [...]` array with objects containing:
+  - `order`, `start` (canonical time 00:00–24:00), `end` (canonical time 00:00–24:00)
+  - `zone_name`, `title`
+  - `asset_type`, `producer_type` (technical fields, included in JSON)
 - Arrays are empty if `--with-contents` is not provided
 
 ### B-7: Deterministic Formatting
@@ -206,7 +211,7 @@ Zones (count: 2):
   Base | 00:00–24:00 | All days
   Prime Time | 19:00–22:00 | All days
 
-Patterns (count: 2):
+SchedulableAssets in Zones:
   Base | Cheers, The Big Bang Theory, ...
   Prime Time | Drama Series, Movie Block
 ```
@@ -287,18 +292,14 @@ Computed:
       "day_filters": null
     }
   ],
-  "patterns": [
+  "schedulable_assets_by_zone": [
     {
-      "id": "990e8400-e29b-41d4-a716-446655440004",
-      "name": "Base Pattern",
       "zone_name": "Base",
-      "program_count": 2
+      "schedulable_asset_count": 2
     },
     {
-      "id": "aa0e8400-e29b-41d4-a716-446655440005",
-      "name": "Prime Time Pattern",
       "zone_name": "Prime Time",
-      "program_count": 2
+      "schedulable_asset_count": 2
     }
   ]
 }
@@ -372,7 +373,5 @@ Planned tests:
 
 ## See Also
 
-- [Scheduling Invariants](SchedulingInvariants.md) - Cross-cutting scheduling invariants
-- [SchedulePlan Domain Documentation](../../domain/SchedulePlan.md)
-- [SchedulePlan Contract](SchedulePlanContract.md)
+- [Domain: SchedulePlan](../../domain/SchedulePlan.md) - SchedulePlan domain documentation
 - [SchedulePlan List](SchedulePlanListContract.md)
