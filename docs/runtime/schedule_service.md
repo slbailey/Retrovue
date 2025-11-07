@@ -3,7 +3,7 @@
 _Related: [Runtime: Channel manager](ChannelManager.md) • [Domain: MasterClock](../domain/MasterClock.md) • [Runtime: Program director](program_director.md)_
 
 > **Note:** This document reflects the modern scheduling architecture.  
-> The active scheduling chain is: **SchedulePlan → ScheduleDay → PlaylogEvent → AsRunLog.**
+> The active scheduling chain is: **SchedulePlan → ScheduleDay → Playlist → PlaylogEvent → AsRunLog.**
 
 > Station's programming authority for "what should air, and when."
 

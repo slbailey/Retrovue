@@ -4,7 +4,7 @@ _Related: [Channel](Channel.md) • [SchedulePlan](SchedulePlan.md) • [Schedul
 
 ## Purpose
 
-This document describes the **default scheduling policies** used by SchedulingService. These policies govern how Zones, Patterns, and Programs are resolved into concrete [ScheduleDay](ScheduleDay.md) schedules, ensuring consistent behavior, predictable EPG output, and reliable ad math calculations.
+This document describes the **default scheduling policies** used by SchedulingService. These policies govern how Zones and their SchedulableAssets are resolved into concrete [ScheduleDay](ScheduleDay.md) schedules, ensuring consistent behavior, predictable EPG output, and reliable ad math calculations.
 
 **Critical Rule:** These are the **default policies** applied by SchedulingService. They ensure deterministic, predictable schedule generation that operators can rely on for EPG accuracy and ad revenue calculations.
 
@@ -15,20 +15,19 @@ This document describes the **default scheduling policies** used by SchedulingSe
 **Policy:** All program starts snap to the [Channel](Channel.md) grid boundaries defined by `grid_block_minutes` and `block_start_offsets_minutes`.
 
 **Behavior:**
-- When a Pattern repeats over a Zone, each Program reference starts at the next valid grid boundary
+- When SchedulableAssets are placed in a Zone, each starts at the next valid grid boundary
 - Grid boundaries are determined by the Channel's `grid_block_minutes` (e.g., 30 minutes) and `block_start_offsets_minutes` (e.g., :00, :30 within each hour)
-- Programs never start at arbitrary times (e.g., 19:07) — they always align to grid boundaries (e.g., 19:00, 19:30)
+- SchedulableAssets never start at arbitrary times (e.g., 19:07) — they always align to grid boundaries (e.g., 19:00, 19:30)
 
 **User-Facing Outcomes:**
 - **EPG Truth:** EPG systems can reliably predict start times because all content aligns to known grid boundaries
 - **Ad Math Consistency:** Ad breaks occur at predictable intervals, enabling accurate revenue calculations and ad inventory management
-- **Predictable Scheduling:** Operators can plan content knowing exactly when programs will start
+- **Predictable Scheduling:** Operators can plan content knowing exactly when content will start
 
 **Example:**
 - Channel grid: 30-minute blocks starting at :00 and :30
-- Pattern: ["Cheers", "The Big Bang Theory"]
-- Zone: 19:00–21:00
-- Result: "Cheers" starts at 19:00, "The Big Bang Theory" starts at 19:30 (or 20:00 if Cheers fills a full block)
+- Zone: 19:00–21:00 with SchedulableAssets: [Program A, Program B]
+- Result: Program A starts at 19:00, Program B starts at 19:30 (or 20:00 if Program A fills a full block)
 
 **See Also:** [Channel.md](Channel.md) - Grid & Boundaries section
 
@@ -40,7 +39,7 @@ This document describes the **default scheduling policies** used by SchedulingSe
 
 **Behavior:**
 - When a Zone becomes active but content from a previous Zone or carry-in is still playing, the new Zone does not interrupt
-- The Zone's Pattern begins at the next grid boundary after the current content completes
+- The Zone's SchedulableAssets begin at the next grid boundary after the current content completes
 - This prevents mid-content interruptions and ensures smooth transitions
 
 **User-Facing Outcomes:**
@@ -50,8 +49,8 @@ This document describes the **default scheduling policies** used by SchedulingSe
 
 **Example:**
 - Current content: Movie playing from 19:00, expected to end at 21:15
-- Zone opens: "Prime Time" zone starts at 20:00 with Pattern ["Drama Series"]
-- Result: Movie continues until 21:15, then "Drama Series" starts at 21:30 (next grid boundary)
+- Zone opens: "Prime Time" zone starts at 20:00 with SchedulableAssets: [Drama Program]
+- Result: Movie continues until 21:15, then Drama Program starts at 21:30 (next grid boundary)
 
 **See Also:** [SchedulePlan.md](SchedulePlan.md) - Conflict Resolution section
 
@@ -59,12 +58,12 @@ This document describes the **default scheduling policies** used by SchedulingSe
 
 ### 3. Fixed Zone End (Do Not Extend to Make Up)
 
-**Policy:** Zones end at their declared end time, even if the Pattern has not fully filled the Zone. Under-filled time becomes avails.
+**Policy:** Zones end at their declared end time, even if the SchedulableAssets have not fully filled the Zone. Under-filled time becomes avails.
 
 **Behavior:**
-- If a Pattern does not fully fill a Zone (e.g., Zone is 19:00–21:00 but Pattern only fills 1.5 hours), the Zone ends at 21:00 as declared
+- If SchedulableAssets do not fully fill a Zone (e.g., Zone is 19:00–21:00 but content only fills 1.5 hours), the Zone ends at 21:00 as declared
 - Under-filled blocks become avails (available grid blocks for ads, promos, or filler content)
-- The scheduler does not extend the Zone or repeat the Pattern beyond the declared end time
+- The scheduler does not extend the Zone beyond the declared end time
 
 **User-Facing Outcomes:**
 - **EPG Truth:** EPG accurately reflects Zone boundaries, and operators know exactly when zones end
@@ -73,7 +72,7 @@ This document describes the **default scheduling policies** used by SchedulingSe
 
 **Example:**
 - Zone: "Prime Time" 20:00–22:00 (2 hours)
-- Pattern: ["Movie Block"] (Program with `slot_units=3` on 30-min grid = 1.5 hours)
+- SchedulableAssets: [Movie Program] (Program with `slot_units=3` on 30-min grid = 1.5 hours)
 - Result: Movie plays 20:00–21:30, then 21:30–22:00 becomes avails
 
 **See Also:** [ScheduleDay.md](ScheduleDay.md) - Resolution Semantics section
@@ -96,8 +95,8 @@ This document describes the **default scheduling policies** used by SchedulingSe
 - **Predictable Behavior:** Operators know that longform content will always play to completion
 
 **Example:**
-- Pattern: ["Movie Block"] with `slot_units=4` (2 hours on 30-min grid)
-- Movie resolves to 2.5 hours
+- Zone contains Movie Program with `slot_units=4` (2 hours on 30-min grid)
+- Movie resolves to 2.5 hours at playlist generation
 - Result: Movie plays for 2.5 hours, consuming 5 grid blocks instead of 4
 
 **See Also:** [Program.md](Program.md) - Resolution section, [ScheduleDay.md](ScheduleDay.md) - Block Consumption and Avails section
@@ -122,8 +121,8 @@ This document describes the **default scheduling policies** used by SchedulingSe
 **Example:**
 - Programming day start: 06:00
 - Day 1: Movie playing from 04:00, expected to end at 06:45
-- Day 2: "Morning Zone" starts at 06:00 with Pattern ["Cartoons"]
-- Result: Movie continues until 06:45, then "Cartoons" start at 07:00 (next grid boundary after carry-in)
+- Day 2: "Morning Zone" starts at 06:00 with SchedulableAssets: [Cartoon Program]
+- Result: Movie continues until 06:45, then Cartoon Program starts at 07:00 (next grid boundary after carry-in)
 
 The same carry-in rule applies across broadcast day boundaries (e.g., a film beginning before 6 AM continues uninterrupted).
 
@@ -141,7 +140,7 @@ These policies work together to ensure deterministic, predictable schedule gener
 4. **No Mid-Longform Cuts** preserves content integrity
 5. **Carry-In Across Day Seam** ensures seamless day transitions
 
-**Critical Rule:** These policies are applied in order during ScheduleDay resolution. The scheduler evaluates Zones, expands Patterns, resolves Programs, and applies these policies to generate the final immutable ScheduleDay.
+**Critical Rule:** These policies are applied in order during ScheduleDay resolution. The scheduler evaluates Zones, places SchedulableAssets, and applies these policies to generate the final immutable ScheduleDay. Programs expand their asset chains and VirtualAssets expand to physical Assets during playlist generation, not during ScheduleDay resolution.
 
 ## Implementation Notes
 
@@ -171,7 +170,7 @@ Policies are applied in a hierarchical layering system:
 ## Related Documentation
 
 - **[Channel.md](Channel.md)** - Defines the Grid configuration that policies align to
-- **[SchedulePlan.md](SchedulePlan.md)** - Defines Zones and Patterns that policies operate on
+- **[SchedulePlan.md](SchedulePlan.md)** - Defines Zones and SchedulableAssets that policies operate on
 - **[ScheduleDay.md](ScheduleDay.md)** - The resolved schedule output that policies generate
 - **[Scheduling.md](Scheduling.md)** - High-level scheduling system overview
 - **[Program.md](Program.md)** - Catalog entities that policies resolve into concrete content

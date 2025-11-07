@@ -10,7 +10,7 @@ This document describes a planned feature that is not part of the initial MVP re
 
 ContentPolicyRule is a placeholder for future infrastructure around **content filtering, eligibility rules, and smart selection**. It will enable operators to define reusable rules that specify content selection criteria, allowing the system to intelligently select assets based on metadata, ratings, duration, genre, and other attributes.
 
-**Example:** A ContentPolicyRule might define "pick a G-rated 90s cartoon with runtime < 30m" — a reusable rule that can be applied to Programs inside Patterns. Pattern picks Program whose rule is "G-rated 90s cartoons < 30m".
+**Example:** A ContentPolicyRule might define "pick a G-rated 90s cartoon with runtime < 30m" — a reusable rule that can be applied to Programs placed in Zones. Programs can reference ContentPolicyRule to automatically select content based on the rule criteria.
 
 **Critical Note:** ContentPolicyRule is **not yet implemented** but is aligned with the long-term roadmap for RetroVue's content selection and scheduling capabilities.
 
@@ -26,6 +26,7 @@ ContentPolicyRule will enable:
 - **Rule composition**: Build complex selection logic from simpler rule components
 
 **Key Points:**
+
 - ContentPolicyRule is a placeholder for future content filtering and smart selection infrastructure
 - Will enable reusable rules for content eligibility and selection
 - Supports complex criteria combining multiple attributes (rating, genre, duration, decade, etc.)
@@ -50,6 +51,7 @@ ContentPolicyRule will define:
 - **Reusability**: Can be referenced across multiple schedule plans and assignments
 
 **Example Rule Definition:**
+
 ```json
 {
   "name": "G-Rated 90s Cartoons Under 30m",
@@ -70,27 +72,28 @@ ContentPolicyRule will define:
 ContentPolicyRule will be used during content selection:
 
 1. **Rule Definition**: Operators create ContentPolicyRule records that define filtering and selection criteria
-2. **Rule Reference**: Rules are referenced in [Program](Program.md) entries inside Patterns or [VirtualAsset](VirtualAsset.md) definitions
-3. **Rule Evaluation**: During ScheduleDay resolution, rules are evaluated against the asset catalog to find matching assets
+2. **Rule Reference**: Rules are referenced in [Program](Program.md) asset chains or [VirtualAsset](VirtualAsset.md) definitions
+3. **Rule Evaluation**: During playlist generation, rules are evaluated against the asset catalog to find matching assets
 4. **Asset Selection**: The system selects assets from the matching set based on the rule's selection logic
 5. **Schedule Integration**: Selected assets are included in [ScheduleDay](ScheduleDay.md) and [PlaylogEvent](PlaylogEvent.md) records
 
 **Integration Points:**
-- **Programs in Patterns**: Rules can be referenced in Programs inside Patterns to automatically select content (e.g., Pattern picks Program whose rule is "G-rated 90s cartoons < 30m")
+
+- **Programs in Zones**: Rules can be referenced in Programs placed in Zones to automatically select content (e.g., Program references a rule for "G-rated 90s cartoons < 30m")
 - **VirtualAsset**: Rules can be used within VirtualAsset definitions for dynamic content selection
 - **Asset Catalog**: Rules evaluate against asset metadata to find eligible content
 
-## Relationship to Programs in Patterns
+## Relationship to Programs in Zones
 
-ContentPolicyRule will integrate with [Program](Program.md) entries inside Patterns to enable smart content selection:
+ContentPolicyRule will integrate with [Program](Program.md) entries placed in Zones to enable smart content selection:
 
-- Programs can reference ContentPolicyRule instead of specific assets or series
-- Pattern picks Program whose rule is "G-rated 90s cartoons < 30m"
-- Rules are evaluated during ScheduleDay generation to select eligible assets
-- Selected assets are resolved to concrete Asset UUIDs in the ScheduleDay
+- Programs can reference ContentPolicyRule in their asset chains instead of specific assets or series
+- Rules are evaluated during playlist generation to select eligible assets based on the rule criteria
+- Selected assets are resolved to concrete Asset UUIDs in the Playlist
 
 **Example Usage:**
-A Program inside a Pattern references a ContentPolicyRule:
+A Program placed in a Zone references a ContentPolicyRule:
+
 ```json
 {
   "content_type": "rule",
@@ -98,7 +101,7 @@ A Program inside a Pattern references a ContentPolicyRule:
 }
 ```
 
-Note: Programs do not have `start_time`/`duration` — that's determined by Zones and Patterns.
+Note: Programs do not have `start_time`/`duration` — that's determined by Zones and Schedule context.
 
 ## Relationship to VirtualAsset
 
@@ -113,6 +116,7 @@ ContentPolicyRule will integrate with [VirtualAsset](VirtualAsset.md) to enable 
 ### Example 1: G-Rated 90s Cartoons Under 30m
 
 **ContentPolicyRule Definition:**
+
 - Name: `g-rated-90s-cartoons-under-30m`
 - Criteria:
   - Rating: G
@@ -122,8 +126,9 @@ ContentPolicyRule will integrate with [VirtualAsset](VirtualAsset.md) to enable 
   - Avoid content aired in last 7 days
 - Selection logic: Random from matching set
 
-**Usage in Program inside Pattern:**
-Pattern picks Program whose rule is "G-rated 90s cartoons < 30m":
+**Usage in Program placed in Zone:**
+Program references a ContentPolicyRule for "G-rated 90s cartoons < 30m":
+
 ```json
 {
   "content_type": "rule",
@@ -132,6 +137,7 @@ Pattern picks Program whose rule is "G-rated 90s cartoons < 30m":
 ```
 
 **Evaluation Result:**
+
 - During ScheduleDay generation, system evaluates rule against asset catalog
 - Finds matching assets (e.g., SpongeBob S01E05, Rugrats S02E12, etc.)
 - Randomly selects one asset that matches all criteria
@@ -140,6 +146,7 @@ Pattern picks Program whose rule is "G-rated 90s cartoons < 30m":
 ### Example 2: Prime-Time Drama Movies
 
 **ContentPolicyRule Definition:**
+
 - Name: `prime-time-drama-movies`
 - Criteria:
   - Genre: drama
@@ -151,6 +158,7 @@ Pattern picks Program whose rule is "G-rated 90s cartoons < 30m":
 
 **Usage in VirtualAsset:**
 A VirtualAsset might use this rule to select the movie component:
+
 - Intro (fixed) → Movie (selected by rule) → Outro (fixed)
 
 ## Benefits
@@ -197,4 +205,3 @@ ContentPolicyRule is not part of the initial MVP release. The following are defe
 - [Scheduling](Scheduling.md) - High-level scheduling system
 
 **Note:** ContentPolicyRule is a placeholder for future infrastructure around content filtering, eligibility rules, and smart selection (e.g., pick a G-rated 90s cartoon with runtime < 30m). It is not yet implemented but is aligned with the long-term roadmap for RetroVue's content selection and scheduling capabilities.
-

@@ -1,12 +1,12 @@
 # SchedulePlan Build Contract
 
-_Related: [SchedulePlanContract](SchedulePlanContract.md) • [SchedulePlan Add](SchedulePlanAddContract.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Channel](../../domain/Channel.md)_
+_Related: [SchedulePlan Add](SchedulePlanAddContract.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md) • [Domain: Channel](../../domain/Channel.md)_
 
 ## Purpose
 
 This contract defines the behavior of the `retrovue channel plan <channel> build` command, which creates a new SchedulePlan and enters an interactive REPL (Read-Eval-Print Loop) for building and editing the plan. This command is intended for interactive CLI use, while `plan add` provides the non-interactive API surface for web UI integration. The web UI will call the same underlying Plan Add function used by the CLI; the interactive plan build command exists only for developer and QA workflows, not production usage.
 
-**Coverage Guarantee:** Plans created by this command are automatically initialized with a default "test pattern" zone (00:00–24:00) to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14). This ensures the plan immediately has full 24-hour coverage and can be used for schedule generation. The default zone can be replaced or modified during the REPL session.
+**Coverage Guarantee:** Plans created by this command are automatically initialized with a default test filler zone (SyntheticAsset, 00:00–24:00) to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE. Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps. This ensures the plan immediately has full 24-hour coverage and can be used for schedule generation. The default zone can be replaced or modified during the REPL session.
 
 ## Command Syntax
 
@@ -52,7 +52,7 @@ retrovue channel plan <channel> build \
 
 - Plan is created with all provided parameters
 - Same validation rules apply as `plan add` (channel resolution, name uniqueness, date validation, cron validation, priority validation)
-- **Default test pattern zone initialization**: When no zones are supplied, the system automatically initializes the plan with a default "test pattern" zone covering 00:00–24:00 to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14). This ensures the plan immediately has full 24-hour coverage and can be used for schedule generation. The default zone can be replaced or modified during the REPL session.
+- **Default test filler zone initialization**: When no zones are supplied, the system automatically initializes the plan with a default test filler zone (SyntheticAsset, 00:00–24:00) to satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE. Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps. This ensures the plan immediately has full 24-hour coverage and can be used for schedule generation. The default zone can be replaced or modified during the REPL session.
 - If plan creation fails, command exits with error (does not enter REPL)
 - Plan is created in a transaction that is NOT committed until `save` is called in REPL
 
@@ -74,9 +74,9 @@ retrovue channel plan <channel> build \
 **Available Commands:**
 
 - `zone add <name> --from HH:MM --to HH:MM [--days MON..SUN]` - Creates a new Zone
-- `pattern set <zone> "<ProgramA>,<ProgramB>,..."` - Sets Pattern for a Zone
-- `pattern weight <zone> "<A>,<A>,<B>..."` - Sets weighted Pattern for a Zone
-- `program create <name> --type series|movie|block [--rotation random|sequential|lru] [--slot-units N]` - Creates a Program catalog entry
+- `zone asset add <zone> <schedulable-asset-id>` - Adds a SchedulableAsset (Program, Asset, VirtualAsset, SyntheticAsset) to a Zone
+- `zone asset remove <zone> <schedulable-asset-id>` - Removes a SchedulableAsset from a Zone
+- `program create <name> --play-mode random|sequential|manual [--asset-chain <id1>,<id2>,...]` - Creates a Program with asset_chain and play_mode
 - `validate` - Performs validation checks on the current plan
 - `preview day YYYY-MM-DD` - Generates a preview of how the plan resolves for a date
 - `save` - Saves all changes and exits REPL
@@ -98,7 +98,7 @@ retrovue channel plan <channel> build \
 
 **Behavior:**
 
-- All Zones, Patterns, and Programs created during the session are associated with the plan
+- All Zones and SchedulableAssets created during the session are associated with the plan
 - Changes are visible immediately within the REPL session
 - Changes are NOT persisted until `save` is called
 - If `discard` is called, all changes are lost
@@ -120,7 +120,7 @@ retrovue channel plan <channel> build \
 
 **Behavior:**
 
-- Each command (`zone add`, `pattern set`, etc.) runs in a single transaction
+- Each command (`zone add`, `zone asset add`, etc.) runs in a single transaction
 - If a command fails, only that command's transaction rolls back
 - `save` commits all changes made during the entire session
 - `discard` rolls back all changes made during the entire session
@@ -156,7 +156,7 @@ retrovue channel plan <channel> build \
 
 **Behavior:**
 
-- All Zones, Patterns, and Programs created during the session are persisted together
+- All Zones and SchedulableAssets created during the session are persisted together
 - If save fails, entire transaction rolls back; no partial state persists
 - Plan and all associated entities are persisted in a single transaction
 
@@ -167,7 +167,7 @@ retrovue channel plan <channel> build \
 **Behavior:**
 
 - Plan creation is rolled back
-- All Zones, Patterns, and Programs created during the session are discarded
+- All Zones and SchedulableAssets created during the session are discarded
 - Database state returns to pre-session state
 - No partial state persists after discard
 
@@ -192,28 +192,6 @@ retrovue channel plan <channel> build \
 **`zone show <name>`**
 
 - Shows details for a specific zone
-
-### Pattern Commands
-
-**`pattern set <zone> "<ProgramA>,<ProgramB>,..."`**
-
-- Sets the Pattern for the specified Zone
-- Takes comma-separated list of Program names
-- Pattern repeats to fill Zone's time window
-- Validates that all Programs exist
-- On success: displays confirmation message
-
-**`pattern weight <zone> "<A>,<A>,<B>..."`**
-
-- Sets a weighted Pattern for the specified Zone
-- Allows repeating Program references to control frequency
-- Pattern repeats to fill Zone's time window
-- Validates that all Programs exist
-- On success: displays confirmation message
-
-**`pattern show <zone>`**
-
-- Shows the current pattern for a zone
 
 ### Program Commands
 
@@ -246,14 +224,14 @@ retrovue channel plan <channel> build \
 - Generates a preview of how the plan resolves for the specified date
 - Shows the first 12 hours rolled from the current Plan
 - Compiles to a ScheduleDay draft (not persisted)
-- Demonstrates how Zones, Patterns, and Programs expand into concrete schedule entries
+- Demonstrates how Zones and SchedulableAssets expand into concrete schedule entries
 
 ### Session Commands
 
 **`save`**
 
 - Saves the current plan and all changes
-- Persists all Zones, Patterns, and Programs to the database
+- Persists all Zones and SchedulableAssets to the database
 - Commits the transaction
 - Displays success message
 - Exits REPL with code 0
@@ -291,7 +269,7 @@ Commands display brief confirmation messages on success:
 
 ```
 Zone 'Morning' added: 06:00-12:00
-Pattern set for zone 'Morning': ProgramA, ProgramB
+SchedulableAsset added to zone 'Morning': ProgramA
 Program 'MySeries' created (type: series, rotation: sequential)
 Plan saved successfully.
 ```
@@ -312,10 +290,9 @@ Available commands:
   zone add <name> --from HH:MM --to HH:MM [--days MON..SUN]
   zone list
   zone show <name>
-  pattern set <zone> "<ProgramA>,<ProgramB>,...">
-  pattern weight <zone> "<A>,<A>,<B>...">
-  pattern show <zone>
-  program create <name> --type series|movie|block [--rotation ...] [--slot-units N]
+  zone asset add <zone> <schedulable-asset-id>
+  zone asset remove <zone> <schedulable-asset-id>
+  program create <name> --play-mode random|sequential|manual [--asset-chain <id1>,<id2>,...]
   program list
   validate
   preview day YYYY-MM-DD
@@ -379,6 +356,5 @@ Available commands:
 - [SchedulePlan Add Contract](SchedulePlanAddContract.md) - Non-interactive plan creation
 - [SchedulePlan Domain Documentation](../../domain/SchedulePlan.md) - Planning Mode REPL specification
 - [Zone Contract](ZoneContract.md) - Zone operations
-- [Pattern Contract](PatternContract.md) - Pattern operations
 - [Program Contract](ProgramContract.md) - Program catalog operations
 

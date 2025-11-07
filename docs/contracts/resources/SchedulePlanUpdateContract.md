@@ -1,6 +1,6 @@
 # SchedulePlan Update Contract
 
-_Related: [SchedulePlanContract](SchedulePlanContract.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
+_Related: [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
 
 ## Purpose
 
@@ -158,7 +158,7 @@ retrovue channel plan <channel> <plan> update \
 
 ### B-12: Coverage Invariant Validation (INV_PLAN_MUST_HAVE_FULL_COVERAGE)
 
-**Rule:** On save/update, the plan MUST satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14).
+**Rule:** On save/update, the plan MUST satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE. Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps.
 
 **Behavior:**
 
@@ -308,7 +308,5 @@ Planned tests:
 
 ## See Also
 
-- [Scheduling Invariants](SchedulingInvariants.md) - Cross-cutting scheduling invariants
-- [SchedulePlan Domain Documentation](../../domain/SchedulePlan.md)
-- [SchedulePlan Contract](SchedulePlanContract.md)
+- [Domain: SchedulePlan](../../domain/SchedulePlan.md) - SchedulePlan domain documentation
 - [SchedulePlan Add](SchedulePlanAddContract.md)

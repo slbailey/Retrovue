@@ -1,12 +1,12 @@
 # SchedulePlan List Contract
 
-_Related: [SchedulePlanContract](SchedulePlanContract.md) • [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
+_Related: [Domain: SchedulePlan](../../domain/SchedulePlan.md)_
 
 ## Purpose
 
 This contract defines the behavior of the `retrovue channel plan <channel> list` command, which lists all SchedulePlan records for a given channel.
 
-**Coverage Guarantee:** Plans returned by list APIs are guaranteed valid (coverage invariant enforced). All plans satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE (see [Scheduling Invariants](SchedulingInvariants.md) S-INV-14), ensuring full 24-hour coverage (00:00–24:00) with no gaps.
+**Coverage Guarantee:** Plans returned by list APIs are guaranteed valid (coverage invariant enforced). All plans satisfy INV_PLAN_MUST_HAVE_FULL_COVERAGE, ensuring full 24-hour coverage (00:00–24:00) with no gaps. Plans must contain one or more Zones whose combined coverage spans 00:00–24:00 with no gaps.
 
 ## Command Syntax
 
@@ -62,14 +62,15 @@ All date values reflect system local time via MasterClock. There is no per-chann
 
 ### B-3: Deterministic Sorting
 
-**Rule:** Plans MUST be sorted deterministically.
+**Rule:** Plans MUST be sorted deterministically. Table shows plans for the channel (omit channel column).
 
 **Behavior:**
 
-- Sorted by priority (descending), then name (case-insensitive ascending), then created_at (ascending), then id (ascending)
-- When priority and name are identical, sort by created_at ascending before id
+- Sorted by priority (descending), then name (case-insensitive ascending), then id (ascending)
+- When priority and name are identical, sort by id ascending
 - Output is deterministic and repeatable
 - Keeps list stable across re-inserts
+- Human-readable table omits channel column (plans are already scoped to a specific channel)
 
 ### B-4: Read-Only Operation
 
@@ -301,7 +302,5 @@ Planned tests:
 
 ## See Also
 
-- [Scheduling Invariants](SchedulingInvariants.md) - Cross-cutting scheduling invariants
-- [SchedulePlan Domain Documentation](../../domain/SchedulePlan.md)
-- [SchedulePlan Contract](SchedulePlanContract.md)
+- [Domain: SchedulePlan](../../domain/SchedulePlan.md) - SchedulePlan domain documentation
 - [SchedulePlan Show](SchedulePlanShowContract.md)

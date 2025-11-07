@@ -19,7 +19,7 @@ The scheduling system architecture is documented, but implementation is in early
 **Components**:
 
 - SchedulePlan creation and management
-- Zone and Pattern definition within plans
+- Zone and SchedulableAsset definition within plans
 - Grid block configuration
 - ScheduleDay generation from plans
 - Basic content selection rules (placeholder or fixed content)
