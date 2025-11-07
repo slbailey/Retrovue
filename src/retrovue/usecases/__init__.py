@@ -5,13 +5,15 @@ CLI commands should call functions from here instead of legacy services.
 """
 
 # Import modules to make them available at package level
-from . import asset_attention
-from . import asset_update
-from . import channel_add
-from . import channel_update
-from . import channel_validate
-from . import plan_add
-from . import plan_delete
-from . import plan_list
-from . import plan_show
-from . import plan_update
+from . import (
+    asset_attention,
+    asset_update,
+    channel_add,
+    channel_update,
+    channel_validate,
+    plan_add,
+    plan_delete,
+    plan_list,
+    plan_show,
+    plan_update,
+)
