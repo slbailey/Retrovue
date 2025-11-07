@@ -143,6 +143,78 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
 
+      - name: Enforce SourceIngest contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: SourceIngest contract tests must pass"
+          pytest tests/contracts/test_source_ingest_contract.py tests/contracts/test_source_ingest_data_contract.py -v --tb=short
+          echo "✅ SourceIngest contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce CollectionList contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: CollectionList contract tests must pass"
+          pytest tests/contracts/test_collection_list_contract.py tests/contracts/test_collection_list_data_contract.py -v --tb=short
+          echo "✅ CollectionList contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce CollectionShow contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: CollectionShow contract tests must pass"
+          pytest tests/contracts/test_collection_show_contract.py -v --tb=short
+          echo "✅ CollectionShow contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce CollectionUpdate contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: CollectionUpdate contract tests must pass"
+          pytest tests/contracts/test_collection_update_contract.py -v --tb=short
+          echo "✅ CollectionUpdate contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce CollectionWipe contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: CollectionWipe contract tests must pass"
+          pytest tests/contracts/test_collection_wipe_contract.py -v --tb=short
+          echo "✅ CollectionWipe contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce CollectionIngest contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: CollectionIngest contract tests must pass"
+          pytest tests/contracts/test_collection_ingest_contract.py tests/contracts/test_collection_ingest_data_contract.py -v --tb=short
+          echo "✅ CollectionIngest contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce AssetAttention contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: AssetAttention contract tests must pass"
+          pytest tests/contracts/test_asset_attention_contract.py tests/contracts/test_asset_attention_data_contract.py -v --tb=short
+          echo "✅ AssetAttention contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce AssetResolve contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: AssetResolve contract tests must pass"
+          pytest tests/contracts/test_asset_resolve_contract.py tests/contracts/test_asset_resolve_data_contract.py -v --tb=short
+          echo "✅ AssetResolve contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
+      - name: Enforce AssetConfidence contract (ENFORCED)
+        run: |
+          echo "🔒 ENFORCED: AssetConfidence contract tests must pass"
+          pytest tests/contracts/test_asset_confidence_contract.py tests/contracts/test_asset_confidence_data_contract.py -v --tb=short
+          echo "✅ AssetConfidence contract enforcement passed"
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/retrovue_test
+
       - name: Cleanup test database
         run: |
           echo "🧹 Cleaning up test database..."
