@@ -39,6 +39,10 @@ def _get_db_context(test_db: bool):
     return session()
 
 
+# Alias for test compatibility
+_get_test_db_context = _get_db_context
+
+
 @app.command("add")
 def add_channel(
     name: str | None = typer.Option(None, "--name", help="Channel name (unique)"),

@@ -76,7 +76,7 @@ The scheduling system follows a simplified architecture based on Zones + Pattern
 
 6. **VirtualAssets enable modular packaging** - [VirtualAssets](VirtualAsset.md) are containers for multiple assets that can be referenced in Programs. They expand to actual assets during ScheduleDay resolution (primary expansion point), enabling reusable modular programming blocks (e.g., branded intro → episode → outro).
 
-7. **Scheduler builds ScheduleDay (resolved, immutable) → PlaylogEvent (runtime)** - The Scheduler resolves active plans into [BroadcastScheduleDay](ScheduleDay.md) records, which are resolved, immutable daily schedules. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets. ScheduleDays are then used to generate [BroadcastPlaylogEvent](PlaylogEvent.md) records for actual playout execution.
+7. **Scheduler builds ScheduleDay (resolved, immutable) → PlaylogEvent (runtime)** - The Scheduler resolves active plans into [ScheduleDay](ScheduleDay.md) records, which are resolved, immutable daily schedules. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets. ScheduleDays are then used to generate [PlaylogEvent](PlaylogEvent.md) records for actual playout execution.
 
 ### Primary Models
 
@@ -88,9 +88,9 @@ The Broadcast Scheduling Domain consists of these primary models:
 - **Pattern** - Ordered lists of Programs (catalog entries). No durations inside the pattern — the plan engine repeats the pattern over the Zone until the Zone is full.
 - **Program** - Catalog entries (schedulable entities) in Patterns: series, movies, blocks, composites (can reference VirtualAssets)
 - **VirtualAsset** - Modular asset containers for reusable programming blocks (expanded at ScheduleDay time)
-- **BroadcastScheduleDay** - Resolved, immutable daily schedules (generated from plans). Primary expansion point for Programs → episodes and VirtualAssets → assets.
+- **ScheduleDay** - Resolved, immutable daily schedules (generated from plans). Primary expansion point for Programs → episodes and VirtualAssets → assets.
 - **Asset** - Broadcast-approved content (airable content)
-- **BroadcastPlaylogEvent** - Generated playout events (runtime execution)
+- **PlaylogEvent** - Generated playout events (runtime execution)
 
 ## Contract / interface
 
@@ -145,12 +145,12 @@ The Scheduler (ScheduleService) is a background daemon that processes the Broadc
    - Resolves VirtualAssets to actual assets (if referenced in Programs)
    - Resolves content references (assets, series, rules) to specific assets
    - Uses the channel's Grid boundaries to anchor Zone time windows and Pattern repeating behavior
-   - Builds BroadcastScheduleDay records (resolved, immutable daily schedules) 3–4 days in advance
+   - Builds ScheduleDay records (resolved, immutable daily schedules) 3–4 days in advance
    - Combines Zone time windows and Pattern repeating behavior with channel's Grid boundaries to produce real-world wall-clock times
    - Resolves all content selections to concrete assets
    - Validates Zones, Patterns, and Programs and ensures no gaps or conflicts
 
-5. **ScheduleDays resolve to PlaylogEvents**: The ScheduleService generates BroadcastPlaylogEvent records from ScheduleDay records:
+5. **ScheduleDays resolve to PlaylogEvents**: The ScheduleService generates PlaylogEvent records from ScheduleDay records:
    - Each PlaylogEvent is a resolved media segment mapping to a ScheduleDay
    - Points to a resolved asset or asset segment (for VirtualAssets)
    - Creates precise playout timestamps for runtime execution
@@ -186,12 +186,12 @@ ProgramDirector coordinates multiple channels and may reference:
 
 - Channel records for channel configuration
 - SchedulePlan records for plan resolution and layering
-- BroadcastScheduleDay records for cross-channel programming
+- ScheduleDay records for cross-channel programming
 - Asset records for content availability and approval status
 
 ChannelManager executes playout but does not modify any Broadcast Scheduling Domain models. It:
 
-- Reads BroadcastPlaylogEvent records for playout instructions
+- Reads PlaylogEvent records for playout instructions
 - References Channel configuration for channel identity
 - Uses Asset file paths for content playback
 

@@ -207,8 +207,8 @@ Programs are consumed during schedule generation:
 3. **Zone and Pattern Resolution**: For each active plan, identify its Zones (time windows) and their associated Patterns (ordered lists of Programs)
 4. **Pattern Repeating**: The plan engine repeats each Pattern over its Zone until the Zone is full, snapping to the Channel's Grid boundaries
 5. **Content Resolution**: Content references are resolved to specific assets based on content_type and playback rules. This happens at ScheduleDay time, which is the primary expansion point for Programs → episodes and VirtualAssets → assets
-6. **ScheduleDay Generation**: Resolved Zones, Patterns, and Programs are used to create [BroadcastScheduleDay](ScheduleDay.md) records (resolved 3-4 days in advance)
-7. **PlaylogEvent Generation**: ScheduleDays are used to generate [BroadcastPlaylogEvent](PlaylogEvent.md) records for playout
+6. **ScheduleDay Generation**: Resolved Zones, Patterns, and Programs are used to create [ScheduleDay](ScheduleDay.md) records (resolved 3-4 days in advance)
+7. **PlaylogEvent Generation**: ScheduleDays are used to generate [PlaylogEvent](PlaylogEvent.md) records for playout
 
 **Critical Rule:** Program is a catalog entry in a Pattern. The scheduler uses Programs within Patterns to determine content selections. Timing is determined by the Zone's time window and the Pattern's repeating behavior, not by individual Programs.
 
@@ -230,7 +230,7 @@ Programs flow into [ScheduleDay](ScheduleDay.md) via Zones+Patterns during sched
    - Longform content with `slot_units` override consumes multiple grid blocks
    - Content duration determines block consumption if `slot_units` is not specified
 5. **Time Resolution**: Zone time windows and Pattern repeating behavior are combined with channel's Grid boundaries to produce real-world wall-clock times
-6. **ScheduleDay Creation**: Resolved Zones, Patterns, and Programs become the resolved asset selections in BroadcastScheduleDay
+6. **ScheduleDay Creation**: Resolved Zones, Patterns, and Programs become the resolved asset selections in ScheduleDay
 
 **Example Flow:**
 

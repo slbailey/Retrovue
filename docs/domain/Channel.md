@@ -99,7 +99,7 @@ The Grid system provides predictable, consistent scheduling behavior across the 
 
 ChannelManager uses Channel to know how to interpret 'now' and how to cut the day (rollover). A Channel continues to exist even when nobody is watching and ffmpeg is torn down.
 
-Channel has relationships with schedule data through BroadcastScheduleDay, which links channels to plans for specific broadcast dates.
+Channel has relationships with schedule data through ScheduleDay, which links channels to plans for specific broadcast dates.
 
 ## Failure / fallback behavior
 

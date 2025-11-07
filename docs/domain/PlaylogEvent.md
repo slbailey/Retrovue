@@ -6,21 +6,21 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 
 ## Purpose
 
-BroadcastPlaylogEvent is the **resolved list of media segments to be played**. Each entry maps to a [ScheduleDay](ScheduleDay.md) and points to a resolved concrete asset. PlaylogEvents originate from resolved [BroadcastScheduleDay](ScheduleDay.md) records, which themselves are built from [SchedulePlans](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets. This object feeds Producers and ChannelManager so they can build a playout plan at 'now', but this object itself does not launch ffmpeg.
+PlaylogEvent is the **resolved list of media segments to be played**. Each entry maps to a [ScheduleDay](ScheduleDay.md) and points to a resolved concrete asset. PlaylogEvents originate from resolved [ScheduleDay](ScheduleDay.md) records, which themselves are built from [SchedulePlans](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets. This object feeds Producers and ChannelManager so they can build a playout plan at 'now', but this object itself does not launch ffmpeg.
 
 **Critical Rule:** PlaylogEvent is a finalized instruction representing "this asset airs at this absolute time on this channel" - it contains resolved `start_utc`, `end_utc`, and `asset_uuid` values. Each entry maps to a ScheduleDay and points to a resolved concrete asset. PlaylogEvents reflect the **exact wall-clock timestamps derived from ScheduleDay**. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets, not VirtualAsset containers. The referenced asset must be in `ready` state with `approved_for_broadcast=true`.
 
 **Generation Lineage:** SchedulePlan (Zones + Patterns) → ScheduleDay (immutable; primary expansion point) → PlaylogEvent (exact wall-clock instructions for runtime)
 
 1. **[SchedulePlan](SchedulePlan.md)** - Top-level operator-created plans defining Zones (time windows) and Patterns (ordered lists of Program references). Multiple plans are layered using priority resolution. Zones + Patterns resolve to assets.
-2. **[BroadcastScheduleDay](ScheduleDay.md)** - Resolved, immutable daily schedules built from SchedulePlans using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones. ScheduleDay is the primary expansion point where Zones + Patterns resolve to concrete assets: Programs → episodes and VirtualAssets → real assets. Contains resolved asset selections and exact wall-clock times.
-3. **BroadcastPlaylogEvent** - Finalized playout instructions generated from the resolved schedule day. Each event contains **exact wall-clock timestamps** (`start_utc`, `end_utc`) derived from ScheduleDay and a resolved asset reference (`asset_uuid`) for execution. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets.
+2. **[ScheduleDay](ScheduleDay.md)** - Resolved, immutable daily schedules built from SchedulePlans using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones. ScheduleDay is the primary expansion point where Zones + Patterns resolve to concrete assets: Programs → episodes and VirtualAssets → real assets. Contains resolved asset selections and exact wall-clock times.
+3. **PlaylogEvent** - Finalized playout instructions generated from the resolved schedule day. Each event contains **exact wall-clock timestamps** (`start_utc`, `end_utc`) derived from ScheduleDay and a resolved asset reference (`asset_uuid`) for execution. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets.
 
 PlaylogEvents reflect the **exact wall-clock timestamps derived from ScheduleDay**. The schedule day's resolved times are computed using Grid alignment: Zone time windows and Pattern repeating behavior are combined with the channel's Grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`) to produce real-world wall-clock times, which are then directly used in PlaylogEvents.
 
 ## Core model / scope
 
-BroadcastPlaylogEvent is the **resolved list of media segments to be played**. It enables:
+PlaylogEvent is the **resolved list of media segments to be played**. It enables:
 
 - **Resolved media segments**: Each entry represents a media segment to be played, mapping to a ScheduleDay and pointing to a resolved concrete asset
 - **Asset resolution**: Points to resolved assets. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets.
@@ -34,48 +34,48 @@ BroadcastPlaylogEvent is the **resolved list of media segments to be played**. I
 
 ## Contract / interface
 
-BroadcastPlaylogEvent is managed by SQLAlchemy with the following fields:
+PlaylogEvent is managed by SQLAlchemy with the following fields:
 
 - **id** (Integer, primary key): Unique identifier for relational joins and foreign key references
 - **uuid** (UUID, required, unique): Stable external identifier used for audit, cross-domain tracing, and as-run logs
 - **channel_id** (Integer, required, foreign key): Reference to Channel
 - **asset_uuid** (UUID, required, foreign key): Reference to Asset UUID (primary key) - points to a resolved concrete asset. VirtualAssets are already expanded by ScheduleDay time, so this always references a concrete asset, not a VirtualAsset container.
-- **schedule_day_id** (UUID, optional, foreign key): Reference to BroadcastScheduleDay - each entry maps to a ScheduleDay for traceability
+- **schedule_day_id** (UUID, optional, foreign key): Reference to ScheduleDay - each entry maps to a ScheduleDay for traceability
 - **start_utc** (DateTime(timezone=True), required): Event start time in UTC
 - **end_utc** (DateTime(timezone=True), required): Event end time in UTC
 - **broadcast_day** (Text, required): Broadcast day label in "YYYY-MM-DD" format
 - **created_at** (DateTime(timezone=True), required): Record creation timestamp
 
-BroadcastPlaylogEvent has indexes on channel_id, start_utc, broadcast_day, and asset_uuid for efficient playout queries.
+PlaylogEvent has indexes on channel_id, start_utc, broadcast_day, and asset_uuid for efficient playout queries.
 
 ## Execution model
 
-ScheduleService generates BroadcastPlaylogEvent records as the output of the scheduling process. These events represent the final playout schedule that will be executed by ChannelManager and reflect **exact wall-clock timestamps derived from ScheduleDay**. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets.
+ScheduleService generates PlaylogEvent records as the output of the scheduling process. These events represent the final playout schedule that will be executed by ChannelManager and reflect **exact wall-clock timestamps derived from ScheduleDay**. VirtualAssets are already expanded by ScheduleDay time, so PlaylogEvents reference only concrete assets.
 
 **EPG Relationship:** The EPG is just a coarser view of these same scheduling decisions. EPG entries are derived from PlaylogEvent records but show broader time blocks rather than precise asset timing.
 
 **Generation Lineage: Plan → Day → Playlog**
 
-PlaylogEvents originate from resolved [BroadcastScheduleDay](ScheduleDay.md) records, which themselves are built from [SchedulePlans](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones. The lineage is:
+PlaylogEvents originate from resolved [ScheduleDay](ScheduleDay.md) records, which themselves are built from [SchedulePlans](SchedulePlan.md) using Zones (time windows) and Patterns (ordered Program lists). If multiple plans are active, priority resolves overlapping Zones. The lineage is:
 
 ```
 SchedulePlans (with Zones and Patterns, priority resolves overlapping Zones)
     ↓
-BroadcastScheduleDay (resolved, immutable daily schedule; primary expansion point for Programs→episodes and VirtualAssets→assets)
+ScheduleDay (resolved, immutable daily schedule; primary expansion point for Programs→episodes and VirtualAssets→assets)
     ↓
-BroadcastPlaylogEvent (finalized instructions with start_utc, end_utc, and resolved asset_uuid)
+PlaylogEvent (finalized instructions with start_utc, end_utc, and resolved asset_uuid)
 ```
 
 **Detailed Generation Process:**
 
 1. **Plan Resolution**: ScheduleService resolves active [SchedulePlans](SchedulePlan.md) for channels and dates (top-level input defining channel programming). Multiple plans are layered using priority resolution, where more specific plans override generic ones. Plans define Zones (time windows) and Patterns (ordered lists of Program references). **Zones + Patterns resolve to assets.**
 
-2. **Schedule Day Creation**: Creates [BroadcastScheduleDay](ScheduleDay.md) records from plans (priority resolves overlapping Zones). ScheduleDays are built from the plan's Zones, Patterns, and Programs, containing:
+2. **Schedule Day Creation**: Creates [ScheduleDay](ScheduleDay.md) records from plans (priority resolves overlapping Zones). ScheduleDays are built from the plan's Zones, Patterns, and Programs, containing:
    - Resolved asset selections (concrete assets from Zones + Patterns resolving to assets). ScheduleDay is the primary expansion point where Programs → concrete episodes and VirtualAssets → real assets. **VirtualAssets are already expanded by ScheduleDay time.**
    - Exact wall-clock times computed from Zone time windows and Pattern repeating behavior, snapped to the channel's Grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`)
    - Playback instructions derived from the Programs (episode policies, playback rules, operator intent)
 
-3. **Playlog Generation**: Generates BroadcastPlaylogEvent records from the resolved [ScheduleDay](ScheduleDay.md). Each PlaylogEvent is a finalized instruction containing:
+3. **Playlog Generation**: Generates PlaylogEvent records from the resolved [ScheduleDay](ScheduleDay.md). Each PlaylogEvent is a finalized instruction containing:
    - **Exact wall-clock timestamps** (`start_utc`, `end_utc`) derived directly from the schedule day's resolved times
    - A resolved asset reference (`asset_uuid`) from the schedule day's asset selections - **always points to a concrete asset** (VirtualAssets are already expanded by ScheduleDay time)
    - Mapping to the ScheduleDay (`schedule_day_id`) for traceability
@@ -89,8 +89,8 @@ BroadcastPlaylogEvent (finalized instructions with start_utc, end_utc, and resol
 
 **Lineage Summary:**
 - **Source of Truth**: Zones + Patterns in [SchedulePlans](SchedulePlan.md) define what should air when. Plans can layer by priority; higher-priority zones override lower ones. Zones + Patterns resolve to assets.
-- **Resolved Schedule**: [BroadcastScheduleDay](ScheduleDay.md) is built from SchedulePlans using Zones and Patterns, with priority resolving overlapping Zones. ScheduleDay resolves Zones + Patterns into concrete asset selections with exact wall-clock times. ScheduleDay is the primary expansion point where Programs → episodes and VirtualAssets → assets. **VirtualAssets are already expanded by ScheduleDay time.**
-- **Playout Events**: BroadcastPlaylogEvent contains finalized instructions with **exact wall-clock timestamps** (`start_utc`, `end_utc`) derived from ScheduleDay and resolved asset references (`asset_uuid`) for execution. PlaylogEvents reference only concrete assets (VirtualAssets already expanded).
+- **Resolved Schedule**: [ScheduleDay](ScheduleDay.md) is built from SchedulePlans using Zones and Patterns, with priority resolving overlapping Zones. ScheduleDay resolves Zones + Patterns into concrete asset selections with exact wall-clock times. ScheduleDay is the primary expansion point where Programs → episodes and VirtualAssets → assets. **VirtualAssets are already expanded by ScheduleDay time.**
+- **Playout Events**: PlaylogEvent contains finalized instructions with **exact wall-clock timestamps** (`start_utc`, `end_utc`) derived from ScheduleDay and resolved asset references (`asset_uuid`) for execution. PlaylogEvents reference only concrete assets (VirtualAssets already expanded).
 
 ## Failure / fallback behavior
 
@@ -137,7 +137,7 @@ PlaylogEvent supports **last-minute overrides** to handle emergency changes or s
 
 ## Naming rules
 
-The canonical name for this concept in code and documentation is BroadcastPlaylogEvent.
+The canonical name for this concept in code and documentation is PlaylogEvent.
 
 Playlog events are generated scheduling output, not runtime components. They define "what to play when" but do not execute playout.
 

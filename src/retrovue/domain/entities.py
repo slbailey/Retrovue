@@ -677,8 +677,8 @@ class SchedulePlan(Base):
     """
     Represents a schedule plan for a channel.
 
-    Schedule plans define programming patterns for specific date ranges on a channel.
-    Lower priority numbers indicate higher priority when multiple plans overlap.
+    Schedule plans define programming patterns using Zones and Patterns.
+    Higher priority numbers indicate higher priority when multiple plans overlap.
     """
 
     __tablename__ = "schedule_plans"
@@ -689,10 +689,16 @@ class SchedulePlan(Base):
     channel_id: Mapped[uuid_module.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("channels.id", ondelete="CASCADE"), nullable=False
     )
-    start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[date] = mapped_column(Date, nullable=False)
-    priority: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="Lower number = higher priority"
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cron_expression: Mapped[str | None] = mapped_column(Text, nullable=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    priority: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="Higher number = higher priority"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -705,13 +711,15 @@ class SchedulePlan(Base):
     channel: Mapped[Channel | None] = relationship("Channel", passive_deletes=True)
 
     __table_args__ = (
-        UniqueConstraint("channel_id", "start_date", "end_date", name="uq_schedule_plans_channel_dates"),
+        UniqueConstraint("channel_id", "name", name="uq_schedule_plans_channel_name"),
+        CheckConstraint("priority >= 0", name="chk_schedule_plans_priority_non_negative"),
         Index("ix_schedule_plans_channel_id", "channel_id"),
-        Index("ix_schedule_plans_dates", "start_date", "end_date"),
+        Index("ix_schedule_plans_name", "name"),
+        Index("ix_schedule_plans_is_active", "is_active"),
     )
 
     def __repr__(self) -> str:
-        return f"<SchedulePlan(id={self.id}, channel_id={self.channel_id}, start_date={self.start_date}, end_date={self.end_date}, priority={self.priority})>"
+        return f"<SchedulePlan(id={self.id}, channel_id={self.channel_id}, name={self.name}, priority={self.priority}, is_active={self.is_active})>"
 
 
 class SchedulePlanLabel(Base):

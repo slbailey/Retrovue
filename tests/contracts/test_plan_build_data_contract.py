@@ -322,3 +322,4 @@ class TestPlanBuildDataContract:
             mock_validate_cron.assert_called_once()
             mock_validate_priority.assert_called_once()
 
+

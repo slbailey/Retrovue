@@ -277,7 +277,7 @@ Zones flow into [ScheduleDay](ScheduleDay.md) via Pattern expansion during sched
 3. **Pattern Expansion**: Each Zone's Pattern is expanded across the Zone's time window, snapping to Grid boundaries
 4. **Program Resolution**: Programs in Patterns are resolved to concrete episodes at ScheduleDay time
 5. **Time Calculation**: Zone time windows are combined with Grid boundaries to produce real-world wall-clock times
-6. **ScheduleDay Creation**: Resolved Zones, Patterns, and Programs become the resolved asset selections in BroadcastScheduleDay
+6. **ScheduleDay Creation**: Resolved Zones, Patterns, and Programs become the resolved asset selections in ScheduleDay
 
 **Example Flow:**
 
@@ -466,6 +466,7 @@ This section defines critical runtime behavior and validation requirements that 
 
 ## See Also
 
+- [Scheduling Invariants](../contracts/resources/SchedulingInvariants.md) - Cross-cutting scheduling invariants
 - [SchedulePlan](SchedulePlan.md) - Top-level operator-created plans that define channel programming (contain Zones)
 - [Pattern](Pattern.md) - Ordered lists of Program references (referenced by Zones)
 - [Program](Program.md) - Catalog entries in Patterns (expanded to concrete episodes at ScheduleDay time)
