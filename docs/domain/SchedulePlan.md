@@ -9,12 +9,14 @@ _Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](
 SchedulePlan is the **top-level unit of channel programming**. It is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows within the programming day) and a **Pattern** for each Zone.
 
 **Zones + Patterns Model:**
+
 - **Zone**: Declares when it applies (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and references a Pattern. Zones do not hold episodes or assets.
 - **Pattern**: An ordered list of [Program](Program.md) entries (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern. The plan engine repeats the pattern over the Zone until the Zone is full.
 
 SchedulePlans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones. Plans are channel-bound and span repeating or one-time timeframes. Superseded plans are archived rather than deleted. Plan-based scheduling flows into [ScheduleDay](ScheduleDay.md), which is resolved 3-4 days in advance for EPG and playout purposes.
 
 **Key Points:**
+
 - SchedulePlan is the **top-level unit of channel programming** — the authoritative source for all scheduling decisions
 - Each plan defines one or more **Zones** (named time windows within the programming day)
 - Each Zone references a **Pattern** (ordered list of Programs)
@@ -34,7 +36,7 @@ SchedulePlan is the **top-level unit of channel programming** and the **single s
 - **Defines Zones**: Each plan defines one or more Zones (named time windows within the programming day, e.g., base 00:00–24:00, or After Dark 22:00–05:00)
 - **Defines Patterns per Zone**: Each Zone references a Pattern (ordered list of [Program](Program.md) entries). Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
 - **Programs are catalog entries**: [Program](Program.md) entries in Patterns are schedulable entities such as series, movies, blocks, or composites (can reference [VirtualAssets](VirtualAsset.md))
-- **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy
+- **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy (`sequential`, `random`, or `lru`)
 - **Zone-based time windows**: Zones declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) but do not hold episodes or assets
 - **Is channel-bound**: Plans are bound to specific channels and span repeating or one-time timeframes
 - **Supports layering and overrides**: Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding more generic ones
@@ -46,9 +48,10 @@ SchedulePlan is the **top-level unit of channel programming** and the **single s
 SchedulePlan is managed by SQLAlchemy with the following fields:
 
 - **id** (UUID, primary key): Unique identifier for relational joins and foreign key references
-- **name** (Text, required, unique): Plan identifier (e.g., "WeekdayPlan", "ChristmasPlan", "SummerBlock")
+- **channel_id** (UUID, required, foreign key): Reference to Channel (plans are channel-bound)
+- **name** (Text, required): Plan identifier (e.g., "WeekdayPlan", "ChristmasPlan", "SummerBlock")
 - **description** (Text, optional): Human-readable description of the plan's programming intent
-- **cron_expression** (Text, optional): Cron-style expression defining when this plan is active (e.g., "0 6 * * MON-FRI" for weekdays 6am)
+- **cron_expression** (Text, optional): Cron-style expression defining when this plan is active. **Note:** Only date/day-of-week fields are used (e.g., `* * * * MON-FRI` for weekdays). Hour and minute fields in cron expressions are ignored; time-of-day activation is defined by Zones, not plans.
 - **start_date** (Date, optional): Start date for plan validity (inclusive, can be year-agnostic)
 - **end_date** (Date, optional): End date for plan validity (inclusive, can be year-agnostic)
 - **priority** (Integer, required, default: 0): Priority for layering; higher priority plans override lower priority plans
@@ -60,7 +63,7 @@ SchedulePlan has one-to-many relationships with:
 
 - **Zone**: Multiple Zones can exist within a single plan, each defining a time window and Pattern reference
 - **Pattern**: Multiple Patterns can exist within a single plan, each defining an ordered list of Program references
-- **BroadcastScheduleDay**: Plans are used to generate resolved schedule days
+- **ScheduleDay**: Plans are used to generate resolved schedule days
 
 ### Table Name
 
@@ -68,12 +71,13 @@ The table is named `schedule_plans` (plural). Schema migration is handled throug
 
 ### Constraints
 
-- `name` must be unique across all plans
+- `channel_id` must reference a valid Channel
+- `name` must be unique within each channel (enforced via unique constraint on `channel_id` + `name`)
 - `name` max length ≤ 255 characters (enforced at database level)
 - `description` max length is database-dependent (typically unlimited for TEXT)
 - `priority` must be non-negative (default: 0)
 - `start_date` and `end_date` must be valid dates if provided
-- `cron_expression` must be valid cron syntax if provided
+- `cron_expression` must be valid cron syntax if provided (hour/minute fields are ignored)
 
 ### Layering and Priority Rules
 
@@ -99,6 +103,7 @@ SchedulePlan is the **single source of scheduling logic** for channel programmin
 - **Patterns** - ordered lists of [Program](Program.md) entries for each Zone. Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
 
 **Zones + Patterns Model:**
+
 - **Zone**: Declares when it applies (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and references a Pattern. Zones do not hold episodes or assets.
 - **Pattern**: An ordered list of [Program](Program.md) entries (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern. The plan engine repeats the pattern over the Zone until the Zone is full.
 - **Program (catalog)**: A schedulable entity such as a series, movie, block, or composite (can reference a [VirtualAsset](VirtualAsset.md)). Episodes are resolved automatically at ScheduleDay time based on rotation policy.
@@ -114,15 +119,18 @@ SchedulePlan is the **single source of scheduling logic** for channel programmin
 1. **Identify active plans**: For a given channel and date, determine which plans are active based on cron_expression, effective date ranges (start_date, end_date), and is_active status. Plans are channel-bound and span repeating or one-time timeframes
 2. **Resolve layering and overrides**: Apply plan layering by priority - if multiple plans match, select the plan with the highest priority. More specific plans (e.g., holidays) override generic ones (e.g., weekdays)
 3. **Resolve Zones and Patterns**: For each active plan, identify its Zones (time windows with optional day filters) and their associated Patterns (ordered lists of Program references). Zones + Patterns repeat to fill each Zone's active window, snapping to the Channel's Grid boundaries. Apply conflict resolution (soft-start-after-current) when Zones open while content is playing
-4. **Generate BroadcastScheduleDay**: Resolve the plan into a concrete [BroadcastScheduleDay](ScheduleDay.md) for the specific channel and date (resolved 3-4 days in advance for EPG and playout purposes). This is the primary expansion point where Programs → concrete episodes and VirtualAssets → real assets
-5. **Generate PlaylogEvents**: From the resolved ScheduleDay, generate [BroadcastPlaylogEvent](PlaylogEvent.md) records for actual playout execution
+4. **Generate ScheduleDay**: Resolve the plan into a concrete [ScheduleDay](ScheduleDay.md) for the specific channel and date. **EPG horizon:** ScheduleDays are resolved 2-3 days in advance for EPG purposes. **Playlog horizon:** PlaylogEvents are continuously extended ~3-4 hours ahead of real time. This is the primary expansion point where Programs → concrete episodes and VirtualAssets → real assets
+5. **Generate PlaylogEvents**: From the resolved ScheduleDay, generate [PlaylogEvent](PlaylogEvent.md) records for actual playout execution
 6. **Validate Zones, Patterns, and Programs**: Ensure all Zones, Patterns, and Programs are valid and consistent
+
+**Viewer Join Behavior:** When a viewer joins a channel, playout starts from the beginning of the current grid block. This ensures consistent viewing experiences regardless of join time. See [ChannelManager](../runtime/ChannelManager.md) for runtime behavior details.
 
 ## Zones and Patterns
 
 Zones and Patterns are the core contents of a SchedulePlan. A plan defines one or more Zones, and each Zone references a Pattern that repeats to fill the Zone's time window.
 
 For detailed documentation on Zones and Patterns, see:
+
 - **[Zone](Zone.md)** - Named time windows within the programming day that declare when content should play
 - **[Pattern](Pattern.md)** - Ordered lists of Program references that define content sequences
 
@@ -132,7 +140,7 @@ For detailed documentation on Zones and Patterns, see:
 
 **Pattern:** An ordered list of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). Patterns have no durations — the plan engine repeats the Pattern across the Zone until the Zone is full, snapping to the Channel's Grid boundaries.
 
-**Relationship:** Each Zone references a Pattern that defines its content sequence. The plan engine applies the Pattern repeatedly across the Zone's active window until the Zone is full, snapping to Grid boundaries. Programs in Patterns are resolved to concrete episodes at ScheduleDay time.
+**Relationship:** Each Zone references a Pattern that defines its content sequence. The plan engine applies the Pattern repeatedly across the Zone's active window until the Zone is full, snapping to Grid boundaries. Programs in Patterns are resolved to concrete episodes at ScheduleDay time based on rotation policy: `sequential` (next episode in order), `random` (random selection), or `lru` (least-recently-used).
 
 **Conflict Resolution:**
 
@@ -171,13 +179,13 @@ If plans are missing or invalid:
 - **Grid alignment**: All scheduling snaps to the Channel's Grid boundaries (`grid_block_minutes`, `block_start_offsets_minutes`, `programming_day_start`)
 - **Pattern repeating**: Patterns have no durations — the plan engine repeats the pattern over the Zone until the Zone is full
 - **Programs are catalog entries**: Programs in Patterns are schedulable entities (series, movies, blocks, composites) without durations
-- **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy
+- **Episode resolution**: Episodes are resolved automatically at ScheduleDay time based on rotation policy (`sequential`, `random`, or `lru`)
 - **Channel-bound**: Plans are channel-bound and span repeating or one-time timeframes
 - **Layering and overrides**: Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones
 - **Content selection**: Content selection can include regular assets or VirtualAssets
 - **Timeless but date-bound**: Plans are timeless (reusable patterns) but bound by effective date ranges
 - **Archival**: Superseded plans are archived (`is_active=false`) rather than deleted
-- **Flows to ScheduleDay**: Plan-based scheduling flows into ScheduleDay, resolved 3-4 days in advance for EPG and playout. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets
+- **Flows to ScheduleDay**: Plan-based scheduling flows into ScheduleDay. **EPG horizon:** ScheduleDays are resolved 2-3 days in advance for EPG purposes. **Playlog horizon:** PlaylogEvents are continuously extended ~3-4 hours ahead of real time. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets
 - **Self-contained**: Plans are self-contained and directly define channel programming
 - **Operator control**: Operators choose what to place in Zones and Patterns, but may request system suggestions
 - **Validation**: Dry run and validation features should be supported to visualize gaps or rule violations
@@ -185,8 +193,8 @@ If plans are missing or invalid:
 ## Lifecycle and Referential Integrity
 
 - `is_active=false` archives the plan: ScheduleService excludes the plan from schedule generation. Existing Zones and Patterns remain but are ignored.
-- Hard delete is only permitted when no dependent rows exist (e.g., Zone, Pattern, BroadcastScheduleDay). When dependencies exist, prefer archival (`is_active=false`).
-- The dependency preflight MUST cover: Zone, Pattern, BroadcastScheduleDay, and any EPG/playlog references that depend on the plan.
+- Hard delete is only permitted when no dependent rows exist (e.g., Zone, Pattern, ScheduleDay). When dependencies exist, prefer archival (`is_active=false`).
+- The dependency preflight MUST cover: Zone, Pattern, ScheduleDay, and any EPG/playlog references that depend on the plan.
 
 ## Operator Workflows
 
@@ -200,7 +208,7 @@ If plans are missing or invalid:
 
 **Layer Plans**: Create multiple plans with different priorities and effective date ranges to handle recurring patterns (weekdays, weekends, holidays, seasons) or one-time timeframes. Use plan layering by priority where more specific plans override generic ones. Plans can be layered and overridden (e.g., weekday vs. holiday).
 
-**Preview Schedule**: Use dry-run or preview features to visualize how a plan's Zones and Patterns will resolve into a BroadcastScheduleDay.
+**Preview Schedule**: Use dry-run or preview features to visualize how a plan's Zones and Patterns will resolve into a ScheduleDay.
 
 **Validate Plan**: Check for gaps, rule violations, or conflicts before activating the plan. Ensure Zones align with Grid boundaries and Patterns are valid.
 
@@ -232,7 +240,7 @@ build_schedule_plan(channel_id=1, date=date(2025, 11, 7))
 ```bash
 retrovue schedule-plan add --name "WeekdayPlan" \
   --description "Weekday programming plan" \
-  --cron "0 6 * * MON-FRI" \
+  --cron "* * * * MON-FRI" \
   --priority 10
 ```
 
@@ -276,8 +284,10 @@ Planning Mode provides an interactive REPL (Read-Eval-Print Loop) for building a
 **Enter Planning Mode:**
 
 ```bash
-retrovue plan build <channel-slug> --name <PlanName>
+retrovue channel plan <channel-slug> build --name <PlanName>
 ```
+
+**Note:** This is the interactive CLI command for building plans. The non-interactive `plan add` command is used by the web UI/API.
 
 Upon entering planning mode, the shell prompt changes to indicate the active plan context:
 
@@ -290,43 +300,51 @@ Upon entering planning mode, the shell prompt changes to indicate the active pla
 Within the Planning Mode REPL, the following commands are available:
 
 - **`zone add <name> --from HH:MM --to HH:MM [--days MON..SUN]`**
+
   - Creates a new Zone with the specified name and time window
   - Optional `--days` parameter restricts the Zone to specific days of the week (e.g., `MON..FRI`, `SAT..SUN`)
   - All times snap to the Channel's grid boundaries
 
 - **`pattern set <zone> "<ProgramA>,<ProgramB>,..."`**
+
   - Sets the Pattern for the specified Zone
   - Takes a comma-separated list of Program names
   - The Pattern repeats to fill the Zone's time window
 
 - **`pattern weight <zone> "<A>,<A>,<B>..."`**
+
   - Sets a weighted Pattern for the specified Zone
   - Allows repeating Program references to control frequency (e.g., Program A appears twice for every one instance of Program B)
   - The weighted Pattern repeats to fill the Zone's time window
 
 - **`program create <name> --type series|movie|block [--rotation random|sequential|lru] [--slot-units N]`**
+
   - Creates a new Program catalog entry
   - `--type` specifies the Program type (series, movie, or block)
   - `--rotation` specifies episode selection policy for series (random, sequential, or least-recently-used)
   - `--slot-units` overrides the default block count for longform content (e.g., a 2-hour movie on a 30-minute grid would use `--slot-units 4`)
 
 - **`validate`**
+
   - Performs validation checks on the current plan
   - Checks grid alignment, zone overlaps, and policy compliance
   - Reports any issues or conflicts before saving
 
 - **`preview day YYYY-MM-DD`**
+
   - Generates a preview of how the current plan resolves for the specified date
   - Shows the first 12 hours rolled from the current Plan
   - Compiles to a ScheduleDay draft (not persisted) using the same resolution rules used in production
   - Demonstrates how Zones, Patterns, and Programs expand into concrete schedule entries
 
 - **`save`**
+
   - Saves the current plan and exits Planning Mode
   - Persists all Zones, Patterns, and Programs to the database
   - Returns to the normal shell prompt
 
 - **`discard`**
+
   - Discards all changes made in Planning Mode and exits
   - No changes are persisted to the database
   - Returns to the normal shell prompt
@@ -412,13 +430,15 @@ Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
 
 ## Validation & Invariants
 
-- **Name uniqueness**: `name` must be unique across all plans (enforced at database level)
+- **Name uniqueness**: `name` must be unique within each channel (enforced via unique constraint on `channel_id` + `name`)
 - **Active status**: Only plans where `is_active=true` are eligible for schedule generation
 - **Zone coverage**: Plans should have Zones covering the programming day, though gaps are allowed (with warnings)
+- **Zone overlap validation**: No overlapping active windows per Zone set after grid normalization. Zones within the same plan must not have overlapping time windows when both are active (considering day filters and effective dates)
 - **Pattern validity**: Patterns must contain valid Programs (catalog entries)
 - **Grid alignment**: Zones must align with the Channel's Grid boundaries
-- **Referential integrity**: Plans cannot be deleted if they have dependent Zones, Patterns, or BroadcastScheduleDay records
-- **Time structure**: Zones define *when* (window); Patterns define *order* (Programs). Patterns have **no durations** and repeat to fill the Zone, snapping to the Channel Grid.
+- **Program resolution policy**: Programs resolve to episodes using rotation policy: `sequential` (next episode in order), `random` (random selection), or `lru` (least-recently-used)
+- **Referential integrity**: Plans cannot be deleted if they have dependent Zones, Patterns, or ScheduleDay records
+- **Time structure**: Zones define _when_ (window); Patterns define _order_ (Programs). Patterns have **no durations** and repeat to fill the Zone, snapping to the Channel Grid.
 
 ## Out of Scope (v0.1)
 
@@ -430,6 +450,7 @@ Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
 
 ## See Also
 
+- [Scheduling Invariants](../contracts/resources/SchedulingInvariants.md) - Cross-cutting scheduling invariants
 - [Scheduling](Scheduling.md) - High-level scheduling system
 - [ScheduleDay](ScheduleDay.md) - Resolved schedules for specific channel and date
 - [Program](Program.md) - Catalog entities (series/movie/block) referenced by patterns; episodes resolved at ScheduleDay
@@ -439,5 +460,4 @@ Post-command reads return normalized domain objects (e.g., 24:00 round-tripped).
 - [Channel manager](../runtime/ChannelManager.md) - Stream execution
 - [Operator CLI](../operator/CLI.md) - Operational procedures
 
-SchedulePlan is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows with optional day filters) and a **Pattern** for each Zone. **Zones** declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and reference a Pattern. **Patterns** are ordered lists of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern — Zones + Patterns repeat to fill the Zone's active window, snapping to the Channel's Grid boundaries. **Programs** are catalog entities (series/movie/block) referenced by patterns; episodes are resolved at ScheduleDay time based on rotation policy. Plans are reusable and timeless — they define Zones and Patterns that are applied per day to generate ScheduleDay records. Plans are channel-bound and span repeating or one-time timeframes. Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones. Templates have been removed; all scheduling logic is defined directly in SchedulePlan. Content selection can include regular assets or VirtualAssets. Plans are timeless but bound by effective date ranges, and superseded plans are archived. Plan-based scheduling flows into ScheduleDay, which is resolved 3-4 days in advance for EPG and playout purposes. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.
-
+SchedulePlan is the **single source of scheduling logic** for channel programming. Each SchedulePlan defines one or more **Zones** (named time windows with optional day filters) and a **Pattern** for each Zone. **Zones** declare when they apply (e.g., base 00:00–24:00, or After Dark 22:00–05:00) and reference a Pattern. **Patterns** are ordered lists of [Program](Program.md) references (catalog entries such as series, movies, blocks, or composites). No durations inside the pattern — Zones + Patterns repeat to fill the Zone's active window, snapping to the Channel's Grid boundaries. **Programs** are catalog entities (series/movie/block) referenced by patterns; episodes are resolved at ScheduleDay time based on rotation policy (`sequential`, `random`, or `lru`). Plans are reusable and timeless — they define Zones and Patterns that are applied per day to generate ScheduleDay records. Plans are channel-bound and span repeating or one-time timeframes. Plans are layered by priority and can be overridden (e.g., weekday vs. holiday), with more specific layers overriding generic ones. Templates have been removed; all scheduling logic is defined directly in SchedulePlan. Content selection can include regular assets or VirtualAssets. Plans are timeless but bound by effective date ranges, and superseded plans are archived. **EPG horizon:** ScheduleDays are resolved 2-3 days in advance for EPG purposes. **Playlog horizon:** PlaylogEvents are continuously extended ~3-4 hours ahead of real time. ScheduleDay is the primary expansion point for Programs → episodes and VirtualAssets → assets.

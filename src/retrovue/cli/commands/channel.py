@@ -14,6 +14,12 @@ from ...usecases import channel_add as _uc_channel_add
 from ...usecases import channel_update as _uc_channel_update
 from ...usecases import channel_validate as _uc_channel_validate
 from ...usecases import plan_add as _uc_plan_add
+from ...usecases import plan_delete as _uc_plan_delete
+from ...usecases import plan_list as _uc_plan_list
+from ...usecases import plan_show as _uc_plan_show
+from ...usecases import plan_update as _uc_plan_update
+from ...usecases.plan_show import _resolve_plan as _uc_resolve_plan
+from ._ops.planning_session import PlanningSession
 
 app = typer.Typer(name="channel", help="Broadcast channel management operations")
 
@@ -468,59 +474,192 @@ def plan_mgmt_callback(
 @plan_mgmt_app.command("add")
 def add_plan(
     ctx: typer.Context,
-    start_date: str = typer.Option(..., "--start-date", help="Start date (YYYY-MM-DD)"),
-    end_date: str = typer.Option(..., "--end-date", help="End date (YYYY-MM-DD)"),
-    priority: int | None = typer.Option(None, "--priority", help="Priority (lower = higher priority)"),
+    name: str = typer.Option(..., "--name", help="Plan name (must be unique within channel)"),
+    description: str | None = typer.Option(None, "--description", help="Human-readable description"),
+    cron: str | None = typer.Option(None, "--cron", help="Cron expression (hour/min ignored)"),
+    start_date: str | None = typer.Option(None, "--start-date", help="Start date (YYYY-MM-DD)"),
+    end_date: str | None = typer.Option(None, "--end-date", help="End date (YYYY-MM-DD)"),
+    priority: int | None = typer.Option(None, "--priority", help="Priority (higher number = higher priority)"),
+    active: bool | None = typer.Option(None, "--active/--inactive", help="Active status (default: active)"),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
     test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
 ):
-    """Create a new schedule plan for a channel."""
+    """Create a new schedule plan for a channel per SchedulePlanAddContract.md."""
     channel_selector = ctx.obj.get("channel_selector")
     
     if not channel_selector:
+        error_msg = "Channel selector required"
         if json_output:
-            typer.echo(json.dumps({"status": "error", "error": "Channel selector required"}, indent=2))
+            typer.echo(json.dumps({"status": "error", "code": "CHANNEL_NOT_FOUND", "message": f"Error: {error_msg}"}, indent=2))
         else:
-            typer.echo("Error: Channel selector required", err=True)
+            typer.echo(f"Error: {error_msg}", err=True)
         raise typer.Exit(1)
+    
+    # Determine is_active (default True unless --inactive is explicitly set)
+    is_active = True if active is None else active
     
     db_cm = _get_db_context(test_db)
     
     with db_cm as db:
         try:
-            # Resolve channel
-            channel = _resolve_channel(db, channel_selector)
-            
             # Delegate to usecase
             result = _uc_plan_add.add_plan(
                 db,
-                channel_id=str(channel.id),
+                channel_identifier=channel_selector,
+                name=name,
+                description=description,
+                cron_expression=cron,
                 start_date=start_date,
                 end_date=end_date,
                 priority=priority,
+                is_active=is_active,
             )
             
             if json_output:
                 payload = {"status": "ok", "plan": result}
                 typer.echo(json.dumps(payload, indent=2))
             else:
+                # Resolve channel for display
+                channel = _resolve_channel(db, channel_selector)
                 typer.echo("Plan created:")
                 typer.echo(f"  ID: {result['id']}")
-                typer.echo(f"  Channel ID: {result['channel_id']}")
-                typer.echo(f"  Start Date: {result['start_date']}")
-                typer.echo(f"  End Date: {result['end_date']}")
-                if result.get("priority") is not None:
-                    typer.echo(f"  Priority: {result['priority']}")
+                typer.echo(f"  Channel: {channel.title} ({result['channel_id']})")
+                typer.echo(f"  Name: {result['name']}")
+                if result.get("description"):
+                    typer.echo(f"  Description: {result['description']}")
+                if result.get("cron_expression"):
+                    typer.echo(f"  Cron: {result['cron_expression']}")
+                if result.get("start_date"):
+                    typer.echo(f"  Start Date: {result['start_date']}")
+                if result.get("end_date"):
+                    typer.echo(f"  End Date: {result['end_date']}")
+                typer.echo(f"  Priority: {result['priority']}")
+                typer.echo(f"  Active: {result['is_active']}")
                 if result.get("created_at"):
                     typer.echo(f"  Created: {result['created_at']}")
             return
         except typer.Exit:
             raise
-        except Exception as e:
+        except ValueError as e:
+            error_msg = str(e)
+            # Map error messages to error codes per contract
+            error_code = "VALIDATION_ERROR"
+            if "Channel" in error_msg and "not found" in error_msg:
+                error_code = "CHANNEL_NOT_FOUND"
+            elif "already exists" in error_msg:
+                error_code = "PLAN_NAME_DUPLICATE"
+            elif "Invalid date format" in error_msg:
+                error_code = "INVALID_DATE_FORMAT"
+            elif "start_date must be <= end_date" in error_msg:
+                error_code = "INVALID_DATE_RANGE"
+            elif "Invalid cron expression" in error_msg:
+                error_code = "INVALID_CRON"
+            elif "Priority must be non-negative" in error_msg:
+                error_code = "INVALID_PRIORITY"
+            
             if json_output:
-                typer.echo(json.dumps({"status": "error", "error": str(e)}, indent=2))
+                typer.echo(json.dumps({"status": "error", "code": error_code, "message": f"Error: {error_msg}"}, indent=2))
             else:
-                typer.echo(f"Error creating plan: {e}", err=True)
+                typer.echo(f"Error: {error_msg}", err=True)
+            raise typer.Exit(1)
+        except Exception as e:
+            error_msg = str(e)
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": "UNKNOWN_ERROR", "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error creating plan: {error_msg}", err=True)
+            raise typer.Exit(1)
+
+
+@plan_mgmt_app.command("build")
+def build_plan(
+    ctx: typer.Context,
+    name: str = typer.Option(..., "--name", help="Plan name (must be unique within channel)"),
+    description: str | None = typer.Option(None, "--description", help="Human-readable description"),
+    cron: str | None = typer.Option(None, "--cron", help="Cron expression (hour/min ignored)"),
+    start_date: str | None = typer.Option(None, "--start-date", help="Start date (YYYY-MM-DD)"),
+    end_date: str | None = typer.Option(None, "--end-date", help="End date (YYYY-MM-DD)"),
+    priority: int | None = typer.Option(None, "--priority", help="Priority (higher number = higher priority)"),
+    active: bool | None = typer.Option(None, "--active/--inactive", help="Active status (default: active)"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
+):
+    """Create a new schedule plan and enter interactive REPL mode per SchedulePlanBuildContract.md."""
+    channel_selector = ctx.obj.get("channel_selector")
+    
+    if not channel_selector:
+        typer.echo("Error: Channel selector required", err=True)
+        raise typer.Exit(1)
+    
+    # Determine is_active (default True unless --inactive is explicitly set)
+    is_active = True if active is None else active
+    
+    db_cm = _get_db_context(test_db)
+    
+    with db_cm as db:
+        try:
+            # Use the same validation logic as plan add, but don't commit yet
+            # We'll create the plan and enter REPL, committing only on 'save'
+            from ...usecases.plan_add import (
+                _check_name_uniqueness,
+                _resolve_channel,
+                _validate_cron_expression,
+                _validate_date_format,
+                _validate_date_range,
+                _validate_priority,
+            )
+            
+            # B-1: Resolve channel
+            channel = _resolve_channel(db, channel_selector)
+            
+            # B-2: Check name uniqueness
+            _check_name_uniqueness(db, channel.id, name)
+            
+            # B-3: Validate date range
+            parsed_start_date = _validate_date_format(start_date) if start_date else None
+            parsed_end_date = _validate_date_format(end_date) if end_date else None
+            _validate_date_range(parsed_start_date, parsed_end_date)
+            
+            # B-4: Validate cron expression
+            _validate_cron_expression(cron)
+            
+            # B-5: Validate priority
+            validated_priority = _validate_priority(priority)
+            
+            # Create plan (not committed yet)
+            plan = SchedulePlan(
+                channel_id=channel.id,
+                name=name,
+                description=description,
+                cron_expression=cron,
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+                priority=validated_priority,
+                is_active=is_active,
+            )
+            
+            db.add(plan)
+            # Don't commit yet - REPL will commit on 'save' or rollback on 'discard'
+            
+            # Enter REPL
+            session = PlanningSession(
+                db=db,
+                channel_id=str(channel.id),
+                plan_id=str(plan.id),
+                plan_name=name,
+            )
+            
+            exit_code = session.run()
+            raise typer.Exit(exit_code)
+            
+        except typer.Exit:
+            raise
+        except ValueError as e:
+            error_msg = str(e)
+            typer.echo(f"Error: {error_msg}", err=True)
+            raise typer.Exit(1)
+        except Exception as e:
+            error_msg = str(e)
+            typer.echo(f"Error creating plan: {error_msg}", err=True)
             raise typer.Exit(1)
 
 
@@ -528,13 +667,404 @@ def add_plan(
 def list_plans(
     ctx: typer.Context,
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    active_only: bool = typer.Option(False, "--active-only", help="Filter to active plans only (reserved for future)"),
+    inactive_only: bool = typer.Option(False, "--inactive-only", help="Filter to inactive plans only (reserved for future)"),
+    limit: int | None = typer.Option(None, "--limit", help="Limit number of results (reserved for future)"),
+    offset: int | None = typer.Option(None, "--offset", help="Offset for pagination (reserved for future)"),
     test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
 ):
-    """List all plans for a channel."""
-    # TODO: Implement plan listing
-    # channel_selector = ctx.obj.get("channel_selector")  # Will be used when implemented
-    typer.echo("Plan listing not yet implemented", err=True)
-    raise typer.Exit(1)
+    """List all plans for a channel per SchedulePlanListContract.md."""
+    channel_selector = ctx.obj.get("channel_selector")
+    
+    if not channel_selector:
+        error_msg = "Channel selector required"
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "code": "CHANNEL_NOT_FOUND", "message": f"Error: {error_msg}"}, indent=2))
+        else:
+            typer.echo(f"Error: {error_msg}", err=True)
+        raise typer.Exit(1)
+    
+    # B-5: Warn about reserved flags (future-safe)
+    warnings = []
+    if active_only:
+        warnings.append("--active-only is reserved for future implementation")
+    if inactive_only:
+        warnings.append("--inactive-only is reserved for future implementation")
+    if limit is not None:
+        warnings.append("--limit is reserved for future implementation")
+    if offset is not None:
+        warnings.append("--offset is reserved for future implementation")
+    
+    db_cm = _get_db_context(test_db)
+    
+    with db_cm as db:
+        try:
+            # Delegate to usecase
+            result = _uc_plan_list.list_plans(
+                db,
+                channel_identifier=channel_selector,
+            )
+            
+            # B-7: Handle zero results
+            if result["total"] == 0:
+                if json_output:
+                    typer.echo(json.dumps(result, indent=2))
+                else:
+                    channel = _resolve_channel(db, channel_selector)
+                    channel_name = channel.title if channel else channel_selector
+                    typer.echo(f"No plans found for channel {channel_name}")
+                return
+            
+            if json_output:
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                # B-8: Human-readable output with consistent field order
+                channel = _resolve_channel(db, channel_selector)
+                channel_name = channel.title if channel else channel_selector
+                typer.echo(f"Plans for channel {channel_name}:")
+                for plan in result["plans"]:
+                    typer.echo(f"  ID: {plan['id']}")
+                    typer.echo(f"  Name: {plan['name']}")
+                    if plan.get("description"):
+                        typer.echo(f"  Description: {plan['description']}")
+                    else:
+                        typer.echo("  Description: -")
+                    if plan.get("cron_expression"):
+                        typer.echo(f"  Cron: {plan['cron_expression']} (hour/min ignored)")
+                    else:
+                        typer.echo("  Cron: null")
+                    if plan.get("start_date"):
+                        typer.echo(f"  Start Date: {plan['start_date']}")
+                    else:
+                        typer.echo("  Start Date: -")
+                    if plan.get("end_date"):
+                        typer.echo(f"  End Date: {plan['end_date']}")
+                    else:
+                        typer.echo("  End Date: -")
+                    typer.echo(f"  Priority: {plan['priority']}")
+                    typer.echo(f"  Active: {plan['is_active']}")
+                    if plan.get("created_at"):
+                        typer.echo(f"  Created: {plan['created_at']}")
+                    typer.echo("")
+                typer.echo(f"Total: {result['total']} plans")
+            return
+        except typer.Exit:
+            raise
+        except ValueError as e:
+            error_msg = str(e)
+            error_code = "CHANNEL_NOT_FOUND" if "Channel" in error_msg and "not found" in error_msg else "VALIDATION_ERROR"
+            
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": error_code, "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error: {error_msg}", err=True)
+            raise typer.Exit(1)
+        except Exception as e:
+            error_msg = str(e)
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": "UNKNOWN_ERROR", "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error listing plans: {error_msg}", err=True)
+            raise typer.Exit(1)
+
+
+@plan_mgmt_app.command("show")
+def show_plan(
+    ctx: typer.Context,
+    plan_selector: str = typer.Argument(..., help="Plan identifier: UUID or name"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    with_contents: bool = typer.Option(False, "--with-contents", help="Include lightweight summaries of Zones and Patterns"),
+    computed: bool = typer.Option(False, "--computed", help="Include computed fields (effective_today, next_applicable_date)"),
+    no_color: bool = typer.Option(False, "--no-color", help="Disable colored output"),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress extraneous output lines"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
+):
+    """Show a schedule plan per SchedulePlanShowContract.md."""
+    channel_selector = ctx.obj.get("channel_selector")
+    
+    if not channel_selector or not plan_selector:
+        error_msg = "Channel and plan selectors required"
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "code": "CHANNEL_NOT_FOUND", "message": f"Error: {error_msg}"}, indent=2))
+        else:
+            typer.echo(f"Error: {error_msg}", err=True)
+        raise typer.Exit(1)
+    
+    db_cm = _get_db_context(test_db)
+    
+    with db_cm as db:
+        try:
+            # Delegate to usecase
+            result = _uc_plan_show.show_plan(
+                db,
+                channel_identifier=channel_selector,
+                plan_identifier=plan_selector,
+                with_contents=with_contents,
+                computed=computed,
+            )
+            
+            if json_output:
+                # Usecase already returns correct JSON structure
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                # Human-readable output
+                plan = result["plan"]
+                channel = _resolve_channel(db, channel_selector)
+                channel_name = channel.title if channel else channel_selector
+                
+                if not quiet:
+                    typer.echo("Plan:")
+                typer.echo(f"  ID: {plan['id']}")
+                typer.echo(f"  Channel: {channel_name} ({plan['channel_id']})")
+                typer.echo(f"  Name: {plan['name']}")
+                if plan.get("description"):
+                    typer.echo(f"  Description: {plan['description']}")
+                if plan.get("cron_expression"):
+                    typer.echo(f"  Cron: {plan['cron_expression']} (hour/min ignored)")
+                if plan.get("start_date"):
+                    typer.echo(f"  Start Date: {plan['start_date']}")
+                if plan.get("end_date"):
+                    typer.echo(f"  End Date: {plan['end_date']}")
+                typer.echo(f"  Priority: {plan['priority']}")
+                typer.echo(f"  Active: {plan['is_active']}")
+                if plan.get("created_at"):
+                    typer.echo(f"  Created: {plan['created_at']}")
+                if plan.get("updated_at"):
+                    typer.echo(f"  Updated: {plan['updated_at']}")
+                
+                # B-6: Add zones and patterns if with_contents
+                if with_contents and "zones" in result.get("plan", {}):
+                    typer.echo("")
+                    typer.echo(f"Zones (count: {len(result['plan'].get('zones', []))}):")
+                    for _zone in result["plan"].get("zones", []):
+                        # TODO: Format zone output when Zone entity exists
+                        pass
+                if with_contents and "patterns" in result.get("plan", {}):
+                    typer.echo("")
+                    typer.echo(f"Patterns (count: {len(result['plan'].get('patterns', []))}):")
+                    for _pattern in result["plan"].get("patterns", []):
+                        # TODO: Format pattern output when Pattern entity exists
+                        pass
+            return
+        except typer.Exit:
+            raise
+        except ValueError as e:
+            error_msg = str(e)
+            # Map error messages to error codes per contract
+            # Check "does not belong" FIRST, before "Plan" and "not found"
+            error_code = "VALIDATION_ERROR"
+            if "Channel" in error_msg and "not found" in error_msg:
+                error_code = "CHANNEL_NOT_FOUND"
+            elif "does not belong" in error_msg:
+                error_code = "PLAN_WRONG_CHANNEL"
+            elif "Plan" in error_msg and "not found" in error_msg:
+                error_code = "PLAN_NOT_FOUND"
+            
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": error_code, "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error: {error_msg}", err=True)
+            raise typer.Exit(1)
+        except Exception as e:
+            error_msg = str(e)
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": "UNKNOWN_ERROR", "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error showing plan: {error_msg}", err=True)
+            raise typer.Exit(1)
+
+
+@plan_mgmt_app.command("update")
+def update_plan(
+    ctx: typer.Context,
+    plan_selector: str = typer.Argument(..., help="Plan identifier: UUID or name"),
+    name: str | None = typer.Option(None, "--name", help="Update plan name (must be unique within channel)"),
+    description: str | None = typer.Option(None, "--description", help="Update description"),
+    cron: str | None = typer.Option(None, "--cron", help="Update cron expression (hour/min ignored)"),
+    start_date: str | None = typer.Option(None, "--start-date", help="Update start date (YYYY-MM-DD)"),
+    end_date: str | None = typer.Option(None, "--end-date", help="Update end date (YYYY-MM-DD)"),
+    priority: int | None = typer.Option(None, "--priority", help="Update priority"),
+    active: bool | None = typer.Option(None, "--active", help="Set active status"),
+    inactive: bool = typer.Option(False, "--inactive", help="Set inactive status"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
+):
+    """Update a schedule plan per SchedulePlanUpdateContract.md."""
+    channel_selector = ctx.obj.get("channel_selector")
+    
+    if not channel_selector or not plan_selector:
+        error_msg = "Channel and plan selectors required"
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "code": "CHANNEL_NOT_FOUND", "message": f"Error: {error_msg}"}, indent=2))
+        else:
+            typer.echo(f"Error: {error_msg}", err=True)
+        raise typer.Exit(1)
+    
+    # Handle --active/--inactive flags
+    is_active = None
+    if active:
+        is_active = True
+    elif inactive:
+        is_active = False
+    
+    db_cm = _get_db_context(test_db)
+    
+    with db_cm as db:
+        try:
+            # Delegate to usecase
+            result = _uc_plan_update.update_plan(
+                db,
+                channel_identifier=channel_selector,
+                plan_identifier=plan_selector,
+                name=name,
+                description=description,
+                cron_expression=cron,
+                start_date=start_date,
+                end_date=end_date,
+                priority=priority,
+                is_active=is_active,
+            )
+            
+            if json_output:
+                # Usecase already returns correct JSON structure
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                # Human-readable output
+                plan = result["plan"]
+                channel = _resolve_channel(db, channel_selector)
+                channel_name = channel.title if channel else channel_selector
+                typer.echo("Plan updated:")
+                typer.echo(f"  ID: {plan['id']}")
+                typer.echo(f"  Channel: {channel_name} ({plan['channel_id']})")
+                typer.echo(f"  Name: {plan['name']}")
+                if plan.get("description"):
+                    typer.echo(f"  Description: {plan['description']}")
+                if plan.get("cron_expression"):
+                    typer.echo(f"  Cron: {plan['cron_expression']} (hour/min ignored)")
+                if plan.get("start_date"):
+                    typer.echo(f"  Start Date: {plan['start_date']}")
+                if plan.get("end_date"):
+                    typer.echo(f"  End Date: {plan['end_date']}")
+                typer.echo(f"  Priority: {plan['priority']}")
+                typer.echo(f"  Active: {plan['is_active']}")
+                if plan.get("created_at"):
+                    typer.echo(f"  Created: {plan['created_at']}")
+                if plan.get("updated_at"):
+                    typer.echo(f"  Updated: {plan['updated_at']}")
+            return
+        except typer.Exit:
+            raise
+        except ValueError as e:
+            error_msg = str(e)
+            # Map error messages to error codes per contract
+            error_code = "VALIDATION_ERROR"
+            if "Channel" in error_msg and "not found" in error_msg:
+                error_code = "CHANNEL_NOT_FOUND"
+            elif "does not belong" in error_msg:
+                error_code = "PLAN_WRONG_CHANNEL"
+            elif "Plan" in error_msg and "not found" in error_msg:
+                error_code = "PLAN_NOT_FOUND"
+            elif "already exists" in error_msg:
+                error_code = "PLAN_NAME_DUPLICATE"
+            elif "Invalid date format" in error_msg:
+                error_code = "INVALID_DATE_FORMAT"
+            elif "start_date must be <= end_date" in error_msg:
+                error_code = "INVALID_DATE_RANGE"
+            elif "Invalid cron expression" in error_msg:
+                error_code = "INVALID_CRON"
+            elif "Priority must be non-negative" in error_msg:
+                error_code = "INVALID_PRIORITY"
+            elif "At least one field must be provided" in error_msg:
+                error_code = "NO_FIELDS_PROVIDED"
+            
+            exit_code = 2 if error_code == "NO_FIELDS_PROVIDED" else 1
+            
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": error_code, "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error: {error_msg}", err=True)
+            raise typer.Exit(exit_code)
+        except Exception as e:
+            error_msg = str(e)
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": "UNKNOWN_ERROR", "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error updating plan: {error_msg}", err=True)
+            raise typer.Exit(1)
+
+
+@plan_mgmt_app.command("delete")
+def delete_plan(
+    ctx: typer.Context,
+    plan_selector: str = typer.Argument(..., help="Plan identifier: UUID or name"),
+    yes: bool = typer.Option(False, "--yes", help="Confirm deletion (non-interactive)"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    test_db: bool = typer.Option(False, "--test-db", help="Use test database context"),
+):
+    """Delete a schedule plan per SchedulePlanDeleteContract.md."""
+    channel_selector = ctx.obj.get("channel_selector")
+    
+    if not channel_selector or not plan_selector:
+        error_msg = "Channel and plan selectors required"
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "code": "CHANNEL_NOT_FOUND", "message": f"Error: {error_msg}"}, indent=2))
+        else:
+            typer.echo(f"Error: {error_msg}", err=True)
+        raise typer.Exit(1)
+    
+    # B-3: Confirmation
+    if not yes:
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "code": "CONFIRMATION_REQUIRED", "message": "Error: Confirmation required (--yes)"}, indent=2))
+        else:
+            typer.echo("Deletion requires --yes confirmation", err=True)
+        raise typer.Exit(1)
+    
+    db_cm = _get_db_context(test_db)
+    
+    with db_cm as db:
+        try:
+            # Delegate to usecase
+            result = _uc_plan_delete.delete_plan(
+                db,
+                channel_identifier=channel_selector,
+                plan_identifier=plan_selector,
+            )
+            
+            if json_output:
+                typer.echo(json.dumps(result, indent=2))
+            else:
+                # Human-readable output - use plan name if available, otherwise ID
+                typer.echo(f"Plan deleted: {plan_selector}")
+            return
+        except typer.Exit:
+            raise
+        except ValueError as e:
+            error_msg = str(e)
+            # Map error messages to error codes per contract
+            # Check "does not belong" FIRST, before "Plan" and "not found"
+            error_code = "VALIDATION_ERROR"
+            if "Channel" in error_msg and "not found" in error_msg:
+                error_code = "CHANNEL_NOT_FOUND"
+            elif "does not belong" in error_msg:
+                error_code = "PLAN_WRONG_CHANNEL"
+            elif "Plan" in error_msg and "not found" in error_msg:
+                error_code = "PLAN_NOT_FOUND"
+            elif "Cannot delete" in error_msg or "has" in error_msg and "zone" in error_msg.lower():
+                error_code = "PLAN_HAS_DEPENDENCIES"
+            
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": error_code, "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error: {error_msg}", err=True)
+            raise typer.Exit(1)
+        except Exception as e:
+            error_msg = str(e)
+            if json_output:
+                typer.echo(json.dumps({"status": "error", "code": "UNKNOWN_ERROR", "message": f"Error: {error_msg}"}, indent=2))
+            else:
+                typer.echo(f"Error deleting plan: {error_msg}", err=True)
+            raise typer.Exit(1)
 
 
 # Program subcommands (require both channel and plan)
@@ -583,33 +1113,15 @@ def _resolve_channel(db, selector: str) -> Channel:
     if not channel:
         raise ValueError(f"Channel '{selector}' not found")
     
-    return channel
+    return channel  # type: ignore[no-any-return]
 
 
 def _resolve_plan(db, channel_id: _uuid.UUID, selector: str) -> SchedulePlan:
-    """Resolve plan by UUID."""
-    plan = None
-    try:
-        plan_uuid = _uuid.UUID(selector)
-        plan = (
-            db.execute(
-                select(SchedulePlan).where(
-                    SchedulePlan.id == plan_uuid, SchedulePlan.channel_id == channel_id
-                )
-            )
-            .scalars()
-            .first()
-        )
-    except ValueError:
-        # Invalid UUID format
-        pass
-    except Exception:
-        pass
+    """Resolve plan by UUID or name (case-insensitive, trimmed).
     
-    if not plan:
-        raise ValueError(f"Plan '{selector}' not found for channel")
-    
-    return plan
+    Uses the usecase's _resolve_plan for consistent resolution logic.
+    """
+    return _uc_resolve_plan(db, channel_id, selector)
 
 
 def _validate_time_format(time_str: str) -> None:
@@ -739,6 +1251,7 @@ def add_program(
                 content_ref = rule
             else:  # random
                 content_type = "random"
+                assert random is not None  # Validated above that exactly one content type is set
                 content_ref = random
             
             # Resolve label_id if provided
