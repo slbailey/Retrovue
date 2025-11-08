@@ -237,6 +237,7 @@ AsRun Log (Observed ground truth)
 ### Contract Files (Legacy References)
 
 **Enforced Legacy Contracts Removed:**
+
 - ✅ `docs/contracts/resources/SchedulingInvariants.md` - REMOVED (was enforced legacy contract)
 - ✅ `docs/contracts/resources/SchedulePlanContract.md` - REMOVED (was enforced legacy contract)
 

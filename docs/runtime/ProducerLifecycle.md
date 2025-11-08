@@ -1,4 +1,4 @@
-_Related: [Domain: Playout pipeline](../domain/PlayoutPipeline.md) • [Runtime: Channel manager](ChannelManager.md) • [Developer: Plugin authoring](../developer/PluginAuthoring.md)_
+_Related: [Domain: Playout pipeline](../domain/PlayoutPipeline.md) • [Runtime: Channel manager](channel_manager.md) • [Runtime: Renderer](Renderer.md) • [Developer: Plugin authoring](../developer/PluginAuthoring.md)_
 
 # Producer lifecycle
 
@@ -22,7 +22,7 @@ A Producer plugin must expose something like:
   - transitions
   - optional filtergraph directives needed for layout or composition of those segments
 
-The playout plan is structured data that ChannelManager can hand to ffmpeg after enrichment.
+The playout plan is structured data that ChannelManager can hand to a Renderer for FFmpeg execution after enrichment.
 
 ## Execution model
 
@@ -45,4 +45,5 @@ See also:
 
 - [Enricher](../domain/Enricher.md)
 - [Playout pipeline](../domain/PlayoutPipeline.md)
+- [Runtime: Renderer](Renderer.md) - How producers' input sources are converted to output streams
 - [Plugin authoring](../developer/PluginAuthoring.md)

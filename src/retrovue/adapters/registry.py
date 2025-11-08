@@ -1,8 +1,8 @@
 """
-Plugin registry for importers and enrichers.
+Plugin registry for importers, enrichers, producers, and renderers.
 
-This module is the plug-in registry for Importers and Enrichers, not business logic.
-It maintains global registries for all available importers and enrichers.
+This module is the plug-in registry for Importers, Enrichers, Producers, and Renderers, not business logic.
+It maintains global registries for all available importers, enrichers, producers, and renderers.
 Plugins self-register when imported, allowing for a modular architecture.
 """
 
@@ -15,10 +15,17 @@ from .enrichers.ffprobe_enricher import FFprobeEnricher
 from .importers.base import DiscoveredItem, Importer, ImporterNotFoundError
 from .importers.filesystem_importer import FilesystemImporter
 from .importers.plex_importer import PlexImporter
+from .producers.base import BaseProducer, ProducerNotFoundError as ProducerNotFoundErrorBase
+from .producers.file_producer import FileProducer
+from .producers.test_pattern_producer import TestPatternProducer
+from .renderers.base import BaseRenderer, RendererNotFoundError as RendererNotFoundErrorBase
+from .renderers.ffmpeg_ts_renderer import FFmpegTSRenderer
 
 # Global registries
 _importers: dict[str, Importer] = {}
 _enrichers: dict[str, Enricher] = {}
+_producers: dict[str, type[BaseProducer]] = {}
+_renderers: dict[str, type[BaseRenderer]] = {}
 
 # Importer aliases for better user experience
 ALIASES = {
@@ -38,6 +45,33 @@ SOURCES = {
 # Available enricher classes
 ENRICHERS = {
     "ffprobe": FFprobeEnricher,
+}
+
+# Available producer classes
+PRODUCERS = {
+    "file": FileProducer,
+    "test-pattern": TestPatternProducer,
+}
+
+# Producer aliases for better user experience
+PRODUCER_ALIASES = {
+    "file": "file",
+    "test": "test-pattern",
+    "testpattern": "test-pattern",
+    "pattern": "test-pattern",
+}
+
+# Available renderer classes
+RENDERERS = {
+    "ffmpeg-ts": FFmpegTSRenderer,
+}
+
+# Renderer aliases for better user experience
+RENDERER_ALIASES = {
+    "ffmpeg-ts": "ffmpeg-ts",
+    "ts": "ffmpeg-ts",
+    "mpegts": "ffmpeg-ts",
+    "mpeg-ts": "ffmpeg-ts",
 }
 
 
@@ -253,13 +287,15 @@ def unregister_enricher(name: str) -> None:
 
 def clear_registries() -> None:
     """
-    Clear all registered importers and enrichers.
+    Clear all registered importers, enrichers, producers, and renderers.
 
     This is primarily useful for testing.
     """
-    global _importers, _enrichers
+    global _importers, _enrichers, _producers, _renderers
     _importers.clear()
     _enrichers.clear()
+    _producers.clear()
+    _renderers.clear()
 
 
 def _register_builtin_enrichers() -> None:
@@ -283,4 +319,260 @@ def get_registry_stats() -> dict[str, Any]:
     return {
         "importers": {"count": len(_importers), "names": list(_importers.keys())},
         "enrichers": {"count": len(_enrichers), "names": list(_enrichers.keys())},
+        "producers": {"count": len(_producers), "names": list(_producers.keys())},
+        "renderers": {"count": len(_renderers), "names": list(_renderers.keys())},
     }
+
+
+# Producer registry functions
+
+class UnsupportedProducer(ValueError):
+    """Raised when an unsupported producer is requested."""
+
+    pass
+
+
+def register_producer(producer_class: type[BaseProducer]) -> None:
+    """
+    Register a producer class with the global registry.
+
+    Args:
+        producer_class: The producer class to register
+
+    Raises:
+        ValueError: If producer name is empty or already registered
+    """
+    if not hasattr(producer_class, "name") or not producer_class.name:
+        raise ValueError("Producer class must have a 'name' attribute")
+
+    if producer_class.name in _producers:
+        raise ValueError(f"Producer '{producer_class.name}' is already registered")
+
+    _producers[producer_class.name] = producer_class
+
+
+def get_producer(name: str, **kwargs: Any) -> BaseProducer:
+    """
+    Get a producer instance by name.
+
+    Args:
+        name: The name of the producer
+        **kwargs: Additional arguments to pass to the producer constructor
+
+    Returns:
+        The requested producer instance
+
+    Raises:
+        UnsupportedProducer: If the producer is not found
+    """
+    key = PRODUCER_ALIASES.get(name.lower(), name.lower())
+    try:
+        cls = PRODUCERS[key]
+    except KeyError:
+        raise UnsupportedProducer(
+            f"Unsupported producer: {name}. Available: {', '.join(sorted(PRODUCERS.keys()))}"
+        ) from None
+    return cls(**kwargs)  # type: ignore[no-any-return]
+
+
+def get_producer_help(name: str) -> dict[str, Any]:
+    """
+    Get help information for a producer without creating an instance.
+
+    Args:
+        name: The producer name
+
+    Returns:
+        Help information dictionary
+
+    Raises:
+        UnsupportedProducer: If the producer is not found
+    """
+    key = PRODUCER_ALIASES.get(name.lower(), name.lower())
+    try:
+        cls = PRODUCERS[key]
+    except KeyError:
+        raise UnsupportedProducer(
+            f"Unsupported producer: {name}. Available: {', '.join(sorted(PRODUCERS.keys()))}"
+        ) from None
+
+    # Create a minimal instance to get help (with minimal required parameters)
+    try:
+        schema = cls.get_config_schema()
+        # Try to create with minimal parameters
+        if key == "file":
+            instance = cls(file_path="/tmp/dummy.mp4")
+        elif key == "test-pattern":
+            instance = cls()
+        else:
+            # For other producers, try with empty config
+            instance = cls()
+
+        return instance.get_help()  # type: ignore[no-any-return]
+    except Exception:
+        # If we can't create an instance, return basic help from schema
+        schema = cls.get_config_schema()
+        return {
+            "description": schema.description,
+            "required_params": schema.required_params,
+            "optional_params": schema.optional_params,
+            "examples": [f"retrovue producer add --type {key} --name 'My {key.title()} Producer'"],
+            "cli_params": {},
+        }
+
+
+def list_producers() -> list[str]:
+    """
+    List all available producer names.
+
+    Returns:
+        List of all available producer names
+    """
+    return list(PRODUCERS.keys())
+
+
+def unregister_producer(name: str) -> None:
+    """
+    Unregister a producer.
+
+    Args:
+        name: The name of the producer to unregister
+
+    Raises:
+        ProducerNotFoundErrorBase: If the producer is not found
+    """
+    if name not in _producers:
+        raise ProducerNotFoundErrorBase(f"Producer '{name}' not found")
+
+    del _producers[name]
+
+
+# Register built-in producers on module import
+for producer_class in PRODUCERS.values():
+    register_producer(producer_class)
+
+
+# Renderer registry functions
+
+class UnsupportedRenderer(ValueError):
+    """Raised when an unsupported renderer is requested."""
+
+    pass
+
+
+def register_renderer(renderer_class: type[BaseRenderer]) -> None:
+    """
+    Register a renderer class with the global registry.
+
+    Args:
+        renderer_class: The renderer class to register
+
+    Raises:
+        ValueError: If renderer name is empty or already registered
+    """
+    if not hasattr(renderer_class, "name") or not renderer_class.name:
+        raise ValueError("Renderer class must have a 'name' attribute")
+
+    if renderer_class.name in _renderers:
+        raise ValueError(f"Renderer '{renderer_class.name}' is already registered")
+
+    _renderers[renderer_class.name] = renderer_class
+
+
+def get_renderer(name: str, **kwargs: Any) -> BaseRenderer:
+    """
+    Get a renderer instance by name.
+
+    Args:
+        name: The name of the renderer
+        **kwargs: Additional arguments to pass to the renderer constructor
+
+    Returns:
+        The requested renderer instance
+
+    Raises:
+        UnsupportedRenderer: If the renderer is not found
+    """
+    key = RENDERER_ALIASES.get(name.lower(), name.lower())
+    try:
+        cls = RENDERERS[key]
+    except KeyError:
+        raise UnsupportedRenderer(
+            f"Unsupported renderer: {name}. Available: {', '.join(sorted(RENDERERS.keys()))}"
+        ) from None
+    return cls(**kwargs)  # type: ignore[no-any-return]
+
+
+def get_renderer_help(name: str) -> dict[str, Any]:
+    """
+    Get help information for a renderer without creating an instance.
+
+    Args:
+        name: The renderer name
+
+    Returns:
+        Help information dictionary
+
+    Raises:
+        UnsupportedRenderer: If the renderer is not found
+    """
+    key = RENDERER_ALIASES.get(name.lower(), name.lower())
+    try:
+        cls = RENDERERS[key]
+    except KeyError:
+        raise UnsupportedRenderer(
+            f"Unsupported renderer: {name}. Available: {', '.join(sorted(RENDERERS.keys()))}"
+        ) from None
+
+    # Create a minimal instance to get help (with minimal required parameters)
+    try:
+        schema = cls.get_config_schema()
+        # Try to create with minimal parameters
+        if key == "ffmpeg-ts":
+            instance = cls()
+        else:
+            # For other renderers, try with empty config
+            instance = cls()
+
+        return instance.get_help()  # type: ignore[no-any-return]
+    except Exception:
+        # If we can't create an instance, return basic help from schema
+        schema = cls.get_config_schema()
+        return {
+            "description": schema.description,
+            "required_params": schema.required_params,
+            "optional_params": schema.optional_params,
+            "examples": [f"retrovue renderer add --type {key} --name 'My {key.title()} Renderer'"],
+            "cli_params": {},
+        }
+
+
+def list_renderers() -> list[str]:
+    """
+    List all available renderer names.
+
+    Returns:
+        List of all available renderer names
+    """
+    return list(RENDERERS.keys())
+
+
+def unregister_renderer(name: str) -> None:
+    """
+    Unregister a renderer.
+
+    Args:
+        name: The name of the renderer to unregister
+
+    Raises:
+        RendererNotFoundErrorBase: If the renderer is not found
+    """
+    if name not in _renderers:
+        raise RendererNotFoundErrorBase(f"Renderer '{name}' not found")
+
+    del _renderers[name]
+
+
+# Register built-in renderers on module import
+for renderer_class in RENDERERS.values():
+    register_renderer(renderer_class)

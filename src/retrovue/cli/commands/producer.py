@@ -23,7 +23,6 @@ def list_producer_types(
         retrovue producer list-types --json
     """
     try:
-        # TODO: Replace with real ProducerRegistry when available
         from ...registries.producer_registry import list_producer_types as _list_types
 
         producer_types = _list_types()
@@ -84,7 +83,7 @@ def add_producer(
             raise typer.Exit(1)
 
         # Get available producer types
-        from ...registries.producer_registry import list_producer_types as _list_types
+        from ...registries.producer_registry import get_producer_help, list_producer_types as _list_types
 
         available_types = _list_types()
         type_names = [t["type"] for t in available_types]
@@ -98,8 +97,6 @@ def add_producer(
         # Handle help request for specific type
         if help_type:
             # Get help information for the producer type
-            from ...registries.producer_registry import get_producer_help
-
             help_info = get_producer_help(type)
 
             typer.echo(f"Help for {type} producer type:")

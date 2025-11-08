@@ -1,6 +1,6 @@
 # RetroVue Runtime — ChannelManager
 
-_Related: [Runtime: Schedule service](schedule_service.md) • [Runtime: Program director](program_director.md) • [Domain: MasterClock](../domain/MasterClock.md)_
+_Related: [Runtime: Schedule service](schedule_service.md) • [Runtime: Program director](program_director.md) • [Runtime: Renderer](Renderer.md) • [Domain: MasterClock](../domain/MasterClock.md)_
 
 > Per-channel board operator that executes scheduled content playback on the air.
 
@@ -114,6 +114,14 @@ Viewers never talk to Producers directly; they attach via the stream endpoint ex
 - ChannelManager may replace the active Producer with a different Producer type (e.g. swap from NormalProducer to EmergencyProducer)
 - ChannelManager is not allowed to reach into a Producer's internals (e.g. cannot manage an ffmpeg subprocess directly). It can only use the Producer interface defined in retrovue.runtime.producer.base
 
+### Renderer
+
+- ChannelManager manages the Renderer lifecycle (start, stop, switch) for its channel
+- ChannelManager hands Producer input URLs to the Renderer for FFmpeg execution
+- ChannelManager does not directly control FFmpeg; it uses the Renderer interface
+- Renderer handles all FFmpeg process management, encoding, and stream delivery
+- See [Runtime: Renderer](Renderer.md) for detailed documentation
+
 ### MasterClock
 
 - ChannelManager must use MasterClock to determine "now" and offset into the current asset
@@ -219,6 +227,7 @@ ChannelManager operates on Channel entities using UUID identifiers for external 
 | **[ScheduleService](schedule_service.md)** | Provides ScheduledSegments for playout execution            |
 | **[MasterClock](../domain/MasterClock.md)**          | Provides authoritative station time for offset calculations |
 | **[ProgramDirector](program_director.md)** | Sets global mode and emergency overrides                    |
+| **[Renderer](Renderer.md)**                | Executes FFmpeg and manages output streams                  |
 | **[AsRunLogger](AsRunLogging.md)**         | Receives playback events for compliance logging             |
 
 _Document version: v0.1 · Last updated: 2025-10-24_

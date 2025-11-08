@@ -1,4 +1,4 @@
-_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime](../runtime/ChannelManager.md) • [Operator CLI](../operator/CLI.md)_
+_Related: [Architecture](../architecture/ArchitectureOverview.md) • [Runtime: Channel manager](../runtime/channel_manager.md) • [Runtime: Renderer](../runtime/Renderer.md) • [Operator CLI](../operator/CLI.md)_
 
 # Domain — Playout pipeline
 
@@ -22,7 +22,13 @@ Viewer activity does not define the Channel. Viewer activity only decides whethe
 
 ## Contract / interface
 
-A Producer is a module responsible for generating a base playout plan. Producers generate the "what to air" plan, not how to render it (no ffmpeg launch).
+**Note:** There are two related but distinct concepts in RetroVue:
+
+1. **Input Producers** (in `adapters/producers/`): Modular source components that provide FFmpeg-compatible input specifiers (files, test patterns, network streams). See [Producers Framework](../components/producers.md) for details.
+
+2. **Playout Plan Producers** (in `runtime/producer/`): Components that generate playout plans from schedules. These determine "what to air" based on schedule context, then select appropriate Input Producers to provide the actual media sources.
+
+A Producer (in the playout plan sense) is a module responsible for generating a base playout plan. Producers generate the "what to air" plan, not how to render it (no ffmpeg launch).
 
 ### Asset vs Segment Distinction
 
@@ -76,13 +82,13 @@ Playout enrichers do not choose what content airs; they decorate how it airs.
 
 If a playout enricher fails, RetroVue logs the failure and continues with the most recent valid plan.
 
-After playout enrichment, the final playout plan is given to the runtime to launch ffmpeg for that Channel.
+After playout enrichment, the final playout plan is given to the Renderer for FFmpeg execution.
 
-The ChannelManager owns the live ffmpeg process.
+The ChannelManager manages the Renderer lifecycle, which owns the live FFmpeg process.
 
-When the first viewer tunes in, ChannelManager asks for "what should be airing right now + offset", generates the playout plan via Producer + playout enrichers, and starts ffmpeg.
+When the first viewer tunes in, ChannelManager asks for "what should be airing right now + offset", generates the playout plan via Producer + playout enrichers, selects the Producer's input source, and starts the Renderer to execute FFmpeg.
 
-When the last viewer leaves, ChannelManager tears down ffmpeg. The Channel itself still logically "continues to air" on the master schedule.
+When the last viewer leaves, ChannelManager stops the Renderer (which tears down FFmpeg). The Channel itself still logically "continues to air" on the master schedule.
 
 ## Failure / fallback behavior
 
@@ -97,6 +103,7 @@ If a playout enricher fails when assembling the playout plan for a channel, Retr
 ## See also
 
 - [Enricher](Enricher.md) - Playout enricher details
-- [Channel manager](../runtime/ChannelManager.md) - Stream execution
+- [Channel manager](../runtime/channel_manager.md) - Stream execution and Renderer lifecycle
+- [Renderer](../runtime/Renderer.md) - FFmpeg execution and output stream management
 - [Producer lifecycle](../runtime/ProducerLifecycle.md) - Producer management
 - [Operator CLI](../operator/CLI.md) - Operational procedures
