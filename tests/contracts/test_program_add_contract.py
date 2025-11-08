@@ -43,6 +43,7 @@ class TestProgramAddContract:
             app,
             ["channel", "plan", "abc", "xyz", "program", "add", "--start", "06:00", "--duration", "30"],
         )
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options (CLI usage error)
         # Accept both 1 (validation error) and 2 (CLI usage error) since the command structure may have changed
         assert result.exit_code in (1, 2)
@@ -70,7 +71,7 @@ class TestProgramAddContract:
                 "Test",
             ],
         )
-        # Typer returns exit code 2 for missing required options or invalid command structure
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Accept 0 (not implemented), 1 (validation error), or 2 (CLI usage error)
         assert result.exit_code in (0, 1, 2)
 
@@ -95,7 +96,7 @@ class TestProgramAddContract:
                 "Test",
             ],
         )
-        # Typer returns exit code 2 for missing required options or invalid command structure
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Accept 0 (not implemented), 1 (validation error), or 2 (CLI usage error)
         assert result.exit_code in (0, 1, 2)
 
@@ -121,6 +122,7 @@ class TestProgramAddContract:
                 "uuid",
             ],
         )
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options (CLI usage error)
         # Accept both 1 (validation error) and 2 (CLI usage error) since the command structure may have changed
         assert result.exit_code in (1, 2)

@@ -90,6 +90,7 @@ class TestSourceEnricherGuarantees:
             "--enrichers", "plex-metadata"  # Should be incompatible
         ])
         
+        # TODO: tighten exit code once CLI is stable - compatibility validation not yet implemented
         # Currently passes because compatibility validation is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -133,6 +134,7 @@ class TestSourceEnricherGuarantees:
             "--enrichers", "ffprobe"
         ])
         
+        # TODO: tighten exit code once CLI is stable - configuration validation not yet implemented
         # Currently passes because configuration validation is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -153,6 +155,7 @@ class TestSourceEnricherGuarantees:
             "--enrichers", "ffprobe"
         ])
         
+        # TODO: tighten exit code once CLI is stable - lifecycle coordination not yet implemented
         # Currently passes because lifecycle coordination is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -192,6 +195,7 @@ class TestSourceEnricherGuarantees:
                 "--enrichers", "ffprobe"
             ])
             
+            # TODO: tighten exit code once CLI is stable - transaction boundary testing with mocks
             # Verify transaction methods were called
             # This ensures cross-domain operations respect transaction boundaries
             assert result.exit_code == 1 or result.exit_code == 0

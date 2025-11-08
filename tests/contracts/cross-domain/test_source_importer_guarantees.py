@@ -50,6 +50,7 @@ class TestSourceImporterGuarantees:
             "--token", "test-token"
         ])
         
+        # TODO: tighten exit code once CLI is stable - interface compliance validation not yet implemented
         # Currently passes because interface compliance validation is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -69,6 +70,7 @@ class TestSourceImporterGuarantees:
             "--token", "test-token"
         ])
         
+        # TODO: tighten exit code once CLI is stable - configuration schema validation not yet implemented
         # Currently passes because configuration schema validation is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -88,6 +90,7 @@ class TestSourceImporterGuarantees:
             "--discover"  # Should fail if filesystem doesn't support discovery
         ])
         
+        # TODO: tighten exit code once CLI is stable - capability validation not yet implemented
         # Currently passes because capability validation is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code in [1, 2]  # 2 for unknown --discover flag
@@ -109,6 +112,7 @@ class TestSourceImporterGuarantees:
                 "--token", "test-token"
             ])
             
+            # TODO: tighten exit code once CLI is stable - transactional integrity testing with mocks
             # Verify transaction methods were called
             # This ensures transactional integrity between source and importer operations
             assert result.exit_code == 1 or result.exit_code == 0
@@ -128,6 +132,7 @@ class TestSourceImporterGuarantees:
             "--token", "test-token"
         ])
         
+        # TODO: tighten exit code once CLI is stable - lifecycle coordination not yet implemented
         # Currently passes because lifecycle coordination is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -163,6 +168,7 @@ class TestSourceImporterGuarantees:
                 "--token", "test-token"
             ])
             
+            # TODO: tighten exit code once CLI is stable - transaction boundary testing with mocks
             # Verify transaction methods were called
             # This ensures cross-domain operations respect transaction boundaries
             assert result.exit_code == 1 or result.exit_code == 0
@@ -182,6 +188,7 @@ class TestSourceImporterGuarantees:
             "--token", "test-token"
         ])
         
+        # TODO: tighten exit code once CLI is stable - ID correlation not yet implemented
         # Currently passes because ID correlation is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0

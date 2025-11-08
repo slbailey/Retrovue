@@ -180,6 +180,7 @@ class TestMasterClockSerializationContract:
     def test_masterclock_serialization_success_json(self):
         """Test masterclock-serialization command with JSON output matches contract."""
         result = self.runner.invoke(app, ["runtime", "masterclock-serialization", "--json"])
+        # TODO: tighten exit code once CLI is stable - split into separate tests for success/failure cases
         # Serialization test may fail if timezone preservation fails, but should return valid JSON
         assert result.exit_code in (0, 1)  # Contract allows exit 1 on validation failure
         payload = json.loads(result.stdout)
@@ -201,6 +202,7 @@ class TestMasterClockPerformanceContract:
         result = self.runner.invoke(
             app, ["runtime", "masterclock-performance", "--iterations", "100", "--json"]
         )
+        # TODO: tighten exit code once CLI is stable - split into separate tests for success/failure cases
         # Performance test may fail if performance degrades or errors occur, but should return valid JSON
         assert result.exit_code in (0, 1)  # Contract allows exit 1 on performance failure
         payload = json.loads(result.stdout)

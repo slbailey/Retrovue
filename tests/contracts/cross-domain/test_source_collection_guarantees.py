@@ -38,6 +38,7 @@ class TestSourceCollectionGuarantees:
                 "--discover"
             ])
             
+            # TODO: tighten exit code once CLI is stable - discover flag not yet implemented
             # Verify transaction methods were called
             # This ensures collection discovery is coordinated with source creation
             # Note: --discover flag not yet implemented, so exit code 2 is expected
@@ -58,6 +59,7 @@ class TestSourceCollectionGuarantees:
             "--token", "test-token"
         ])
         
+        # TODO: tighten exit code once CLI is stable - lifecycle synchronization not yet implemented
         # Currently passes because lifecycle synchronization is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -74,6 +76,7 @@ class TestSourceCollectionGuarantees:
             "Test Source"
         ])
         
+        # TODO: tighten exit code once CLI is stable - ingestibility validation not yet implemented
         # Currently passes because ingestibility validation is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
@@ -96,6 +99,7 @@ class TestSourceCollectionGuarantees:
                 "--discover"
             ])
             
+            # TODO: tighten exit code once CLI is stable - discover flag not yet implemented
             # Verify transaction methods were called
             # This ensures transactional integrity between source and collection operations
             # Note: --discover flag not yet implemented, so exit code 2 is expected
@@ -130,6 +134,7 @@ class TestSourceCollectionGuarantees:
             "--discover"
         ])
         
+        # TODO: tighten exit code once CLI is stable - path mapping coordination and discover flag not yet implemented
         # Currently passes because path mapping coordination is not implemented
         # This test documents the expected behavior for future implementation
         # Note: --discover flag not yet implemented, so exit code 2 is expected
@@ -180,6 +185,7 @@ class TestSourceCollectionGuarantees:
                 "--token", "test-token"
             ])
             
+            # TODO: tighten exit code once CLI is stable - transaction boundary testing with mocks
             # Verify transaction methods were called
             # This ensures cross-domain operations respect transaction boundaries
             assert result.exit_code == 1 or result.exit_code == 0

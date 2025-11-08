@@ -31,6 +31,7 @@ class TestProgramDeleteContract:
         result = self.runner.invoke(
             app, ["channel", "plan", "abc", "xyz", "program", "delete", "1234"]
         )
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options (CLI usage error)
         # Accept both 1 (validation error) and 2 (CLI usage error) since the command structure may have changed
         assert result.exit_code in (1, 2)
@@ -42,6 +43,7 @@ class TestProgramDeleteContract:
         result = self.runner.invoke(
             app, ["channel", "plan", "abc", "xyz", "program", "delete", "1234", "--yes"]
         )
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options or invalid command structure
         # Accept 0 (success), 1 (validation/not found error), or 2 (CLI usage error)
         assert result.exit_code in (0, 1, 2)
@@ -51,6 +53,7 @@ class TestProgramDeleteContract:
         result = self.runner.invoke(
             app, ["channel", "plan", "nonexistent", "xyz", "program", "delete", "1234", "--yes"]
         )
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options or invalid command structure
         # Accept 0 (not yet implemented), 1 (validation/not found error), or 2 (CLI usage error)
         assert result.exit_code in (0, 1, 2)
@@ -60,6 +63,7 @@ class TestProgramDeleteContract:
         result = self.runner.invoke(
             app, ["channel", "plan", "abc", "nonexistent", "program", "delete", "1234", "--yes"]
         )
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options or invalid command structure
         # Accept 0 (not yet implemented), 1 (validation/not found error), or 2 (CLI usage error)
         assert result.exit_code in (0, 1, 2)

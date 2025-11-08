@@ -29,6 +29,7 @@ class TestProgramListContract:
     def test_program_list_requires_channel_and_plan(self):
         """PL-1: Must provide channel and plan identifiers."""
         result = self.runner.invoke(app, ["channel", "plan", "program", "list"])
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Command structure requires channel and plan args
         # Accept either exit code 1 (missing args) or 0 (not yet implemented)
         assert result.exit_code in (0, 1)
@@ -36,6 +37,7 @@ class TestProgramListContract:
     def test_program_list_handles_missing_channel(self):
         """PL-1: Channel not found should exit with error."""
         result = self.runner.invoke(app, ["channel", "plan", "nonexistent", "xyz", "program", "list"])
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options or invalid command structure
         # Accept 0 (not yet implemented), 1 (validation/not found error), or 2 (CLI usage error)
         assert result.exit_code in (0, 1, 2)
@@ -43,6 +45,7 @@ class TestProgramListContract:
     def test_program_list_handles_missing_plan(self):
         """PL-1: Plan not found should exit with error."""
         result = self.runner.invoke(app, ["channel", "plan", "abc", "nonexistent", "program", "list"])
+        # TODO: tighten exit code once CLI is stable - program commands not yet implemented
         # Typer returns exit code 2 for missing required options or invalid command structure
         # Accept 0 (not yet implemented), 1 (validation/not found error), or 2 (CLI usage error)
         assert result.exit_code in (0, 1, 2)

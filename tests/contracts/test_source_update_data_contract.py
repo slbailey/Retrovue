@@ -64,6 +64,7 @@ class TestSourceUpdateDataContract:
                 "Test Plex",
                 "--name", "Updated Plex",
             ])
+            # TODO: tighten exit code once CLI is stable - mock returns empty dict which may fail validation
             assert result.exit_code in (0, 1)
             # Ensure immutable fields are not included in updates payload
             _, kwargs = mock_update.call_args
@@ -95,6 +96,7 @@ class TestSourceUpdateDataContract:
                 "Test Plex",
                 "--base-url", "http://updated",
             ])
+            # TODO: tighten exit code once CLI is stable - mock returns empty dict which may fail validation
             assert result.exit_code in (0, 1)
             _, kwargs = mock_update.call_args
             cfg = kwargs.get("updates", kwargs).get("config", {})
@@ -125,6 +127,7 @@ class TestSourceUpdateDataContract:
                 "Test Plex",
                 "--base-url", "http://server3",
             ])
+            # TODO: tighten exit code once CLI is stable - mock returns empty dict which may fail validation
             assert result.exit_code in (0, 1)
             args, kwargs = mock_update.call_args
             updates = args[1] if len(args) >= 2 else kwargs.get("updates", {})

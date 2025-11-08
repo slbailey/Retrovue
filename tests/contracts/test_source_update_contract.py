@@ -247,6 +247,7 @@ class TestSourceUpdateContract:
              patch("requests.get") as mock_get, \
              patch("requests.post") as mock_post:
             result = self.runner.invoke(app, ["update", "Test Plex", "--name", "New Name"])
+        # TODO: tighten exit code once CLI is stable - mock returns empty dict which may fail validation
         assert result.exit_code in (0, 1)
         mock_get.assert_not_called()
         mock_post.assert_not_called()

@@ -177,6 +177,7 @@ class TestCollectionListDataContract:
             
             result = self.runner.invoke(app, ["collection", "list", "--test-db"])
             
+            # TODO: tighten exit code once CLI is stable - placeholder test with mocks
             # Should not crash
             assert result.exit_code in [0, 1]
 

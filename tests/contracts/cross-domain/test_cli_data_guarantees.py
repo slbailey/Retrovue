@@ -39,6 +39,7 @@ class TestCLIDataGuarantees:
                 "--token", "test-token"
             ])
             
+            # TODO: tighten exit code once CLI is stable - transaction boundary testing with mocks
             # Verify transaction methods were called
             # This ensures CLI operations respect transaction boundaries
             assert result.exit_code == 1 or result.exit_code == 0
@@ -113,6 +114,7 @@ class TestCLIDataGuarantees:
             "--token", "test-token"
         ])
         
+        # TODO: tighten exit code once CLI is stable - rollback coordination not yet implemented
         # Currently passes because rollback coordination is not implemented
         # This test documents the expected behavior for future implementation
         assert result.exit_code == 1 or result.exit_code == 0
