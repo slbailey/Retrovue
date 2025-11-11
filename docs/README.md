@@ -54,8 +54,10 @@ How to extend RetroVue safely by adding plugins.
 
 ## Methodology
 
-House writing style and doc rules.
+House writing style, collaboration, and testing standards.
 
-- [AI assistant methodology](methodology/AI-Assistant-Methodology.md)
-- [Style guide](STYLEGUIDE.md)
+- [AI assistant methodology](_standards/AI_Assistant_Methodology.md)
+- [Documentation standards](_standards/Documentation_Standards.md)
+- [Repository conventions](_standards/Repository_Conventions.md)
+- [Test methodology](_standards/Test_Methodology.md)
 - [Glossary](GLOSSARY.md)
