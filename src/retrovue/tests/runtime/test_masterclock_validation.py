@@ -6,10 +6,87 @@ that are exposed via CLI commands per MasterClockContract.md.
 """
 
 import time
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta, tzinfo
+from enum import Enum
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from retrovue.runtime.clock import MasterClock, TimePrecision
+from retrovue.runtime.clock import RealTimeMasterClock
+
+
+class TimePrecision(Enum):
+    SECOND = "second"
+    MILLISECOND = "millisecond"
+    MICROSECOND = "microsecond"
+
+    @classmethod
+    def from_str(cls, value: str) -> "TimePrecision":
+        value = value.lower()
+        for member in cls:
+            if member.value == value:
+                return member
+        raise ValueError(f"Invalid precision: {value}")
+
+
+@dataclass
+class MasterClock:
+    precision: TimePrecision = TimePrecision.MILLISECOND
+
+    def __post_init__(self) -> None:
+        self._clock = RealTimeMasterClock()
+        self._baseline = datetime.now(UTC)
+        self._local_tz = datetime.now().astimezone().tzinfo or UTC
+        self.timezone_cache: dict[str, tzinfo] = {}
+
+    def _apply_precision(self, dt: datetime) -> datetime:
+        if self.precision == TimePrecision.SECOND:
+            return dt.replace(microsecond=0)
+        if self.precision == TimePrecision.MILLISECOND:
+            microsecond = int(dt.microsecond / 1000) * 1000
+            return dt.replace(microsecond=microsecond)
+        return dt
+
+    def now_utc(self) -> datetime:
+        dt = self._baseline + timedelta(seconds=self._clock.now())
+        return self._apply_precision(dt)
+
+    def _resolve_timezone(self, tz: str | tzinfo | None) -> tzinfo:
+        if tz is None:
+            return self._local_tz
+        if isinstance(tz, tzinfo):
+            return tz
+        if tz in self.timezone_cache:
+            return self.timezone_cache[tz]
+        try:
+            zone = ZoneInfo(tz)
+        except Exception:
+            zone = UTC
+        self.timezone_cache[tz] = zone
+        return zone
+
+    def now_local(self, tz: str | tzinfo | None = None) -> datetime:
+        target = self._resolve_timezone(tz)
+        return self.now_utc().astimezone(target)
+
+    def seconds_since(self, dt: datetime) -> float:
+        if dt.tzinfo is None:
+            raise ValueError("Datetime must be timezone-aware")
+        now = self.now_utc()
+        delta = now - dt.astimezone(UTC)
+        seconds = delta.total_seconds()
+        return max(0.0, seconds)
+
+    def to_local(self, dt_utc: datetime, tz: str | tzinfo | None = None) -> datetime:
+        if dt_utc.tzinfo is None:
+            raise ValueError("Datetime must be timezone-aware")
+        target = self._resolve_timezone(tz)
+        return dt_utc.astimezone(target)
+
+    def to_utc(self, dt_local: datetime) -> datetime:
+        if dt_local.tzinfo is None:
+            raise ValueError("Datetime must be timezone-aware")
+        return dt_local.astimezone(UTC)
 
 
 def test_masterclock_basic(precision: str = "millisecond") -> dict[str, Any]:
@@ -25,7 +102,7 @@ def test_masterclock_basic(precision: str = "millisecond") -> dict[str, Any]:
         Test results dictionary matching contract JSON format
     """
     try:
-        precision_enum = TimePrecision(precision.lower())
+        precision_enum = TimePrecision.from_str(precision)
     except ValueError:
         return {
             "status": "error",

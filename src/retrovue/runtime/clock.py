@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Callable, Protocol, runtime_checkable
 
+from datetime import datetime, timezone, tzinfo
+from zoneinfo import ZoneInfo
+
 import time
 
 MonotonicFn = Callable[[], float]
@@ -80,4 +83,50 @@ class SteppedMasterClock:
         with self._lock:
             self._current += seconds
             return self._current
+
+
+class MasterClock:
+    """Contract-compliant clock providing timezone-aware timestamps."""
+
+    def now_utc(self) -> datetime:
+        """Return current UTC time as an aware datetime."""
+        return datetime.now(timezone.utc)
+
+    def now_local(self, tz: str | tzinfo | None = None) -> datetime:
+        """Return current time in the requested timezone (defaults to system local)."""
+        target = self._resolve_timezone(tz)
+        return self.now_utc().astimezone(target)
+
+    def seconds_since(self, dt: datetime) -> float:
+        """Return non-negative seconds elapsed since the given timestamp."""
+        self._ensure_aware(dt)
+        delta = self.now_utc() - dt.astimezone(timezone.utc)
+        return max(0.0, delta.total_seconds())
+
+    def to_utc(self, dt_local: datetime) -> datetime:
+        """Convert an aware datetime to UTC."""
+        self._ensure_aware(dt_local)
+        return dt_local.astimezone(timezone.utc)
+
+    def to_local(self, dt_utc: datetime, tz: str | tzinfo | None = None) -> datetime:
+        """Convert an aware UTC datetime to the requested timezone."""
+        self._ensure_aware(dt_utc)
+        target = self._resolve_timezone(tz)
+        return dt_utc.astimezone(target)
+
+    @staticmethod
+    def _ensure_aware(dt: datetime) -> None:
+        if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+            raise ValueError("Datetime must be timezone-aware")
+
+    @staticmethod
+    def _resolve_timezone(tz: str | tzinfo | None) -> tzinfo:
+        if tz is None:
+            return datetime.now().astimezone().tzinfo or timezone.utc
+        if isinstance(tz, tzinfo):
+            return tz
+        try:
+            return ZoneInfo(tz)
+        except Exception:
+            return timezone.utc
 

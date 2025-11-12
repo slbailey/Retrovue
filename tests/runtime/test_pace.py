@@ -83,3 +83,4 @@ def test_participant_can_remove_itself_safely():
     assert participant.count == 1
 
 
+
