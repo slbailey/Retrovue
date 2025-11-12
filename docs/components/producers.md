@@ -18,11 +18,12 @@ This modular design allows the system to seamlessly switch between producers wit
 
 ### Producer Interface
 
-All producers must implement a consistent interface:
+All producers must implement a consistent interface that makes them both **time-addressable** and **pace-driven**:
 
-- **`get_input_url(context: dict[str, Any] | None = None) -> str`**: Returns an FFmpeg-compatible source string
-- **`prepare(context: dict[str, Any] | None = None) -> dict[str, Any] | None`**: Optional metadata or preparation hooks (e.g., validation, pre-roll setup)
-- **`cleanup(context: dict[str, Any] | None = None) -> None`**: Optional cleanup hooks
+- **`start(playout_plan, start_at_station_time)`**: Join playout at an arbitrary station time (mid-program joins are mandatory).
+- **`on_paced_tick(t_now, dt)`**: Advance internal state using ticks emitted by the `PaceController`. This method MUST be non-blocking and MUST NOT sleep.
+- **`get_segment_edges()`**: Optional helper returning queued segment boundary edges (e.g., “segment-ended”) that inform ChannelManager when it is safe to transition.
+- **`get_input_url(context)`**, **`prepare(context)`**, **`cleanup(context)`**: Continue to provide FFmpeg-compatible inputs and lifecycle hooks.
 
 ### Configuration Schema
 
@@ -129,6 +130,12 @@ ChannelManager (or Renderer) selects the appropriate producer based on:
 - Channel configuration
 - Runtime context (emergency mode, guide mode, etc.)
 
+### Time addressing and ticking
+
+- Producers MUST honour the station time supplied by `ProgramDirector`/`PaceController`. When `start(...)` is invoked, the producer receives the station time to join, and all subsequent progress is driven by `on_paced_tick(t_now, dt)`.
+- `dt` is clamped by the pacing loop, but producers SHOULD continue to clamp defensive logic internally to prevent runaway seeks.
+- Producers MUST keep their tick path non-blocking. Any FFmpeg interaction should rely on non-blocking pipes or internal polling with small timeouts owned by the producer.
+- Segment boundary events (end-of-segment, preroll, etc.) should be queued for ChannelManager so it can schedule ads and bumpers reliably.
 ### Input URL Generation
 
 The producer's `get_input_url()` method is called with optional context:

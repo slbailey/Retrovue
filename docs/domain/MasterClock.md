@@ -4,174 +4,72 @@ _Related: [Architecture](../overview/architecture.md) • [Contracts](../contrac
 
 ## Purpose
 
-MasterClock is the single source of truth for "now" inside RetroVue. It provides authoritative, timezone-aware time across the entire system. All scheduling, playout, logging, and ChannelManager decisions must query MasterClock instead of calling system time directly.
+Provide a single source of station time — a monotonic timeline shared by all runtime components — so scheduling, playout, and logging operate against the same notion of “now”.
 
 ## Core model / scope
 
-- MasterClock is the authority for current wall-clock time in the system.
-- All runtime components (ScheduleService, ChannelManager, ProgramDirector, AsRunLogger) MUST obtain wall-clock timestamps from MasterClock.
-- Calling `datetime.now()` or `datetime.utcnow()` directly in runtime code is considered a defect.
-- MasterClock aligns with the local-time methodology: inputs/outputs presented in local system time; storage and inter-component exchange in UTC.
+- MasterClock returns station time as a monotonically increasing number of seconds.
+- Station time is independent of wall clock time; it never jumps backwards and can run faster or slower than real time.
+- All runtime code MUST use MasterClock instead of `time.time()`, `datetime.now()`, or `datetime.utcnow()`.
+- Converting station time to wall clock timestamps is a higher-level concern handled where persistence or operator-facing output is generated.
+
+## Station time vs. wall clock
+
+- **Station time** is monotonic and deterministic. It drives playout math, offsets, and sequencing.
+- **Wall clock time** (UTC or local timezone) is what operators see on EPGs or logs.
+- Runtime components consume station time; translation to wall clock happens in adapters that need to render timestamps.
+- This separation prevents leap seconds, DST shifts, or system clock corrections from causing playout regressions.
 
 ## Contract / interface
 
-MasterClock exposes:
+MasterClock exposes a single method:
 
-- **`now_utc() -> datetime`**: Returns current UTC time as an aware datetime (tzinfo=UTC). This is the authoritative station time.
-- **`now_local() -> datetime`**: Returns current time in the system/station timezone as an aware datetime.
-- **`seconds_since(dt: datetime) -> float`**: Returns `max(0, now_utc() - dt_in_utc).total_seconds()`.
-  - Accepts both aware UTC datetimes and aware local datetimes.
-  - If `dt` is naive, raises `ValueError`.
-  - If `dt` is in the future, returns `0.0` instead of a negative number.
-  - This gives ChannelManager a sane non-negative playout offset.
-- **`to_local(dt_utc: datetime) -> datetime`**: Converts an aware UTC datetime to an aware datetime in the system local timezone. Raises `ValueError` on naive input.
-- **`to_utc(dt_local: datetime) -> datetime`**: Converts an aware local datetime to an aware UTC datetime. Raises `ValueError` on naive input.
+- **`now() -> float`** — Returns the current station time in seconds. The value is monotonically increasing and represents the authoritative clock for runtime decisions.
 
-Notes:
-- No per-channel timezone. "Local" means system local timezone.
-- All datetimes are tz-aware; naive datetimes are rejected.
+No additional helpers (UTC/local conversions, `seconds_since`, etc.) are provided at this layer. Downstream code wraps station time with domain-specific helpers as needed.
 
-## Design Principles
+## Implementations
 
-### Timezone Awareness
+### RealTimeMasterClock
 
-All datetimes returned by MasterClock MUST be timezone-aware. UTC is the authoritative source of truth for storage and inter-component exchange.
+- Wraps a monotonic timer (default: `time.perf_counter()`).
+- Applies an optional scale factor so station time can run faster or slower than wall clock (e.g., rate = 2.0 doubles elapsed time).
+- Ensures forward-only progression even if the underlying monotonic source misbehaves.
+- Used in production runners and simulations that need to track real elapsed time.
 
-### Time Monotonicity
+### SteppedMasterClock
 
-Time should never appear to "go backward" from the point of view of ChannelManager's playout math. `now_utc()` never appears to go backward within a process.
-
-### Error Handling
-
-- Naive datetimes raise `ValueError`.
-- Future timestamps in `seconds_since()` clamp to `0.0`.
-- DST transitions are handled by the platform timezone rules.
-
-### Passive Design
-
-MasterClock is intentionally passive and read-only:
-
-- It does not accept timers or listeners.
-- It does not wake other components.
-- It does not know broadcast day rules.
-- The scheduler_daemon (horizon builder) polls MasterClock for `now_utc()` and then asks ScheduleService what needs to be generated.
-
-**MasterClock is read-only, authoritative, and never event-driven.**
-
-## Integration Patterns
-
-### ScheduleService Integration
-
-ScheduleService uses MasterClock to advance EPG / Playlog horizons:
-
-```python
-class ScheduleService:
-    def __init__(self, clock: MasterClock):
-        self.clock = clock
-
-    def get_playout_plan_now(self, channel_id: str):
-        # Get authoritative time
-        now_utc = self.clock.now_utc()
-
-        # Derive local time (system timezone) if needed
-        local_time = self.clock.now_local()
-
-        # Calculate offset for mid-program joins
-        offset_seconds = self.clock.seconds_since(program_start_time)
-
-        return self._build_playout_plan(channel_id, now_utc, offset_seconds)
-```
-
-ScheduleService does the broadcast-day classification. MasterClock does NOT know about broadcast days; it only knows "what time is it (UTC + system local)." This keeps boundaries clear between time authority and scheduling logic.
-
-### ChannelManager Integration
-
-ChannelManager uses MasterClock to timestamp transitions and calculate playout offsets:
-
-```python
-class ChannelManager:
-    def __init__(self, clock: MasterClock):
-        self.clock = clock
-
-    def viewer_join(self, session_id: str):
-        # Get current time for logging
-        join_time = self.clock.now_utc()
-
-        # Calculate playback offset for mid-program joins
-        program_start = self._get_program_start_time()
-        offset = self.clock.seconds_since(program_start)
-
-        # Start producer with correct offset
-        self._start_producer_with_offset(offset)
-```
-
-### AsRunLogger Integration
-
-AsRunLogger uses MasterClock to record what actually aired:
-
-```python
-class AsRunLogger:
-    def __init__(self, clock: MasterClock):
-        self.clock = clock
-
-    def log_event(self, event: str, channel: str):
-        # Get both UTC and local timestamps
-        utc_time = self.clock.now_utc()
-        local_time = self.clock.now_local()
-
-        # Log with consistent timestamps
-        self._write_log({
-            "timestamp": utc_time.isoformat(),
-            "local_time": local_time.isoformat(),
-            "event": event,
-            "channel": channel
-        })
-```
+- Deterministic clock for tests.
+- Station time advances only when `advance(seconds)` is called.
+- Thread-safe enough for test environments; callers typically run in a single thread but locking guards accidental contention.
+- Ideal for asserting playout math without waiting on real time.
 
 ## Validation & invariants
 
-- **MC-001**: All returned datetimes are tz-aware. UTC is authoritative for storage and exchange.
-- **MC-002**: Time monotonicity — `now_utc()` never appears to go backward within a process.
-- **MC-003**: `seconds_since(dt)` never returns negative values; future timestamps clamp to `0.0`.
-- **MC-004**: Naive datetimes passed to conversion methods raise `ValueError`.
-- **MC-005**: Local time is the system timezone; no per-channel timezone parameters.
-- **MC-006**: Passive design — no timers, listeners, or event scheduling APIs.
-- **MC-007**: Single source of "now" — runtime components must not call `datetime.now()` directly.
+- **MC-001**: `now()` never decreases during process lifetime.
+- **MC-002**: Scaling is multiplicative; `rate = 2.0` doubles elapsed time compared to the monotonic source.
+- **MC-003**: No direct calls to system time APIs in runtime packages.
+- **MC-004**: Stepped clocks only move forward when explicitly advanced.
+- **MC-005**: MasterClock is read-only; it emits time but never drives callbacks or scheduling loops.
 
-## Failure / fallback behavior
+## Integration guidelines
 
-If MasterClock is unavailable or returns nonsense, downstream services cannot safely infer "what is on right now." This is considered critical. This condition must be surfaced to operators.
-
-## Execution model
-
-- Scheduler uses MasterClock to advance EPG / Playlog horizons.
-- Producer uses MasterClock to figure out "what should be airing right now".
-- ChannelManager uses MasterClock to timestamp transitions.
-- As-run log uses MasterClock to record what actually aired.
-
-## Naming rules
-
-- "MasterClock" is not ffmpeg's framerate clock. It is the broadcast facility wall clock for RetroVue logic.
+- Inject a `MasterClock` into runtime services (ScheduleService, ChannelManager, ProgramDirector, AsRunLogger).
+- Use station time for offsets and sequencing, then translate to wall clock times at the boundary where data is persisted or shown to operators.
+- When tests require deterministic timing, use `SteppedMasterClock` and advance it explicitly.
+- Operators and CLI surfaces continue to rely on contract docs for timestamp formatting — MasterClock does not dictate presentation.
 
 ## Testing
 
-The MasterClock implementation is validated through comprehensive testing that ensures:
-
-- Contract enforcement (MC-001 through MC-007)
-- Time monotonicity (never goes backward)
-- Timezone safety (DST transitions handled correctly)
-- Consistency (all components see the same "now")
-- Boundary conditions (schedule block boundaries work correctly)
-- Performance (high-frequency operations remain stable)
-- Serialization (timestamps serialize to ISO 8601 correctly)
-
-See [MasterClock Contract](../contracts/resources/MasterClockContract.md) for CLI test contracts and detailed behavior rules.
+- Unit tests cover monotonicity, scale factors, and deterministic stepping.
+- Contract tests enforce that CLI surfaces still display correct timestamps by using the injected clock during scenarios.
+- Regression tests ensure no component reintroduces direct `datetime.utcnow()` or `time.time()` calls within runtime packages.
 
 ## See also
 
-- [MasterClock Contract](../contracts/resources/MasterClockContract.md) — Runtime contract and CLI test specifications
-- [ScheduleService](../runtime/schedule_service.md) — Uses MasterClock for all scheduling operations
-- [ChannelManager](../runtime/ChannelManager.md) — Uses MasterClock for playout offset calculations
-- [ProgramDirector](../runtime/program_director.md) — Uses MasterClock for system-wide coordination
-- [AsRunLogger](../runtime/AsRunLogging.md) — Uses MasterClock for consistent timestamp logging
+- [MasterClock Contract](../contracts/resources/MasterClockContract.md) — Runtime contract and validation rules
+- [ScheduleService](../runtime/schedule_service.md) — Consumes MasterClock for horizon advancement
+- [ChannelManager](../runtime/ChannelManager.md) — Uses MasterClock for playout offsets
+- [ProgramDirector](../runtime/program_director.md) — Coordinates runtime operations using station time
+- [AsRunLogger](../runtime/AsRunLogging.md) — Converts station time to operator-visible timestamps
 

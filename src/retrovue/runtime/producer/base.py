@@ -30,6 +30,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+import logging
 from typing import Any
 
 
@@ -75,6 +76,15 @@ class ContentSegment:
     metadata: dict[str, Any]
 
 
+@dataclass
+class SegmentEdge:
+    """Represents a boundary event for a content segment."""
+
+    segment: ContentSegment
+    kind: str  # e.g. "end"
+    station_time: float
+
+
 class Producer(ABC):
     """
     Base class for output generators that create broadcast streams.
@@ -90,6 +100,7 @@ class Producer(ABC):
     - Handle real-time encoding and streaming
     - Ensure seamless transitions between content segments
     - Provide stream URLs for viewer access
+    - Honor pacing ticks and station-time offsets
 
     Boundaries:
     - IS allowed to: Generate output, handle encoding, manage streams, play provided content
@@ -111,6 +122,22 @@ class Producer(ABC):
         self.status = ProducerStatus.STOPPED
         self.output_url = None
         self.started_at = None
+        self._segment_edges: list[SegmentEdge] = []
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
+        # Teardown management
+        default_grace = 0.5
+        default_timeout = 5.0
+        if isinstance(configuration, dict):
+            default_grace = float(configuration.get("teardown_grace_seconds", default_grace))
+            default_timeout = float(configuration.get("teardown_timeout_seconds", default_timeout))
+        self._teardown_grace_seconds = default_grace
+        self._teardown_timeout_default = default_timeout
+        self._tearing_down = False
+        self._teardown_elapsed = 0.0
+        self._teardown_timeout = default_timeout
+        self._teardown_reason: str | None = None
+        self._teardown_ready = False
 
     @abstractmethod
     def start(self, playout_plan: list[dict[str, Any]], start_at_station_time: datetime) -> bool:
@@ -195,3 +222,119 @@ class Producer(ABC):
             Producer identifier
         """
         pass
+
+    @abstractmethod
+    def on_paced_tick(self, t_now: float, dt: float) -> None:
+        """
+        Advance the producer using the pace loop.
+
+        Args:
+            t_now: Current station time supplied by MasterClock.
+            dt: Seconds elapsed since the previous tick (already clamped by PaceController).
+        """
+        pass
+
+    def poll_segment_edges(self) -> list[SegmentEdge]:
+        """Return and clear the list of queued segment boundary events."""
+        edges = self._segment_edges
+        self._segment_edges = []
+        return edges
+
+    def _emit_segment_edge(self, edge: SegmentEdge) -> None:
+        """Utility for subclasses to queue a segment boundary event."""
+        self._segment_edges.append(edge)
+
+    def get_segment_progress(self) -> tuple[str | None, float]:
+        """
+        Return the current segment identifier and position in seconds.
+
+        Defaults to no segment information.
+        """
+        return (None, 0.0)
+
+    def get_frame_counters(self) -> tuple[int | None, int | None]:
+        """
+        Return dropped and queued frame counters if available.
+
+        Defaults to unknown counters.
+        """
+        return (None, None)
+
+    # ------------------------------------------------------------------
+    # Teardown orchestration
+    # ------------------------------------------------------------------
+
+    def request_teardown(self, reason: str, timeout: float | None = None) -> None:
+        """Begin graceful teardown and transition to STOPPING state."""
+        if self._tearing_down:
+            return
+        self._tearing_down = True
+        self._teardown_elapsed = 0.0
+        self._teardown_timeout = timeout if timeout is not None else self._teardown_timeout_default
+        self._teardown_reason = reason
+        self._teardown_ready = False
+        self.status = ProducerStatus.STOPPING
+        self._logger.info(
+            "Producer %s teardown requested (reason=%s, timeout=%.2fs)",
+            self.channel_id,
+            reason,
+            self._teardown_timeout,
+        )
+        self._on_teardown_requested(reason)
+
+    def teardown_in_progress(self) -> bool:
+        """Return True while the producer is draining for shutdown."""
+        return self._tearing_down
+
+    def signal_teardown_ready(self) -> None:
+        """Signal that buffers are drained and teardown can complete."""
+        if self._tearing_down:
+            self._teardown_ready = True
+
+    def _on_teardown_requested(self, reason: str) -> None:
+        """Hook for subclasses to initiate resource draining."""
+
+    def _advance_teardown(self, dt: float) -> bool:
+        """
+        Progress graceful shutdown.
+
+        Returns True when teardown consumed the tick (no further work this tick).
+        """
+        if not self._tearing_down:
+            return False
+        if dt > 0.0:
+            self._teardown_elapsed += dt
+        timeout_reached = self._teardown_elapsed >= self._teardown_timeout
+        if not self._teardown_ready and self._teardown_elapsed >= self._teardown_grace_seconds:
+            self._teardown_ready = True
+        if self._teardown_ready or timeout_reached:
+            self._finish_teardown(force=timeout_reached and not self._teardown_ready)
+        return True
+
+    def _finish_teardown(self, *, force: bool) -> None:
+        if not self._tearing_down:
+            return
+        reason = self._teardown_reason or "unspecified"
+        if force:
+            self._logger.warning(
+                "Producer %s forced to stop after teardown timeout (reason=%s)",
+                self.channel_id,
+                reason,
+            )
+        else:
+            self._logger.info(
+                "Producer %s completed teardown (reason=%s)",
+                self.channel_id,
+                reason,
+            )
+        stopped = self.stop()
+        if not stopped:
+            self._logger.warning("Producer %s failed to acknowledge stop during teardown", self.channel_id)
+        self.status = ProducerStatus.STOPPED
+        self._teardown_cleanup()
+
+    def _teardown_cleanup(self) -> None:
+        self._tearing_down = False
+        self._teardown_elapsed = 0.0
+        self._teardown_ready = False
+        self._teardown_reason = None

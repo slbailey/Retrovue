@@ -29,7 +29,8 @@ Boundaries:
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+import logging
+from typing import TYPE_CHECKING, Any, Protocol
 
 # Producer Protocol / types from runtime.producer package.
 # Note: ProducerMode / ProducerStatus are imported even if not all are used yet
@@ -37,10 +38,14 @@ from typing import Any, Protocol
 from retrovue.runtime.producer import (
     Producer,
     ProducerState,
+    ProducerStatus,
 )
 
 # MasterClock is the single source of authoritative "now"
 from .clock import MasterClock
+
+if TYPE_CHECKING:
+    from retrovue.runtime.metrics import ChannelMetricsSample, MetricsPublisher
 
 
 class ScheduleService(Protocol):
@@ -180,6 +185,11 @@ class ChannelManager:
             stream_endpoint=None,
             last_health=None,
         )
+        self._metrics_publisher: "MetricsPublisher | None" = None
+        self._logger = logging.getLogger(__name__)
+        self._teardown_timeout_seconds = 5.0
+        self._teardown_started_station: float | None = None
+        self._teardown_reason: str | None = None
 
     def _get_current_mode(self) -> str:
         """
@@ -360,20 +370,34 @@ class ChannelManager:
         Stop the Producer if there are no active viewers.
 
         If viewer_count == 0:
-        - stop() the Producer
-        - clear active_producer
-        - update runtime_state to reflect "stopped"
+        - initiate graceful teardown
+        - once teardown completes, clear active_producer and update runtime_state
 
         If viewer_count > 0, do nothing.
         """
-        if self.runtime_state.viewer_count == 0:
-            if self.active_producer:
-                self.active_producer.stop()
-                self.active_producer = None
+        self._check_teardown_completion()
+        if self.runtime_state.viewer_count != 0:
+            return
 
-            self.runtime_state.producer_status = "stopped"
-            self.runtime_state.stream_endpoint = None
-            # Do NOT clear current_mode here; ProgramDirector still "owns" desired mode.
+        producer = self.active_producer
+        if producer:
+            if not producer.teardown_in_progress():
+                self._teardown_started_station = self._station_now()
+                self._teardown_reason = "viewer_inactive"
+                self._logger.info(
+                    "Channel %s initiating producer teardown (reason=%s)",
+                    self.channel_id,
+                    self._teardown_reason,
+                )
+                producer.request_teardown(
+                    reason=self._teardown_reason,
+                    timeout=self._teardown_timeout_seconds,
+                )
+            return
+
+        self.runtime_state.producer_status = "stopped"
+        self.runtime_state.stream_endpoint = None
+        # Do NOT clear current_mode here; ProgramDirector still "owns" desired mode.
 
     def check_health(self) -> None:
         """
@@ -389,6 +413,8 @@ class ChannelManager:
           - Recovery policy is defined by ProgramDirector (e.g. switch to emergency).
             ChannelManager will execute that policy, not invent its own fallback.
         """
+        self._check_teardown_completion()
+
         if self.active_producer is None:
             self.runtime_state.producer_status = "stopped"
             self.runtime_state.last_health = "stopped"
@@ -409,6 +435,104 @@ class ChannelManager:
         #   escalate to emergency, etc.)
         # - Then either restart or swap via _ensure_producer_running()
         #   after ProgramDirector updates channel mode.
+
+    # ------------------------------------------------------------------
+    # Metrics integration
+    # ------------------------------------------------------------------
+
+    def attach_metrics_publisher(self, publisher: "MetricsPublisher") -> None:
+        """Register the metrics publisher responsible for this channel."""
+        self._metrics_publisher = publisher
+
+    def get_channel_metrics(self) -> "ChannelMetricsSample | None":
+        """Return the latest metrics sample, if publishing is configured."""
+        if not self._metrics_publisher:
+            return None
+        return self._metrics_publisher.get_latest_sample()
+
+    def populate_metrics_sample(self, sample: "ChannelMetricsSample") -> None:
+        """Populate the provided sample with the most recent channel state."""
+        self._check_teardown_completion()
+        viewer_count = len(self.viewer_sessions)
+        producer = self.active_producer
+
+        producer_state = "stopped"
+        segment_id: str | None = None
+        segment_position = 0.0
+        dropped_frames: int | None = None
+        queued_frames: int | None = None
+
+        if producer is not None:
+            status_obj = getattr(producer, "status", ProducerStatus.RUNNING)
+            if isinstance(status_obj, ProducerStatus):
+                producer_state = status_obj.value
+            else:
+                producer_state = str(status_obj)
+
+            seg_id, seg_position = producer.get_segment_progress()
+            segment_id = seg_id
+            segment_position = seg_position
+            dropped_frames, queued_frames = producer.get_frame_counters()
+
+        active = viewer_count > 0 or producer_state == ProducerStatus.RUNNING.value
+
+        sample.channel_state = "active" if active else "idle"
+        sample.viewer_count = viewer_count
+        sample.producer_state = producer_state
+        sample.segment_id = segment_id
+        sample.segment_position = segment_position
+        sample.dropped_frames = dropped_frames
+        sample.queued_frames = queued_frames
+
+    def _station_now(self) -> float:
+        if hasattr(self.clock, "now"):
+            return getattr(self.clock, "now")()
+        current_time = self.clock.get_current_time()
+        if hasattr(current_time, "timestamp"):
+            return current_time.timestamp()
+        return float(current_time)
+
+    def _check_teardown_completion(self) -> None:
+        if self._teardown_started_station is None:
+            return
+        producer = self.active_producer
+        if producer is None:
+            self._finalize_teardown(completed=True)
+            return
+        if producer.teardown_in_progress():
+            return
+        completed = producer.status == ProducerStatus.STOPPED
+        self._finalize_teardown(completed=completed)
+
+    def _finalize_teardown(self, *, completed: bool) -> None:
+        duration = 0.0
+        if self._teardown_started_station is not None:
+            duration = max(0.0, self._station_now() - self._teardown_started_station)
+        reason = self._teardown_reason or "unspecified"
+        producer = self.active_producer
+
+        if completed:
+            self._logger.info(
+                "Channel %s producer teardown completed in %.3fs (reason=%s)",
+                self.channel_id,
+                duration,
+                reason,
+            )
+        else:
+            self._logger.warning(
+                "Channel %s producer teardown timed out after %.3fs (reason=%s); forcing stop",
+                self.channel_id,
+                duration,
+                reason,
+            )
+            if producer:
+                producer.stop()
+
+        self.active_producer = None
+        self.runtime_state.producer_status = "stopped"
+        self.runtime_state.stream_endpoint = None
+        self._teardown_started_station = None
+        self._teardown_reason = None
 
     # ------------------------------------------------------------------
     # Internal helpers

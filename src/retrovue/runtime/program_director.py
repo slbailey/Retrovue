@@ -23,11 +23,21 @@ Design Principles:
 - Resource coordination and health monitoring
 """
 
+import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from threading import Thread
+from typing import Any, Optional
 
+from retrovue.runtime.clock import MasterClock, RealTimeMasterClock
+from retrovue.runtime.pace import PaceController
+
+try:
+    from retrovue.runtime.settings import RuntimeSettings  # type: ignore
+except ImportError:  # pragma: no cover - settings optional
+    RuntimeSettings = None  # type: ignore
 
 class SystemMode(Enum):
     """System-wide operational modes"""
@@ -103,10 +113,64 @@ class ProgramDirector:
       grouping, not as a playout cut point.
     """
 
-    def __init__(self):
-        """Initialize the Program Director"""
-        # TODO: Initialize system state, channel managers, health monitoring
-        pass
+    def __init__(
+        self,
+        clock: Optional[MasterClock] = None,
+        target_hz: Optional[float] = None,
+        *,
+        sleep_fn=time.sleep,
+    ) -> None:
+        """Initialize the Program Director."""
+        self._logger = logging.getLogger(__name__)
+        self._clock = clock or RealTimeMasterClock()
+        if target_hz is None and RuntimeSettings:
+            target_hz = RuntimeSettings.pace_target_hz
+        self._pace = PaceController(clock=self._clock, target_hz=target_hz or 30.0, sleep_fn=sleep_fn)
+        self._pace_thread: Optional[Thread] = None
+        self._logger.debug(
+            "ProgramDirector initialized with target_hz=%s clock=%s", self._pace.target_hz, type(self._clock).__name__
+        )
+
+    # Lifecycle -------------------------------------------------------------
+    def start(self) -> None:
+        """Start the pacing loop in a daemon thread."""
+        if self._pace_thread and self._pace_thread.is_alive():
+            self._logger.debug("ProgramDirector.start() called but pace thread already running")
+            return
+
+        def _run() -> None:
+            self._logger.info("ProgramDirector pace loop starting")
+            try:
+                self._pace.run_forever()
+            finally:
+                self._logger.info("ProgramDirector pace loop stopped")
+
+        thread = Thread(target=_run, name="program-director-pace", daemon=True)
+        self._pace_thread = thread
+        thread.start()
+        self._logger.debug("ProgramDirector pace thread started")
+
+    def stop(self, timeout: float = 2.0) -> None:
+        """Stop the pacing loop and join the thread.
+
+        Parameters
+        ----------
+        timeout:
+            Maximum seconds to wait for the pace loop to exit before emitting a warning.
+        """
+        self._logger.debug("ProgramDirector.stop() requested")
+        self._pace.stop()
+        thread = self._pace_thread
+        if not thread:
+            self._logger.debug("ProgramDirector.stop() called with no active thread")
+            return
+
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            self._logger.warning("ProgramDirector pace thread did not stop within %.2fs", timeout)
+        else:
+            self._logger.debug("ProgramDirector pace thread joined successfully")
+        self._pace_thread = None
 
     def get_system_health(self) -> SystemHealth:
         """
