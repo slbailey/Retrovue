@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     allowed_origins: str = Field(default="*", alias="ALLOWED_ORIGINS")  # Comma-separated origins
     env: str = Field(default="dev", alias="ENV")  # dev|prod|test
 
-    model_config: SettingsConfigDict = SettingsConfigDict(env_file=".env", case_sensitive=False)
+    model_config: SettingsConfigDict = SettingsConfigDict(
+        env_file=".env", 
+        case_sensitive=False,
+        extra="ignore"  # Ignore extra fields like PYTHONPATH from .env
+    )
 
 
 def _resolve_env_file() -> str | None:

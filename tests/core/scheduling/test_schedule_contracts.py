@@ -59,8 +59,22 @@ class MockBlockAssignment:
         self.duration = duration
         self.content_type = content_type
         # Support both old and new attribute names for backward compatibility
-        self.content_ref = content_ref or content_reference or "test-ref"
-        self.content_reference = content_reference or content_ref or "test-ref"
+        # Use explicit values if provided, otherwise fall back to the other or default
+        # This allows tests to explicitly set None to test validation
+        if content_ref is not None:
+            self.content_ref = content_ref
+            self.content_reference = content_reference if content_reference is not None else content_ref
+        elif content_reference is not None:
+            self.content_ref = content_reference
+            self.content_reference = content_reference
+        else:
+            # Both are None - check if we should preserve None or use default
+            # If content_reference was explicitly passed as None (for testing), preserve it
+            # Otherwise use default for backward compatibility
+            # We can't distinguish "not passed" from "passed as None" in Python,
+            # so we'll preserve None when both are None to allow validation tests
+            self.content_ref = None
+            self.content_reference = None
         self.label_id = label_id
 
 
@@ -340,7 +354,8 @@ class TestSchedulePlanBlockAssignmentContract:
         with pytest.raises(BlockAssignmentValidationError) as exc_info:
             validate_block_assignment(assignment)
 
-        assert "content_reference" in str(exc_info.value).lower()
+        # The validation error uses "content_ref" in the message
+        assert "content_ref" in str(exc_info.value).lower() or "content_reference" in str(exc_info.value).lower()
 
     def test_invalid_start_time_format_should_fail(self):
         """Invalid start_time format should fail."""

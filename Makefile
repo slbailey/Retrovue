@@ -27,21 +27,27 @@ dev-all: dev
 	@echo "Note: No separate frontend dev server configured"
 
 # Install dependencies
+# PYTHON can be passed from parent Makefile to use venv
 install:
-	pip install -r requirements.txt
-	pip install -r requirements-admin.txt
+	$(PYTHON) -m pip install -q -r requirements.txt
+	@if [ -f requirements-admin.txt ]; then $(PYTHON) -m pip install -q -r requirements-admin.txt; fi
 
 # Run tests
+# PYTHON can be passed from parent Makefile to use venv
+# Prefer Python 3.11 if available
+PYTHON311 := $(shell command -v python3.11 2>/dev/null)
+VENV_PYTHON := $(shell if [ -f ../.venv/bin/python ]; then echo ../.venv/bin/python; elif [ -f .venv/bin/python ]; then echo .venv/bin/python; fi)
+PYTHON ?= $(shell if [ -n "$(PYTHON311)" ]; then echo $(PYTHON311); elif [ -n "$(VENV_PYTHON)" ]; then echo $(VENV_PYTHON); elif command -v python >/dev/null 2>&1; then echo python; else echo python3; fi)
 test:
-	pytest -v
+	$(PYTHON) -m pytest -v
 
 # Run contract tests only
 test-contracts:
-	pytest tests/contracts -v
+	$(PYTHON) -m pytest tests/contracts -v
 
 # Run enricher contract tests only
 test-enricher-contracts:
-	pytest tests/contracts/ -k "enricher" -v
+	$(PYTHON) -m pytest tests/contracts/ -k "enricher" -v
 
 # Run linting
 lint:
