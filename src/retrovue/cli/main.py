@@ -18,6 +18,7 @@ import retrovue.adapters.importers  # noqa: F401
 from .commands import asset as asset_cmd
 from .commands import (
     channel,
+    channel_manager,
     collection,
     enricher,
     producer,
@@ -79,6 +80,13 @@ router.register(
     runtime.app,
     help_text="Runtime diagnostics and validation operations",
     doc_path="runtime.md",
+)
+
+router.register(
+    "channel-manager",
+    channel_manager.app,
+    help_text="Channel Manager daemon operations",
+    doc_path="channel-manager.md",
 )
 
 
