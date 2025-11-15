@@ -42,11 +42,8 @@ Start channel stream and view in VLC or Plex Live TV
 
 ### **Launch the Web Interface**
 
-```powershell
-# Windows
-uvicorn retrovue.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload
-
-# macOS/Linux
+```bash
+# Linux/Ubuntu/WSL
 uvicorn retrovue.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -77,7 +74,7 @@ Then open your browser to: **http://localhost:8000**
 - Select server and library
 - Add path mappings:
   - **Plex Path**: Path as seen by Plex (e.g., `/mnt/media/movies`)
-  - **Local Path**: Corresponding path on your machine (e.g., `D:\Movies`)
+  - **Local Path**: Corresponding path on your machine (e.g., `/media/movies`)
   - Click "Add Mapping"
 - Set sync limit (optional, useful for testing)
 - Click "Dry Run (Preview)" to test
@@ -121,13 +118,12 @@ cd retrovue
 
 ```bash
 # Create virtual environment
-python -m venv venv
+python3 -m venv venv
 
 # Activate virtual environment
-# On Windows:
-.\venv\Scripts\Activate.ps1
-# On macOS/Linux:
 source venv/bin/activate
+# Or use the provided activation script:
+# source activate.sh
 ```
 
 ### **Step 3: Install Dependencies**
@@ -291,10 +287,9 @@ python -m cli.plex_sync ingest-status --db ./retrovue.db
 #### **FFmpeg Not Found**
 
 ```bash
-# Install FFmpeg
-# Windows: Download from https://ffmpeg.org/download.html
-# macOS: brew install ffmpeg
-# Ubuntu: sudo apt install ffmpeg
+# Install FFmpeg on Ubuntu/WSL
+sudo apt update
+sudo apt install ffmpeg
 
 # Verify installation
 ffmpeg -version
@@ -312,7 +307,7 @@ ffmpeg -version
 - Verify streaming server is running
 - Check URL format: `http://localhost:8080/channel/1.ts`
 - Try different VLC version
-- Check Windows firewall settings
+- Check firewall settings (if using ufw: `sudo ufw status`)
 
 #### **Python Import Errors**
 

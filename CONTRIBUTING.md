@@ -52,23 +52,16 @@ Before you begin, ensure you have:
 
 ### Development Setup
 
-**Windows (PowerShell):**
-
-```powershell
-python -m venv venv
-.
-env\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install flake8 mypy pytest pytest-cov black isort
-```
-
-**macOS/Linux (bash):**
+**Linux/Ubuntu/WSL:**
 
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
-pip install flake8 mypy pytest pytest-cov black isort
+# Or use the provided activation script:
+# source activate.sh  # Note: use 'source', not './activate.sh'
+pip install -e .  # Install package in editable mode with dependencies
+pip install -e ".[dev]"  # Install with dev dependencies (optional)
+# This creates the 'retrovue' command. If not installed, use: python -m retrovue.cli.main --help
 ```
 
 ### Verify Installation

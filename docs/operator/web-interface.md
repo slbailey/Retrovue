@@ -8,11 +8,8 @@ RetroVue's modern web interface makes setup and management much easier than usin
 
 ### **Launch the Web Interface**
 
-```powershell
-# Windows
-uvicorn retrovue.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload
-
-# macOS/Linux
+```bash
+# Linux/Ubuntu/WSL
 uvicorn retrovue.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -86,23 +83,19 @@ Path mappings are **critical** for streaming to work properly. They translate Pl
 2. **Select server and library** from dropdowns
 3. **Add path mapping**:
    - **Plex Path**: Path as seen by Plex (e.g., `/mnt/media/movies`)
-   - **Local Path**: Corresponding path on your machine (e.g., `D:\Movies`)
+   - **Local Path**: Corresponding path on your machine (e.g., `/media/movies`)
    - **Click "Add Mapping"**
 
 #### **Example Path Mappings**
 
 ```bash
-# Windows example
+# Linux/Ubuntu/WSL example
 Plex Path: /mnt/media/movies
-Local Path: D:\Media\Movies
+Local Path: /media/movies
 
-# Linux example
-Plex Path: /data/movies
-Local Path: /home/user/media/movies
-
-# macOS example
-Plex Path: /Volumes/Media/Movies
-Local Path: /Users/username/Movies
+# Another example (WSL accessing Windows paths)
+Plex Path: /mnt/media/movies
+Local Path: /mnt/c/Media/Movies
 ```
 
 ### **Sync Content**
@@ -204,7 +197,7 @@ The web interface provides real-time updates for all operations:
 #### **Path Mapping Issues**
 
 - Verify local paths exist and are accessible
-- Check path format (use forward slashes on Windows)
+- Check path format (use absolute paths with forward slashes)
 - Ensure sufficient disk space
 - Verify file permissions
 

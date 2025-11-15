@@ -111,27 +111,27 @@ Retrovue's scheduling system follows a clear hierarchy that transforms operator 
 
 ### Installation
 
-**Windows (PowerShell):**
-
-```powershell
-git clone https://github.com/slbailey/Retrovue.git
-cd Retrovue
-python -m venv venv
-.
-env\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m retrovue.cli.main --help
-```
-
-**macOS/Linux (bash):**
+**Linux/Ubuntu/WSL:**
 
 ```bash
 git clone https://github.com/slbailey/Retrovue.git
 cd Retrovue
-python -m venv venv
+
+# Install Python 3.12 if needed (Ubuntu/WSL):
+sudo apt update
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install python3.12 python3.12-venv python3.12-dev
+
+# Create venv with Python 3.12
+python3.12 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
-python -m retrovue.cli.main --help
+# Or use the provided activation script:
+# source activate.sh  # Note: use 'source', not './activate.sh'
+pip install -e .  # Install package in editable mode
+# This installs dependencies from pyproject.toml and creates the 'retrovue' command
+retrovue --help
 ```
 
 ## 🧭 Channel Management CLI
