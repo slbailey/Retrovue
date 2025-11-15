@@ -23,11 +23,13 @@ from uvicorn import Config, Server
 
 from .clock import MasterClock
 from .producer.base import Producer, ProducerMode, ProducerStatus, ContentSegment, ProducerState
+from .channel_stream import ChannelStream, FakeTsSource, generate_ts_stream
 from ..usecases import channel_manager_launch
 from typing import Protocol, TYPE_CHECKING
 from dataclasses import dataclass
 from datetime import datetime
 import logging
+import os
 
 if TYPE_CHECKING:
     from retrovue.runtime.metrics import ChannelMetricsSample, MetricsPublisher
@@ -578,11 +580,12 @@ class Phase8ProgramDirector:
 
 
 class Phase8AirProducer(Producer):
-    """Phase 8 Producer implementation wrapping Retrovue Air processes."""
+    """Phase 8/9 Producer implementation wrapping Retrovue Air processes."""
 
     def __init__(self, channel_id: str, configuration: dict[str, Any]):
         super().__init__(channel_id, ProducerMode.NORMAL, configuration)
         self.air_process: channel_manager_launch.ProcessHandle | None = None
+        self.socket_path: Path | None = None  # Phase 9: UDS socket path
         self._stream_endpoint = f"/channel/{channel_id}.ts"
 
     def start(self, playout_plan: list[dict[str, Any]], start_at_station_time: datetime) -> bool:
@@ -611,9 +614,12 @@ class Phase8AirProducer(Producer):
         }
 
         try:
-            # Launch Air
-            process = channel_manager_launch.launch_air(playout_request=playout_request)
+            # Launch Air (Phase 9: returns process and socket_path)
+            process, socket_path = channel_manager_launch.launch_air(
+                playout_request=playout_request
+            )
             self.air_process = process
+            self.socket_path = socket_path  # Phase 9: Store socket path for ChannelStream
             self.status = ProducerStatus.RUNNING
             self.started_at = start_at_station_time
             self.output_url = self._stream_endpoint
@@ -684,12 +690,18 @@ class ChannelManagerDaemon:
         self.managers: dict[str, ChannelManager] = {}
         self.lock = threading.Lock()
         
+        # Phase 9: ChannelStream registry per channel
+        self.channel_streams: dict[str, ChannelStream] = {}
+        
         # HTTP server
         self.fastapi_app = FastAPI(title="ChannelManager")
         self._register_endpoints()
         
         # Factory for creating Producers (Phase 8: AirProducer)
         self._producer_factory = self._create_air_producer
+        
+        # Phase 9: Test mode flag (allows fake TS source)
+        self.test_mode = os.getenv("RETROVUE_TEST_MODE") == "1"
 
     def _create_air_producer(self, channel_id: str, mode: str, config: dict[str, Any]) -> Producer | None:
         """Factory for creating Phase 8 AirProducer."""
@@ -725,6 +737,51 @@ class ChannelManagerDaemon:
 
             return self.managers[channel_id]
 
+    def _get_or_create_channel_stream(
+        self, channel_id: str, manager: ChannelManager
+    ) -> ChannelStream | None:
+        """
+        Get or create ChannelStream for a channel (Phase 9).
+        
+        If Producer is running and has socket_path, create ChannelStream.
+        If test mode, use FakeTsSource (even if Producer lacks socket_path).
+        """
+        with self.lock:
+            if channel_id in self.channel_streams:
+                stream = self.channel_streams[channel_id]
+                if stream.is_running():
+                    return stream
+                # Stream stopped, remove it
+                self.channel_streams.pop(channel_id, None)
+
+            # Phase 9: Create ChannelStream
+            if self.test_mode:
+                # Test mode: use fake TS source (doesn't need real Producer/Air)
+                def ts_source_factory():
+                    return FakeTsSource()
+
+                channel_stream = ChannelStream(
+                    channel_id=channel_id,
+                    ts_source_factory=ts_source_factory,
+                )
+                self.channel_streams[channel_id] = channel_stream
+                return channel_stream
+
+            # Production: check if Producer is running and has socket_path
+            producer = manager.active_producer
+            if not producer or not isinstance(producer, Phase8AirProducer):
+                return None
+
+            # Get socket path from Producer
+            socket_path = producer.socket_path
+            if not socket_path:
+                return None
+
+            # Production: use UDS socket
+            channel_stream = ChannelStream(channel_id=channel_id, socket_path=socket_path)
+            self.channel_streams[channel_id] = channel_stream
+            return channel_stream
+
     def _register_endpoints(self):
         """Register HTTP endpoints with FastAPI."""
 
@@ -757,7 +814,7 @@ class ChannelManagerDaemon:
 
         @self.fastapi_app.get("/channel/{channel_id}.ts")
         def get_channel_stream(channel_id: str) -> Response:
-            """Serve MPEG-TS stream for a specific channel."""
+            """Serve MPEG-TS stream for a specific channel (Phase 9: UDS fan-out)."""
             try:
                 manager = self._get_or_create_manager(channel_id)
             except ChannelManagerError as e:
@@ -791,24 +848,54 @@ class ChannelManagerDaemon:
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
 
-            # Generate stream response
-            # TODO: In Phase 8, pipe from Air's stdout
-            # For now, return placeholder stream
-            def generate_stream():
+            # Phase 9: Get or create ChannelStream for this channel
+            channel_stream = self._get_or_create_channel_stream(channel_id, manager)
+            if not channel_stream:
+                # Fallback to placeholder if ChannelStream not available
+                def generate_placeholder():
+                    try:
+                        yield b"#EXTM3U\n"
+                        yield b"# Stream placeholder\n"
+                        while True:
+                            time.sleep(1)
+                            yield b""
+                    except GeneratorExit:
+                        manager.viewer_leave(session_id)
+
+                return StreamingResponse(
+                    generate_placeholder(),
+                    media_type="video/mp2t",
+                    status_code=status.HTTP_200_OK,
+                )
+
+            # Subscribe this client to the ChannelStream
+            client_queue = channel_stream.subscribe(session_id)
+
+            # Generate stream from ChannelStream
+            def generate_stream_from_channel():
                 try:
-                    yield b"#EXTM3U\n"
-                    yield b"# Stream placeholder\n"
-                    # Keep connection alive
-                    while True:
-                        time.sleep(1)
-                        yield b""
+                    for chunk in generate_ts_stream(client_queue):
+                        yield chunk
                 except GeneratorExit:
+                    pass
+                finally:
                     # Viewer leaves (decrements viewer_count, stops Producer if last viewer)
+                    channel_stream.unsubscribe(session_id)
                     manager.viewer_leave(session_id)
+                    # If no more viewers, stop ChannelStream (will be recreated on next viewer)
+                    if channel_stream.get_subscriber_count() == 0:
+                        channel_stream.stop()
+                        with self.lock:
+                            self.channel_streams.pop(channel_id, None)
 
             return StreamingResponse(
-                generate_stream(),
+                generate_stream_from_channel(),
                 media_type="video/mp2t",
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
                 status_code=status.HTTP_200_OK,
             )
 
@@ -855,8 +942,13 @@ class ChannelManagerDaemon:
         if hasattr(self, "server") and self.server:
             self.server.should_exit = True
 
-        # Terminate all Producers via ChannelManager instances
+        # Stop all ChannelStreams
         with self.lock:
+            for channel_stream in self.channel_streams.values():
+                channel_stream.stop()
+            self.channel_streams.clear()
+
+            # Terminate all Producers via ChannelManager instances
             for manager in self.managers.values():
                 # Stop Producer if running (via viewer_leave if needed, or directly)
                 if manager.active_producer:
